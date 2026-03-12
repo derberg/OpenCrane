@@ -1,0 +1,1005 @@
+"""Unit tests for MCP server."""
+
+import json
+import pytest
+from unittest.mock import Mock, patch, AsyncMock, mock_open
+from opencrane.mcp.server import (
+    search_product_docs, search_guidelines, _search_documentation_impl,
+    health_check, list_tools, call_tool,
+    get_embeddings_service, get_milvus_service, get_keyword_service,
+    get_yaml_definition, get_metadata_schema, _rehydrate_to_yaml, main
+)
+from mcp.types import TextContent
+
+
+class TestMCPServer:
+    """Test cases for MCP server functions."""
+
+    @pytest.mark.anyio
+    async def test_list_tools(self):
+        """Test list_tools returns correct tools."""
+        tools = await list_tools()
+
+        assert len(tools) == 5
+        assert tools[0].name == "search_product_docs"
+        assert tools[1].name == "search_guidelines"
+        assert tools[2].name == "health"
+        assert tools[3].name == "get_yaml_definition"
+        assert tools[4].name == "get_metadata_schema"
+
+    @patch('opencrane.mcp.server.EmbeddingService')
+    def test_get_embeddings_service_lazy_init(self, mock_embedding_service):
+        """Test lazy initialization of embeddings service."""
+        # Reset global state
+        import opencrane.mcp.server as server_module
+        server_module._embeddings_service = None
+
+        mock_instance = Mock()
+        mock_embedding_service.return_value = mock_instance
+
+        service = get_embeddings_service()
+
+        assert service == mock_instance
+        mock_embedding_service.assert_called_once()
+
+        # Second call should return cached instance
+        service2 = get_embeddings_service()
+        assert service2 == mock_instance
+        assert mock_embedding_service.call_count == 1  # Not called again
+
+    @patch('opencrane.mcp.server.MilvusService')
+    def test_get_milvus_service_lazy_init(self, mock_milvus_service):
+        """Test lazy initialization of Milvus service."""
+        # Reset global state
+        import opencrane.mcp.server as server_module
+        server_module._milvus_service = None
+
+        mock_instance = Mock()
+        mock_milvus_service.return_value = mock_instance
+
+        service = get_milvus_service()
+
+        assert service == mock_instance
+        mock_milvus_service.assert_called_once()
+
+        # Second call should return cached instance
+        service2 = get_milvus_service()
+        assert service2 == mock_instance
+        assert mock_milvus_service.call_count == 1  # Not called again
+
+    @patch('opencrane.mcp.server.KeywordSearchService')
+    def test_get_keyword_service_init(self, mock_keyword_service):
+        """Test initialization of keyword search service."""
+        mock_instance = Mock()
+        mock_keyword_service.return_value = mock_instance
+
+        service = get_keyword_service()
+
+        assert service == mock_instance
+        mock_keyword_service.assert_called_once()
+
+    @patch('opencrane.mcp.server.search_product_docs')
+    @pytest.mark.anyio
+    async def test_call_tool_search_product_docs(self, mock_search):
+        """Test call_tool for search_product_docs."""
+        mock_search.return_value = [TextContent(type="text", text="result")]
+
+        result = await call_tool("search_product_docs", {"query": "test"})
+
+        mock_search.assert_called_once_with({"query": "test"})
+        assert result == [TextContent(type="text", text="result")]
+
+    @patch('opencrane.mcp.server.health_check')
+    @pytest.mark.anyio
+    async def test_call_tool_health(self, mock_health):
+        """Test call_tool for health."""
+        mock_health.return_value = [TextContent(type="text", text="healthy")]
+
+        result = await call_tool("health", {})
+
+        mock_health.assert_called_once_with({})
+        assert result == [TextContent(type="text", text="healthy")]
+
+    @patch('opencrane.mcp.server.search_product_docs')
+    @pytest.mark.anyio
+    async def test_call_tool_long_args_summary(self, mock_search):
+        """Test call_tool truncates long argument summaries."""
+        mock_search.return_value = [TextContent(type="text", text="result")]
+        long_args = {"query": "x" * 300}
+
+        result = await call_tool("search_product_docs", long_args)
+
+        mock_search.assert_called_once_with(long_args)
+        assert result == [TextContent(type="text", text="result")]
+
+    @pytest.mark.anyio
+    async def test_call_tool_unknown(self):
+        """Test call_tool for unknown tool."""
+        with pytest.raises(ValueError, match="Unknown tool"):
+            await call_tool("unknown", {})
+
+    @patch('opencrane.mcp.server.get_yaml_definition')
+    @pytest.mark.anyio
+    async def test_call_tool_get_yaml_definition(self, mock_get_yaml):
+        """Test call_tool for get_yaml_definition."""
+        mock_get_yaml.return_value = [TextContent(type="text", text="yaml content")]
+
+        result = await call_tool("get_yaml_definition", {"chunk_id": "test-id"})
+
+        mock_get_yaml.assert_called_once_with({"chunk_id": "test-id"})
+        assert result == [TextContent(type="text", text="yaml content")]
+
+    @patch('opencrane.mcp.server._search_documentation_impl')
+    @pytest.mark.anyio
+    async def test_search_product_docs_wrapper(self, mock_impl):
+        """Test search_product_docs wrapper injects product category."""
+        mock_impl.return_value = [TextContent(type="text", text="result")]
+
+        result = await search_product_docs({"query": "test"})
+
+        # Verify it called the impl with product category injected
+        mock_impl.assert_called_once()
+        call_args = mock_impl.call_args[0][0]
+        assert call_args["categories"] == ["product"]
+        assert call_args["query"] == "test"
+        assert result == [TextContent(type="text", text="result")]
+
+    @patch('opencrane.mcp.server._search_documentation_impl')
+    @pytest.mark.anyio
+    async def test_search_guidelines_wrapper(self, mock_impl):
+        """Test search_guidelines wrapper injects guidelines category."""
+        mock_impl.return_value = [TextContent(type="text", text="result")]
+
+        result = await search_guidelines({"query": "test"})
+
+        # Verify it called the impl with guidelines category injected
+        mock_impl.assert_called_once()
+        call_args = mock_impl.call_args[0][0]
+        assert call_args["categories"] == ["guidelines"]
+        assert call_args["query"] == "test"
+        assert result == [TextContent(type="text", text="result")]
+
+    @patch('opencrane.mcp.server.get_embeddings_service')
+    @patch('opencrane.mcp.server.get_milvus_service')
+    @pytest.mark.anyio
+    async def test_search_documentation_success(self, mock_milvus_get, mock_embeddings_get):
+        """Test successful search documentation."""
+        # Mock services
+        mock_embeddings = Mock()
+        mock_model = Mock()
+        mock_model.encode.return_value = [[0.1] * 768]
+        mock_embeddings.model = mock_model
+        mock_embeddings_get.return_value = mock_embeddings
+
+        mock_milvus = Mock()
+        mock_milvus.search.return_value = [
+            {
+                "content": "test content",
+                "source_file": "file.md",
+                "chunk_type": "prose",
+                "metadata_json": '{"key": "value"}',
+                "distance": 0.5
+            }
+        ]
+
+        mock_milvus_get.return_value = mock_milvus
+
+        arguments = {"query": "test query", "limit": 5, "search_mode": "semantic", "categories": ["product"]}
+
+        results = await _search_documentation_impl(arguments)
+
+        assert len(results) == 1
+        assert "Result 1:" in results[0].text
+        assert "test content" in results[0].text
+        assert "file.md" in results[0].text
+
+        mock_model.encode.assert_called_once_with(["test query"], batch_size=8, show_progress_bar=False)
+        mock_milvus.search.assert_called_once_with([0.1] * 768, limit=5, categories=["product"], chunk_types=None, metadata_contains=None)
+
+    @patch('opencrane.mcp.server.get_embeddings_service')
+    @patch('opencrane.mcp.server.get_milvus_service')
+    @pytest.mark.anyio
+    async def test_search_documentation_with_filters(self, mock_milvus_get, mock_embeddings_get):
+        """Test search with chunk type filters."""
+        mock_embeddings = Mock()
+        mock_model = Mock()
+        mock_model.encode.return_value = [[0.1] * 768]
+        mock_embeddings.model = mock_model
+        mock_embeddings_get.return_value = mock_embeddings
+
+        mock_milvus = Mock()
+        mock_milvus.search.return_value = []
+        mock_milvus_get.return_value = mock_milvus
+
+        arguments = {"query": "test", "limit": 3, "chunk_types": ["prose", "code"], "search_mode": "semantic", "categories": ["product"]}
+
+        results = await _search_documentation_impl(arguments)
+
+        assert len(results) == 1
+        assert "No results found." in results[0].text
+
+        mock_milvus.search.assert_called_once_with([0.1] * 768, limit=3, categories=["product"], chunk_types=["prose", "code"], metadata_contains=None)
+
+    @patch('opencrane.mcp.server.get_embeddings_service')
+    @patch('opencrane.mcp.server.get_milvus_service')
+    @pytest.mark.anyio
+    async def test_search_documentation_failure(self, mock_milvus_get, mock_embeddings_get):
+        """Test search failure handling."""
+        mock_embeddings = Mock()
+        mock_model = Mock()
+        mock_model.encode.side_effect = Exception("Encoding failed")
+        mock_embeddings.model = mock_model
+        mock_embeddings_get.return_value = mock_embeddings
+
+        mock_milvus_get.return_value = Mock()
+
+        arguments = {"query": "test", "categories": ["product"]}
+
+        results = await _search_documentation_impl(arguments)
+
+        assert len(results) == 1
+        assert "Search failed:" in results[0].text
+
+    @patch('opencrane.mcp.server.get_milvus_service')
+    @patch('opencrane.mcp.server.get_embeddings_service')
+    @pytest.mark.anyio
+    async def test_health_check_success(self, mock_embeddings_get, mock_milvus_get):
+        """Test successful health check."""
+        mock_embeddings = Mock()
+        mock_embeddings.model = Mock()
+        mock_embeddings_get.return_value = mock_embeddings
+
+        mock_milvus = Mock()
+        mock_milvus.client = Mock()
+        mock_milvus.get_collection_stats.return_value = {"row_count": 100}
+        mock_milvus_get.return_value = mock_milvus
+
+        arguments = {}
+
+        results = await health_check(arguments)
+
+        assert len(results) == 1
+        health_text = results[0].text
+        assert "embeddings_service: healthy" in health_text
+        assert "milvus_service: healthy" in health_text
+        assert "collection_stats" in health_text
+
+    @patch('opencrane.mcp.server.get_milvus_service')
+    @patch('opencrane.mcp.server.get_embeddings_service')
+    @pytest.mark.anyio
+    async def test_health_check_failure(self, mock_embeddings_get, mock_milvus_get):
+        """Test health check with failures."""
+        mock_embeddings = Mock()
+        mock_embeddings.model = None
+        mock_embeddings_get.return_value = mock_embeddings
+
+        mock_milvus = Mock()
+        mock_milvus.client = None
+        mock_milvus.get_collection_stats.side_effect = Exception("Stats error")
+        mock_milvus_get.return_value = mock_milvus
+
+        arguments = {}
+
+        results = await health_check(arguments)
+
+        assert len(results) == 1
+        health_text = results[0].text
+        assert "embeddings_service: unhealthy" in health_text
+        assert "milvus_service: unhealthy" in health_text
+        assert "error: Stats error" in health_text
+
+    @patch('opencrane.mcp.server.app')
+    @pytest.mark.anyio
+    async def test_main(self, mock_app):
+        """Test main function execution."""
+        from unittest.mock import AsyncMock, Mock
+
+        # Create a mock context manager for stdio_server
+        mock_read_stream = Mock()
+        mock_write_stream = Mock()
+        mock_cm = Mock()
+        mock_cm.__aenter__ = AsyncMock(return_value=(mock_read_stream, mock_write_stream))
+        mock_cm.__aexit__ = AsyncMock(return_value=None)
+
+        with patch('opencrane.mcp.server.stdio_server', return_value=mock_cm):
+            mock_app.run = AsyncMock()
+            mock_app.create_initialization_options.return_value = {}
+
+            await main()
+
+            mock_app.run.assert_called_once_with(
+                mock_read_stream,
+                mock_write_stream,
+                {}
+            )
+
+    @patch('opencrane.mcp.server.get_embeddings_service')
+    @patch('opencrane.mcp.server.get_milvus_service')
+    @patch('opencrane.mcp.server._build_chunk_source_map')
+    @pytest.mark.anyio
+    async def test_search_with_numpy_array_conversion(self, mock_build_map, mock_milvus_get, mock_embeddings_get):
+        """Test search when model returns numpy array."""
+        import numpy as np
+
+        mock_embeddings = Mock()
+        mock_model = Mock()
+        # Return numpy array
+        mock_model.encode.return_value = np.array([[0.1] * 768])
+        mock_embeddings.model = mock_model
+        mock_embeddings_get.return_value = mock_embeddings
+
+        mock_milvus = Mock()
+        mock_milvus.search.return_value = [
+            {
+                "content": "test",
+                "source_file": "file.md",
+                "chunk_type": "prose",
+                "chunk_id": "test_id",
+                "metadata_json": '{}',
+                "distance": 0.5
+            }
+        ]
+        mock_milvus_get.return_value = mock_milvus
+        mock_build_map.return_value = {}
+
+        arguments = {"query": "test", "limit": 5, "search_mode": "semantic", "categories": ["product"]}
+        results = await _search_documentation_impl(arguments)
+
+        assert len(results) == 1
+        mock_model.encode.assert_called_once()
+
+    @patch('opencrane.mcp.server.get_embeddings_service')
+    @patch('opencrane.mcp.server.get_milvus_service')
+    @patch('opencrane.mcp.server._build_chunk_source_map')
+    @pytest.mark.anyio
+    async def test_search_with_source_map_fallback(self, mock_build_map, mock_milvus_get, mock_embeddings_get):
+        """Test search falls back to source_map for URL."""
+        mock_embeddings = Mock()
+        mock_model = Mock()
+        mock_model.encode.return_value = [[0.1] * 768]
+        mock_embeddings.model = mock_model
+        mock_embeddings_get.return_value = mock_embeddings
+
+        mock_milvus = Mock()
+        mock_milvus.search.return_value = [
+            {
+                "content": "test content without URL",
+                "source_file": "llmstxt/product-docs/llms-full.txt",
+                "chunk_type": "prose",
+                "chunk_id": "test_id_123",
+                "metadata_json": '{}',
+                "distance": 0.5
+            }
+        ]
+        mock_milvus_get.return_value = mock_milvus
+        mock_build_map.return_value = {"test_id_123": "https://github.com/test/repo/blob/main/file.md"}
+
+        arguments = {"query": "test", "limit": 5, "search_mode": "semantic", "categories": ["product"]}
+        results = await _search_documentation_impl(arguments)
+
+        assert len(results) == 1
+        assert "https://github.com/test/repo/blob/main/file.md" in results[0].text
+
+    @patch('opencrane.mcp.server.get_embeddings_service')
+    @patch('opencrane.mcp.server.get_milvus_service')
+    @pytest.mark.anyio
+    async def test_health_check_exception(self, mock_milvus_get, mock_embeddings_get):
+        """Test health check handles exceptions."""
+        mock_embeddings_get.side_effect = Exception("Service unavailable")
+        
+        arguments = {}
+        results = await health_check(arguments)
+        
+        assert len(results) == 1
+        assert "Health check failed" in results[0].text
+        assert "Service unavailable" in results[0].text
+
+    @patch('opencrane.mcp.server.Path')
+    @patch('opencrane.mcp.server.generate_chunk_id')
+    def test_build_chunk_source_map_with_exception(self, mock_gen_id, mock_path):
+        """Test building source map skips chunks that fail ID generation."""
+        from opencrane.mcp.server import _build_chunk_source_map
+        import opencrane.mcp.server as server_module
+        
+        # Reset cache
+        server_module._chunk_source_map = None
+        
+        mock_file = Mock()
+        mock_file.exists.return_value = True
+        mock_file.read_text.return_value = '[{"content": "test", "source_file": "test.md", "chunk_type": "prose"}]'
+        mock_path.return_value = mock_file
+        
+        # Make generate_chunk_id raise exception
+        mock_gen_id.side_effect = Exception("ID generation failed")
+        
+        result = _build_chunk_source_map()
+        
+        # Should return empty map since all chunks failed
+        assert result == {}
+
+    @patch('opencrane.mcp.server.Path')
+    def test_build_chunk_source_map_caching(self, mock_path):
+        """Test that source map is cached and returns early on second call."""
+        from opencrane.mcp.server import _build_chunk_source_map
+        import opencrane.mcp.server as server_module
+        
+        # Reset cache
+        server_module._chunk_source_map = None
+        
+        mock_file = Mock()
+        mock_file.exists.return_value = True
+        mock_file.read_text.return_value = '[{"content": "test content", "source_file": "test.md", "chunk_type": "prose"}]'
+        mock_path.return_value = mock_file
+        
+        # First call - should load from file
+        result1 = _build_chunk_source_map()
+        assert isinstance(result1, dict)
+        
+        # Second call - should return cached value (line 87)
+        # Mock file should not be read again
+        mock_file.read_text.side_effect = Exception("Should not be called")
+        result2 = _build_chunk_source_map()
+        
+        # Should return the same cached object
+        assert result2 is result1
+
+    def test_rehydrate_to_yaml_with_dict_content(self):
+        """Test YAML re-hydration with dict content and full metadata."""
+        content = {"spec": {"replicas": 3}}
+        metadata = {
+            "original_format": "yaml",
+            "breadcrumb_path": "spec.versions[0].schema.properties.spec",
+            "source_url": "https://github.com/my-org/smc/docs/config.md",
+            "logical_parent": "spec.versions[0].schema.properties",
+            "crd_kind": "SMC",
+            "crd_version": "v1"
+        }
+
+        result = _rehydrate_to_yaml(content, metadata, "crd_definition")
+
+        # Check breadcrumb comments
+        assert "# Location: spec.versions[0].schema.properties.spec" in result
+        assert "# Documentation: https://github.com/my-org/smc/docs/config.md" in result
+        assert "# Parent: spec.versions[0].schema.properties" in result
+        assert "# CRD Kind: SMC" in result
+        assert "# CRD Version: v1" in result
+        # Check YAML content
+        assert "spec:" in result
+        assert "replicas: 3" in result
+
+    def test_rehydrate_to_yaml_with_openapi_metadata(self):
+        """Test YAML re-hydration with OpenAPI-specific metadata."""
+        content = {"get": {"summary": "Get user"}}
+        metadata = {
+            "original_format": "yaml",
+            "breadcrumb_path": "paths./users.get",
+            "openapi_version": "3.0.0",
+            "endpoint_path": "/users",
+            "http_method": "get"
+        }
+
+        result = _rehydrate_to_yaml(content, metadata, "openapi_spec")
+
+        assert "# Location: paths./users.get" in result
+        assert "# OpenAPI Version: 3.0.0" in result
+        assert "# Endpoint: /users" in result
+        assert "# Method: GET" in result
+        assert "get:" in result
+        assert "summary: Get user" in result
+
+    def test_rehydrate_to_yaml_non_yaml_content(self):
+        """Test that non-YAML content is returned as-is."""
+        content = "This is prose text"
+        metadata = {"original_format": "text"}
+
+        result = _rehydrate_to_yaml(content, metadata, "prose")
+
+        assert result == content
+
+    def test_rehydrate_to_yaml_minimal_metadata(self):
+        """Test YAML re-hydration with minimal metadata."""
+        content = {"key": "value"}
+        metadata = {"original_format": "yaml"}
+
+        result = _rehydrate_to_yaml(content, metadata, "crd_definition")
+
+        # Should just have YAML content, no breadcrumb
+        assert "key: value" in result
+        assert "#" not in result
+
+    def test_rehydrate_to_yaml_string_content(self):
+        """Test YAML re-hydration with string content (already YAML)."""
+        content = "already_yaml: true\nkey: value"
+        metadata = {
+            "original_format": "yaml",
+            "breadcrumb_path": "test.path"
+        }
+
+        result = _rehydrate_to_yaml(content, metadata, "crd_definition")
+
+        # Should have breadcrumb plus original string
+        assert "# Location: test.path" in result
+        assert "already_yaml: true" in result
+        assert "key: value" in result
+
+    def test_rehydrate_to_yaml_json_schema(self):
+        """Test YAML re-hydration with JSON Schema chunk."""
+        content = {
+            "type": "string",
+            "description": "User email address",
+            "format": "email"
+        }
+        metadata = {
+            "original_format": "yaml",
+            "schema_type": "json_schema",
+            "breadcrumb_path": "properties.email",
+            "logical_parent": "properties",
+            "schema_version": "https://json-schema.org/draft/2020-12/schema",
+            "schema_title": "User Schema",
+            "property_path": "email",
+            "source_url": "https://example.com/schema.json"
+        }
+
+        result = _rehydrate_to_yaml(content, metadata, "json_schema")
+
+        # Should have JSON Schema-specific breadcrumbs
+        assert "# Location: properties.email" in result
+        assert "# Documentation: https://example.com/schema.json" in result
+        assert "# Parent: properties" in result
+        assert "# JSON Schema Version: https://json-schema.org/draft/2020-12/schema" in result
+        assert "# Schema Title: User Schema" in result
+        assert "# Property Path: email" in result
+        # Should have YAML content
+        assert "type: string" in result
+        assert "format: email" in result
+
+    @patch('opencrane.mcp.server._build_chunk_source_map', return_value={})
+    @pytest.mark.anyio
+    async def test_search_documentation_metadata_parse_error(self, mock_source_map):
+        """Test search when metadata JSON parsing fails."""
+        from opencrane.mcp.server import _search_documentation_impl
+
+        # Setup mock services
+        mock_milvus = Mock()
+        mock_embeddings = Mock()
+        mock_embeddings.model.encode.return_value = [[0.1] * 768]
+
+        with patch('opencrane.mcp.server.get_milvus_service', return_value=mock_milvus), \
+             patch('opencrane.mcp.server.get_embeddings_service', return_value=mock_embeddings):
+
+            # Return result with metadata_json that will fail to parse
+            mock_milvus.search.return_value = [
+                {
+                    "chunk_id": "test-123",
+                    "content": "test content",
+                    "chunk_type": "prose",
+                    "metadata_json": '{"invalid"',  # Invalid JSON
+                    "distance": 0.5
+                }
+            ]
+
+            result = await _search_documentation_impl({
+                "query": "test",
+                "limit": 1,
+                "search_mode": "semantic",
+                "categories": ["product"]
+            })
+
+            # Should handle the error gracefully
+            assert len(result) > 0
+            assert "test content" in result[0].text
+
+    @patch('opencrane.mcp.server._build_chunk_source_map', return_value={})
+    @pytest.mark.anyio
+    async def test_search_documentation_long_content_truncation(self, mock_source_map):
+        """Test that long content is truncated in search results."""
+        from opencrane.mcp.server import _search_documentation_impl
+
+        # Setup mock services
+        mock_milvus = Mock()
+        mock_embeddings = Mock()
+        mock_embeddings.model.encode.return_value = [[0.1] * 768]
+
+        # Create content > 1000 chars
+        long_content = "x" * 1500
+
+        with patch('opencrane.mcp.server.get_milvus_service', return_value=mock_milvus), \
+             patch('opencrane.mcp.server.get_embeddings_service', return_value=mock_embeddings):
+
+            mock_milvus.search.return_value = [
+                {
+                    "chunk_id": "test-123",
+                    "content": long_content,
+                    "chunk_type": "prose",
+                    "metadata": "{}",
+                    "distance": 0.5
+                }
+            ]
+
+            result = await _search_documentation_impl({
+                "query": "test",
+                "limit": 1,
+                "search_mode": "semantic",
+                "categories": ["product"]
+            })
+
+            # Should have truncation message
+            assert len(result) > 0
+            assert "...(truncated" in result[0].text
+            assert "1500 total chars" in result[0].text
+            assert "get_yaml_definition" in result[0].text
+            assert "chunk_id='test-123'" in result[0].text
+
+    @patch('opencrane.mcp.server._build_chunk_source_map', return_value={})
+    @pytest.mark.anyio
+    async def test_search_documentation_yaml_chunk_hint(self, mock_source_map):
+        """Test that YAML chunks show hint to use get_yaml_definition."""
+        from opencrane.mcp.server import _search_documentation_impl
+
+        # Setup mock services
+        mock_milvus = Mock()
+        mock_embeddings = Mock()
+        mock_embeddings.model.encode.return_value = [[0.1] * 768]
+
+        with patch('opencrane.mcp.server.get_milvus_service', return_value=mock_milvus), \
+             patch('opencrane.mcp.server.get_embeddings_service', return_value=mock_embeddings):
+
+            # Return CRD chunk with short content (not truncated)
+            mock_milvus.search.return_value = [
+                {
+                    "chunk_id": "crd-456",
+                    "content": {"replicas": 3},
+                    "chunk_type": "crd_definition",
+                    "metadata_json": '{"original_format": "yaml"}',
+                    "distance": 0.8
+                }
+            ]
+
+            result = await _search_documentation_impl({
+                "query": "test crd",
+                "limit": 1,
+                "search_mode": "semantic",
+                "categories": ["product"]
+            })
+
+            # Should have hint to use get_yaml_definition
+            assert len(result) > 0
+            assert "get_yaml_definition" in result[0].text
+            assert "chunk_id='crd-456'" in result[0].text
+            assert "breadcrumb comments" in result[0].text
+
+    @pytest.mark.anyio
+    async def test_search_documentation_empty_query(self):
+        """Test search_documentation returns error for empty query."""
+        result = await _search_documentation_impl({"query": "", "categories": ["product"]})
+        assert len(result) == 1
+        assert "Error: query must be a non-empty string." in result[0].text
+
+    @pytest.mark.anyio
+    async def test_search_documentation_whitespace_query(self):
+        """Test search_documentation returns error for whitespace-only query."""
+        result = await _search_documentation_impl({"query": "   ", "categories": ["product"]})
+        assert len(result) == 1
+        assert "Error: query must be a non-empty string." in result[0].text
+
+    @patch('opencrane.mcp.server._build_chunk_source_map', return_value={})
+    @patch('opencrane.mcp.server._build_chunk_index')
+    @pytest.mark.anyio
+    async def test_search_documentation_exposes_token_count(self, mock_chunk_index, mock_source_map):
+        """Test that search results include token_count from chunk index."""
+        from opencrane.mcp.server import _search_documentation_impl
+
+        # Setup mock services
+        mock_milvus = Mock()
+        mock_embeddings = Mock()
+        mock_embeddings.model.encode.return_value = [[0.1] * 768]
+
+        # Mock chunk index with token_count data
+        mock_chunk_index.return_value = {
+            "chunk-123": {
+                "chunk_id": "chunk-123",
+                "content": "test content",
+                "token_count": 2073
+            }
+        }
+
+        with patch('opencrane.mcp.server.get_milvus_service', return_value=mock_milvus), \
+             patch('opencrane.mcp.server.get_embeddings_service', return_value=mock_embeddings):
+
+            mock_milvus.search.return_value = [
+                {
+                    "chunk_id": "chunk-123",
+                    "content": "test content",
+                    "chunk_type": "prose",
+                    "metadata_json": '{}',
+                    "distance": 0.9
+                }
+            ]
+
+            result = await _search_documentation_impl({
+                "query": "test",
+                "limit": 1,
+                "search_mode": "semantic",
+                "categories": ["product"]
+            })
+
+            # Should include token count in output
+            assert len(result) > 0
+            assert "Token Count: 2073" in result[0].text
+            assert "Chunk ID: chunk-123" in result[0].text
+
+    @patch('opencrane.mcp.server._build_chunk_index')
+    @pytest.mark.anyio
+    async def test_get_yaml_definition_with_many_neighbors(self, mock_build_chunk_index):
+        """Test get_yaml_definition with > 5 neighbor chunks."""
+        chunk_data = {
+            "chunk_id": "test-123",
+            "content": {"spec": {"replicas": 3}},
+            "chunk_type": "crd_definition",
+            "metadata": {
+                "original_format": "yaml",
+                "neighbor_chunks": ["n1", "n2", "n3", "n4", "n5", "n6", "n7", "n8"]
+            }
+        }
+        mock_build_chunk_index.return_value = {"test-123": chunk_data}
+
+        result = await get_yaml_definition({"chunk_id": "test-123"})
+
+        assert len(result) == 1
+        # Should show "and X more" message
+        assert "and 3 more" in result[0].text
+        # Should show first 5 neighbors
+        assert "n1" in result[0].text
+        assert "n5" in result[0].text
+
+    @patch('builtins.open', new_callable=mock_open)
+    @patch('opencrane.mcp.server._build_chunk_index')
+    @pytest.mark.anyio
+    async def test_get_yaml_definition_success(self, mock_build_chunk_index, mock_file):
+        """Test successful chunk retrieval and YAML re-hydration."""
+        chunk_data = {
+            "chunk_id": "test-123",
+            "content": {"spec": {"replicas": 3}},
+            "chunk_type": "crd_definition",
+            "metadata": {
+                "original_format": "yaml",
+                "breadcrumb_path": "spec.properties.spec",
+                "source_url": "https://github.com/test/doc.md",
+                "neighbor_chunks": ["chunk-456", "chunk-789"]
+            }
+        }
+        mock_build_chunk_index.return_value = {"test-123": chunk_data}
+
+        result = await get_yaml_definition({"chunk_id": "test-123"})
+
+        assert len(result) == 1
+        assert "Chunk ID: test-123" in result[0].text
+        assert "Type: crd_definition" in result[0].text
+        assert "# Location: spec.properties.spec" in result[0].text
+        assert "# Documentation: https://github.com/test/doc.md" in result[0].text
+        assert "spec:" in result[0].text
+        assert "replicas: 3" in result[0].text
+        assert "# Neighbor Chunks" in result[0].text
+        assert "chunk-456" in result[0].text
+
+    @patch('opencrane.mcp.server._build_chunk_index')
+    @pytest.mark.anyio
+    async def test_get_yaml_definition_chunk_not_found(self, mock_build_chunk_index):
+        """Test get_yaml_definition with non-existent chunk ID."""
+        mock_build_chunk_index.return_value = {}
+
+        result = await get_yaml_definition({"chunk_id": "nonexistent"})
+
+        assert len(result) == 1
+        assert "Chunk not found" in result[0].text
+
+    @patch('opencrane.mcp.server._build_chunk_index')
+    @pytest.mark.anyio
+    async def test_get_yaml_definition_file_error(self, mock_build_chunk_index):
+        """Test get_yaml_definition with file read error."""
+        mock_build_chunk_index.side_effect = Exception("File not found")
+
+        result = await get_yaml_definition({"chunk_id": "test-123"})
+
+        assert len(result) == 1
+        assert "Failed to fetch chunk" in result[0].text
+
+    @patch('opencrane.mcp.server._build_chunk_index')
+    @patch('opencrane.mcp.server._rehydrate_to_yaml')
+    @pytest.mark.anyio
+    async def test_get_yaml_definition_processing_error(self, mock_rehydrate, mock_build_chunk_index):
+        """Test get_yaml_definition with error during YAML re-hydration."""
+        chunk_data = {
+            "chunk_id": "test-123",
+            "content": {"spec": {"replicas": 3}},
+            "chunk_type": "crd_definition",
+            "metadata": {"original_format": "yaml"}
+        }
+        mock_build_chunk_index.return_value = {"test-123": chunk_data}
+        mock_rehydrate.side_effect = Exception("YAML conversion failed")
+
+        result = await get_yaml_definition({"chunk_id": "test-123"})
+
+        assert len(result) == 1
+        assert "Failed to fetch chunk" in result[0].text
+        assert "YAML conversion failed" in result[0].text
+
+    @patch('opencrane.mcp.server.Path')
+    @pytest.mark.anyio
+    async def test_get_metadata_schema_success(self, mock_path):
+        """Test get_metadata_schema returns schema documentation."""
+        from opencrane.mcp.server import get_metadata_schema
+
+        schema_content = "# Chunk Metadata Schema\n\nbreadcrumb_path: ...\nlogical_parent: ...\nneighbor_chunks: ..."
+        mock_path_instance = Mock()
+        mock_path_instance.exists.return_value = True
+        mock_path_instance.read_text.return_value = schema_content
+        mock_path.return_value = mock_path_instance
+
+        result = await get_metadata_schema({})
+
+        assert len(result) == 1
+        assert "Chunk Metadata Schema" in result[0].text
+        assert "breadcrumb_path" in result[0].text
+        assert "logical_parent" in result[0].text
+        assert "neighbor_chunks" in result[0].text
+
+    @patch('opencrane.mcp.server.Path')
+    @pytest.mark.anyio
+    async def test_get_metadata_schema_file_not_found(self, mock_path):
+        """Test get_metadata_schema when schema file doesn't exist."""
+        from opencrane.mcp.server import get_metadata_schema
+
+        mock_path_instance = Mock()
+        mock_path_instance.exists.return_value = False
+        mock_path.return_value = mock_path_instance
+
+        result = await get_metadata_schema({})
+
+        assert len(result) == 1
+        assert "not found" in result[0].text
+
+    @patch('opencrane.mcp.server.Path')
+    @pytest.mark.anyio
+    async def test_get_metadata_schema_read_error(self, mock_path):
+        """Test get_metadata_schema with file read error."""
+        from opencrane.mcp.server import get_metadata_schema
+
+        mock_path_instance = Mock()
+        mock_path_instance.exists.return_value = True
+        mock_path_instance.read_text.side_effect = Exception("Read failed")
+        mock_path.return_value = mock_path_instance
+
+        result = await get_metadata_schema({})
+
+        assert len(result) == 1
+        assert "Failed to retrieve metadata schema" in result[0].text
+
+
+def test_build_chunk_index_loads_from_file(tmp_path, monkeypatch):
+    """Test _build_chunk_index loads and indexes chunks from .opencrane/chunks.json."""
+    import opencrane.mcp.server as server_module
+
+    monkeypatch.chdir(tmp_path)
+    server_module._chunk_index = None
+
+    chunks = [
+        {"chunk_id": "abc-1", "content": "hello", "chunk_type": "prose"},
+        {"chunk_id": "abc-2", "content": "world", "chunk_type": "code_snippet"},
+        {"content": "no id chunk", "chunk_type": "prose"},  # missing chunk_id
+    ]
+    (tmp_path / ".opencrane").mkdir()
+    (tmp_path / ".opencrane" / "chunks.json").write_text(json.dumps(chunks), encoding="utf-8")
+
+    result = server_module._build_chunk_index()
+
+    assert len(result) == 2
+    assert result["abc-1"]["content"] == "hello"
+    assert result["abc-2"]["content"] == "world"
+
+
+def test_build_chunk_index_caching(tmp_path, monkeypatch):
+    """Test _build_chunk_index returns cached value on second call."""
+    import opencrane.mcp.server as server_module
+
+    monkeypatch.chdir(tmp_path)
+    server_module._chunk_index = None
+
+    chunks = [{"chunk_id": "c1", "content": "data"}]
+    (tmp_path / ".opencrane").mkdir()
+    chunks_path = tmp_path / ".opencrane" / "chunks.json"
+    chunks_path.write_text(json.dumps(chunks), encoding="utf-8")
+
+    result1 = server_module._build_chunk_index()
+    assert "c1" in result1
+
+    # Remove the file — second call should still return cached result
+    chunks_path.unlink()
+    result2 = server_module._build_chunk_index()
+    assert result2 is result1
+
+
+def test_build_chunk_source_map_from_rag_chunks(tmp_path, monkeypatch):
+    """Cover chunk source map building via .opencrane/chunks.json."""
+    import opencrane.mcp.server as server_module
+
+    monkeypatch.chdir(tmp_path)
+    server_module._chunk_source_map = None
+
+    url = "https://github.com/my-org/proj/blob/main/docs/a.md"
+    source_file = "llmstxt/product-docs/llms-full.txt"
+    chunk = {
+        "content": "Some unique content",
+        "source_file": source_file,
+        "chunk_type": "prose",
+        "line_start": None,
+        "metadata": {"source_url": url},
+    }
+    (tmp_path / ".opencrane").mkdir()
+    chunks_path = tmp_path / ".opencrane" / "chunks.json"
+    chunks_path.write_text(json.dumps([chunk]), encoding="utf-8")
+
+    mapping = server_module._build_chunk_source_map()
+    expected_id = server_module.generate_chunk_id(source_file, "prose", None, "Some unique content")
+    assert mapping.get(expected_id) == url
+
+
+@pytest.mark.anyio
+@patch('opencrane.mcp.server.get_embeddings_service')
+@patch('opencrane.mcp.server.get_milvus_service')
+async def test_search_documentation_metadata_display_prose(mock_milvus_get, mock_embeddings_get, monkeypatch):
+    """Test that metadata is displayed for prose chunks but not for YAML chunks."""
+    import opencrane.mcp.server as server_module
+
+    # Mock services
+    mock_embeddings = Mock()
+    mock_model = Mock()
+    mock_model.encode.return_value = [[0.1] * 768]
+    mock_embeddings.model = mock_model
+    mock_embeddings_get.return_value = mock_embeddings
+
+    mock_milvus = Mock()
+    mock_milvus.search.return_value = [
+        {
+            "chunk_id": "test-prose-id",
+            "content": "prose content",
+            "source_file": "file.md",
+            "chunk_type": "prose",
+            "metadata_json": json.dumps({
+                "breadcrumb_path": "section/subsection",
+                "logical_parent": "parent.section",
+                "neighbor_chunks": ["chunk1", "chunk2"]
+            }),
+            "distance": 0.5
+        },
+        {
+            "chunk_id": "test-crd-id",
+            "content": {"apiVersion": "v1", "kind": "Test"},
+            "source_file": "crd.yaml",
+            "chunk_type": "crd_definition",
+            "metadata_json": json.dumps({
+                "breadcrumb_path": "spec.replicas",
+                "crd_kind": "TestCRD",
+                "crd_version": "v1alpha1"
+            }),
+            "distance": 0.4
+        }
+    ]
+
+    mock_milvus_get.return_value = mock_milvus
+    monkeypatch.setattr(server_module, "_build_chunk_source_map", lambda: {})
+
+    results = await server_module._search_documentation_impl({"query": "test", "search_mode": "semantic", "categories": ["product"]})
+
+    assert len(results) == 2
+
+    # Prose chunk should have Metadata section
+    assert "Metadata:" in results[0].text
+    assert "Location: section/subsection" in results[0].text
+    assert "Parent: parent.section" in results[0].text
+    assert "Siblings: 2 chunks" in results[0].text
+
+    # CRD chunk should NOT have duplicate Metadata section (already in breadcrumb comments)
+    # Count occurrences of "CRD Kind" - should only appear once (in breadcrumb)
+    crd_kind_count = results[1].text.count("CRD Kind")
+    assert crd_kind_count == 1  # Only in breadcrumb, not in separate Metadata section

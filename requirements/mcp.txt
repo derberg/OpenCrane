@@ -1,0 +1,5 @@
+# MCP Server dependencies
+mcp>=0.1
+uvicorn>=0.24.0
+starlette>=0.32.0
+rank-bm25>=0.2.2

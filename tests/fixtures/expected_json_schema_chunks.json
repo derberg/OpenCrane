@@ -1,0 +1,348 @@
+[
+  {
+    "chunk_id": "9f97077d1caa95cdf051cd52ae9f45ae1a89ac9988a81ce21fe604d99873753a",
+    "content": {
+      "title": "User",
+      "description": "Schema for user objects",
+      "type": "object"
+    },
+    "source_file": "tests/fixtures/markdown_with_json_schema.md",
+    "chunk_type": "json_schema",
+    "metadata": {
+      "source_url": "tests/fixtures/markdown_with_json_schema.md",
+      "breadcrumb_path": "root",
+      "logical_parent": "root",
+      "neighbor_chunks": [
+        "79bb05589c102ce36ae7defba6924a0b9173f12b88e2cd8845bcbc653851efbb",
+        "b26d9fcce3beae69881ea93efcc491cd33b567b65a75f16373dfa8ed4c58bab7",
+        "c25adb9968d09905373be7b376a69e167114fbef1bb803f3aaff7491c4e36343",
+        "a48d8cac43687b89bedce54f411a76f00cec319c5c5a0c821e71116117c2e90d",
+        "6e85f09a92e8e145131362a16b50b0800b7f6ffe304c95d4b9f0459e2287cb2f",
+        "35961f491427c591225ea8a49dfeb2e1ca93454e4926b141014c69331f1179e1"
+      ],
+      "original_format": "yaml",
+      "schema_type": "json_schema",
+      "schema_version": "https://json-schema.org/draft/2020-12/schema",
+      "schema_element": "root",
+      "schema_id": "https://example.com/schemas/user.json",
+      "schema_title": "User"
+    },
+    "token_count": 15,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "79bb05589c102ce36ae7defba6924a0b9173f12b88e2cd8845bcbc653851efbb",
+    "content": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for the user"
+    },
+    "source_file": "tests/fixtures/markdown_with_json_schema.md",
+    "chunk_type": "json_schema",
+    "metadata": {
+      "source_url": "tests/fixtures/markdown_with_json_schema.md",
+      "breadcrumb_path": "properties.id",
+      "logical_parent": "root",
+      "neighbor_chunks": [
+        "9f97077d1caa95cdf051cd52ae9f45ae1a89ac9988a81ce21fe604d99873753a",
+        "b26d9fcce3beae69881ea93efcc491cd33b567b65a75f16373dfa8ed4c58bab7",
+        "c25adb9968d09905373be7b376a69e167114fbef1bb803f3aaff7491c4e36343",
+        "a48d8cac43687b89bedce54f411a76f00cec319c5c5a0c821e71116117c2e90d",
+        "6e85f09a92e8e145131362a16b50b0800b7f6ffe304c95d4b9f0459e2287cb2f",
+        "35961f491427c591225ea8a49dfeb2e1ca93454e4926b141014c69331f1179e1"
+      ],
+      "original_format": "yaml",
+      "schema_type": "json_schema",
+      "schema_version": "https://json-schema.org/draft/2020-12/schema",
+      "schema_element": "properties",
+      "schema_id": "https://example.com/schemas/user.json",
+      "schema_title": "User",
+      "property_path": "id",
+      "property_name": "id"
+    },
+    "token_count": 16,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "b26d9fcce3beae69881ea93efcc491cd33b567b65a75f16373dfa8ed4c58bab7",
+    "content": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 50,
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "description": "User's login name"
+    },
+    "source_file": "tests/fixtures/markdown_with_json_schema.md",
+    "chunk_type": "json_schema",
+    "metadata": {
+      "source_url": "tests/fixtures/markdown_with_json_schema.md",
+      "breadcrumb_path": "properties.username",
+      "logical_parent": "root",
+      "neighbor_chunks": [
+        "9f97077d1caa95cdf051cd52ae9f45ae1a89ac9988a81ce21fe604d99873753a",
+        "79bb05589c102ce36ae7defba6924a0b9173f12b88e2cd8845bcbc653851efbb",
+        "c25adb9968d09905373be7b376a69e167114fbef1bb803f3aaff7491c4e36343",
+        "a48d8cac43687b89bedce54f411a76f00cec319c5c5a0c821e71116117c2e90d",
+        "6e85f09a92e8e145131362a16b50b0800b7f6ffe304c95d4b9f0459e2287cb2f",
+        "35961f491427c591225ea8a49dfeb2e1ca93454e4926b141014c69331f1179e1"
+      ],
+      "original_format": "yaml",
+      "schema_type": "json_schema",
+      "schema_version": "https://json-schema.org/draft/2020-12/schema",
+      "schema_element": "properties",
+      "schema_id": "https://example.com/schemas/user.json",
+      "schema_title": "User",
+      "property_path": "username",
+      "property_name": "username"
+    },
+    "token_count": 35,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "c25adb9968d09905373be7b376a69e167114fbef1bb803f3aaff7491c4e36343",
+    "content": {
+      "type": "string",
+      "format": "email",
+      "description": "User's email address"
+    },
+    "source_file": "tests/fixtures/markdown_with_json_schema.md",
+    "chunk_type": "json_schema",
+    "metadata": {
+      "source_url": "tests/fixtures/markdown_with_json_schema.md",
+      "breadcrumb_path": "properties.email",
+      "logical_parent": "root",
+      "neighbor_chunks": [
+        "9f97077d1caa95cdf051cd52ae9f45ae1a89ac9988a81ce21fe604d99873753a",
+        "79bb05589c102ce36ae7defba6924a0b9173f12b88e2cd8845bcbc653851efbb",
+        "b26d9fcce3beae69881ea93efcc491cd33b567b65a75f16373dfa8ed4c58bab7",
+        "a48d8cac43687b89bedce54f411a76f00cec319c5c5a0c821e71116117c2e90d",
+        "6e85f09a92e8e145131362a16b50b0800b7f6ffe304c95d4b9f0459e2287cb2f",
+        "35961f491427c591225ea8a49dfeb2e1ca93454e4926b141014c69331f1179e1"
+      ],
+      "original_format": "yaml",
+      "schema_type": "json_schema",
+      "schema_version": "https://json-schema.org/draft/2020-12/schema",
+      "schema_element": "properties",
+      "schema_id": "https://example.com/schemas/user.json",
+      "schema_title": "User",
+      "property_path": "email",
+      "property_name": "email"
+    },
+    "token_count": 15,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "a48d8cac43687b89bedce54f411a76f00cec319c5c5a0c821e71116117c2e90d",
+    "content": {
+      "type": "object",
+      "description": "User profile information",
+      "properties": {
+        "firstName": {
+          "type": "string",
+          "description": "User's first name"
+        },
+        "lastName": {
+          "type": "string",
+          "description": "User's last name"
+        },
+        "age": {
+          "type": "integer",
+          "minimum": 18,
+          "maximum": 120,
+          "description": "User's age"
+        },
+        "address": {
+          "$ref": "#/$defs/address"
+        }
+      }
+    },
+    "source_file": "tests/fixtures/markdown_with_json_schema.md",
+    "chunk_type": "json_schema",
+    "metadata": {
+      "source_url": "tests/fixtures/markdown_with_json_schema.md",
+      "breadcrumb_path": "properties.profile",
+      "logical_parent": "root",
+      "neighbor_chunks": [
+        "9f97077d1caa95cdf051cd52ae9f45ae1a89ac9988a81ce21fe604d99873753a",
+        "79bb05589c102ce36ae7defba6924a0b9173f12b88e2cd8845bcbc653851efbb",
+        "b26d9fcce3beae69881ea93efcc491cd33b567b65a75f16373dfa8ed4c58bab7",
+        "c25adb9968d09905373be7b376a69e167114fbef1bb803f3aaff7491c4e36343",
+        "6e85f09a92e8e145131362a16b50b0800b7f6ffe304c95d4b9f0459e2287cb2f",
+        "35961f491427c591225ea8a49dfeb2e1ca93454e4926b141014c69331f1179e1"
+      ],
+      "original_format": "yaml",
+      "schema_type": "json_schema",
+      "schema_version": "https://json-schema.org/draft/2020-12/schema",
+      "schema_element": "properties",
+      "schema_id": "https://example.com/schemas/user.json",
+      "schema_title": "User",
+      "property_path": "profile",
+      "property_name": "profile"
+    },
+    "token_count": 83,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "6e85f09a92e8e145131362a16b50b0800b7f6ffe304c95d4b9f0459e2287cb2f",
+    "content": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "admin",
+          "user",
+          "moderator"
+        ]
+      },
+      "description": "User's assigned roles"
+    },
+    "source_file": "tests/fixtures/markdown_with_json_schema.md",
+    "chunk_type": "json_schema",
+    "metadata": {
+      "source_url": "tests/fixtures/markdown_with_json_schema.md",
+      "breadcrumb_path": "properties.roles",
+      "logical_parent": "root",
+      "neighbor_chunks": [
+        "9f97077d1caa95cdf051cd52ae9f45ae1a89ac9988a81ce21fe604d99873753a",
+        "79bb05589c102ce36ae7defba6924a0b9173f12b88e2cd8845bcbc653851efbb",
+        "b26d9fcce3beae69881ea93efcc491cd33b567b65a75f16373dfa8ed4c58bab7",
+        "c25adb9968d09905373be7b376a69e167114fbef1bb803f3aaff7491c4e36343",
+        "a48d8cac43687b89bedce54f411a76f00cec319c5c5a0c821e71116117c2e90d",
+        "35961f491427c591225ea8a49dfeb2e1ca93454e4926b141014c69331f1179e1"
+      ],
+      "original_format": "yaml",
+      "schema_type": "json_schema",
+      "schema_version": "https://json-schema.org/draft/2020-12/schema",
+      "schema_element": "properties",
+      "schema_id": "https://example.com/schemas/user.json",
+      "schema_title": "User",
+      "property_path": "roles",
+      "property_name": "roles"
+    },
+    "token_count": 33,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "35961f491427c591225ea8a49dfeb2e1ca93454e4926b141014c69331f1179e1",
+    "content": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Flexible metadata storage"
+    },
+    "source_file": "tests/fixtures/markdown_with_json_schema.md",
+    "chunk_type": "json_schema",
+    "metadata": {
+      "source_url": "tests/fixtures/markdown_with_json_schema.md",
+      "breadcrumb_path": "properties.metadata",
+      "logical_parent": "root",
+      "neighbor_chunks": [
+        "9f97077d1caa95cdf051cd52ae9f45ae1a89ac9988a81ce21fe604d99873753a",
+        "79bb05589c102ce36ae7defba6924a0b9173f12b88e2cd8845bcbc653851efbb",
+        "b26d9fcce3beae69881ea93efcc491cd33b567b65a75f16373dfa8ed4c58bab7",
+        "c25adb9968d09905373be7b376a69e167114fbef1bb803f3aaff7491c4e36343",
+        "a48d8cac43687b89bedce54f411a76f00cec319c5c5a0c821e71116117c2e90d",
+        "6e85f09a92e8e145131362a16b50b0800b7f6ffe304c95d4b9f0459e2287cb2f"
+      ],
+      "original_format": "yaml",
+      "schema_type": "json_schema",
+      "schema_version": "https://json-schema.org/draft/2020-12/schema",
+      "schema_element": "properties",
+      "schema_id": "https://example.com/schemas/user.json",
+      "schema_title": "User",
+      "property_path": "metadata",
+      "property_name": "metadata"
+    },
+    "token_count": 15,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "6d1d747ccfec5d205f037a05fcf0568ae8dffd20ef3d67eec85f9eb4375768ca",
+    "content": {
+      "type": "object",
+      "description": "Physical address",
+      "properties": {
+        "street": {
+          "type": "string",
+          "description": "Street address"
+        },
+        "city": {
+          "type": "string",
+          "description": "City name"
+        },
+        "state": {
+          "type": "string",
+          "description": "State or province"
+        },
+        "zipCode": {
+          "type": "string",
+          "pattern": "^[0-9]{5}(-[0-9]{4})?$",
+          "description": "ZIP or postal code"
+        },
+        "country": {
+          "type": "string",
+          "description": "Country name"
+        }
+      },
+      "required": [
+        "street",
+        "city",
+        "country"
+      ]
+    },
+    "source_file": "tests/fixtures/markdown_with_json_schema.md",
+    "chunk_type": "json_schema",
+    "metadata": {
+      "source_url": "tests/fixtures/markdown_with_json_schema.md",
+      "breadcrumb_path": "$defs.address",
+      "logical_parent": "$defs",
+      "neighbor_chunks": [
+        "933bb66e2adce597ae2b078027140567c385f6c3df2758c3d8d7c97c8a8c80f9"
+      ],
+      "original_format": "yaml",
+      "schema_type": "json_schema",
+      "schema_version": "https://json-schema.org/draft/2020-12/schema",
+      "schema_element": "definitions",
+      "schema_id": "https://example.com/schemas/user.json",
+      "schema_title": "User",
+      "definition_name": "address"
+    },
+    "token_count": 117,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "933bb66e2adce597ae2b078027140567c385f6c3df2758c3d8d7c97c8a8c80f9",
+    "content": {
+      "type": "string",
+      "pattern": "^\\+?[1-9]\\d{1,14}$",
+      "description": "E.164 formatted phone number"
+    },
+    "source_file": "tests/fixtures/markdown_with_json_schema.md",
+    "chunk_type": "json_schema",
+    "metadata": {
+      "source_url": "tests/fixtures/markdown_with_json_schema.md",
+      "breadcrumb_path": "$defs.phoneNumber",
+      "logical_parent": "$defs",
+      "neighbor_chunks": [
+        "6d1d747ccfec5d205f037a05fcf0568ae8dffd20ef3d67eec85f9eb4375768ca"
+      ],
+      "original_format": "yaml",
+      "schema_type": "json_schema",
+      "schema_version": "https://json-schema.org/draft/2020-12/schema",
+      "schema_element": "definitions",
+      "schema_id": "https://example.com/schemas/user.json",
+      "schema_title": "User",
+      "definition_name": "phoneNumber"
+    },
+    "token_count": 30,
+    "line_start": null,
+    "category": "product"
+  }
+]

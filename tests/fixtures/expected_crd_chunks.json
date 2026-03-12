@@ -1,0 +1,1972 @@
+[
+  {
+    "chunk_id": "55180b25002769723bf60e39d22cbc47fa41423ff40933e726a3f937967f11a4",
+    "content": {
+      "description": "Replicas is the number of desired replicas for the StatefulSet",
+      "format": "int32",
+      "minimum": 1,
+      "type": "integer"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.replicas",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.properties",
+      "neighbor_chunks": [
+        "8b72aff0a44f292610cfe23590dfbf9db87f9d08505b43853ae701cc4bf64f91",
+        "33b24547a63a525c36a746b61cf6df514fd9f8c78efac4a8612dc423add63f11",
+        "f6fa4c256a77b0d52c3b69ce3d71011ba841e17351767487545a07e32833f854",
+        "fb0109823085b126eb2aa33c586779d673251ce2cfc9becbe9a2a107dc1d661d",
+        "d758c0898b62d5268df2ce9f08158b5889e8bb9366eda3e4bb73d393006a66d7",
+        "93a9254c4cf2d18ba3676a29d11a837476d2f843f42e614b7b7c95d3623e407e",
+        "abd939e92dd890bb5be8b72349eebd5792600d78d83662da1fec410abbe99aed"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.replicas"
+    },
+    "token_count": 30,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "8b72aff0a44f292610cfe23590dfbf9db87f9d08505b43853ae701cc4bf64f91",
+    "content": {
+      "description": "Image specifies the container image to use",
+      "properties": {
+        "repository": {
+          "description": "Repository is the image repository",
+          "type": "string"
+        },
+        "tag": {
+          "description": "Tag is the image tag",
+          "type": "string"
+        },
+        "pullPolicy": {
+          "description": "PullPolicy describes a policy for if/when to pull a container image",
+          "enum": [
+            "Always",
+            "Never",
+            "IfNotPresent"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository",
+        "tag"
+      ],
+      "type": "object"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.image",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.properties",
+      "neighbor_chunks": [
+        "55180b25002769723bf60e39d22cbc47fa41423ff40933e726a3f937967f11a4",
+        "33b24547a63a525c36a746b61cf6df514fd9f8c78efac4a8612dc423add63f11",
+        "f6fa4c256a77b0d52c3b69ce3d71011ba841e17351767487545a07e32833f854",
+        "fb0109823085b126eb2aa33c586779d673251ce2cfc9becbe9a2a107dc1d661d",
+        "d758c0898b62d5268df2ce9f08158b5889e8bb9366eda3e4bb73d393006a66d7",
+        "93a9254c4cf2d18ba3676a29d11a837476d2f843f42e614b7b7c95d3623e407e",
+        "abd939e92dd890bb5be8b72349eebd5792600d78d83662da1fec410abbe99aed"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.image"
+    },
+    "token_count": 102,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "22bba787e755ff117a139f37dd7ca3ddb6b32b68e1d7e9795a6e63ada1d461d0",
+    "content": {
+      "description": "LogLevel sets the logging verbosity",
+      "enum": [
+        "debug",
+        "info",
+        "warn",
+        "error"
+      ],
+      "type": "string"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config.logLevel",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config",
+      "neighbor_chunks": [
+        "a39b1cd8f713c9ead031149840c6e4998c24799f019300ea6698c6ff69654122",
+        "e09894c8602e062ca0810373af434c1a84f71421148f0f54bf1601dc5d28ca5e",
+        "ce3236dd12adb288e01b1143718ca8a7921a29f4405d2d082dfe5b151e311e0d",
+        "0f70dde52d4e05a8a3c50434e2015e2855ff76f6a957d89f04e781485049e936",
+        "2e779e3f1c5103e865da8f54b072c01f4eb843593fcfa08301165b30d3161c30"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.config.logLevel"
+    },
+    "token_count": 26,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "a39b1cd8f713c9ead031149840c6e4998c24799f019300ea6698c6ff69654122",
+    "content": {
+      "description": "EnableMetrics enables Prometheus metrics exposition",
+      "type": "boolean"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config.enableMetrics",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config",
+      "neighbor_chunks": [
+        "22bba787e755ff117a139f37dd7ca3ddb6b32b68e1d7e9795a6e63ada1d461d0",
+        "e09894c8602e062ca0810373af434c1a84f71421148f0f54bf1601dc5d28ca5e",
+        "ce3236dd12adb288e01b1143718ca8a7921a29f4405d2d082dfe5b151e311e0d",
+        "0f70dde52d4e05a8a3c50434e2015e2855ff76f6a957d89f04e781485049e936",
+        "2e779e3f1c5103e865da8f54b072c01f4eb843593fcfa08301165b30d3161c30"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.config.enableMetrics"
+    },
+    "token_count": 13,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "e09894c8602e062ca0810373af434c1a84f71421148f0f54bf1601dc5d28ca5e",
+    "content": {
+      "description": "MetricsPort is the port for metrics server",
+      "format": "int32",
+      "maximum": 65535,
+      "minimum": 1024,
+      "type": "integer"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config.metricsPort",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config",
+      "neighbor_chunks": [
+        "22bba787e755ff117a139f37dd7ca3ddb6b32b68e1d7e9795a6e63ada1d461d0",
+        "a39b1cd8f713c9ead031149840c6e4998c24799f019300ea6698c6ff69654122",
+        "ce3236dd12adb288e01b1143718ca8a7921a29f4405d2d082dfe5b151e311e0d",
+        "0f70dde52d4e05a8a3c50434e2015e2855ff76f6a957d89f04e781485049e936",
+        "2e779e3f1c5103e865da8f54b072c01f4eb843593fcfa08301165b30d3161c30"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.config.metricsPort"
+    },
+    "token_count": 32,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "ce3236dd12adb288e01b1143718ca8a7921a29f4405d2d082dfe5b151e311e0d",
+    "content": {
+      "description": "Database configuration",
+      "properties": {
+        "host": {
+          "description": "Host is the database hostname",
+          "type": "string"
+        },
+        "port": {
+          "description": "Port is the database port",
+          "format": "int32",
+          "maximum": 65535,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Name is the database name",
+          "type": "string"
+        },
+        "sslMode": {
+          "description": "SSLMode configures SSL connection mode",
+          "enum": [
+            "disable",
+            "require",
+            "verify-ca",
+            "verify-full"
+          ],
+          "type": "string"
+        },
+        "maxConnections": {
+          "description": "MaxConnections sets the maximum number of connections",
+          "format": "int32",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "credentials": {
+          "description": "Credentials reference for database authentication",
+          "properties": {
+            "secretName": {
+              "description": "SecretName references the Kubernetes secret",
+              "type": "string"
+            },
+            "usernameKey": {
+              "description": "UsernameKey is the key for username in secret",
+              "type": "string"
+            },
+            "passwordKey": {
+              "description": "PasswordKey is the key for password in secret",
+              "type": "string"
+            }
+          },
+          "required": [
+            "secretName",
+            "usernameKey",
+            "passwordKey"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "host",
+        "port",
+        "name",
+        "credentials"
+      ],
+      "type": "object"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config.database",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config",
+      "neighbor_chunks": [
+        "22bba787e755ff117a139f37dd7ca3ddb6b32b68e1d7e9795a6e63ada1d461d0",
+        "a39b1cd8f713c9ead031149840c6e4998c24799f019300ea6698c6ff69654122",
+        "e09894c8602e062ca0810373af434c1a84f71421148f0f54bf1601dc5d28ca5e",
+        "0f70dde52d4e05a8a3c50434e2015e2855ff76f6a957d89f04e781485049e936",
+        "2e779e3f1c5103e865da8f54b072c01f4eb843593fcfa08301165b30d3161c30"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.config.database"
+    },
+    "token_count": 270,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "0f70dde52d4e05a8a3c50434e2015e2855ff76f6a957d89f04e781485049e936",
+    "content": {
+      "description": "Cache configuration for Redis",
+      "properties": {
+        "enabled": {
+          "description": "Enabled determines if caching is active",
+          "type": "boolean"
+        },
+        "host": {
+          "description": "Host is the Redis hostname",
+          "type": "string"
+        },
+        "port": {
+          "description": "Port is the Redis port",
+          "format": "int32",
+          "maximum": 65535,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ttl": {
+          "description": "TTL is the default time-to-live in seconds",
+          "format": "int32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxRetries": {
+          "description": "MaxRetries for connection attempts",
+          "format": "int32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "type": "object"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config.cache",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config",
+      "neighbor_chunks": [
+        "22bba787e755ff117a139f37dd7ca3ddb6b32b68e1d7e9795a6e63ada1d461d0",
+        "a39b1cd8f713c9ead031149840c6e4998c24799f019300ea6698c6ff69654122",
+        "e09894c8602e062ca0810373af434c1a84f71421148f0f54bf1601dc5d28ca5e",
+        "ce3236dd12adb288e01b1143718ca8a7921a29f4405d2d082dfe5b151e311e0d",
+        "2e779e3f1c5103e865da8f54b072c01f4eb843593fcfa08301165b30d3161c30"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.config.cache"
+    },
+    "token_count": 154,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "2e779e3f1c5103e865da8f54b072c01f4eb843593fcfa08301165b30d3161c30",
+    "content": {
+      "description": "Messaging configuration for message queue",
+      "properties": {
+        "provider": {
+          "description": "Provider specifies the messaging system",
+          "enum": [
+            "rabbitmq",
+            "kafka",
+            "nats"
+          ],
+          "type": "string"
+        },
+        "brokers": {
+          "description": "Brokers is the list of broker addresses",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "topic": {
+          "description": "Topic or queue name for messages",
+          "type": "string"
+        },
+        "consumerGroup": {
+          "description": "ConsumerGroup for message consumption",
+          "type": "string"
+        },
+        "retryPolicy": {
+          "description": "RetryPolicy for failed message processing",
+          "properties": {
+            "maxAttempts": {
+              "description": "MaxAttempts before moving to dead letter",
+              "format": "int32",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "backoffInterval": {
+              "description": "BackoffInterval in seconds between retries",
+              "format": "int32",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "exponentialBackoff": {
+              "description": "ExponentialBackoff enables exponential retry delays",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "maxAttempts"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "provider",
+        "brokers",
+        "topic"
+      ],
+      "type": "object"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config.messaging",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config",
+      "neighbor_chunks": [
+        "22bba787e755ff117a139f37dd7ca3ddb6b32b68e1d7e9795a6e63ada1d461d0",
+        "a39b1cd8f713c9ead031149840c6e4998c24799f019300ea6698c6ff69654122",
+        "e09894c8602e062ca0810373af434c1a84f71421148f0f54bf1601dc5d28ca5e",
+        "ce3236dd12adb288e01b1143718ca8a7921a29f4405d2d082dfe5b151e311e0d",
+        "0f70dde52d4e05a8a3c50434e2015e2855ff76f6a957d89f04e781485049e936"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.config.messaging"
+    },
+    "token_count": 247,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "33b24547a63a525c36a746b61cf6df514fd9f8c78efac4a8612dc423add63f11",
+    "content": {
+      "description": "Storage configuration for persistent volumes",
+      "properties": {
+        "class": {
+          "description": "Class is the StorageClass name",
+          "type": "string"
+        },
+        "size": {
+          "description": "Size is the requested storage size",
+          "pattern": "^[0-9]+(Gi|Mi|Ti)$",
+          "type": "string"
+        },
+        "accessModes": {
+          "description": "AccessModes for the volume",
+          "items": {
+            "enum": [
+              "ReadWriteOnce",
+              "ReadOnlyMany",
+              "ReadWriteMany"
+            ],
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "volumeMode": {
+          "description": "VolumeMode defines if volume is filesystem or block",
+          "enum": [
+            "Filesystem",
+            "Block"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "size",
+        "accessModes"
+      ],
+      "type": "object"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.storage",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.properties",
+      "neighbor_chunks": [
+        "55180b25002769723bf60e39d22cbc47fa41423ff40933e726a3f937967f11a4",
+        "8b72aff0a44f292610cfe23590dfbf9db87f9d08505b43853ae701cc4bf64f91",
+        "f6fa4c256a77b0d52c3b69ce3d71011ba841e17351767487545a07e32833f854",
+        "fb0109823085b126eb2aa33c586779d673251ce2cfc9becbe9a2a107dc1d661d",
+        "d758c0898b62d5268df2ce9f08158b5889e8bb9366eda3e4bb73d393006a66d7",
+        "93a9254c4cf2d18ba3676a29d11a837476d2f843f42e614b7b7c95d3623e407e",
+        "abd939e92dd890bb5be8b72349eebd5792600d78d83662da1fec410abbe99aed"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.storage"
+    },
+    "token_count": 163,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "f6fa4c256a77b0d52c3b69ce3d71011ba841e17351767487545a07e32833f854",
+    "content": {
+      "description": "Networking configuration",
+      "properties": {
+        "serviceName": {
+          "description": "ServiceName for the headless service",
+          "type": "string"
+        },
+        "ports": {
+          "description": "Ports to expose on the service",
+          "items": {
+            "properties": {
+              "name": {
+                "description": "Name of the port",
+                "type": "string"
+              },
+              "port": {
+                "description": "Port number",
+                "format": "int32",
+                "maximum": 65535,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "targetPort": {
+                "description": "TargetPort on the pod",
+                "format": "int32",
+                "maximum": 65535,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "protocol": {
+                "description": "Protocol for the port",
+                "enum": [
+                  "TCP",
+                  "UDP",
+                  "SCTP"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "port"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "ingress": {
+          "description": "Ingress configuration",
+          "properties": {
+            "enabled": {
+              "description": "Enabled determines if ingress is created",
+              "type": "boolean"
+            },
+            "className": {
+              "description": "ClassName specifies the ingress class",
+              "type": "string"
+            },
+            "hosts": {
+              "description": "Hosts for ingress rules",
+              "items": {
+                "properties": {
+                  "host": {
+                    "description": "Host hostname",
+                    "type": "string"
+                  },
+                  "paths": {
+                    "description": "Paths for this host",
+                    "items": {
+                      "properties": {
+                        "path": {
+                          "description": "Path URL path",
+                          "type": "string"
+                        },
+                        "pathType": {
+                          "description": "PathType how path is interpreted",
+                          "enum": [
+                            "Exact",
+                            "Prefix",
+                            "ImplementationSpecific"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "path",
+                        "pathType"
+                      ],
+                      "type": "object"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "host",
+                  "paths"
+                ],
+                "type": "object"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            "tls": {
+              "description": "TLS configuration",
+              "items": {
+                "properties": {
+                  "secretName": {
+                    "description": "SecretName containing TLS cert and key",
+                    "type": "string"
+                  },
+                  "hosts": {
+                    "description": "Hosts covered by this TLS cert",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "secretName",
+                  "hosts"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "enabled"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "serviceName",
+        "ports"
+      ],
+      "type": "object"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.networking",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.properties",
+      "neighbor_chunks": [
+        "55180b25002769723bf60e39d22cbc47fa41423ff40933e726a3f937967f11a4",
+        "8b72aff0a44f292610cfe23590dfbf9db87f9d08505b43853ae701cc4bf64f91",
+        "33b24547a63a525c36a746b61cf6df514fd9f8c78efac4a8612dc423add63f11",
+        "fb0109823085b126eb2aa33c586779d673251ce2cfc9becbe9a2a107dc1d661d",
+        "d758c0898b62d5268df2ce9f08158b5889e8bb9366eda3e4bb73d393006a66d7",
+        "93a9254c4cf2d18ba3676a29d11a837476d2f843f42e614b7b7c95d3623e407e",
+        "abd939e92dd890bb5be8b72349eebd5792600d78d83662da1fec410abbe99aed"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.networking"
+    },
+    "token_count": 510,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "fb0109823085b126eb2aa33c586779d673251ce2cfc9becbe9a2a107dc1d661d",
+    "content": {
+      "description": "Resources defines CPU and memory requirements",
+      "properties": {
+        "limits": {
+          "description": "Limits describes the maximum resources allowed",
+          "properties": {
+            "cpu": {
+              "description": "CPU limit",
+              "pattern": "^[0-9]+m?$",
+              "type": "string"
+            },
+            "memory": {
+              "description": "Memory limit",
+              "pattern": "^[0-9]+(Mi|Gi)$",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "requests": {
+          "description": "Requests describes the minimum resources required",
+          "properties": {
+            "cpu": {
+              "description": "CPU request",
+              "pattern": "^[0-9]+m?$",
+              "type": "string"
+            },
+            "memory": {
+              "description": "Memory request",
+              "pattern": "^[0-9]+(Mi|Gi)$",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.resources",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.properties",
+      "neighbor_chunks": [
+        "55180b25002769723bf60e39d22cbc47fa41423ff40933e726a3f937967f11a4",
+        "8b72aff0a44f292610cfe23590dfbf9db87f9d08505b43853ae701cc4bf64f91",
+        "33b24547a63a525c36a746b61cf6df514fd9f8c78efac4a8612dc423add63f11",
+        "f6fa4c256a77b0d52c3b69ce3d71011ba841e17351767487545a07e32833f854",
+        "d758c0898b62d5268df2ce9f08158b5889e8bb9366eda3e4bb73d393006a66d7",
+        "93a9254c4cf2d18ba3676a29d11a837476d2f843f42e614b7b7c95d3623e407e",
+        "abd939e92dd890bb5be8b72349eebd5792600d78d83662da1fec410abbe99aed"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.resources"
+    },
+    "token_count": 167,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "d758c0898b62d5268df2ce9f08158b5889e8bb9366eda3e4bb73d393006a66d7",
+    "content": {
+      "description": "Affinity scheduling rules",
+      "properties": {
+        "podAntiAffinity": {
+          "description": "PodAntiAffinity rules",
+          "properties": {
+            "requiredDuringSchedulingIgnoredDuringExecution": {
+              "description": "Required anti-affinity rules",
+              "items": {
+                "properties": {
+                  "topologyKey": {
+                    "description": "TopologyKey for the rule",
+                    "type": "string"
+                  },
+                  "labelSelector": {
+                    "description": "LabelSelector for matching pods",
+                    "properties": {
+                      "matchLabels": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "MatchLabels key-value pairs",
+                        "type": "object"
+                      }
+                    },
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "topologyKey"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.affinity",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.properties",
+      "neighbor_chunks": [
+        "55180b25002769723bf60e39d22cbc47fa41423ff40933e726a3f937967f11a4",
+        "8b72aff0a44f292610cfe23590dfbf9db87f9d08505b43853ae701cc4bf64f91",
+        "33b24547a63a525c36a746b61cf6df514fd9f8c78efac4a8612dc423add63f11",
+        "f6fa4c256a77b0d52c3b69ce3d71011ba841e17351767487545a07e32833f854",
+        "fb0109823085b126eb2aa33c586779d673251ce2cfc9becbe9a2a107dc1d661d",
+        "93a9254c4cf2d18ba3676a29d11a837476d2f843f42e614b7b7c95d3623e407e",
+        "abd939e92dd890bb5be8b72349eebd5792600d78d83662da1fec410abbe99aed"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.affinity"
+    },
+    "token_count": 146,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "93a9254c4cf2d18ba3676a29d11a837476d2f843f42e614b7b7c95d3623e407e",
+    "content": {
+      "description": "SecurityContext for pods",
+      "properties": {
+        "runAsUser": {
+          "description": "RunAsUser UID",
+          "format": "int64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "runAsGroup": {
+          "description": "RunAsGroup GID",
+          "format": "int64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fsGroup": {
+          "description": "FSGroup for volume ownership",
+          "format": "int64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "runAsNonRoot": {
+          "description": "RunAsNonRoot requires non-root user",
+          "type": "boolean"
+        },
+        "seccompProfile": {
+          "description": "SeccompProfile for the pod",
+          "properties": {
+            "type": {
+              "description": "Type of seccomp profile",
+              "enum": [
+                "RuntimeDefault",
+                "Unconfined",
+                "Localhost"
+              ],
+              "type": "string"
+            },
+            "localhostProfile": {
+              "description": "LocalhostProfile path (when type is Localhost)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.securityContext",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.properties",
+      "neighbor_chunks": [
+        "55180b25002769723bf60e39d22cbc47fa41423ff40933e726a3f937967f11a4",
+        "8b72aff0a44f292610cfe23590dfbf9db87f9d08505b43853ae701cc4bf64f91",
+        "33b24547a63a525c36a746b61cf6df514fd9f8c78efac4a8612dc423add63f11",
+        "f6fa4c256a77b0d52c3b69ce3d71011ba841e17351767487545a07e32833f854",
+        "fb0109823085b126eb2aa33c586779d673251ce2cfc9becbe9a2a107dc1d661d",
+        "d758c0898b62d5268df2ce9f08158b5889e8bb9366eda3e4bb73d393006a66d7",
+        "abd939e92dd890bb5be8b72349eebd5792600d78d83662da1fec410abbe99aed"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.securityContext"
+    },
+    "token_count": 219,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "abd939e92dd890bb5be8b72349eebd5792600d78d83662da1fec410abbe99aed",
+    "content": {
+      "description": "Monitoring and observability settings",
+      "properties": {
+        "serviceMonitor": {
+          "description": "ServiceMonitor for Prometheus Operator",
+          "properties": {
+            "enabled": {
+              "description": "Enabled creates ServiceMonitor resource",
+              "type": "boolean"
+            },
+            "interval": {
+              "description": "Interval between scrapes",
+              "pattern": "^[0-9]+[sm]$",
+              "type": "string"
+            },
+            "scrapeTimeout": {
+              "description": "ScrapeTimeout for metrics collection",
+              "pattern": "^[0-9]+[sm]$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "enabled"
+          ],
+          "type": "object"
+        },
+        "alerts": {
+          "description": "Alert configuration",
+          "properties": {
+            "enabled": {
+              "description": "Enabled creates PrometheusRule resource",
+              "type": "boolean"
+            },
+            "rules": {
+              "description": "Rules for alerting",
+              "items": {
+                "properties": {
+                  "alert": {
+                    "description": "Alert name",
+                    "type": "string"
+                  },
+                  "expr": {
+                    "description": "Expr PromQL expression",
+                    "type": "string"
+                  },
+                  "for": {
+                    "description": "For duration before firing",
+                    "pattern": "^[0-9]+[smh]$",
+                    "type": "string"
+                  },
+                  "severity": {
+                    "description": "Severity level",
+                    "enum": [
+                      "critical",
+                      "warning",
+                      "info"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "alert",
+                  "expr"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "enabled"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.monitoring",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.properties",
+      "neighbor_chunks": [
+        "55180b25002769723bf60e39d22cbc47fa41423ff40933e726a3f937967f11a4",
+        "8b72aff0a44f292610cfe23590dfbf9db87f9d08505b43853ae701cc4bf64f91",
+        "33b24547a63a525c36a746b61cf6df514fd9f8c78efac4a8612dc423add63f11",
+        "f6fa4c256a77b0d52c3b69ce3d71011ba841e17351767487545a07e32833f854",
+        "fb0109823085b126eb2aa33c586779d673251ce2cfc9becbe9a2a107dc1d661d",
+        "d758c0898b62d5268df2ce9f08158b5889e8bb9366eda3e4bb73d393006a66d7",
+        "93a9254c4cf2d18ba3676a29d11a837476d2f843f42e614b7b7c95d3623e407e"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.monitoring"
+    },
+    "token_count": 288,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "c8c81e4bd3ac25929f6294946d641bc2308178fdce4861a0a4f53886e63218d1",
+    "content": {
+      "description": "Replicas is the number of desired replicas for the StatefulSet",
+      "format": "int32",
+      "minimum": 1,
+      "type": "integer"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.replicas",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.properties",
+      "neighbor_chunks": [
+        "0a4848f98ca5d971eb09d2e66a359dad36b2d4921e2f4d0329aa9d54bbeaddb3",
+        "8ea15b610d4bd226d422cb15a3e105ff38e71f31daea3191748a0e46359f4b84",
+        "54695ef15ae66bd1b67b0183fd5e1ab4ceb76a09b58dab3a8301d01ecf53694d",
+        "0f834ed5bb9cb5c88b97c20399cb1f066d34386f371c0309821a17ea608a7734",
+        "5dde52401c3a7457bf50af2191706394c71e58a609a875e15ac243bd97393fc6",
+        "41ac56e994e597408c215cf0dad5c93b423429434d250c0a7de34cdaab9d73ec",
+        "7f9116915efe75a4e0e20092f7467b014f7d800b9df37ebd26a890cb62e449a5"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.replicas"
+    },
+    "token_count": 30,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "0a4848f98ca5d971eb09d2e66a359dad36b2d4921e2f4d0329aa9d54bbeaddb3",
+    "content": {
+      "description": "Image specifies the container image to use",
+      "properties": {
+        "repository": {
+          "description": "Repository is the image repository",
+          "type": "string"
+        },
+        "tag": {
+          "description": "Tag is the image tag",
+          "type": "string"
+        },
+        "pullPolicy": {
+          "description": "PullPolicy describes a policy for if/when to pull a container image",
+          "enum": [
+            "Always",
+            "Never",
+            "IfNotPresent"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository",
+        "tag"
+      ],
+      "type": "object"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.image",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.properties",
+      "neighbor_chunks": [
+        "c8c81e4bd3ac25929f6294946d641bc2308178fdce4861a0a4f53886e63218d1",
+        "8ea15b610d4bd226d422cb15a3e105ff38e71f31daea3191748a0e46359f4b84",
+        "54695ef15ae66bd1b67b0183fd5e1ab4ceb76a09b58dab3a8301d01ecf53694d",
+        "0f834ed5bb9cb5c88b97c20399cb1f066d34386f371c0309821a17ea608a7734",
+        "5dde52401c3a7457bf50af2191706394c71e58a609a875e15ac243bd97393fc6",
+        "41ac56e994e597408c215cf0dad5c93b423429434d250c0a7de34cdaab9d73ec",
+        "7f9116915efe75a4e0e20092f7467b014f7d800b9df37ebd26a890cb62e449a5"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.image"
+    },
+    "token_count": 102,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "2e3cd1c62479af619a24b415c5976d3891547d366221f4146e338005e7351c22",
+    "content": {
+      "description": "LogLevel sets the logging verbosity",
+      "enum": [
+        "debug",
+        "info",
+        "warn",
+        "error"
+      ],
+      "type": "string"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config.logLevel",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config",
+      "neighbor_chunks": [
+        "b4fae14790d0d68f0014fe4eb8de87408354eeea706869f90250d3b3d7054f16",
+        "a01edb1478af349ad1337ecc9a0ec85ac9195618ecc85581abf40dc908e70e44",
+        "47977099fdb7dd709557727a36b384f4aeca3da391ddedf5f40a0cc0eb97b91f",
+        "9beca6f2064a41b896e1cf8a4164f599c321710898818116c573184db45c2a1d",
+        "6c444c655cdc15f56929550af481f917cca7b47208e3cba9a4dc6cbbc492e758"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.config.logLevel"
+    },
+    "token_count": 26,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "b4fae14790d0d68f0014fe4eb8de87408354eeea706869f90250d3b3d7054f16",
+    "content": {
+      "description": "EnableMetrics enables Prometheus metrics exposition",
+      "type": "boolean"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config.enableMetrics",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config",
+      "neighbor_chunks": [
+        "2e3cd1c62479af619a24b415c5976d3891547d366221f4146e338005e7351c22",
+        "a01edb1478af349ad1337ecc9a0ec85ac9195618ecc85581abf40dc908e70e44",
+        "47977099fdb7dd709557727a36b384f4aeca3da391ddedf5f40a0cc0eb97b91f",
+        "9beca6f2064a41b896e1cf8a4164f599c321710898818116c573184db45c2a1d",
+        "6c444c655cdc15f56929550af481f917cca7b47208e3cba9a4dc6cbbc492e758"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.config.enableMetrics"
+    },
+    "token_count": 13,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "a01edb1478af349ad1337ecc9a0ec85ac9195618ecc85581abf40dc908e70e44",
+    "content": {
+      "description": "MetricsPort is the port for metrics server",
+      "format": "int32",
+      "maximum": 65535,
+      "minimum": 1024,
+      "type": "integer"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config.metricsPort",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config",
+      "neighbor_chunks": [
+        "2e3cd1c62479af619a24b415c5976d3891547d366221f4146e338005e7351c22",
+        "b4fae14790d0d68f0014fe4eb8de87408354eeea706869f90250d3b3d7054f16",
+        "47977099fdb7dd709557727a36b384f4aeca3da391ddedf5f40a0cc0eb97b91f",
+        "9beca6f2064a41b896e1cf8a4164f599c321710898818116c573184db45c2a1d",
+        "6c444c655cdc15f56929550af481f917cca7b47208e3cba9a4dc6cbbc492e758"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.config.metricsPort"
+    },
+    "token_count": 32,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "47977099fdb7dd709557727a36b384f4aeca3da391ddedf5f40a0cc0eb97b91f",
+    "content": {
+      "description": "Database configuration",
+      "properties": {
+        "host": {
+          "description": "Host is the database hostname",
+          "type": "string"
+        },
+        "port": {
+          "description": "Port is the database port",
+          "format": "int32",
+          "maximum": 65535,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Name is the database name",
+          "type": "string"
+        },
+        "sslMode": {
+          "description": "SSLMode configures SSL connection mode",
+          "enum": [
+            "disable",
+            "require",
+            "verify-ca",
+            "verify-full"
+          ],
+          "type": "string"
+        },
+        "maxConnections": {
+          "description": "MaxConnections sets the maximum number of connections",
+          "format": "int32",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "credentials": {
+          "description": "Credentials reference for database authentication",
+          "properties": {
+            "secretName": {
+              "description": "SecretName references the Kubernetes secret",
+              "type": "string"
+            },
+            "usernameKey": {
+              "description": "UsernameKey is the key for username in secret",
+              "type": "string"
+            },
+            "passwordKey": {
+              "description": "PasswordKey is the key for password in secret",
+              "type": "string"
+            }
+          },
+          "required": [
+            "secretName",
+            "usernameKey",
+            "passwordKey"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "host",
+        "port",
+        "name",
+        "credentials"
+      ],
+      "type": "object"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config.database",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config",
+      "neighbor_chunks": [
+        "2e3cd1c62479af619a24b415c5976d3891547d366221f4146e338005e7351c22",
+        "b4fae14790d0d68f0014fe4eb8de87408354eeea706869f90250d3b3d7054f16",
+        "a01edb1478af349ad1337ecc9a0ec85ac9195618ecc85581abf40dc908e70e44",
+        "9beca6f2064a41b896e1cf8a4164f599c321710898818116c573184db45c2a1d",
+        "6c444c655cdc15f56929550af481f917cca7b47208e3cba9a4dc6cbbc492e758"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.config.database"
+    },
+    "token_count": 270,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "9beca6f2064a41b896e1cf8a4164f599c321710898818116c573184db45c2a1d",
+    "content": {
+      "description": "Cache configuration for Redis",
+      "properties": {
+        "enabled": {
+          "description": "Enabled determines if caching is active",
+          "type": "boolean"
+        },
+        "host": {
+          "description": "Host is the Redis hostname",
+          "type": "string"
+        },
+        "port": {
+          "description": "Port is the Redis port",
+          "format": "int32",
+          "maximum": 65535,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ttl": {
+          "description": "TTL is the default time-to-live in seconds",
+          "format": "int32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxRetries": {
+          "description": "MaxRetries for connection attempts",
+          "format": "int32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "type": "object"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config.cache",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config",
+      "neighbor_chunks": [
+        "2e3cd1c62479af619a24b415c5976d3891547d366221f4146e338005e7351c22",
+        "b4fae14790d0d68f0014fe4eb8de87408354eeea706869f90250d3b3d7054f16",
+        "a01edb1478af349ad1337ecc9a0ec85ac9195618ecc85581abf40dc908e70e44",
+        "47977099fdb7dd709557727a36b384f4aeca3da391ddedf5f40a0cc0eb97b91f",
+        "6c444c655cdc15f56929550af481f917cca7b47208e3cba9a4dc6cbbc492e758"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.config.cache"
+    },
+    "token_count": 154,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "6c444c655cdc15f56929550af481f917cca7b47208e3cba9a4dc6cbbc492e758",
+    "content": {
+      "description": "Messaging configuration for message queue",
+      "properties": {
+        "provider": {
+          "description": "Provider specifies the messaging system",
+          "enum": [
+            "rabbitmq",
+            "kafka",
+            "nats"
+          ],
+          "type": "string"
+        },
+        "brokers": {
+          "description": "Brokers is the list of broker addresses",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "topic": {
+          "description": "Topic or queue name for messages",
+          "type": "string"
+        },
+        "consumerGroup": {
+          "description": "ConsumerGroup for message consumption",
+          "type": "string"
+        },
+        "retryPolicy": {
+          "description": "RetryPolicy for failed message processing",
+          "properties": {
+            "maxAttempts": {
+              "description": "MaxAttempts before moving to dead letter",
+              "format": "int32",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "backoffInterval": {
+              "description": "BackoffInterval in seconds between retries",
+              "format": "int32",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "exponentialBackoff": {
+              "description": "ExponentialBackoff enables exponential retry delays",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "maxAttempts"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "provider",
+        "brokers",
+        "topic"
+      ],
+      "type": "object"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config.messaging",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.config",
+      "neighbor_chunks": [
+        "2e3cd1c62479af619a24b415c5976d3891547d366221f4146e338005e7351c22",
+        "b4fae14790d0d68f0014fe4eb8de87408354eeea706869f90250d3b3d7054f16",
+        "a01edb1478af349ad1337ecc9a0ec85ac9195618ecc85581abf40dc908e70e44",
+        "47977099fdb7dd709557727a36b384f4aeca3da391ddedf5f40a0cc0eb97b91f",
+        "9beca6f2064a41b896e1cf8a4164f599c321710898818116c573184db45c2a1d"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.config.messaging"
+    },
+    "token_count": 247,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "8ea15b610d4bd226d422cb15a3e105ff38e71f31daea3191748a0e46359f4b84",
+    "content": {
+      "description": "Storage configuration for persistent volumes",
+      "properties": {
+        "class": {
+          "description": "Class is the StorageClass name",
+          "type": "string"
+        },
+        "size": {
+          "description": "Size is the requested storage size",
+          "pattern": "^[0-9]+(Gi|Mi|Ti)$",
+          "type": "string"
+        },
+        "accessModes": {
+          "description": "AccessModes for the volume",
+          "items": {
+            "enum": [
+              "ReadWriteOnce",
+              "ReadOnlyMany",
+              "ReadWriteMany"
+            ],
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "volumeMode": {
+          "description": "VolumeMode defines if volume is filesystem or block",
+          "enum": [
+            "Filesystem",
+            "Block"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "size",
+        "accessModes"
+      ],
+      "type": "object"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.storage",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.properties",
+      "neighbor_chunks": [
+        "c8c81e4bd3ac25929f6294946d641bc2308178fdce4861a0a4f53886e63218d1",
+        "0a4848f98ca5d971eb09d2e66a359dad36b2d4921e2f4d0329aa9d54bbeaddb3",
+        "54695ef15ae66bd1b67b0183fd5e1ab4ceb76a09b58dab3a8301d01ecf53694d",
+        "0f834ed5bb9cb5c88b97c20399cb1f066d34386f371c0309821a17ea608a7734",
+        "5dde52401c3a7457bf50af2191706394c71e58a609a875e15ac243bd97393fc6",
+        "41ac56e994e597408c215cf0dad5c93b423429434d250c0a7de34cdaab9d73ec",
+        "7f9116915efe75a4e0e20092f7467b014f7d800b9df37ebd26a890cb62e449a5"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.storage"
+    },
+    "token_count": 163,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "54695ef15ae66bd1b67b0183fd5e1ab4ceb76a09b58dab3a8301d01ecf53694d",
+    "content": {
+      "description": "Networking configuration",
+      "properties": {
+        "serviceName": {
+          "description": "ServiceName for the headless service",
+          "type": "string"
+        },
+        "ports": {
+          "description": "Ports to expose on the service",
+          "items": {
+            "properties": {
+              "name": {
+                "description": "Name of the port",
+                "type": "string"
+              },
+              "port": {
+                "description": "Port number",
+                "format": "int32",
+                "maximum": 65535,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "targetPort": {
+                "description": "TargetPort on the pod",
+                "format": "int32",
+                "maximum": 65535,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "protocol": {
+                "description": "Protocol for the port",
+                "enum": [
+                  "TCP",
+                  "UDP",
+                  "SCTP"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "port"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "ingress": {
+          "description": "Ingress configuration",
+          "properties": {
+            "enabled": {
+              "description": "Enabled determines if ingress is created",
+              "type": "boolean"
+            },
+            "className": {
+              "description": "ClassName specifies the ingress class",
+              "type": "string"
+            },
+            "hosts": {
+              "description": "Hosts for ingress rules",
+              "items": {
+                "properties": {
+                  "host": {
+                    "description": "Host hostname",
+                    "type": "string"
+                  },
+                  "paths": {
+                    "description": "Paths for this host",
+                    "items": {
+                      "properties": {
+                        "path": {
+                          "description": "Path URL path",
+                          "type": "string"
+                        },
+                        "pathType": {
+                          "description": "PathType how path is interpreted",
+                          "enum": [
+                            "Exact",
+                            "Prefix",
+                            "ImplementationSpecific"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "path",
+                        "pathType"
+                      ],
+                      "type": "object"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "host",
+                  "paths"
+                ],
+                "type": "object"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            "tls": {
+              "description": "TLS configuration",
+              "items": {
+                "properties": {
+                  "secretName": {
+                    "description": "SecretName containing TLS cert and key",
+                    "type": "string"
+                  },
+                  "hosts": {
+                    "description": "Hosts covered by this TLS cert",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "secretName",
+                  "hosts"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "enabled"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "serviceName",
+        "ports"
+      ],
+      "type": "object"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.networking",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.properties",
+      "neighbor_chunks": [
+        "c8c81e4bd3ac25929f6294946d641bc2308178fdce4861a0a4f53886e63218d1",
+        "0a4848f98ca5d971eb09d2e66a359dad36b2d4921e2f4d0329aa9d54bbeaddb3",
+        "8ea15b610d4bd226d422cb15a3e105ff38e71f31daea3191748a0e46359f4b84",
+        "0f834ed5bb9cb5c88b97c20399cb1f066d34386f371c0309821a17ea608a7734",
+        "5dde52401c3a7457bf50af2191706394c71e58a609a875e15ac243bd97393fc6",
+        "41ac56e994e597408c215cf0dad5c93b423429434d250c0a7de34cdaab9d73ec",
+        "7f9116915efe75a4e0e20092f7467b014f7d800b9df37ebd26a890cb62e449a5"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.networking"
+    },
+    "token_count": 510,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "0f834ed5bb9cb5c88b97c20399cb1f066d34386f371c0309821a17ea608a7734",
+    "content": {
+      "description": "Resources defines CPU and memory requirements",
+      "properties": {
+        "limits": {
+          "description": "Limits describes the maximum resources allowed",
+          "properties": {
+            "cpu": {
+              "description": "CPU limit",
+              "pattern": "^[0-9]+m?$",
+              "type": "string"
+            },
+            "memory": {
+              "description": "Memory limit",
+              "pattern": "^[0-9]+(Mi|Gi)$",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "requests": {
+          "description": "Requests describes the minimum resources required",
+          "properties": {
+            "cpu": {
+              "description": "CPU request",
+              "pattern": "^[0-9]+m?$",
+              "type": "string"
+            },
+            "memory": {
+              "description": "Memory request",
+              "pattern": "^[0-9]+(Mi|Gi)$",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.resources",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.properties",
+      "neighbor_chunks": [
+        "c8c81e4bd3ac25929f6294946d641bc2308178fdce4861a0a4f53886e63218d1",
+        "0a4848f98ca5d971eb09d2e66a359dad36b2d4921e2f4d0329aa9d54bbeaddb3",
+        "8ea15b610d4bd226d422cb15a3e105ff38e71f31daea3191748a0e46359f4b84",
+        "54695ef15ae66bd1b67b0183fd5e1ab4ceb76a09b58dab3a8301d01ecf53694d",
+        "5dde52401c3a7457bf50af2191706394c71e58a609a875e15ac243bd97393fc6",
+        "41ac56e994e597408c215cf0dad5c93b423429434d250c0a7de34cdaab9d73ec",
+        "7f9116915efe75a4e0e20092f7467b014f7d800b9df37ebd26a890cb62e449a5"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.resources"
+    },
+    "token_count": 167,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "5dde52401c3a7457bf50af2191706394c71e58a609a875e15ac243bd97393fc6",
+    "content": {
+      "description": "Affinity scheduling rules",
+      "properties": {
+        "podAntiAffinity": {
+          "description": "PodAntiAffinity rules",
+          "properties": {
+            "requiredDuringSchedulingIgnoredDuringExecution": {
+              "description": "Required anti-affinity rules",
+              "items": {
+                "properties": {
+                  "topologyKey": {
+                    "description": "TopologyKey for the rule",
+                    "type": "string"
+                  },
+                  "labelSelector": {
+                    "description": "LabelSelector for matching pods",
+                    "properties": {
+                      "matchLabels": {
+                        "additionalProperties": {
+                          "type": "string"
+                        },
+                        "description": "MatchLabels key-value pairs",
+                        "type": "object"
+                      }
+                    },
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "topologyKey"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.affinity",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.properties",
+      "neighbor_chunks": [
+        "c8c81e4bd3ac25929f6294946d641bc2308178fdce4861a0a4f53886e63218d1",
+        "0a4848f98ca5d971eb09d2e66a359dad36b2d4921e2f4d0329aa9d54bbeaddb3",
+        "8ea15b610d4bd226d422cb15a3e105ff38e71f31daea3191748a0e46359f4b84",
+        "54695ef15ae66bd1b67b0183fd5e1ab4ceb76a09b58dab3a8301d01ecf53694d",
+        "0f834ed5bb9cb5c88b97c20399cb1f066d34386f371c0309821a17ea608a7734",
+        "41ac56e994e597408c215cf0dad5c93b423429434d250c0a7de34cdaab9d73ec",
+        "7f9116915efe75a4e0e20092f7467b014f7d800b9df37ebd26a890cb62e449a5"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.affinity"
+    },
+    "token_count": 146,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "41ac56e994e597408c215cf0dad5c93b423429434d250c0a7de34cdaab9d73ec",
+    "content": {
+      "description": "SecurityContext for pods",
+      "properties": {
+        "runAsUser": {
+          "description": "RunAsUser UID",
+          "format": "int64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "runAsGroup": {
+          "description": "RunAsGroup GID",
+          "format": "int64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fsGroup": {
+          "description": "FSGroup for volume ownership",
+          "format": "int64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "runAsNonRoot": {
+          "description": "RunAsNonRoot requires non-root user",
+          "type": "boolean"
+        },
+        "seccompProfile": {
+          "description": "SeccompProfile for the pod",
+          "properties": {
+            "type": {
+              "description": "Type of seccomp profile",
+              "enum": [
+                "RuntimeDefault",
+                "Unconfined",
+                "Localhost"
+              ],
+              "type": "string"
+            },
+            "localhostProfile": {
+              "description": "LocalhostProfile path (when type is Localhost)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.securityContext",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.properties",
+      "neighbor_chunks": [
+        "c8c81e4bd3ac25929f6294946d641bc2308178fdce4861a0a4f53886e63218d1",
+        "0a4848f98ca5d971eb09d2e66a359dad36b2d4921e2f4d0329aa9d54bbeaddb3",
+        "8ea15b610d4bd226d422cb15a3e105ff38e71f31daea3191748a0e46359f4b84",
+        "54695ef15ae66bd1b67b0183fd5e1ab4ceb76a09b58dab3a8301d01ecf53694d",
+        "0f834ed5bb9cb5c88b97c20399cb1f066d34386f371c0309821a17ea608a7734",
+        "5dde52401c3a7457bf50af2191706394c71e58a609a875e15ac243bd97393fc6",
+        "7f9116915efe75a4e0e20092f7467b014f7d800b9df37ebd26a890cb62e449a5"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.securityContext"
+    },
+    "token_count": 219,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "7f9116915efe75a4e0e20092f7467b014f7d800b9df37ebd26a890cb62e449a5",
+    "content": {
+      "description": "Monitoring and observability settings",
+      "properties": {
+        "serviceMonitor": {
+          "description": "ServiceMonitor for Prometheus Operator",
+          "properties": {
+            "enabled": {
+              "description": "Enabled creates ServiceMonitor resource",
+              "type": "boolean"
+            },
+            "interval": {
+              "description": "Interval between scrapes",
+              "pattern": "^[0-9]+[sm]$",
+              "type": "string"
+            },
+            "scrapeTimeout": {
+              "description": "ScrapeTimeout for metrics collection",
+              "pattern": "^[0-9]+[sm]$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "enabled"
+          ],
+          "type": "object"
+        },
+        "alerts": {
+          "description": "Alert configuration",
+          "properties": {
+            "enabled": {
+              "description": "Enabled creates PrometheusRule resource",
+              "type": "boolean"
+            },
+            "rules": {
+              "description": "Rules for alerting",
+              "items": {
+                "properties": {
+                  "alert": {
+                    "description": "Alert name",
+                    "type": "string"
+                  },
+                  "expr": {
+                    "description": "Expr PromQL expression",
+                    "type": "string"
+                  },
+                  "for": {
+                    "description": "For duration before firing",
+                    "pattern": "^[0-9]+[smh]$",
+                    "type": "string"
+                  },
+                  "severity": {
+                    "description": "Severity level",
+                    "enum": [
+                      "critical",
+                      "warning",
+                      "info"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "alert",
+                  "expr"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "enabled"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "source_file": "tests/fixtures/markdown_with_crd.md",
+    "chunk_type": "crd_definition",
+    "metadata": {
+      "source_url": "https://github.com/example-org/extension-example-smc/blob/main/docs/configuration.md",
+      "original_format": "yaml",
+      "schema_type": "k8s_crd",
+      "breadcrumb_path": "spec.versions[0].schema.openAPIV3Schema.properties.spec.monitoring",
+      "logical_parent": "spec.versions[0].schema.openAPIV3Schema.properties.spec.properties",
+      "neighbor_chunks": [
+        "c8c81e4bd3ac25929f6294946d641bc2308178fdce4861a0a4f53886e63218d1",
+        "0a4848f98ca5d971eb09d2e66a359dad36b2d4921e2f4d0329aa9d54bbeaddb3",
+        "8ea15b610d4bd226d422cb15a3e105ff38e71f31daea3191748a0e46359f4b84",
+        "54695ef15ae66bd1b67b0183fd5e1ab4ceb76a09b58dab3a8301d01ecf53694d",
+        "0f834ed5bb9cb5c88b97c20399cb1f066d34386f371c0309821a17ea608a7734",
+        "5dde52401c3a7457bf50af2191706394c71e58a609a875e15ac243bd97393fc6",
+        "41ac56e994e597408c215cf0dad5c93b423429434d250c0a7de34cdaab9d73ec"
+      ],
+      "crd_kind": "SMC",
+      "crd_api_version": "smc.example-org.com/v1",
+      "crd_version": "v1",
+      "crd_property_path": "spec.monitoring"
+    },
+    "token_count": 288,
+    "line_start": null,
+    "category": "product"
+  }
+]

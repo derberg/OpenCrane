@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: broken-config
+  invalid yaml here: [this is not valid
+  another_field: value
+data:
+  key1: value1
+  key2: value2

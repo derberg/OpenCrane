@@ -1,0 +1,278 @@
+[
+  {
+    "chunk_id": "672f2da115b4dc49a9ea98212b20216f4125b8756b59eb3fccbf7a3c144f28a9",
+    "content": {
+      "title": "Volume Configuration Schema",
+      "description": "Schema demonstrating array items recursive chunking",
+      "type": "object"
+    },
+    "source_file": "tests/fixtures/markdown_with_array_items.md",
+    "chunk_type": "json_schema",
+    "metadata": {
+      "source_url": "tests/fixtures/markdown_with_array_items.md",
+      "breadcrumb_path": "root",
+      "logical_parent": "root",
+      "neighbor_chunks": [],
+      "original_format": "yaml",
+      "schema_type": "json_schema",
+      "schema_version": "https://json-schema.org/draft/2020-12/schema",
+      "schema_element": "root",
+      "schema_title": "Volume Configuration Schema"
+    },
+    "token_count": 20,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "0a64618cb2870d2fa2eb74ce8ab2d4113fe0af7f416b077253db7fea45946076",
+    "content": {
+      "type": "string",
+      "description": "Unique identifier for the volume within the cluster. Must follow DNS-1123\nnaming conventions with lowercase alphanumeric characters and hyphens only.\nMaximum length of 63 characters. The name is used for volume references in\npod specifications and must be unique within the namespace.\n",
+      "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+      "maxLength": 63
+    },
+    "source_file": "tests/fixtures/markdown_with_array_items.md",
+    "chunk_type": "json_schema",
+    "metadata": {
+      "source_url": "tests/fixtures/markdown_with_array_items.md",
+      "breadcrumb_path": "properties.volumes.items.properties.name",
+      "logical_parent": "properties.volumes.items",
+      "neighbor_chunks": [
+        "2885848e6b133bd919654e60b6beb74804354a4c858687f040b38c1d9d312677",
+        "5d20f5842c4e511c968eb2053a431fddee6396a5abc53bb4c7572f793210b6ce",
+        "7a103cdf180a08105e43fd7353e7dcadb4aaab662bcca330108bfdd16882e0fe",
+        "08ced79a9829d93d258dc1d39c9f553feed0901c1c6f1c02c186ffd467c4ccae",
+        "69090e1fd00abe40b57344c9df850e0cd246cda5cb2f64132608422abc28fa0c",
+        "2af7be13d548763ba8603cdf3a5ba004385ae5276b04ad8c0c3171d29efaa7d6"
+      ],
+      "original_format": "yaml",
+      "schema_type": "json_schema",
+      "schema_version": "https://json-schema.org/draft/2020-12/schema",
+      "schema_element": "properties",
+      "schema_title": "Volume Configuration Schema",
+      "property_path": "volumes.items.name",
+      "property_name": "name"
+    },
+    "token_count": 97,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "2885848e6b133bd919654e60b6beb74804354a4c858687f040b38c1d9d312677",
+    "content": {
+      "type": "string",
+      "description": "Absolute path where the volume will be mounted within the container filesystem.\nMust start with a forward slash and follow POSIX path conventions. The path\nmust not conflict with system directories or other volume mount points. Common\npatterns include /data, /mnt/volumes, or application-specific paths like\n/var/lib/mysql for database storage.\n",
+      "pattern": "^/[a-zA-Z0-9_/-]*$"
+    },
+    "source_file": "tests/fixtures/markdown_with_array_items.md",
+    "chunk_type": "json_schema",
+    "metadata": {
+      "source_url": "tests/fixtures/markdown_with_array_items.md",
+      "breadcrumb_path": "properties.volumes.items.properties.path",
+      "logical_parent": "properties.volumes.items",
+      "neighbor_chunks": [
+        "0a64618cb2870d2fa2eb74ce8ab2d4113fe0af7f416b077253db7fea45946076",
+        "5d20f5842c4e511c968eb2053a431fddee6396a5abc53bb4c7572f793210b6ce",
+        "7a103cdf180a08105e43fd7353e7dcadb4aaab662bcca330108bfdd16882e0fe",
+        "08ced79a9829d93d258dc1d39c9f553feed0901c1c6f1c02c186ffd467c4ccae",
+        "69090e1fd00abe40b57344c9df850e0cd246cda5cb2f64132608422abc28fa0c",
+        "2af7be13d548763ba8603cdf3a5ba004385ae5276b04ad8c0c3171d29efaa7d6"
+      ],
+      "original_format": "yaml",
+      "schema_type": "json_schema",
+      "schema_version": "https://json-schema.org/draft/2020-12/schema",
+      "schema_element": "properties",
+      "schema_title": "Volume Configuration Schema",
+      "property_path": "volumes.items.path",
+      "property_name": "path"
+    },
+    "token_count": 95,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "5d20f5842c4e511c968eb2053a431fddee6396a5abc53bb4c7572f793210b6ce",
+    "content": {
+      "type": "string",
+      "description": "Storage capacity specification using Kubernetes resource notation. Supports\nunits: Ki (kibibytes), Mi (mebibytes), Gi (gibibytes), Ti (tebibytes),\nPi (pebibytes). Examples: \"10Gi\", \"500Mi\", \"1Ti\". The specified size is the\nminimum guaranteed capacity; actual provisioned size may be larger depending\non storage class and provisioner configuration.\n",
+      "pattern": "^[0-9]+(Ki|Mi|Gi|Ti|Pi)$"
+    },
+    "source_file": "tests/fixtures/markdown_with_array_items.md",
+    "chunk_type": "json_schema",
+    "metadata": {
+      "source_url": "tests/fixtures/markdown_with_array_items.md",
+      "breadcrumb_path": "properties.volumes.items.properties.size",
+      "logical_parent": "properties.volumes.items",
+      "neighbor_chunks": [
+        "0a64618cb2870d2fa2eb74ce8ab2d4113fe0af7f416b077253db7fea45946076",
+        "2885848e6b133bd919654e60b6beb74804354a4c858687f040b38c1d9d312677",
+        "7a103cdf180a08105e43fd7353e7dcadb4aaab662bcca330108bfdd16882e0fe",
+        "08ced79a9829d93d258dc1d39c9f553feed0901c1c6f1c02c186ffd467c4ccae",
+        "69090e1fd00abe40b57344c9df850e0cd246cda5cb2f64132608422abc28fa0c",
+        "2af7be13d548763ba8603cdf3a5ba004385ae5276b04ad8c0c3171d29efaa7d6"
+      ],
+      "original_format": "yaml",
+      "schema_type": "json_schema",
+      "schema_version": "https://json-schema.org/draft/2020-12/schema",
+      "schema_element": "properties",
+      "schema_title": "Volume Configuration Schema",
+      "property_path": "volumes.items.size",
+      "property_name": "size"
+    },
+    "token_count": 123,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "7a103cdf180a08105e43fd7353e7dcadb4aaab662bcca330108bfdd16882e0fe",
+    "content": {
+      "type": "string",
+      "description": "Volume access mode defining how the volume can be mounted by pods. ReadWriteOnce\nallows mounting by a single node with read-write access. ReadOnlyMany allows\nmounting by multiple nodes with read-only access. ReadWriteMany allows mounting\nby multiple nodes with read-write access. Choice depends on storage backend\ncapabilities and application requirements.\n",
+      "enum": [
+        "ReadWriteOnce",
+        "ReadOnlyMany",
+        "ReadWriteMany"
+      ]
+    },
+    "source_file": "tests/fixtures/markdown_with_array_items.md",
+    "chunk_type": "json_schema",
+    "metadata": {
+      "source_url": "tests/fixtures/markdown_with_array_items.md",
+      "breadcrumb_path": "properties.volumes.items.properties.accessMode",
+      "logical_parent": "properties.volumes.items",
+      "neighbor_chunks": [
+        "0a64618cb2870d2fa2eb74ce8ab2d4113fe0af7f416b077253db7fea45946076",
+        "2885848e6b133bd919654e60b6beb74804354a4c858687f040b38c1d9d312677",
+        "5d20f5842c4e511c968eb2053a431fddee6396a5abc53bb4c7572f793210b6ce",
+        "08ced79a9829d93d258dc1d39c9f553feed0901c1c6f1c02c186ffd467c4ccae",
+        "69090e1fd00abe40b57344c9df850e0cd246cda5cb2f64132608422abc28fa0c",
+        "2af7be13d548763ba8603cdf3a5ba004385ae5276b04ad8c0c3171d29efaa7d6"
+      ],
+      "original_format": "yaml",
+      "schema_type": "json_schema",
+      "schema_version": "https://json-schema.org/draft/2020-12/schema",
+      "schema_element": "properties",
+      "schema_title": "Volume Configuration Schema",
+      "property_path": "volumes.items.accessMode",
+      "property_name": "accessMode"
+    },
+    "token_count": 95,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "08ced79a9829d93d258dc1d39c9f553feed0901c1c6f1c02c186ffd467c4ccae",
+    "content": {
+      "type": "string",
+      "description": "Storage class name for dynamic provisioning. References a StorageClass resource\nthat defines the provisioner, parameters, and reclaim policy. Common examples\ninclude \"standard\", \"fast-ssd\", \"network-storage\". If omitted, the cluster's\ndefault storage class is used. Must match an existing StorageClass in the cluster.\n"
+    },
+    "source_file": "tests/fixtures/markdown_with_array_items.md",
+    "chunk_type": "json_schema",
+    "metadata": {
+      "source_url": "tests/fixtures/markdown_with_array_items.md",
+      "breadcrumb_path": "properties.volumes.items.properties.storageClass",
+      "logical_parent": "properties.volumes.items",
+      "neighbor_chunks": [
+        "0a64618cb2870d2fa2eb74ce8ab2d4113fe0af7f416b077253db7fea45946076",
+        "2885848e6b133bd919654e60b6beb74804354a4c858687f040b38c1d9d312677",
+        "5d20f5842c4e511c968eb2053a431fddee6396a5abc53bb4c7572f793210b6ce",
+        "7a103cdf180a08105e43fd7353e7dcadb4aaab662bcca330108bfdd16882e0fe",
+        "69090e1fd00abe40b57344c9df850e0cd246cda5cb2f64132608422abc28fa0c",
+        "2af7be13d548763ba8603cdf3a5ba004385ae5276b04ad8c0c3171d29efaa7d6"
+      ],
+      "original_format": "yaml",
+      "schema_type": "json_schema",
+      "schema_version": "https://json-schema.org/draft/2020-12/schema",
+      "schema_element": "properties",
+      "schema_title": "Volume Configuration Schema",
+      "property_path": "volumes.items.storageClass",
+      "property_name": "storageClass"
+    },
+    "token_count": 80,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "69090e1fd00abe40b57344c9df850e0cd246cda5cb2f64132608422abc28fa0c",
+    "content": {
+      "type": "boolean",
+      "description": "Enable encryption at rest for the volume. When true, data written to the volume\nis encrypted using the storage backend's encryption mechanism. Encryption keys\nare typically managed by the cloud provider's KMS or a cluster-local key management\nsystem. Encryption adds minimal performance overhead while providing data security\ncompliance.\n",
+      "default": false
+    },
+    "source_file": "tests/fixtures/markdown_with_array_items.md",
+    "chunk_type": "json_schema",
+    "metadata": {
+      "source_url": "tests/fixtures/markdown_with_array_items.md",
+      "breadcrumb_path": "properties.volumes.items.properties.encrypted",
+      "logical_parent": "properties.volumes.items",
+      "neighbor_chunks": [
+        "0a64618cb2870d2fa2eb74ce8ab2d4113fe0af7f416b077253db7fea45946076",
+        "2885848e6b133bd919654e60b6beb74804354a4c858687f040b38c1d9d312677",
+        "5d20f5842c4e511c968eb2053a431fddee6396a5abc53bb4c7572f793210b6ce",
+        "7a103cdf180a08105e43fd7353e7dcadb4aaab662bcca330108bfdd16882e0fe",
+        "08ced79a9829d93d258dc1d39c9f553feed0901c1c6f1c02c186ffd467c4ccae",
+        "2af7be13d548763ba8603cdf3a5ba004385ae5276b04ad8c0c3171d29efaa7d6"
+      ],
+      "original_format": "yaml",
+      "schema_type": "json_schema",
+      "schema_version": "https://json-schema.org/draft/2020-12/schema",
+      "schema_element": "properties",
+      "schema_title": "Volume Configuration Schema",
+      "property_path": "volumes.items.encrypted",
+      "property_name": "encrypted"
+    },
+    "token_count": 82,
+    "line_start": null,
+    "category": "product"
+  },
+  {
+    "chunk_id": "2af7be13d548763ba8603cdf3a5ba004385ae5276b04ad8c0c3171d29efaa7d6",
+    "content": {
+      "type": "object",
+      "description": "Backup configuration for the volume including schedule, retention, and destination.\nBackups are performed using volume snapshots and stored according to the specified\npolicy. Critical for disaster recovery and data protection strategies.\n",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable automated backups for this volume",
+          "default": false
+        },
+        "schedule": {
+          "type": "string",
+          "description": "Cron expression defining backup schedule. Examples: \"0 2 * * *\" (daily at 2 AM),\n\"0 */6 * * *\" (every 6 hours). Uses standard cron syntax with minute, hour,\nday of month, month, and day of week fields.\n",
+          "pattern": "^(\\*|[0-9,\\-/]+)\\s+(\\*|[0-9,\\-/]+)\\s+(\\*|[0-9,\\-/]+)\\s+(\\*|[0-9,\\-/]+)\\s+(\\*|[0-9,\\-/]+)$"
+        },
+        "retention": {
+          "type": "integer",
+          "description": "Number of backup snapshots to retain. Older snapshots beyond this count are\nautomatically deleted. Minimum value of 1 ensures at least one backup is always\navailable. Typical values range from 7 (daily backups for a week) to 30+ for\nmonthly retention.\n",
+          "minimum": 1,
+          "default": 7
+        }
+      }
+    },
+    "source_file": "tests/fixtures/markdown_with_array_items.md",
+    "chunk_type": "json_schema",
+    "metadata": {
+      "source_url": "tests/fixtures/markdown_with_array_items.md",
+      "breadcrumb_path": "properties.volumes.items.properties.backup",
+      "logical_parent": "properties.volumes.items",
+      "neighbor_chunks": [
+        "0a64618cb2870d2fa2eb74ce8ab2d4113fe0af7f416b077253db7fea45946076",
+        "2885848e6b133bd919654e60b6beb74804354a4c858687f040b38c1d9d312677",
+        "5d20f5842c4e511c968eb2053a431fddee6396a5abc53bb4c7572f793210b6ce",
+        "7a103cdf180a08105e43fd7353e7dcadb4aaab662bcca330108bfdd16882e0fe",
+        "08ced79a9829d93d258dc1d39c9f553feed0901c1c6f1c02c186ffd467c4ccae",
+        "69090e1fd00abe40b57344c9df850e0cd246cda5cb2f64132608422abc28fa0c"
+      ],
+      "original_format": "yaml",
+      "schema_type": "json_schema",
+      "schema_version": "https://json-schema.org/draft/2020-12/schema",
+      "schema_element": "properties",
+      "schema_title": "Volume Configuration Schema",
+      "property_path": "volumes.items.backup",
+      "property_name": "backup"
+    },
+    "token_count": 295,
+    "line_start": null,
+    "category": "product"
+  }
+]

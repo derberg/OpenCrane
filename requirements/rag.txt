@@ -1,0 +1,5 @@
+# RAG pipeline dependencies (CI/CD only)
+PyGithub>=1.57
+requests>=2.31
+tiktoken>=0.5.0
+docling>=0.1.0

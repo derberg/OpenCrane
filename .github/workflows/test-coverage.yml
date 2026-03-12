@@ -1,0 +1,36 @@
+name: Test and Coverage Check
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+    - name: Set up Python
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+        cache-dependency-path: 'requirements.txt'
+
+    - name: Free disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/local/share/boost
+        df -h
+
+    - name: Install dependencies
+      run: pip install -r requirements.txt
+
+    - name: Setup.sh smoke test
+      run: ./pytest.sh -q -s -o addopts= tests/integration/test_setup_sh_smoke.py
+
+    - name: Run tests with coverage check
+      run: ./pytest.sh --check-coverage --cov-report=term-missing --ignore=tests/integration/test_setup_sh_smoke.py

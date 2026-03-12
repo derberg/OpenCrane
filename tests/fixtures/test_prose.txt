@@ -1,0 +1,12 @@
+# https://github.com/example-org/extension-example/blob/main/docs/README.md What is ExamplePlatform?
+
+ExamplePlatform is a complete platform designed to build and manage next-generation network services. With its globally distributed architecture, centrally managed from a single point, ExamplePlatform significantly reduces the costs and operational complexities associated with deploying and maintaining distributed network infrastructures across cloud and edge environments.
+
+ExamplePlatform adopts an API-first strategy, adhering to best practices in modern operations such as GitOps, Continuous Deployment, and Observability.
+
+## https://github.com/example-org/extension-example/blob/main/docs/README.md How to use ExamplePlatform?
+
+Depending on your goal, you can bootstrap, set up, or configure ExamplePlatform in two manners:
+
+- through ExamplePlatform Management Console (EMC)
+- through a Command Line Interface (CLI)

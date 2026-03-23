@@ -333,18 +333,23 @@ def init(podman, force):
 
     created = []
     skipped = []
+    protected = []
 
-    def write_file(path: Path, content: str):
-        if path.exists() and not force:
-            skipped.append(str(path))
-            return
+    def write_file(path: Path, content: str, user_managed: bool = False):
+        if path.exists():
+            if user_managed:
+                protected.append(str(path))
+                return
+            if not force:
+                skipped.append(str(path))
+                return
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content)
         created.append(str(path))
 
     opencrane_dir = Path(".opencrane")
     write_file(opencrane_dir / "config.py", CONFIG_PY)
-    write_file(opencrane_dir / "sources.yaml", SOURCES_YAML)
+    write_file(opencrane_dir / "sources.yaml", SOURCES_YAML, user_managed=True)
     write_file(opencrane_dir / "README.md", readme(podman=podman))
 
     dockerfile_name = "Containerfile" if podman else "Dockerfile"
@@ -359,13 +364,17 @@ def init(podman, force):
         click.echo("Skipped (already exist — use --force to overwrite):")
         for f in skipped:
             click.echo(f"  {f}")
+    if protected:
+        click.echo("Protected (user-managed, never overwritten):")
+        for f in protected:
+            click.echo(f"  {f}")
 
-    if not skipped:
+    if not skipped and not protected:
         click.echo("")
         click.echo("Next steps:")
         click.echo("  1. Edit .opencrane/sources.yaml to point at your documentation")
-        click.echo("  2. Run: opencrane fetch && opencrane llms && opencrane chunk && opencrane embed")
-        click.echo("  3. Run: opencrane serve   (and follow the printed instructions to add to your MCP client)")
+        click.echo("  2. Run: opencrane build")
+        click.echo("  3. Run: opencrane serve")
 
 
 if __name__ == "__main__":

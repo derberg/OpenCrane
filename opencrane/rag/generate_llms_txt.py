@@ -320,6 +320,39 @@ def write_outputs(project_outputs: Dict[str, str], output_root: Path = OUTPUT_RO
     (output_root / "llms-full.txt").write_text("\n\n".join(combined_sections), encoding="utf-8")
 
 
+def _combine_existing_llmstxt(llmstxt_base: Path) -> List[Path]:
+    """Scan llmstxt subdirectories for existing llms-full.txt files and combine them.
+
+    Used when no sources are configured in sources.yaml but pre-existing
+    llms-full.txt files exist (e.g., added via ``opencrane add``).
+
+    Returns the list of found files (empty if none exist).
+    """
+    if not llmstxt_base.exists():
+        return []
+
+    existing = sorted(
+        p for p in llmstxt_base.iterdir()
+        if p.is_dir() and (p / "llms-full.txt").exists()
+    )
+
+    if not existing:
+        return []
+
+    combined_parts = []
+    for subdir in existing:
+        llms_file = subdir / "llms-full.txt"
+        combined_parts.append(llms_file.read_text(encoding="utf-8"))
+
+    llmstxt_base.mkdir(parents=True, exist_ok=True)
+    (llmstxt_base / "llms-full.txt").write_text(
+        "\n\n======\n\n".join(combined_parts), encoding="utf-8"
+    )
+
+    print(f"Combined {len(existing)} existing llms-full.txt files into {llmstxt_base / 'llms-full.txt'}")
+    return [subdir / "llms-full.txt" for subdir in existing]
+
+
 def generate_outputs(selected_projects: Iterable[str] | None = None, config=None, sources_dirs: List[Path] | None = None, llmstxt_dir: Path | None = None, force: bool = False) -> None:
     """Generate llms-full.txt output files.
 
@@ -397,7 +430,12 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
         mapping = get_source_mapping()
         sources = mapping.data.get("sources", {})
         if not sources:
-            print("⊘ Skipping llms-full.txt generation: no sources in mapping file and AI_DOCS_SOURCES_DIRS not set")
+            # No sources in mapping — but there may be pre-existing llms-full.txt
+            # files placed by `opencrane add` or manually. Combine them if found.
+            existing_files = _combine_existing_llmstxt(LLMSTXT_BASE)
+            if not existing_files:
+                print("⊘ No sources configured and no existing llms-full.txt files found.")
+                print("  Add sources with: opencrane add")
             return
         workspace_root = Path.cwd()
         top_level_dirs = {Path(k).parts[0] for k in sources.keys() if Path(k).parts}

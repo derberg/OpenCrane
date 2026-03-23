@@ -272,6 +272,14 @@ def build(config_path, sources_dirs, llmstxt_dir, chunks_file, embeddings_file):
             llmstxt_dir=Path(llmstxt_dir) if llmstxt_dir else None,
         )
 
+        # Check if there's anything to chunk
+        effective_llmstxt_dir = Path(llmstxt_dir) if llmstxt_dir else Path(".opencrane/llmstxt")
+        if not (effective_llmstxt_dir / "llms-full.txt").exists():
+            click.echo("")
+            click.echo("Nothing to process — no llms-full.txt was generated.")
+            click.echo("Add sources with: opencrane add")
+            return
+
         click.echo("Step 3/5: Chunking documentation...")
         from opencrane.rag.chunker import main as chunk_main
         chunk_main(
@@ -322,11 +330,78 @@ def inspect(config_path):
 
 
 @main.command()
+def add():
+    """Interactively add documentation sources to the project."""
+    from pathlib import Path
+
+    opencrane_dir = Path(".opencrane")
+    if not opencrane_dir.exists():
+        click.echo("No .opencrane/ directory found. Run 'opencrane init' first.")
+        sys.exit(1)
+
+    _add_sources_interactive()
+
+
+def _add_sources_interactive():
+    """Run the interactive source addition loop."""
+    from opencrane.add_source import add_github_source, add_llmstxt_source
+
+    while True:
+        click.echo("")
+        click.echo("What type of source do you want to add?")
+        click.echo("  1. GitHub repository (fetch markdown docs)")
+        click.echo("  2. Existing llms.txt file (URL or local path)")
+        choice = click.prompt("Choice", type=click.IntRange(1, 2), default=1)
+
+        if choice == 1:
+            github_url = click.prompt("GitHub repository URL")
+            docs_path = click.prompt("Path to docs within the repo", default="docs")
+            docs_url = click.prompt("Published docs URL (optional, for source links)", default="")
+
+            # Suggest a name derived from the URL
+            parts = github_url.rstrip("/").split("/")
+            suggested = f"{parts[-2]}/{parts[-1]}" if len(parts) >= 2 else parts[-1]
+            name = click.prompt("Source name", default=suggested)
+
+            try:
+                add_github_source(
+                    name=name,
+                    github_url=github_url,
+                    docs_path=docs_path,
+                    docs_url=docs_url,
+                )
+                click.echo(f"Added GitHub source '{name}' to .opencrane/sources.yaml")
+            except Exception as e:
+                click.echo(f"Error: {e}", err=True)
+
+        elif choice == 2:
+            name = click.prompt("Name for this source (used as directory name)")
+            location = click.prompt("llms.txt URL or local file path")
+
+            try:
+                dest = add_llmstxt_source(name=name, location=location)
+                click.echo(f"Saved to {dest}")
+            except FileNotFoundError as e:
+                click.echo(f"Error: {e}", err=True)
+            except Exception as e:
+                click.echo(f"Error downloading: {e}", err=True)
+
+        if not click.confirm("Add another source?", default=False):
+            break
+
+    click.echo("")
+    click.echo("Next steps:")
+    click.echo("  Run: opencrane build")
+
+
+@main.command()
 @click.option("--podman", is_flag=True, default=False,
               help="Generate Containerfile instead of Dockerfile")
 @click.option("--force", is_flag=True, default=False,
               help="Overwrite existing files")
-def init(podman, force):
+@click.option("--no-add", is_flag=True, default=False,
+              help="Skip the interactive source addition prompt")
+def init(podman, force, no_add):
     """Scaffold a new OpenCrane project with .opencrane/ directory and container files."""
     from pathlib import Path
     from opencrane.templates import CONFIG_PY, SOURCES_YAML, DOCKERFILE, DOCKER_COMPOSE, readme
@@ -369,10 +444,18 @@ def init(podman, force):
         for f in protected:
             click.echo(f"  {f}")
 
-    if not skipped and not protected:
+    click.echo("")
+    if no_add:
+        click.echo("Next steps:")
+        click.echo("  1. Add sources: opencrane add")
+        click.echo("  2. Run: opencrane build")
+        click.echo("  3. Run: opencrane serve")
+    elif click.confirm("Would you like to add documentation sources now?", default=True):
+        _add_sources_interactive()
+    else:
         click.echo("")
         click.echo("Next steps:")
-        click.echo("  1. Edit .opencrane/sources.yaml to point at your documentation")
+        click.echo("  1. Add sources: opencrane add")
         click.echo("  2. Run: opencrane build")
         click.echo("  3. Run: opencrane serve")
 

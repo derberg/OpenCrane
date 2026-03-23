@@ -27,7 +27,8 @@ Always include the version tag as a comment for reference.
 
 ```
 opencrane/                  # Main Python package
-├── cli.py                  # Click CLI entry point (11 subcommands)
+├── cli.py                  # Click CLI entry point (12 subcommands)
+├── add_source.py           # Source addition logic (GitHub repos + llms.txt files)
 ├── config.py               # OpenCraneConfig base class (extension points)
 ├── fences/                 # Fence type configuration API
 ├── mcp/                    # MCP server (stdio + HTTP transport)
@@ -66,10 +67,14 @@ tests/
 ## Pipeline
 
 ```
-fetch → llms → chunk → embed → index → serve
+add → fetch → llms → chunk → embed → index → serve
 ```
 
-Each step is independently callable via CLI (`opencrane <step>`) or via `opencrane build` for the full pipeline.
+- `opencrane add` — interactively add GitHub repos or pre-existing llms.txt files as sources
+- `opencrane init` — scaffolds project and offers interactive source addition (same as `add`)
+- Each step is independently callable via CLI (`opencrane <step>`) or via `opencrane build` for the full pipeline
+- `build` exits gracefully when no sources are configured (suggests `opencrane add`)
+- The `llms` step combines pre-existing llms-full.txt files even when `sources.yaml` is empty
 
 ## Development
 

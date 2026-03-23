@@ -30,6 +30,7 @@ class Config(OpenCraneConfig):
 
 SOURCES_YAML = '''\
 # OpenCrane source mapping
+# Tip: Run `opencrane add` to interactively add sources instead of editing this file.
 # Defines repositories and local directories to include in the knowledge base.
 #
 # Each entry maps an output path (used as the local directory name) to its source.
@@ -166,7 +167,8 @@ This directory contains OpenCrane configuration and generated data files.
 ## Quick Start
 
 ```bash
-# 1. Edit sources.yaml to point at your documentation
+# 1. Add documentation sources interactively
+opencrane add
 
 # 2. Build the full pipeline (fetch → llms → chunk → embed → index)
 opencrane build
@@ -198,6 +200,7 @@ Configure the embedding model via `EMBEDDING_MODEL` env var in `{container_tool}
 
 | Command | Description |
 |---|---|
+| `opencrane add` | Interactively add documentation sources |
 | `opencrane fetch` | Download documentation from GitHub repositories |
 | `opencrane llms` | Generate `llms-full.txt` bundle files |
 | `opencrane chunk` | Split documentation into chunks |

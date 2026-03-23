@@ -455,7 +455,7 @@ class TestGenerateOutputs:
                     mock_mapping.return_value.data = {"sources": {}}
                     generate_outputs()
             captured = capsys.readouterr()
-            assert "no sources in mapping file" in captured.out
+            assert "No sources configured" in captured.out
         finally:
             mod._source_mapping = original
 

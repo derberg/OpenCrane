@@ -11,6 +11,7 @@ A standalone, extensible RAG/MCP pipeline for building AI-powered documentation 
 - [Usage](#usage)
   - [CLI](#cli)
     - [init](#opencrane-init----scaffold-a-new-project)
+    - [add](#opencrane-add----add-documentation-sources)
     - [build](#opencrane-build----full-pipeline)
     - [fetch](#opencrane-fetch----fetch-docs-from-github)
     - [llms](#opencrane-llms----generate-llms-fulltxt-bundles)
@@ -59,7 +60,7 @@ Scaffold a new project without installing anything:
 uvx --from "opencrane @ git+https://github.com/derberg/OpenCrane.git" opencrane init
 ```
 
-This creates `.opencrane/`, `Dockerfile`, and `docker-compose.yml` in the current directory. Edit `.opencrane/sources.yaml` to point at your docs, then run `docker compose up`.
+This creates `.opencrane/`, `Dockerfile`, and `docker-compose.yml` in the current directory and walks you through adding documentation sources interactively. Then run `opencrane build` and `opencrane serve`.
 
 ## Installation
 
@@ -80,7 +81,7 @@ All commands accept `--config myproject.config:MyConfig` to load a custom `OpenC
 #### `opencrane init` — scaffold a new project
 
 ```bash
-opencrane init [--podman] [--force]
+opencrane init [--podman] [--force] [--no-add]
 ```
 
 Creates the `.opencrane/` directory and container files in the current directory:
@@ -97,8 +98,24 @@ Creates the `.opencrane/` directory and container files in the current directory
 |---|---|
 | `--podman` | Generate `Containerfile` instead of `Dockerfile`; README uses `podman` commands |
 | `--force` | Overwrite existing files (default: skip) |
+| `--no-add` | Skip the interactive source addition prompt (useful for CI/scripts) |
 
 > **Convention**: OpenCrane auto-discovers `.opencrane/config.py` as the project config, so no `--config` flag or `OPENCRANE_CONFIG` env var is needed when using the `.opencrane/` layout.
+
+After scaffolding, `init` prompts you to add documentation sources interactively (same flow as `opencrane add`). Use `--no-add` to skip the prompt.
+
+#### `opencrane add` — add documentation sources
+
+```bash
+opencrane add
+```
+
+Interactively add documentation sources to your project. The command loops, asking for each source:
+
+1. **GitHub repository** — adds an entry to `.opencrane/sources.yaml` with the repo URL, docs path, and optional published docs URL. The `fetch` step will clone it on the next `opencrane build`.
+2. **Existing llms.txt file** — provide a URL or local file path. OpenCrane downloads/copies it into `.opencrane/llmstxt/<name>/llms-full.txt`, ready for chunking. No `fetch` or `llms` step needed for these sources.
+
+After each source, you're asked whether to add another or finish.
 
 #### `opencrane build` — full pipeline
 

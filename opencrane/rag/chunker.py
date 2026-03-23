@@ -25,6 +25,11 @@ def main(config=None, llmstxt_dir=None, chunks_file=None):
     input_file = llmstxt_dir / "llms-full.txt"
     output = chunks_file or Path(os.getenv("AI_DOCS_CHUNKS_FILE", ".opencrane/chunks.json"))
 
+    if not input_file.exists():
+        print(f"⊘ Skipping chunking: {input_file} not found.", file=sys.stderr)
+        print("  Run 'opencrane llms' first, or add sources with 'opencrane add'.", file=sys.stderr)
+        return
+
     logger.info(f"Starting chunking of {input_file} to {output}")
 
     try:

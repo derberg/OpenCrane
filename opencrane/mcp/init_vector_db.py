@@ -24,12 +24,12 @@ def main():
     # Validate input files
     if not chunks_file.exists():
         logger.error(f"Chunks file not found: {chunks_file}")
-        logger.error("Run './setup.sh --chunk-docs' first")
+        logger.error("Run 'opencrane chunk' first")
         sys.exit(1)
 
     if not embeddings_file.exists():
         logger.error(f"Embeddings file not found: {embeddings_file}")
-        logger.error("Run './setup.sh --generate-embeddings' first")
+        logger.error("Run 'opencrane embed' first")
         sys.exit(1)
 
     logger.info("Loading chunks and embeddings...")

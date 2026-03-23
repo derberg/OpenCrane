@@ -197,10 +197,22 @@ def index(config_path):
               default="stdio",
               help="Transport mode: stdio (default, for local MCP clients) or http (for Docker/Podman, port 8000)")
 def serve(config_path, transport):
-    """Start the MCP server (stdio or HTTP transport)."""
+    """Start the MCP server (stdio or HTTP transport).
+
+    Automatically indexes the vector database before starting
+    (skips if already populated).
+    """
     try:
         import asyncio
         load_config(config_path)
+
+        # Auto-index: idempotent — skips if collection already has data
+        from opencrane.mcp.init_vector_db import main as index_main
+        try:
+            index_main()
+        except SystemExit:
+            click.echo("Error: indexing failed. Run 'opencrane build' first to generate chunks and embeddings.", err=True)
+            sys.exit(1)
 
         if transport == "http":
             port = __import__("os").environ.get("MCP_HTTP_PORT", "8000")

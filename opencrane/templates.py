@@ -167,26 +167,47 @@ This directory contains OpenCrane configuration and generated data files.
 
 ```bash
 # 1. Edit sources.yaml to point at your documentation
-# 2. Fetch and process docs
-opencrane fetch
-opencrane llms
-opencrane chunk
-opencrane embed
 
-# 3. Start MCP server locally (no Docker)
-opencrane index
+# 2. Build the full pipeline (fetch → llms → chunk → embed → index)
+opencrane build
+
+# 3. Start the MCP server (auto-indexes into Milvus Lite)
 opencrane serve
 
 # 4. Or launch MCP Inspector for interactive testing
 opencrane inspect
+```
 
-# 5. Or build and run via {container_tool}
+Run `opencrane serve` and follow the printed instructions to connect your MCP client.
+
+## Docker / Podman
+
+For containerized deployment over HTTP:
+
+```bash
+# Build and run
 {container_tool}-compose up --build
 ```
 
-## Adding to your MCP client
+The Docker image bakes the vector database at build time for fast startup.
+Configure the embedding model via `EMBEDDING_MODEL` env var in `{container_tool}-compose.yaml`.
 
-Run `opencrane serve` and follow the printed instructions.
+## Pipeline Steps
+
+`opencrane build` runs the full pipeline, but each step can be run independently:
+
+| Command | Description |
+|---|---|
+| `opencrane fetch` | Download documentation from GitHub repositories |
+| `opencrane llms` | Generate `llms-full.txt` bundle files |
+| `opencrane chunk` | Split documentation into chunks |
+| `opencrane embed` | Generate vector embeddings for each chunk |
+| `opencrane index` | Load chunks and embeddings into Milvus |
+| `opencrane serve` | Start the MCP server (auto-indexes if needed) |
+| `opencrane inspect` | Launch MCP Inspector web UI for testing |
+| `opencrane tokens` | Generate a token count report |
+
+Running steps individually is useful when iterating on a single stage (e.g., re-chunking after config changes without re-fetching).
 '''
 
 

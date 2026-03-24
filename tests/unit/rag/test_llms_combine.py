@@ -110,6 +110,52 @@ def test_combine_no_docs_url_leaves_headings_unchanged(llmstxt_workspace, monkey
 
 
 @pytest.mark.unit
+def test_combine_includes_preexisting_llmstxt_alongside_source_dirs(tmp_path, monkeypatch):
+    """When --sources-dir processes some sources AND pre-existing llmstxt files
+    exist (e.g., added via opencrane add with type: llmstxt), the combined
+    llms-full.txt should include both."""
+    from unittest.mock import patch
+
+    opencrane_dir = tmp_path / ".opencrane"
+    opencrane_dir.mkdir()
+    sources_yaml = opencrane_dir / "sources.yaml"
+    sources_yaml.write_text(
+        "sources:\n"
+        "  likec4:\n"
+        "    type: llmstxt\n"
+        "    url: https://likec4.dev/llms-full.txt\n"
+        "    docs_url: https://likec4.dev/tutorial/\n"
+        "    manual: true\n"
+    )
+    monkeypatch.setenv("MAPPING_FILE", str(sources_yaml))
+
+    llmstxt_dir = opencrane_dir / "llmstxt"
+
+    # Pre-existing llmstxt source (added via opencrane add)
+    likec4_dir = llmstxt_dir / "likec4"
+    likec4_dir.mkdir(parents=True)
+    (likec4_dir / "llms-full.txt").write_text("# LikeC4 Tutorial\n\nArchitecture as code.")
+
+    # Source directory with markdown docs
+    source_dir = tmp_path / "my-docs"
+    (source_dir / "project").mkdir(parents=True)
+    (source_dir / "project" / "readme.md").write_text("# My Project\n\nProject docs.")
+
+    monkeypatch.chdir(tmp_path)
+
+    monkeypatch.setenv("AI_DOCS_NO_FILTER", "1")
+    generate_outputs(force=True, sources_dirs=[source_dir], llmstxt_dir=llmstxt_dir)
+
+    combined = llmstxt_dir / "llms-full.txt"
+    assert combined.exists(), "Root llms-full.txt should be generated"
+    content = combined.read_text()
+    assert "My Project" in content, "Source-dir content should be in combined output"
+    assert "LikeC4 Tutorial" in content, "Pre-existing llmstxt content should be in combined output"
+    # Verify docs_url was injected into likec4 headings
+    assert "[https://likec4.dev/tutorial]" in content
+
+
+@pytest.mark.unit
 def test_combine_skips_non_directory_entries(llmstxt_workspace, monkeypatch):
     """The combine logic should only look at subdirectories, not stray files."""
     llmstxt_dir = llmstxt_workspace / ".opencrane" / "llmstxt"

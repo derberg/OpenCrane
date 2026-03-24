@@ -589,6 +589,7 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
     # Top-level combined output used by setup.sh (llmstxt/llms-full.txt)
     # Keep the format consistent with per-source outputs: a sequence of "# Project:" blocks.
     combined_parts: List[str] = []
+    covered_subdirs: set[str] = set()
     sources_base = Path.cwd() / ".opencrane" / "sources"
     for source_dir in sorted(source_dirs, key=lambda p: p.as_posix()):
         # Compute source_rel consistently with per-source output above
@@ -600,9 +601,35 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             except ValueError:  # pragma: no cover
                 source_rel = Path(source_dir.name)
         source_llms = LLMSTXT_BASE / source_rel / "llms-full.txt"
-        
+
         if source_llms.exists():
             combined_parts.append(source_llms.read_text(encoding="utf-8"))
+            covered_subdirs.add(source_rel.as_posix())
+
+    # Include pre-existing llmstxt sources (e.g., added via `opencrane add` with
+    # type: llmstxt) that weren't already covered by source-dir processing above.
+    if LLMSTXT_BASE.exists():
+        mapping = get_source_mapping()
+        for subdir in sorted(LLMSTXT_BASE.iterdir()):
+            if not subdir.is_dir():
+                continue
+            if subdir.name in covered_subdirs:
+                continue
+            llms_file = subdir / "llms-full.txt"
+            if not llms_file.exists():
+                continue
+            content = llms_file.read_text(encoding="utf-8")
+            # Inject docs_url into headings if configured for this source
+            source = mapping.get_source(subdir.name)
+            if source and source.get("docs_url"):
+                docs_url = source["docs_url"].rstrip("/")
+                content = re.sub(
+                    r"^(#{1,6})\s+(.+)$",
+                    rf"\1 [{docs_url}] \2",
+                    content,
+                    flags=re.MULTILINE,
+                )
+            combined_parts.append(content)
 
     if combined_parts:
         LLMSTXT_BASE.mkdir(parents=True, exist_ok=True)

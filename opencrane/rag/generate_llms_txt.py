@@ -154,12 +154,12 @@ def rewrite_links(
     return re.sub(r"\[(.*?)\]\((.*?)\)", replace, text)
 
 
-def get_github_url(rel_with_project: Path, project_name: str) -> str | None:
+def get_source_url(rel_with_project: Path, project_name: str) -> str | None:
     """Return the source URL for a given file path and project name.
 
     Prefers ``docs_url`` from the source mapping when set (useful for non-GitHub
     or published docs sites). Falls back to building a GitHub blob URL from
-    ``github_url``. Returns ``None`` when no mapping entry is found — callers
+    ``url``. Returns ``None`` when no mapping entry is found — callers
     should skip URL embedding in that case.
     """
     mapping = get_source_mapping()
@@ -190,8 +190,8 @@ def get_github_url(rel_with_project: Path, project_name: str) -> str | None:
         return f"{docs_url.rstrip('/')}/{file_rel}"
 
     # Fall back to GitHub blob URL
-    github_url = source.get("github_url", "")
-    if not github_url:
+    url = source.get("url", "")
+    if not url:
         return None
 
     if docs_path:
@@ -199,9 +199,9 @@ def get_github_url(rel_with_project: Path, project_name: str) -> str | None:
         file_rel = relative_after_key
         if file_rel.startswith(docs_prefix):
             file_rel = file_rel[len(docs_prefix):]
-        return f"{github_url}/blob/main/{docs_path.rstrip('/')}/{file_rel}"
+        return f"{url}/blob/main/{docs_path.rstrip('/')}/{file_rel}"
 
-    return f"{github_url}/blob/main/{rel_str}"
+    return f"{url}/blob/main/{rel_str}"
 
 
 def prefix_headings_with_path(content: str, rel_with_project: Path, project_name: str) -> str:
@@ -211,7 +211,7 @@ def prefix_headings_with_path(content: str, rel_with_project: Path, project_name
     but keeping URLs in llms-full.txt is useful for humans reading the files directly.
     """
     output: List[str] = []
-    gh_url = get_github_url(rel_with_project, project_name)
+    gh_url = get_source_url(rel_with_project, project_name)
 
     for line in content.splitlines():
         heading_match = HEADING_RE.match(line)
@@ -236,7 +236,7 @@ def process_file(file_path: Path, project_dir: Path, project_name: str) -> str:
     text_relinked = rewrite_links(text_no_images, file_path, rel_with_project, project_dir, project_name)
     text_with_prefixed_headings = prefix_headings_with_path(text_relinked, rel_with_project, project_name)
 
-    gh_url = get_github_url(rel_with_project, project_name)
+    gh_url = get_source_url(rel_with_project, project_name)
 
     output_lines = []
     if gh_url:

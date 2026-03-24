@@ -8,7 +8,7 @@ from opencrane.rag.generate_llms_txt import (
     build_anchor,
     strip_images,
     rewrite_links,
-    get_github_url,
+    get_source_url,
     prefix_headings_with_path,
     process_file,
     process_fence_blocks,
@@ -152,8 +152,8 @@ class TestRewriteLinks:
         assert result == text
 
 
-class TestGetGithubUrl:
-    """Unit tests for get_github_url function."""
+class TestGetSourceUrl:
+    """Unit tests for get_source_url function."""
 
     def test_external_product_docs(self):
         """Test GitHub URL generation for external product-docs."""
@@ -162,14 +162,14 @@ class TestGetGithubUrl:
             mapping = SourceMapping(mapping_file)
             mapping.add_source(
                 path_key="external-sources/product-a/extension-b",
-                github_url="https://github.com/test/extension-b",
+                url="https://github.com/test/extension-b",
                 docs_path="docs"
             )
             mapping.save()
-            
+
             with patch("opencrane.rag.generate_llms_txt._source_mapping", mapping):
                 rel_path = Path("external-sources/product-a/extension-b/docs/guide.md")
-                result = get_github_url(rel_path, "extension-b")
+                result = get_source_url(rel_path, "extension-b")
                 assert result == "https://github.com/test/extension-b/blob/main/docs/guide.md"
 
     def test_internal_content_guidelines(self):
@@ -179,14 +179,14 @@ class TestGetGithubUrl:
             mapping = SourceMapping(mapping_file)
             mapping.add_source(
                 path_key="guidelines-dir",
-                github_url="https://github.com/test/main-repo",
+                url="https://github.com/test/main-repo",
                 docs_path=""
             )
             mapping.save()
-            
+
             with patch("opencrane.rag.generate_llms_txt._source_mapping", mapping):
                 rel_path = Path("guidelines-dir/strategy/component-doc.md")
-                result = get_github_url(rel_path, "main-repo")
+                result = get_source_url(rel_path, "main-repo")
                 assert result == "https://github.com/test/main-repo/blob/main/guidelines-dir/strategy/component-doc.md"
 
     def test_internal_other_path_with_mapping(self):
@@ -196,14 +196,14 @@ class TestGetGithubUrl:
             mapping = SourceMapping(mapping_file)
             mapping.add_source(
                 path_key="some/other",
-                github_url="https://github.com/test/main-repo",
+                url="https://github.com/test/main-repo",
                 docs_path=""
             )
             mapping.save()
 
             with patch("opencrane.rag.generate_llms_txt._source_mapping", mapping):
                 rel_path = Path("some/other/path/file.md")
-                result = get_github_url(rel_path, "main-repo")
+                result = get_source_url(rel_path, "main-repo")
                 assert result == "https://github.com/test/main-repo/blob/main/some/other/path/file.md"
 
     def test_returns_none_when_no_mapping(self):
@@ -215,17 +215,17 @@ class TestGetGithubUrl:
 
             with patch("opencrane.rag.generate_llms_txt._source_mapping", mapping):
                 rel_path = Path("unmapped/path/file.md")
-                result = get_github_url(rel_path, "some-project")
+                result = get_source_url(rel_path, "some-project")
                 assert result is None
 
-    def test_docs_url_takes_precedence_over_github_url(self):
-        """Test that docs_url is used instead of github_url when set."""
+    def test_docs_url_takes_precedence_over_url(self):
+        """Test that docs_url is used instead of url when set."""
         with tempfile.TemporaryDirectory() as tmp:
             mapping_file = Path(tmp) / "mapping.yaml"
             mapping = SourceMapping(mapping_file)
             mapping.add_source(
                 path_key="external-sources/product-a",
-                github_url="https://github.com/test/product-a",
+                url="https://github.com/test/product-a",
                 docs_path="docs",
                 docs_url="https://docs.example.com/product-a"
             )
@@ -233,7 +233,7 @@ class TestGetGithubUrl:
 
             with patch("opencrane.rag.generate_llms_txt._source_mapping", mapping):
                 rel_path = Path("external-sources/product-a/docs/guide.md")
-                result = get_github_url(rel_path, "product-a")
+                result = get_source_url(rel_path, "product-a")
                 assert result == "https://docs.example.com/product-a/guide.md"
 
     def test_docs_url_without_docs_path(self):
@@ -243,7 +243,7 @@ class TestGetGithubUrl:
             mapping = SourceMapping(mapping_file)
             mapping.add_source(
                 path_key="my-source",
-                github_url="https://github.com/test/repo",
+                url="https://github.com/test/repo",
                 docs_path="",
                 docs_url="https://docs.example.com"
             )
@@ -251,7 +251,7 @@ class TestGetGithubUrl:
 
             with patch("opencrane.rag.generate_llms_txt._source_mapping", mapping):
                 rel_path = Path("my-source/guide/intro.md")
-                result = get_github_url(rel_path, "my-source")
+                result = get_source_url(rel_path, "my-source")
                 assert result == "https://docs.example.com/guide/intro.md"
 
 
@@ -265,7 +265,7 @@ class TestPrefixHeadingsWithPath:
             mapping = SourceMapping(mapping_file)
             mapping.add_source(
                 path_key="project-a",
-                github_url="https://github.com/test/project-a",
+                url="https://github.com/test/project-a",
                 docs_path=""
             )
             mapping.save()
@@ -284,7 +284,7 @@ class TestPrefixHeadingsWithPath:
             mapping = SourceMapping(mapping_file)
             mapping.add_source(
                 path_key="project-a",
-                github_url="https://github.com/test/project-a",
+                url="https://github.com/test/project-a",
                 docs_path=""
             )
             mapping.save()
@@ -356,7 +356,7 @@ class TestProcessFile:
             mapping = SourceMapping(mapping_file)
             mapping.add_source(
                 path_key="project-a",
-                github_url="https://github.com/test/project-a",
+                url="https://github.com/test/project-a",
                 docs_path=""
             )
             mapping.save()
@@ -690,19 +690,19 @@ class TestGenerateOutputs:
             # but NOT proj-c or filtered-sub
             mapping_content = """sources:
   sources:
-    github_url: https://github.com/test/sources
+    url: https://github.com/test/sources
     docs_path: ''
     manual: false
   sources/proj-a:
-    github_url: https://github.com/test/proj-a
+    url: https://github.com/test/proj-a
     docs_path: ''
     manual: false
   sources/proj-a/subproject:
-    github_url: https://github.com/test/subproject
+    url: https://github.com/test/subproject
     docs_path: ''
     manual: false
   sources/proj-b:
-    github_url: https://github.com/test/proj-b
+    url: https://github.com/test/proj-b
     docs_path: ''
     manual: false
 """

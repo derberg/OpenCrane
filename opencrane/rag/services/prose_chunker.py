@@ -55,11 +55,25 @@ class ProseChunkingStrategy(ProcessingStrategy):
                     self._current_chunk = ""
                     self._current_tokens = 0
             
-            # Update source URL if line contains it
-            if 'https://github.com/' in line:
-                match = re.search(r'https://github\.com/[^\s\]]+', line)
-                if match:
-                    self._current_source_url = match.group(0)
+            # Source separator resets URL context so content from one source
+            # does not inherit the previous source's URL.
+            if stripped == '======':
+                self._current_source_url = None
+
+            # Update source URL from heading markers.
+            # Matches both GitHub URLs (# https://github.com/...) and
+            # bracketed docs URLs (# [https://docs.example.com] Title)
+            # injected by the llms step.
+            if 'https://' in line and stripped.startswith('#'):
+                # Try bracketed URL first: # [https://...] Title
+                bracket_match = re.search(r'\[https?://[^\]]+\]', line)
+                if bracket_match:
+                    self._current_source_url = bracket_match.group(0).strip('[]')
+                else:
+                    # Bare URL: # https://github.com/... Title
+                    match = re.search(r'https://[^\s\]]+', line)
+                    if match:
+                        self._current_source_url = match.group(0)
             
             # Accumulate line
             self._current_chunk += line + '\n'
@@ -83,9 +97,11 @@ class ProseChunkingStrategy(ProcessingStrategy):
         if not content:
             return None  # pragma: no cover
         
-        # Strip GitHub URLs from headings (they're already in source_url metadata)
-        # Pattern: # https://github.com/... Title -> # Title
-        content = re.sub(r'^(#{1,3})\s+https://github\.com/[^\s]+\s+', r'\1 ', content, flags=re.MULTILINE)
+        # Strip source URLs from headings (they're already in source_url metadata)
+        # Bracketed URL: # [https://...] Title -> # Title
+        content = re.sub(r'^(#{1,6})\s+\[https?://[^\]]+\]\s+', r'\1 ', content, flags=re.MULTILINE)
+        # Bare URL: # https://github.com/... Title -> # Title
+        content = re.sub(r'^(#{1,6})\s+https://[^\s]+\s+', r'\1 ', content, flags=re.MULTILINE)
         content = content.strip()
         
         # Garbage filtering

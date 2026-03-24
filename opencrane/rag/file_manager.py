@@ -15,9 +15,11 @@ class FileManager:
         self.config = config
         self.base_dir = Path(config.target_dir)
 
+    SOURCES_DIR = Path(".opencrane") / "sources"
+
     def store_repo_files(self, path_key: str, files: List[File]) -> None:
         """Store files for a repository, removing any existing directory first."""
-        repo_dir = Path(path_key)
+        repo_dir = self.SOURCES_DIR / path_key
 
         # Remove existing directory if it exists
         if repo_dir.exists():

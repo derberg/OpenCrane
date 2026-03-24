@@ -144,6 +144,7 @@ Config is auto-discovered from `.opencrane/config.py:Config` or set via `--confi
 ## Default Paths
 
 All outputs go to `.opencrane/` directory:
+- `.opencrane/sources/` — fetched documentation source files
 - `.opencrane/llmstxt/` — generated llms-full.txt files
 - `.opencrane/chunks.json` — chunked documents
 - `.opencrane/embeddings.json` — embedding vectors

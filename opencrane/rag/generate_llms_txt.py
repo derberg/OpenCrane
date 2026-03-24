@@ -438,13 +438,15 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
                 print("  Add sources with: opencrane add")
             return
         workspace_root = Path.cwd()
+        sources_base = workspace_root / ".opencrane" / "sources"
         top_level_dirs = {Path(k).parts[0] for k in sources.keys() if Path(k).parts}
         source_dirs = sorted(
-            [workspace_root / d for d in top_level_dirs if (workspace_root / d).exists()],
+            [sources_base / d for d in top_level_dirs if (sources_base / d).exists()],
             key=lambda p: p.name,
         )
         if not source_dirs:
             print("⊘ Skipping llms-full.txt generation: no source directories found from mapping file")
+            print(f"  Expected sources in: {sources_base}")
             return
     for source_dir in sorted(source_dirs, key=lambda p: p.name):
         # Store workspace root for relative path computation
@@ -470,8 +472,15 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
 
         if should_filter:
             # ONLY process paths explicitly listed in mapping - no directory discovery
+            # When sources come from mapping (no explicit --sources-dir), files are
+            # stored under .opencrane/sources/. When --sources-dir is explicit, the
+            # user already told us where the files are.
+            if sources_dirs_override:
+                path_base = workspace_root
+            else:
+                path_base = workspace_root / ".opencrane" / "sources"
             for mapped_path in sorted(mapped_paths.keys()):
-                full_path = workspace_root / mapped_path
+                full_path = path_base / mapped_path
                 if not full_path.exists() or not full_path.is_dir():  # pragma: no cover
                     continue
                 

@@ -212,8 +212,9 @@ def main(config=None):
 
             logger.info(f"Documentation fetch completed. Processed {processed_count}/{len(all_repos)} repositories")
             if processed_paths:
+                sources_base = workspace_root / ".opencrane" / "sources"
                 for p in processed_paths:
-                    logger.info(f"  Fetched to: {workspace_root / p}")
+                    logger.info(f"  Fetched to: {sources_base / p}")
 
         # Cleanup stale sources - only remove repos that LOST the "documentation" topic
         # NOT repos that failed to fetch or have no files
@@ -224,9 +225,10 @@ def main(config=None):
             workspace_root = Path.cwd()
             llmstxt_base = workspace_root / ".opencrane" / "llmstxt"
 
+            sources_base = workspace_root / ".opencrane" / "sources"
             for stale_path_key in removed_sources:
-                # Remove from source directory (e.g., external-sources/repo-name)
-                source_path = workspace_root / stale_path_key
+                # Remove from source directory (e.g., .opencrane/sources/repo-name)
+                source_path = sources_base / stale_path_key
                 if source_path.exists() and source_path.is_dir():
                     logger.info(f"Removing stale source directory: {source_path}")
                     shutil.rmtree(source_path)

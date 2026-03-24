@@ -67,7 +67,6 @@ def milvus_with_test_data(temp_milvus_db):
             content="This is test content about UPF setup and testing procedures.",
             source_file="test1.md",
             chunk_type="prose",
-            category="product",
             metadata_json='{"test": true}',
             token_count=15,
             line_start=1
@@ -78,7 +77,6 @@ def milvus_with_test_data(temp_milvus_db):
             content="Another test chunk with different content about configuration.",
             source_file="test2.md",
             chunk_type="code_snippet",
-            category="product",
             metadata_json='{"test": true}',
             token_count=12,
             line_start=10
@@ -89,7 +87,6 @@ def milvus_with_test_data(temp_milvus_db):
             content="Third chunk for testing hybrid search with keywords.",
             source_file="test3.md",
             chunk_type="prose",
-            category="product",
             metadata_json='{"test": true}',
             token_count=10,
             line_start=5
@@ -148,21 +145,6 @@ class TestSearchIntegration:
 
             print(f"✓ Result {i}: chunk_id={result['chunk_id']}, type={type(result)}")
 
-    def test_search_with_filters(self, milvus_with_test_data):
-        """Test that filtering works correctly with real data."""
-        service, _ = milvus_with_test_data
-
-        embedding_service = EmbeddingService()
-        query_vec = embedding_service.model.encode(["test"])[0].tolist()
-
-        # Search with category filter
-        results = service.search(query_vec, limit=10, categories=["product"])
-
-        assert len(results) > 0
-        # All results should be from 'product' category
-        for result in results:
-            assert result.get('category') == 'product'
-
     def test_search_with_chunk_type_filter(self, milvus_with_test_data):
         """Test chunk type filtering."""
         service, _ = milvus_with_test_data
@@ -188,7 +170,6 @@ class TestSearchIntegration:
                     "content": "UPF setup and testing procedures",
                     "source_file": "test.md",
                     "chunk_type": "prose",
-                    "category": "product",
                     "metadata": {"test": True},
                     "token_count": 10,
                     "line_start": 1
@@ -199,7 +180,7 @@ class TestSearchIntegration:
 
         try:
             service = KeywordSearchService(chunks_path=Path(chunks_path))
-            results = service.search("UPF testing", limit=5, categories=["product"])
+            results = service.search("UPF testing", limit=5)
 
             assert len(results) > 0
 
@@ -236,7 +217,6 @@ class TestSearchIntegration:
                     "content": c.content,
                     "source_file": c.source_file,
                     "chunk_type": c.chunk_type,
-                    "category": c.category,
                     "metadata": json.loads(c.metadata_json) if c.metadata_json else {},
                     "token_count": c.token_count,
                     "line_start": c.line_start

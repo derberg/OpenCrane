@@ -48,7 +48,7 @@ def pack(
 
     # 3. Resolve output directory
     if output is None:
-        output = Path(f".opencrane/pack/{name}/")
+        output = Path(".opencrane/pack/")
 
     # 4. Derive module_name (hyphens and dots to underscores)
     module_name = re.sub(r"[-.]", "_", name)

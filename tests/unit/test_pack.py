@@ -87,7 +87,7 @@ def test_successful_pack(pack_dir, monkeypatch):
 
     output_dir, wheel_path = pack(name="test-mcp", version="2.0.0")
 
-    assert output_dir == Path(".opencrane/pack/test-mcp")
+    assert output_dir == Path(".opencrane/pack")
     assert output_dir.exists()
 
     # pyproject.toml contains both distribution name and module name

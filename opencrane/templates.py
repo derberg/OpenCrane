@@ -31,20 +31,21 @@ class Config(OpenCraneConfig):
 SOURCES_YAML = '''\
 # OpenCrane source mapping
 # Tip: Run `opencrane add` to interactively add sources instead of editing this file.
-# Defines repositories and local directories to include in the knowledge base.
+# Defines repositories and pre-existing llms.txt files to include in the knowledge base.
 #
-# Each entry maps an output path (used as the local directory name) to its source.
+# Each entry maps a source name to its configuration.
 #
-# Remote GitHub repository example:
+# GitHub repository example:
 # external-sources/my-repo:
-#   github_url: https://github.com/my-org/my-repo
+#   url: https://github.com/my-org/my-repo
 #   docs_path: docs        # subdirectory inside the repo to fetch (empty = root)
 #   manual: true           # true = always fetch, false = only if repo has the configured topic
 #
-# Local directory example (path relative to project root):
-# local-docs/my-content:
-#   github_url: ""
-#   docs_path: my-local-content
+# Pre-existing llms.txt example:
+# anthropic-docs:
+#   type: llmstxt
+#   url: https://docs.anthropic.com/llms-full.txt
+#   docs_url: https://docs.anthropic.com  # optional, for source links
 #   manual: true
 
 sources:

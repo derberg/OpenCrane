@@ -366,7 +366,7 @@ def _add_sources_interactive():
             try:
                 add_github_source(
                     name=name,
-                    github_url=github_url,
+                    url=github_url,
                     docs_path=docs_path,
                     docs_url=docs_url,
                 )
@@ -376,19 +376,13 @@ def _add_sources_interactive():
 
         elif choice == 2:
             name = click.prompt("Name for this source (used as directory name)")
-            while True:
-                location = click.prompt("llms.txt URL or local file path")
-                try:
-                    dest = add_llmstxt_source(name=name, location=location)
-                    click.echo(f"Saved to {dest}")
-                    break
-                except FileNotFoundError as e:
-                    click.echo(f"Error: {e}", err=True)
-                except Exception as e:
-                    click.echo(f"Error downloading: {e}", err=True)
-                    click.echo("  Tip: set LOG_LEVEL=DEBUG for detailed error info", err=True)
-                if not click.confirm("Try again?", default=True):
-                    break
+            location = click.prompt("llms.txt URL or local file path")
+            docs_url = click.prompt("Published docs URL (optional, for source links)", default="")
+            try:
+                add_llmstxt_source(name=name, url=location, docs_url=docs_url)
+                click.echo(f"Added llmstxt source '{name}' to .opencrane/sources.yaml")
+            except Exception as e:
+                click.echo(f"Error: {e}", err=True)
 
         if not click.confirm("Add another source?", default=False):
             break

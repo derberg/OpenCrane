@@ -39,9 +39,9 @@ sources:
 |-------|----------|---------|-------------|
 | `type` | no | `github` | Source type: `github` or `llmstxt` |
 | `url` | yes | — | GitHub URL, llmstxt URL, or local file path |
-| `docs_path` | no | `""` | GitHub-only: subdirectory within repo containing docs |
+| `docs_path` | no | `""` | GitHub-only: subdirectory within repo containing docs. Ignored for `type: llmstxt`. |
 | `docs_url` | no | — | Published docs base URL for source link injection |
-| `manual` | no | `false` | Protects entry from auto-refresh overwrites |
+| `manual` | no | `false` | Protects entry from auto-refresh overwrites. Always `true` for entries added via `opencrane add`. |
 
 No backward compatibility for `github_url` — clean rename to `url` everywhere.
 
@@ -61,11 +61,15 @@ No backward compatibility for `github_url` — clean rename to `url` everywhere.
 
 ### `opencrane/rag/fetch_docs.py`
 
-- After fetching GitHub repos, iterate sources with `type == "llmstxt"`
+- The existing manual-repo loop must filter OUT `type: llmstxt` entries — only process entries where `type` is `github` (or absent). This prevents `parse_github_url()` from being called on non-GitHub URLs.
+- New separate loop: iterate sources with `type == "llmstxt"`
 - For URL sources (`http://` / `https://`): download to `.opencrane/llmstxt/<name>/llms-full.txt`
 - For local path sources: copy to `.opencrane/llmstxt/<name>/llms-full.txt`
 - Same destination structure as current `add_llmstxt_source()` uses
 - Download/copy logic moves here from `add_source.py`
+- `--repo` filtering applies to llmstxt sources too (filter by path key)
+- Error handling: if an llmstxt download/copy fails, log the error and continue with other sources (don't fail the entire fetch step)
+- `cleanup_stale_sources`: llmstxt path keys must be included in the `active_repos` set so they are not cleaned up
 
 ### `opencrane/rag/generate_llms_txt.py`
 
@@ -76,18 +80,26 @@ No backward compatibility for `github_url` — clean rename to `url` everywhere.
 ### `opencrane/cli.py`
 
 - `add` interactive flow: unchanged from user perspective. Choice 2 (llmstxt) now calls the simplified `add_llmstxt_source()` that only registers in `sources.yaml`
+- Add optional `docs_url` prompt when adding llmstxt sources (same as GitHub sources)
 - Pass `url=` instead of `github_url=` where applicable
 
 ### Rename `github_url` → `url`
 
-Straight replacement across all files:
-- `source_mapping.py`
-- `fetch_docs.py`
-- `generate_llms_txt.py`
-- `cli.py`
-- `add_source.py`
-- All tests and fixtures
-- `init` templates that scaffold `sources.yaml`
+Grep the entire repo for `github_url` and rename all occurrences. Known files:
+- `opencrane/rag/services/source_mapping.py`
+- `opencrane/rag/fetch_docs.py`
+- `opencrane/rag/generate_llms_txt.py` — includes `get_github_url()` function
+- `opencrane/cli.py`
+- `opencrane/add_source.py`
+- `opencrane/fences/__init__.py` — re-exports `get_github_url` as public API
+- `opencrane/shared/utils/github_url_parser.py` — utility module
+- `opencrane/templates.py` — `SOURCES_YAML` scaffold template
+- All tests and fixtures (including `tests/fixtures/test-mapping.yaml`)
+- Documentation files (`docs/source-mapping.md`, `docs/llms-generation.md`)
+
+### Public API rename: `get_github_url` → `get_source_url`
+
+The `get_github_url()` function in `generate_llms_txt.py` is re-exported from `opencrane/fences/__init__.py` as a user-facing extension point. Rename to `get_source_url()` since it now resolves URLs for both GitHub and llmstxt sources. Update `fences/__init__.py` exports accordingly.
 
 ## Pipeline Flow (After)
 

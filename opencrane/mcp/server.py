@@ -643,10 +643,15 @@ async def get_metadata_schema(arguments: dict) -> list[TextContent]:
 
     try:
         # Read the metadata schema documentation.
-        # Check .opencrane/ first (new convention), then docs/ (legacy).
-        docs_path = Path(".opencrane/metadata-schema.md")
-        if not docs_path.exists():
-            docs_path = Path("docs/metadata-schema.md")
+        # Check METADATA_SCHEMA_PATH env var first (used by opencrane pack),
+        # then .opencrane/ (new convention), then docs/ (legacy).
+        env_path = os.environ.get("METADATA_SCHEMA_PATH")
+        if env_path:
+            docs_path = Path(env_path)
+        else:
+            docs_path = Path(".opencrane/metadata-schema.md")
+            if not docs_path.exists():
+                docs_path = Path("docs/metadata-schema.md")
         if not docs_path.exists():
             logger.warning("   get_metadata_schema: schema file not found")
             return [TextContent(

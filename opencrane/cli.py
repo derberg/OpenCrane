@@ -399,6 +399,44 @@ def _add_sources_interactive():
 
 
 @main.command()
+@click.option("--name", "name", default=None,
+              help="Package name (e.g. my-docs-mcp)")
+@click.option("--output", "output", default=None, type=click.Path(),
+              help="Output directory (default: .opencrane/pack/<name>/)")
+@click.option("--version", "version", default="1.0.0",
+              help="Package version (default: 1.0.0)")
+def pack(name, output, version):
+    """Package the MCP server for distribution via uvx."""
+    from pathlib import Path
+    from opencrane.pack import pack as do_pack
+
+    if name is None:
+        name = click.prompt("Package name (e.g. my-docs-mcp)")
+
+    output_path = Path(output) if output else None
+    output_dir, wheel_path = do_pack(name=name, version=version, output=output_path)
+
+    click.echo(f"Packed MCP server to {output_dir}/")
+    if wheel_path:
+        click.echo(f"Wheel built: {wheel_path}")
+    else:
+        click.echo("Wheel not built (install 'build' package: pip install build)")
+    click.echo("")
+    click.echo("Share it:")
+    click.echo("")
+    click.echo("  1. Push to GitHub, then others run:")
+    click.echo(f'     claude mcp add {name} -- uvx --from "git+https://github.com/you/{name}" {name}')
+    click.echo("")
+    click.echo("  2. Or publish to PyPI:")
+    click.echo(f"     pip install build twine && python -m build {output_dir} && twine upload {output_dir}/dist/*")
+    click.echo("     Then others run:")
+    click.echo(f"     claude mcp add {name} -- uvx {name}")
+    click.echo("")
+    click.echo("  3. Or use locally:")
+    click.echo(f"     claude mcp add {name} -- uvx --from {output_dir} {name}")
+
+
+@main.command()
 @click.option("--podman", is_flag=True, default=False,
               help="Generate Containerfile instead of Dockerfile")
 @click.option("--force", is_flag=True, default=False,

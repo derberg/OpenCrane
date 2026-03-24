@@ -20,6 +20,7 @@ A standalone, extensible RAG/MCP pipeline for building AI-powered documentation 
     - [embed](#opencrane-embed----generate-embeddings)
     - [index](#opencrane-index----load-into-milvus)
     - [serve](#opencrane-serve----start-mcp-server)
+    - [pack](#opencrane-pack----package-for-distribution)
     - [inspect](#opencrane-inspect----launch-mcp-inspector)
   - [Default file and directory names](#default-file-and-directory-names)
   - [Environment variables](#environment-variables)
@@ -205,6 +206,31 @@ opencrane serve [--config CLASS] [--transport stdio|http]
 |---|---|
 | `--transport stdio` | *(default)* stdio transport for local MCP clients. Prints integration instructions for Claude Code, Cursor, Windsurf, VS Code, Zed, and Docker/Podman on startup |
 | `--transport http` | HTTP transport on port 8000 (Streamable HTTP, stateless). Used inside Docker/Podman containers. Port configurable via `MCP_HTTP_PORT` env var |
+
+#### `opencrane pack` — package for distribution
+
+```bash
+opencrane pack [--name NAME] [--output PATH] [--version VERSION]
+```
+
+Packages the built MCP server and data into a standalone Python package that others can run via `uvx`. After packing, share a one-liner:
+
+```bash
+# From PyPI (after publishing)
+claude mcp add my-docs -- uvx my-docs-mcp
+
+# From GitHub
+claude mcp add my-docs -- uvx --from "git+https://github.com/you/my-docs-mcp" my-docs-mcp
+
+# From local path
+claude mcp add my-docs -- uvx --from .opencrane/pack/my-docs-mcp my-docs-mcp
+```
+
+The generated package includes the Milvus database and chunk index — recipients don't need to rebuild anything. The embedding model is downloaded automatically on first use.
+
+Run `opencrane build` before packing. Use `--version` to bump the version when re-packing updated docs (so `uvx` pulls the new version instead of serving its cache).
+
+Install the optional `build` dependency for wheel generation: `pip install opencrane[pack]`.
 
 #### `opencrane inspect` — launch MCP Inspector
 

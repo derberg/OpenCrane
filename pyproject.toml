@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opencrane"
-version = "0.3.4"
+version = "0.4.0"
 description = "A standalone, extensible RAG/MCP library for building AI-powered documentation search."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -36,6 +36,9 @@ dev = [
     "pytest>=7.0",
     "pytest-mock>=3.10",
     "pytest-cov>=4.0",
+]
+pack = [
+    "build>=1.0",
 ]
 
 [project.scripts]

@@ -207,10 +207,136 @@ Configure the embedding model via `EMBEDDING_MODEL` env var in `{container_tool}
 | `opencrane embed` | Generate vector embeddings for each chunk |
 | `opencrane index` | Load chunks and embeddings into Milvus |
 | `opencrane serve` | Start the MCP server (auto-indexes if needed) |
+| `opencrane pack` | Package the MCP server for distribution via `uvx` |
 | `opencrane inspect` | Launch MCP Inspector web UI for testing |
 | `opencrane tokens` | Generate a token count report |
 
 Running steps individually is useful when iterating on a single stage (e.g., re-chunking after config changes without re-fetching).
+'''
+
+
+PACK_MAIN_PY = '''\
+"""MCP server with bundled documentation data."""
+import os
+from pathlib import Path
+
+
+def main():
+    data_dir = Path(__file__).parent / "data"
+    os.environ.setdefault("MILVUS_DB_PATH", str(data_dir / "milvus.db"))
+    os.environ.setdefault("AI_DOCS_CHUNKS_FILE", str(data_dir / "chunks.json"))
+    os.environ.setdefault("METADATA_SCHEMA_PATH", str(data_dir / "metadata-schema.md"))
+
+    import asyncio
+    from opencrane.mcp.server import main as serve_main
+    asyncio.run(serve_main())
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+PACK_PYPROJECT = '''\
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "{name}"
+version = "{version}"
+description = "MCP server for documentation search — built with OpenCrane"
+requires-python = ">=3.11"
+dependencies = [
+    "opencrane>={opencrane_version}",
+]
+
+[project.scripts]
+{name} = "{module_name}.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["{module_name}*"]
+
+[tool.setuptools.package-data]
+{module_name} = ["data/**"]
+'''
+
+PACK_README = '''\
+# {name}
+
+MCP server for documentation search — built with [OpenCrane](https://github.com/opencrane/opencrane).
+
+## Use locally
+
+```bash
+claude mcp add {name} -- uvx --from /path/to/{name} {name}
+```
+
+## Share via GitHub
+
+Push this directory to a GitHub repository, then others can add it with:
+
+```bash
+claude mcp add {name} -- uvx --from "git+https://github.com/you/{name}" {name}
+```
+
+## Share via PyPI
+
+Build and upload the wheel:
+
+```bash
+pip install build twine
+python -m build .
+twine upload dist/*
+```
+
+Then others can add it with:
+
+```bash
+claude mcp add {name} -- uvx {name}
+```
+
+> **Note:** PyPI has a 100 MB per-file size limit. If your `milvus.db` exceeds this,
+> distribute via GitHub or a direct path instead.
+
+> **Note:** When you re-pack with updated documentation, bump `--version` so that
+> `uvx` pulls the new version instead of serving its cache.
+
+## MCP client configuration
+
+### Claude Code
+
+```bash
+claude mcp add {name} -- uvx {name}
+```
+
+### Cursor / Windsurf / VS Code (mcp.json)
+
+```json
+{{
+  "mcpServers": {{
+    "{name}": {{
+      "command": "uvx",
+      "args": ["{name}"]
+    }}
+  }}
+}}
+```
+
+### Zed (settings.json)
+
+```json
+{{
+  "context_servers": {{
+    "{name}": {{
+      "command": {{
+        "path": "uvx",
+        "args": ["{name}"]
+      }}
+    }}
+  }}
+}}
+```
 '''
 
 

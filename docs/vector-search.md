@@ -43,7 +43,19 @@ opencrane init --podman
 podman-compose up --build
 ```
 
-### Option 3: Using a Pre-built Docker Image
+### Option 3: Package for distribution via `uvx`
+
+```bash
+# Package the built MCP server
+opencrane pack --name my-docs-mcp
+
+# Share a one-liner with teammates
+claude mcp add my-docs -- uvx --from "git+https://github.com/you/my-docs-mcp" my-docs-mcp
+```
+
+Recipients don't need to rebuild anything — the package includes the Milvus database and chunk index. See `opencrane pack --help` for options.
+
+### Option 4: Using a Pre-built Docker Image
 
 ```bash
 docker run -p 8000:8000 your-registry/your-project-mcp:latest

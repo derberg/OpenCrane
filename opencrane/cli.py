@@ -376,15 +376,19 @@ def _add_sources_interactive():
 
         elif choice == 2:
             name = click.prompt("Name for this source (used as directory name)")
-            location = click.prompt("llms.txt URL or local file path")
-
-            try:
-                dest = add_llmstxt_source(name=name, location=location)
-                click.echo(f"Saved to {dest}")
-            except FileNotFoundError as e:
-                click.echo(f"Error: {e}", err=True)
-            except Exception as e:
-                click.echo(f"Error downloading: {e}", err=True)
+            while True:
+                location = click.prompt("llms.txt URL or local file path")
+                try:
+                    dest = add_llmstxt_source(name=name, location=location)
+                    click.echo(f"Saved to {dest}")
+                    break
+                except FileNotFoundError as e:
+                    click.echo(f"Error: {e}", err=True)
+                except Exception as e:
+                    click.echo(f"Error downloading: {e}", err=True)
+                    click.echo("  Tip: set LOG_LEVEL=DEBUG for detailed error info", err=True)
+                if not click.confirm("Try again?", default=True):
+                    break
 
         if not click.confirm("Add another source?", default=False):
             break

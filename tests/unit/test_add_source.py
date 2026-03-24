@@ -137,7 +137,8 @@ def test_cli_add_github_error_handling(workspace):
 @pytest.mark.unit
 def test_cli_add_llmstxt_file_not_found(workspace):
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["add"], input="2\nmy-project\n/nonexistent/file.txt\nn\n")
+    # After error: "Try again?" -> n, then "Add another source?" -> n
+    result = runner.invoke(cli_main, ["add"], input="2\nmy-project\n/nonexistent/file.txt\nn\nn\n")
     assert result.exit_code == 0  # Should not crash
 
 

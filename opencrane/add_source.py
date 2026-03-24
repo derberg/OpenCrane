@@ -4,9 +4,12 @@ Provides functions to add GitHub repositories or pre-existing llms.txt files
 as sources, updating sources.yaml and placing files in the correct locations.
 """
 
+import logging
 import shutil
 from pathlib import Path
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
+
+logger = logging.getLogger(__name__)
 
 from opencrane.rag.services.source_mapping import SourceMapping
 
@@ -68,8 +71,11 @@ def add_llmstxt_source(name: str, location: str) -> Path:
     dest_file = dest_dir / "llms-full.txt"
 
     if location.startswith("http://") or location.startswith("https://"):
-        with urlopen(location) as response:
+        logger.debug("Downloading %s", location)
+        req = Request(location, headers={"User-Agent": "OpenCrane/0.3.0"})
+        with urlopen(req) as response:
             content = response.read()
+        logger.debug("Downloaded %d bytes", len(content))
         dest_file.write_bytes(content)
     else:
         source_path = Path(location).resolve()

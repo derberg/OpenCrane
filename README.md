@@ -216,6 +216,15 @@ Launches the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) 
 
 Web UI available at `http://localhost:5173`.
 
+### Debugging
+
+Enable verbose logging for any command:
+
+```bash
+LOG_LEVEL=DEBUG opencrane build
+LOG_LEVEL=DEBUG opencrane add
+```
+
 ### Default file and directory names
 
 OpenCrane uses these defaults for all pipeline output. Override them with CLI flags (one-off) or environment variables (persistent):

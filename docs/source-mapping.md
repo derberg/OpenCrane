@@ -17,7 +17,7 @@ Each entry in the mapping follows this structure:
 ```yaml
 sources:
   external-sources/my-project:           # Relative path (key)
-    github_url: https://github.com/my-org/my-project
+    url: https://github.com/my-org/my-project
     docs_path: docs                       # Path within the repository
     manual: false                         # Entry created/updated automatically vs manually maintained
 ```
@@ -25,7 +25,7 @@ sources:
 Field Descriptions:
 
 - Key (e.g., `external-sources/my-project`): The relative path from workspace root where documentation is stored locally
-- github_url: Source repository URL for attribution and fetching
+- url: Source repository URL for attribution and fetching
 - docs_path: Path within the source repository where docs are located (empty string means root)
 - manual: `false` = entry auto-generated and updated during fetch, `true` = manually added and maintained mapping
 
@@ -67,7 +67,7 @@ The key (relative path) in the mapping determines exactly where the generated fi
 Mapping entry:
 ```yaml
 external-sources/my-project:
-  github_url: https://github.com/my-org/my-project
+  url: https://github.com/my-org/my-project
   docs_path: docs
   manual: false
 ```
@@ -112,10 +112,10 @@ NOT generated:
 
 ## Building GitHub URLs
 
-The `github_url` field is used to construct source attribution URLs in the generated content. Every heading in `llms-full.txt` includes the full GitHub URL to its source.
+The `url` field is used to construct source attribution URLs in the generated content. Every heading in `llms-full.txt` includes the full GitHub URL to its source.
 
 URL Construction:
-1. Take `github_url`: `https://github.com/my-org/my-project`
+1. Take `url`: `https://github.com/my-org/my-project`
 2. Add Git ref: `/blob/main`
 3. Add `docs_path` if present: `/docs`
 4. Add file's relative path from mapped directory: `/guides/setup.md`
@@ -126,7 +126,7 @@ This ensures every piece of content is traceable back to its source repository a
 Mapping:
 ```yaml
 external-sources/my-project:
-  github_url: https://github.com/my-org/my-project
+  url: https://github.com/my-org/my-project
   docs_path: docs
 ```
 

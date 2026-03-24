@@ -1,13 +1,13 @@
 sources:
   test-project:
-    github_url: https://github.com/test_org/test-repo
+    url: https://github.com/test_org/test-repo
     docs_path: docs
     manual: false
   external-sources/test-extension:
-    github_url: https://github.com/test_org/test-extension
+    url: https://github.com/test_org/test-extension
     docs_path: docs
     manual: false
   content-guidelines/test-guidelines:
-    github_url: https://github.com/test_org/test-guidelines
+    url: https://github.com/test_org/test-guidelines
     docs_path: ''
     manual: true

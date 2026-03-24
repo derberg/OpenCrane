@@ -25,11 +25,11 @@ If your source mapping config contains:
 ```yaml
 sources:
   external-sources/my-project:
-    github_url: https://github.com/my-org/my-project
+    url: https://github.com/my-org/my-project
     docs_path: docs
     manual: false
   external-sources/another-project:
-    github_url: https://github.com/my-org/another-project
+    url: https://github.com/my-org/another-project
     docs_path: docs
     manual: false
 ```

@@ -334,9 +334,9 @@ Each entry supports the following fields:
 
 | Field | Required | Description |
 |---|---|---|
-| `github_url` | Yes (for `fetch`) | GitHub repository URL — used by `opencrane fetch` to clone the repo and as a fallback source link in llms-full.txt |
+| `url` | Yes (for `fetch`) | GitHub repository URL — used by `opencrane fetch` to clone the repo and as a fallback source link in llms-full.txt |
 | `docs_path` | No | Path within the repo where docs are stored (e.g. `docs`) |
-| `docs_url` | No | Base URL of the published documentation site (e.g. `https://docs.example.com/product`). When set, this is used instead of `github_url` when embedding source links in llms-full.txt — lets AI agents point users to rendered docs rather than raw GitHub files. If neither is set, no source links are embedded. |
+| `docs_url` | No | Base URL of the published documentation site (e.g. `https://docs.example.com/product`). When set, this is used instead of `url` when embedding source links in llms-full.txt — lets AI agents point users to rendered docs rather than raw GitHub files. If neither is set, no source links are embedded. |
 | `manual` | No | When `true`, the entry is user-managed and will not be overwritten by `opencrane fetch` auto-discovery |
 
 Example:
@@ -344,7 +344,7 @@ Example:
 ```yaml
 sources:
   external-sources/my-product:
-    github_url: https://github.com/myorg/my-product
+    url: https://github.com/myorg/my-product
     docs_path: docs
     docs_url: https://docs.myorg.com/my-product
     manual: true
@@ -426,16 +426,16 @@ fence_types = {
 }
 ```
 
-To inline a file referenced by path inside the block, use `get_github_url` from `opencrane.fences` to add a source annotation:
+To inline a file referenced by path inside the block, use `get_source_url` from `opencrane.fences` to add a source annotation:
 
 ```python
 from pathlib import Path
-from opencrane.fences import CodeFenceConfig, get_github_url
+from opencrane.fences import CodeFenceConfig, get_source_url
 
 def inline_handler(content: str, file_path: Path, project_dir: Path, project_name: str) -> str:
     target = (file_path.parent / content.strip()).resolve()
     language = "json" if target.suffix == ".json" else "yaml"
-    gh_url = get_github_url(Path(project_name) / target.relative_to(project_dir), project_name)
+    gh_url = get_source_url(Path(project_name) / target.relative_to(project_dir), project_name)
     file_content = target.read_text(encoding="utf-8").rstrip("\n")
     if gh_url:
         return f"```{language}\n# Source: {gh_url}\n{file_content}\n```\n"

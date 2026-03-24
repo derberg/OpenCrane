@@ -3,6 +3,7 @@ import shutil
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from urllib.request import Request, urlopen
 from opencrane.shared.config import get_config
 from opencrane.rag.github_client import GitHubClient
 from opencrane.rag.repo_fetcher import RepoFetcher
@@ -142,6 +143,10 @@ def main(config=None):
                 logger.debug(f"Marking {path_key} as active (--repo filter active, protected from cleanup)")
                 active_repos.add(path_key)
                 continue
+            # Protect all llmstxt entries from stale cleanup — they are always user-managed
+            if source_config.get("type", "github") == "llmstxt":
+                active_repos.add(path_key)
+                continue
             url = source_config.get("url")
             if url:
                 parsed = parse_github_url(url)
@@ -150,6 +155,45 @@ def main(config=None):
                     if org_name != config.org_name:
                         logger.debug(f"Marking {org_name}/{repo_name} as active (different org, protected from cleanup)")
                         active_repos.add(path_key)
+
+        # Fetch llmstxt sources
+        for path_key, source_config in source_mapping.get_all_sources().items():
+            if source_config.get("type", "github") != "llmstxt":
+                continue
+            if fetch_repo_filter and path_key != fetch_repo_filter:
+                logger.debug(f"Skipping llmstxt {path_key} (--repo filter active: {fetch_repo_filter})")
+                continue
+
+            url = source_config.get("url", "")
+            if not url:
+                logger.warning(f"llmstxt entry {path_key} has no url, skipping")
+                continue
+
+            dest_dir = workspace_root / ".opencrane" / "llmstxt" / path_key
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest_file = dest_dir / "llms-full.txt"
+
+            try:
+                if url.startswith("http://") or url.startswith("https://"):
+                    logger.info(f"Downloading llmstxt: {path_key} from {url}")
+                    req = Request(url, headers={"User-Agent": "OpenCrane"})
+                    with urlopen(req) as response:
+                        content = response.read()
+                    logger.debug(f"Downloaded {len(content)} bytes for {path_key}")
+                    dest_file.write_bytes(content)
+                else:
+                    source_path = Path(url).resolve()
+                    if not source_path.exists():
+                        logger.error(f"Local file not found for {path_key}: {source_path}")
+                        continue
+                    logger.info(f"Copying llmstxt: {path_key} from {source_path}")
+                    shutil.copy2(source_path, dest_file)
+
+                active_repos.add(path_key)
+                logger.info(f"Fetched llmstxt source: {path_key} -> {dest_file}")
+            except Exception as e:
+                logger.error(f"Failed to fetch llmstxt source {path_key}: {e}")
+                active_repos.add(path_key)  # Don't clean up on transient failure
 
         if not all_repos:
             logger.warning("No documentation repositories found")

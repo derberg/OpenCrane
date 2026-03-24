@@ -35,12 +35,6 @@ class Config:
     embedding_model: str = field(default_factory=lambda: os.getenv("EMBEDDING_MODEL", "nomic-ai/nomic-embed-text-v1.5"))
     # Search configuration
     hybrid_alpha: float = field(default_factory=lambda: float(os.getenv("HYBRID_ALPHA", "0.6")))
-    # Category configuration for filtering search results
-    # Paths matching these patterns are categorized as "guidelines" (vs "product" docs)
-    # This automatically includes content-guidelines/
-    guidelines_path_patterns: List[str] = field(default_factory=lambda:
-        os.getenv("GUIDELINES_PATH_PATTERNS", "content-guidelines/").split(",")
-    )
     # Source mapping file configuration
     mapping_file: Path = field(default_factory=lambda: Path(os.getenv("MAPPING_FILE", ".opencrane/sources.yaml")))
     # Optional: restrict fetch to a single repo by path key (e.g. "external-sources/cgw")

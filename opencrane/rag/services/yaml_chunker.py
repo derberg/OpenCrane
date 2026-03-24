@@ -46,15 +46,19 @@ class YamlChunkingStrategy(ProcessingStrategy):
             self.yaml_tree_walkers = yaml_tree_walkers
 
     def can_process(self, node) -> bool:
-        """Check if node contains YAML content."""
+        """Check if node contains YAML content (excludes front matter)."""
         if not hasattr(node, 'text'):
             return False
         text = node.text.strip()
-        
+
+        # Skip YAML front matter — flat key: value metadata blocks
+        if self._is_front_matter(text):
+            return False
+
         # Strong indicators of YAML
         if text.startswith('---') or text.startswith('apiVersion:') or text.startswith('kind:'):
             return True
-        
+
         # Check for key: value patterns typical of YAML, but exclude prose
         # YAML typically has keys at line starts with colons
         lines = text.split('\n')[:10]  # Check first 10 lines
@@ -71,14 +75,49 @@ class YamlChunkingStrategy(ProcessingStrategy):
                 key = parts[0].strip()
                 # Valid YAML key should be a single word or have quotes
                 # Avoid matching prose like "text text: more text" or URLs
-                if (len(key.split()) <= 2 and 
-                    not key.endswith(')') and 
-                    not '/' in key and 
+                if (len(key.split()) <= 2 and
+                    not key.endswith(')') and
+                    not '/' in key and
                     not '.' in key[-5:]):  # Avoid URLs and sentences
                     yaml_like_lines += 1
-        
+
         # If we have multiple YAML-like lines, it's probably YAML
         return yaml_like_lines >= 2
+
+    @staticmethod
+    def _is_front_matter(text: str) -> bool:
+        """Detect YAML front matter — flat key: scalar metadata blocks.
+
+        Front matter is typically document metadata (title, author, date, etc.)
+        with only flat key-value pairs and no nested structures.  We parse it
+        as YAML and reject anything with non-scalar values or domain-specific
+        keys like ``apiVersion`` / ``kind``.
+        """
+        import yaml as _yaml
+
+        # Strip leading --- delimiter if present
+        body = text.lstrip('-').strip() if text.startswith('---') else text.strip()
+        if not body:
+            return False
+
+        try:
+            parsed = _yaml.safe_load(body)
+        except _yaml.YAMLError:
+            return False
+
+        if not isinstance(parsed, dict):
+            return False
+
+        # Domain YAML keys → not front matter
+        if parsed.get("apiVersion") or parsed.get("kind") or parsed.get("openapi"):
+            return False
+
+        # Every value must be a scalar (str, int, float, bool, None) — no lists or dicts
+        for value in parsed.values():
+            if isinstance(value, (dict, list)):
+                return False
+
+        return True
 
     def process(self, node, source_file: Path) -> List[Chunk]:
         """Process YAML node into chunks.

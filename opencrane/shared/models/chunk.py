@@ -18,10 +18,6 @@ class Chunk(BaseModel):
     # TODO: line_start is currently unused (always None). Would require tracking line numbers during
     # document parsing. Kept for future use if line-level source tracking is implemented.
     line_start: int | None = Field(None, description="Starting line number in source file (1-indexed)")
-    # Category for filtering search results: "product" for product docs, "guidelines" for content guidelines and tools
-    # Auto-inferred from source_file path if not explicitly set (see Config.guidelines_path_patterns)
-    category: Literal["product", "guidelines"] = Field(default="product", description="Documentation category for filtering")
-
     @model_validator(mode='after')
     def validate_content_and_metadata(self):
         """Validate content is non-empty and metadata matches chunk type."""

@@ -32,7 +32,6 @@ class KeywordDoc:
     content: str
     source_file: str
     chunk_type: str
-    category: str
     metadata_json: str
 
 
@@ -65,10 +64,9 @@ class KeywordSearchService:
                     content = str(content)
                 source_file = ch.get("source_file", "")
                 chunk_type = ch.get("chunk_type", "")
-                category = ch.get("category", "product")
                 metadata = ch.get("metadata") or {}
                 metadata_json = json.dumps(metadata, ensure_ascii=False)
-                docs.append(KeywordDoc(chunk_id, content, source_file, chunk_type, category, metadata_json))
+                docs.append(KeywordDoc(chunk_id, content, source_file, chunk_type, metadata_json))
             except Exception:  # pragma: no cover - skip malformed
                 continue
 
@@ -82,7 +80,6 @@ class KeywordSearchService:
         self,
         query: str,
         limit: int = 5,
-        categories: Optional[List[str]] = None,
         chunk_types: Optional[List[str]] = None,
         source_files: Optional[List[str]] = None,
         metadata_contains: Optional[List[str]] = None,
@@ -97,8 +94,6 @@ class KeywordSearchService:
         ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
 
         def _passes_filters(doc: KeywordDoc) -> bool:
-            if categories and doc.category not in set(categories):
-                return False
             if chunk_types and doc.chunk_type not in set(chunk_types):
                 return False
             if source_files and doc.source_file not in set(source_files):
@@ -120,7 +115,6 @@ class KeywordSearchService:
                 "content": doc.content,
                 "source_file": doc.source_file,
                 "chunk_type": doc.chunk_type,
-                "category": doc.category,
                 "metadata_json": doc.metadata_json,
                 # Use a unified key name for score compatibility with vector results
                 "distance": float(scores[i]),

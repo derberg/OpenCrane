@@ -67,9 +67,6 @@ docker run -p 8000:8000 your-registry/your-project-mcp:latest
 # Search product documentation
 search_product_docs(query="kubernetes deployment", limit=5)
 
-# Search guidelines
-search_guidelines(query="documentation style", search_mode="semantic")
-
 # Hybrid search with custom weighting
 search_product_docs(
     query="configuration options",
@@ -77,10 +74,6 @@ search_product_docs(
     alpha=0.7,  # 70% semantic, 30% keyword
     chunk_types=["prose"]
 )
-
-# Cross-category search: Call both tools
-product_results = search_product_docs(query="API documentation examples")
-guideline_results = search_guidelines(query="API documentation best practices")
 ```
 
 ## Available MCP Tools
@@ -109,28 +102,7 @@ search_product_docs(
 )
 ```
 
-### 2. `search_guidelines`
-
-Search content guidelines: writing style, documentation templates, diagram conventions, and content strategy.
-
-**Parameters:**
-- `query` (string, required): The search query
-- `limit` (integer, optional): Maximum number of results (1-50, default: 5)
-- `search_mode` (string, optional): Search mode - "semantic", "keyword", or "hybrid" (default: "hybrid")
-- `alpha` (number, optional): Weight for semantic score in hybrid mode (0-1, default: 0.6)
-- `chunk_types` (array, optional): Filter by content type - "prose", "code_snippet", "crd_definition", "openapi_spec", "json_schema"
-- `metadata_contains` (array, optional): Filter by metadata content (AND logic)
-
-**Example:**
-```python
-search_guidelines(
-    query="documentation templates",
-    search_mode="semantic",
-    limit=5
-)
-```
-
-### 3. `get_yaml_definition`
+### 2. `get_yaml_definition`
 
 Retrieve complete YAML definition for CRD, OpenAPI, or JSON Schema chunks with breadcrumb comments showing location in tree.
 
@@ -148,7 +120,7 @@ Retrieve complete YAML definition for CRD, OpenAPI, or JSON Schema chunks with b
 get_yaml_definition(chunk_id="abc123...")
 ```
 
-### 4. `get_metadata_schema`
+### 3. `get_metadata_schema`
 
 Retrieve comprehensive documentation of all metadata fields available in chunks. Use this to understand what metadata fields mean and how to use them programmatically.
 
@@ -172,7 +144,7 @@ Retrieve comprehensive documentation of all metadata fields available in chunks.
 get_metadata_schema()
 ```
 
-### 5. `health`
+### 4. `health`
 
 Check the health status of the MCP server and its services.
 

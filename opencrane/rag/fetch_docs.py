@@ -85,9 +85,10 @@ def main(config=None):
                 org_name, repo_name = parsed
 
                 # Skip repos from other orgs (only process repos matching current org)
-                # When a specific --repo filter is active, bypass the org check — the path key
-                # already uniquely identifies the repo regardless of which org owns it.
-                if org_name != config.org_name and not fetch_repo_filter:
+                # Bypass the org check when:
+                # - a specific --repo filter is active (path key already identifies the repo)
+                # - no org is configured (user is only using manual sources)
+                if config.org_name and org_name != config.org_name and not fetch_repo_filter:
                     logger.info(f"Skipping {org_name}/{repo_name} (org filter: {config.org_name})")
                     continue
 

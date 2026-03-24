@@ -442,8 +442,9 @@ class TestWriteOutputs:
 class TestGenerateOutputs:
     """Unit tests for generate_outputs function."""
 
-    def test_generate_outputs_missing_env_var(self, tmp_path, capsys):
+    def test_generate_outputs_missing_env_var(self, tmp_path, capsys, monkeypatch):
         """Test that generation is skipped gracefully when no sources are configured."""
+        monkeypatch.chdir(tmp_path)
         import opencrane.rag.generate_llms_txt as mod
         empty_mapping = tmp_path / "opencrane-sources.yaml"
         empty_mapping.write_text("sources: {}\n")

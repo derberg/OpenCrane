@@ -23,8 +23,9 @@ from opencrane.rag.services.source_mapping import SourceMapping
 from opencrane.shared.config import get_config
 from opencrane.shared.utils.git import has_changes
 
-# Path: src/rag/generate_llms_txt.py -> parent.parent.parent = project root
-ROOT = Path(__file__).resolve().parent.parent.parent
+# Default paths are relative to cwd (resolved at call time via generate_outputs).
+# These module-level values are only used as fallbacks and by legacy __main__ invocation.
+ROOT = Path.cwd()
 SOURCES_BASE = ROOT
 LLMSTXT_BASE = ROOT / ".opencrane" / "llmstxt"
 # Legacy paths for tests/backward compatibility
@@ -384,6 +385,14 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
 
     global SOURCES_BASE, LLMSTXT_BASE, SOURCE_ROOT, OUTPUT_ROOT
 
+    # Reset LLMSTXT_BASE to cwd so the function works regardless of where the
+    # package is installed.  Explicit overrides below take precedence.
+    # SOURCE_ROOT/SOURCES_BASE are only used by the legacy selected_projects
+    # path and are set via env var overrides when needed.
+    cwd = Path.cwd()
+    LLMSTXT_BASE = cwd / ".opencrane" / "llmstxt"
+    OUTPUT_ROOT = LLMSTXT_BASE
+
     # CLI params take precedence over env vars
     sources_override = os.environ.get("AI_DOCS_SOURCES_DIR")
     sources_dirs_override = ",".join(str(p) for p in sources_dirs) if sources_dirs else os.environ.get("AI_DOCS_SOURCES_DIRS")
@@ -391,7 +400,6 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
 
     if sources_override:
         SOURCES_BASE = Path(sources_override)
-        # Keep legacy constant in sync for tests/backward compatibility
         SOURCE_ROOT = SOURCES_BASE
     if llmstxt_override:
         LLMSTXT_BASE = Path(llmstxt_override)

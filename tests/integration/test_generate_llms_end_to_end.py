@@ -38,9 +38,8 @@ class TestGenerateLlmsEndToEnd:
 
         # Patch the global paths for new multi-source behavior
         with patch('opencrane.rag.generate_llms_txt.SOURCES_BASE', sources_dir), \
-             patch('opencrane.rag.generate_llms_txt.LLMSTXT_BASE', llmstxt_dir), \
              patch('opencrane.rag.generate_llms_txt.SOURCE_ROOT', source_dir), \
-             patch.dict('os.environ', {'AI_DOCS_SOURCES_DIRS': str(source_dir)}, clear=False):
+             patch.dict('os.environ', {'AI_DOCS_SOURCES_DIRS': str(source_dir), 'AI_DOCS_LLMSTXT_DIR': str(llmstxt_dir)}, clear=False):
             # Run the generation
             generate_outputs()
 
@@ -87,9 +86,8 @@ class TestGenerateLlmsEndToEnd:
 
         # Patch the global paths
         with patch('opencrane.rag.generate_llms_txt.SOURCES_BASE', sources_dir), \
-             patch('opencrane.rag.generate_llms_txt.LLMSTXT_BASE', llmstxt_dir), \
              patch('opencrane.rag.generate_llms_txt.SOURCE_ROOT', source_dir), \
-             patch.dict('os.environ', {'AI_DOCS_SOURCES_DIRS': str(source_dir)}, clear=False):
+             patch.dict('os.environ', {'AI_DOCS_SOURCES_DIRS': str(source_dir), 'AI_DOCS_LLMSTXT_DIR': str(llmstxt_dir)}, clear=False):
             # Run the generation
             generate_outputs()
 
@@ -118,9 +116,8 @@ class TestGenerateLlmsEndToEnd:
 
         # Patch paths to use temp dirs
         with patch('opencrane.rag.generate_llms_txt.SOURCES_BASE', sources_dir), \
-             patch('opencrane.rag.generate_llms_txt.LLMSTXT_BASE', llmstxt_dir), \
              patch('opencrane.rag.generate_llms_txt.SOURCE_ROOT', source1_dir), \
-             patch.dict('os.environ', {'AI_DOCS_SOURCES_DIRS': f"{source1_dir},{source2_dir}"}, clear=False):
+             patch.dict('os.environ', {'AI_DOCS_SOURCES_DIRS': f"{source1_dir},{source2_dir}", 'AI_DOCS_LLMSTXT_DIR': str(llmstxt_dir)}, clear=False):
             # Run generation (will process all sources)
             generate_outputs()
 

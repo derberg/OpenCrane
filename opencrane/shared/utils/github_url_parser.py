@@ -6,7 +6,7 @@ import re
 logger = logging.getLogger(__name__)
 
 
-def parse_github_url(github_url: str) -> Optional[Tuple[str, str]]:
+def parse_github_url(url: str) -> Optional[Tuple[str, str]]:
     """
     Parse GitHub URL to extract organization and repository name.
 
@@ -16,7 +16,7 @@ def parse_github_url(github_url: str) -> Optional[Tuple[str, str]]:
     - git@github.com:org/repo.git
 
     Args:
-        github_url: GitHub repository URL
+        url: GitHub repository URL
 
     Returns:
         Tuple of (org_name, repo_name) or None if parsing fails
@@ -29,13 +29,13 @@ def parse_github_url(github_url: str) -> Optional[Tuple[str, str]]:
         >>> parse_github_url("git@github.com:example-org/my-repo.git")
         ('example-org', 'my-repo')
     """
-    if not github_url:
+    if not url:
         return None
 
     try:
         # Pattern for HTTPS URLs: https://github.com/org/repo(.git)?
         https_pattern = r'https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$'
-        match = re.match(https_pattern, github_url)
+        match = re.match(https_pattern, url)
         if match:
             org_name = match.group(1)
             repo_name = match.group(2)
@@ -43,16 +43,16 @@ def parse_github_url(github_url: str) -> Optional[Tuple[str, str]]:
 
         # Pattern for SSH URLs: git@github.com:org/repo(.git)?
         ssh_pattern = r'git@github\.com:([^/]+)/([^/]+?)(?:\.git)?/?$'
-        match = re.match(ssh_pattern, github_url)
+        match = re.match(ssh_pattern, url)
         if match:
             org_name = match.group(1)
             repo_name = match.group(2)
             return (org_name, repo_name)
 
-        logger.warning(f"Could not parse GitHub URL: {github_url}")
+        logger.warning(f"Could not parse GitHub URL: {url}")
         return None
     except Exception as e:
-        logger.error(f"Error parsing GitHub URL {github_url}: {e}")
+        logger.error(f"Error parsing GitHub URL {url}: {e}")
         return None
 
 

@@ -68,18 +68,21 @@ def main(config=None):
 
         for path_key, source_config in source_mapping.get_all_sources().items():
             if source_config.get("manual"):
+                # Skip non-GitHub sources (e.g., llmstxt) — handled separately
+                if source_config.get("type", "github") != "github":
+                    continue
                 # Skip if a repo filter is active and this entry doesn't match
                 if fetch_repo_filter and path_key != fetch_repo_filter:
                     logger.debug(f"Skipping {path_key} (--repo filter active: {fetch_repo_filter})")
                     continue
-                github_url = source_config.get("github_url")
-                if not github_url:
-                    logger.warning(f"Manual entry {path_key} has no github_url, skipping")
+                url = source_config.get("url")
+                if not url:
+                    logger.warning(f"Manual entry {path_key} has no url, skipping")
                     continue
 
-                parsed = parse_github_url(github_url)
+                parsed = parse_github_url(url)
                 if not parsed:
-                    logger.warning(f"Could not parse GitHub URL for {path_key}: {github_url}")
+                    logger.warning(f"Could not parse GitHub URL for {path_key}: {url}")
                     continue
 
                 org_name, repo_name = parsed
@@ -104,7 +107,7 @@ def main(config=None):
                     manual_repo_metadata[manual_repo.name] = {
                         "org_name": org_name,
                         "path_key": path_key,
-                        "github_url": github_url,
+                        "url": url,
                         "docs_path": source_config.get("docs_path", "docs")
                     }
                 except Exception as e:
@@ -139,9 +142,9 @@ def main(config=None):
                 logger.debug(f"Marking {path_key} as active (--repo filter active, protected from cleanup)")
                 active_repos.add(path_key)
                 continue
-            github_url = source_config.get("github_url")
-            if github_url:
-                parsed = parse_github_url(github_url)
+            url = source_config.get("url")
+            if url:
+                parsed = parse_github_url(url)
                 if parsed:
                     org_name, repo_name = parsed
                     if org_name != config.org_name:
@@ -159,13 +162,13 @@ def main(config=None):
 
                 org_name = metadata.get("org_name", config.org_name)
 
-                # Determine docs_path, path_key, and github_url upfront
+                # Determine docs_path, path_key, and url upfront
                 if is_manual:
-                    github_url = metadata.get("github_url")
+                    url = metadata.get("url")
                     path_key = metadata.get("path_key")
                     docs_path = metadata.get("docs_path", "docs")
                 else:
-                    github_url = f"https://github.com/{config.org_name}/{repo.name}"
+                    url = f"https://github.com/{config.org_name}/{repo.name}"
                     path_key = f"{config.target_dir.as_posix()}/{repo.name}"
                     docs_path = "docs"
 
@@ -184,7 +187,7 @@ def main(config=None):
 
                     source_mapping.add_source(
                         path_key=path_key,
-                        github_url=github_url,
+                        url=url,
                         docs_path=docs_path,
                         manual=is_manual
                     )

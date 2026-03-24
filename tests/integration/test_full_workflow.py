@@ -240,17 +240,17 @@ class TestFullWorkflow:
         mock_mapping_instance = Mock()
         mock_mapping_instance.get_all_sources.return_value = {
             "external-sources/my-org-repo-1": {
-                "github_url": "https://github.com/my-org/my-org-repo-1",
+                "url": "https://github.com/my-org/my-org-repo-1",
                 "docs_path": "docs",
                 "manual": False
             },
             "external-sources/my-org-repo-2": {
-                "github_url": "https://github.com/my-org/my-org-repo-2",
+                "url": "https://github.com/my-org/my-org-repo-2",
                 "docs_path": "docs",
                 "manual": False
             },
             "external-sources/other-org-cgw": {
-                "github_url": "https://github.com/other-org/cgw",
+                "url": "https://github.com/other-org/cgw",
                 "docs_path": "docs",
                 "manual": True
             }
@@ -317,12 +317,12 @@ class TestFullWorkflow:
         mock_mapping_instance = Mock()
         mock_mapping_instance.get_all_sources.return_value = {
             "external-sources/cgw": {
-                "github_url": "https://github.com/other-org/cgw",
+                "url": "https://github.com/other-org/cgw",
                 "docs_path": "docs",
                 "manual": True,
             },
             "external-sources/tsr": {
-                "github_url": "https://github.com/other-org/tsr",
+                "url": "https://github.com/other-org/tsr",
                 "docs_path": "docs",
                 "manual": True,
             },
@@ -420,17 +420,17 @@ class TestFullWorkflow:
         mock_mapping_instance = Mock()
         mock_mapping_instance.get_all_sources.return_value = {
             "external-sources/cgw": {
-                "github_url": "https://github.com/other-org/cgw",
+                "url": "https://github.com/other-org/cgw",
                 "docs_path": "docs",
                 "manual": True,
             },
             "external-sources/tsr": {
-                "github_url": "https://github.com/other-org/tsr",
+                "url": "https://github.com/other-org/tsr",
                 "docs_path": "docs",
                 "manual": True,
             },
             "external-sources/other-my-org-repo": {
-                "github_url": "https://github.com/my-org/other-my-org-repo",
+                "url": "https://github.com/my-org/other-my-org-repo",
                 "docs_path": "docs",
                 "manual": False,
             },

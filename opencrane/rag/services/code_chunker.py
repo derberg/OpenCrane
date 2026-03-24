@@ -267,12 +267,22 @@ class CodeChunkingStrategy(ProcessingStrategy):
                     temp = temp[1:]
                 
                 heading_text = temp.strip()
-                
-                # If heading starts with URL, try to extract the title after it
-                if heading_text.startswith('http://') or heading_text.startswith('https://'):
+
+                # Strip bracketed URL: # [https://...] Title -> # Title
+                if heading_text.startswith('[http://') or heading_text.startswith('[https://'):
+                    bracket_end = heading_text.find(']')
+                    if bracket_end != -1:
+                        after_bracket = heading_text[bracket_end + 1:].strip()
+                        if after_bracket:
+                            lines.append(f"{indent}{hashes} {after_bracket}")
+                        else:
+                            lines.append(line)
+                    else:
+                        lines.append(line)
+                # Strip bare URL: # https://... Title -> # Title
+                elif heading_text.startswith('http://') or heading_text.startswith('https://'):
                     url_parts = heading_text.split(None, 1)
                     if len(url_parts) > 1:
-                        # Has title after URL, use clean title
                         clean_heading = f"{indent}{hashes} {url_parts[1].strip()}"
                         lines.append(clean_heading)
                     else:
@@ -289,5 +299,10 @@ class CodeChunkingStrategy(ProcessingStrategy):
 
     @staticmethod
     def _extract_source_url(text: str) -> str | None:
+        # Try bracketed URL first: [https://...]
+        bracket_match = re.search(r'\[https?://[^\]]+\]', text)
+        if bracket_match:
+            return bracket_match.group(0).strip('[]')
+        # Fall back to bare GitHub URL
         match = re.search(r'https://github\.com/[^\s\]]+', text)
         return match.group(0) if match else None

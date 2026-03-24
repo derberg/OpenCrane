@@ -180,7 +180,12 @@ class FileProcessor:
                 
                 # Always split into sections if content has ### URL markers
                 # These markers indicate logical file boundaries and must be respected
-                has_section_markers = '### https://github.com/' in self.content
+                # Matches both bare URLs (### https://github.com/...) and
+                # bracketed docs URLs (# [https://...] Title) from the llms step.
+                has_section_markers = bool(
+                    '### https://github.com/' in self.content
+                    or re.search(r'^#{1,6}\s+\[https?://', self.content, re.MULTILINE)
+                )
                 
                 # For large files with mixed content, or files with section markers, split into logical sections
                 # This allows prose, code, and YAML sections to be processed independently
@@ -252,14 +257,23 @@ class FileProcessor:
                 
                 sections = []
                 current_section = []
-                # Find first URL marker to use as initial source for any content before markers
+                # Find first URL marker to use as initial source for any content before markers.
+                # Matches both bare GitHub URLs and bracketed docs URLs.
                 current_source_url = None
                 for line in content.split('\n'):
-                    if line.strip().startswith('###') and 'https://github.com/' in line:
-                        match = re.search(r'https://github\.com/[^\s\]]+', line)
-                        if match:
-                            current_source_url = match.group(0)
+                    stripped_line = line.strip()
+                    if stripped_line.startswith('#'):
+                        # Bracketed URL: # [https://...] Title
+                        bracket_match = re.search(r'\[https?://[^\]]+\]', stripped_line)
+                        if bracket_match:
+                            current_source_url = bracket_match.group(0).strip('[]')
                             break
+                        # Bare GitHub URL: ### https://github.com/...
+                        if 'https://github.com/' in stripped_line:
+                            match = re.search(r'https://github\.com/[^\s\]]+', stripped_line)
+                            if match:
+                                current_source_url = match.group(0)
+                                break
                 
                 in_code_block = False
                 in_html_block = False
@@ -268,37 +282,50 @@ class FileProcessor:
                 for line in content.split('\n'):
                     stripped = line.strip()
                     
-                    # Split on URL marker lines (### https://github.com/...) BEFORE processing
-                    # These mark boundaries between different source files
+                    # Split on URL marker lines BEFORE processing.
+                    # Matches both bare GitHub URLs (### https://github.com/...)
+                    # and bracketed docs URLs (# [https://...] Title).
                     if not in_html_block and not in_code_block:
-                        if stripped.startswith('###') and 'https://github.com/' in stripped:
+                        is_github_marker = stripped.startswith('###') and 'https://github.com/' in stripped
+                        bracket_url_match = re.search(r'\[https?://[^\]]+\]', stripped) if stripped.startswith('#') else None
+                        is_url_marker = is_github_marker or bracket_url_match is not None
+
+                        if is_url_marker:
                             # Save accumulated content before this marker
                             if current_section:
                                 section_text = '\n'.join(current_section).strip()
                                 if section_text:
-                                    logger.debug(f"Saving section with URL={current_source_url[:60]}... ({len(section_text)} chars)")
+                                    logger.debug(f"Saving section with URL={current_source_url[:60] if current_source_url else 'None'}... ({len(section_text)} chars)")
                                     sections.append(FakeTextItem(section_text, current_source_url))
+
                             # Extract and update current source URL
-                            import re
-                            match = re.search(r'https://github\.com/[^\s\]]+', line)
-                            if match:
-                                logger.debug(f"Found new marker, updating URL from {current_source_url[:60] if current_source_url else 'None'}... to {match.group(0)[:60]}...")
-                                current_source_url = match.group(0)
-                                
-                                # Check if there's inline text after the URL (like "### https://...file.md Title")
-                                # Extract and preserve it as a heading for the prose chunker
-                                url_end = line.find(match.group(0)) + len(match.group(0))
-                                inline_title = line[url_end:].strip()
-                                if inline_title:
-                                    # Start new section with the title as a heading
-                                    current_section = [f"### {inline_title}"]
-                                    logger.debug(f"Extracted inline title from marker: '{inline_title}'")
+                            if bracket_url_match:
+                                new_url = bracket_url_match.group(0).strip('[]')
+                                logger.debug(f"Found bracketed URL marker, updating URL from {current_source_url[:60] if current_source_url else 'None'}... to {new_url[:60]}...")
+                                current_source_url = new_url
+                                # Extract inline title: # [https://...] Title → # Title
+                                after_bracket = stripped[stripped.index(']') + 1:].strip()
+                                hashes = stripped.split()[0]  # e.g. '#', '##', '###'
+                                if after_bracket:
+                                    current_section = [f"{hashes} {after_bracket}"]
                                 else:
-                                    # No inline title, start empty section
                                     current_section = []
                             else:
-                                # No URL match, just start new section
-                                current_section = []  # pragma: no cover
+                                match = re.search(r'https://github\.com/[^\s\]]+', line)
+                                if match:
+                                    logger.debug(f"Found new marker, updating URL from {current_source_url[:60] if current_source_url else 'None'}... to {match.group(0)[:60]}...")
+                                    current_source_url = match.group(0)
+
+                                    # Check if there's inline text after the URL (like "### https://...file.md Title")
+                                    url_end = line.find(match.group(0)) + len(match.group(0))
+                                    inline_title = line[url_end:].strip()
+                                    if inline_title:
+                                        current_section = [f"### {inline_title}"]
+                                        logger.debug(f"Extracted inline title from marker: '{inline_title}'")
+                                    else:
+                                        current_section = []
+                                else:
+                                    current_section = []  # pragma: no cover
                             continue
                     
                     # Track HTML block state (Tabs, Tab, etc)

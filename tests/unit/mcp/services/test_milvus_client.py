@@ -48,13 +48,12 @@ class TestMilvusService:
             call(field_name='content', datatype=ANY, max_length=65535),
             call(field_name='source_file', datatype=ANY, max_length=512),
             call(field_name='chunk_type', datatype=ANY, max_length=32),
-            call(field_name='category', datatype=ANY, max_length=32),
             call(field_name='metadata_json', datatype=ANY, max_length=65535),
             call(field_name='token_count', datatype=ANY),
             call(field_name='line_start', datatype=ANY),
         ]
         schema_mock.add_field.assert_has_calls(expected_calls, any_order=True)
-        assert schema_mock.add_field.call_count == 9  # All fields added
+        assert schema_mock.add_field.call_count == 8  # All fields added
         # Verify index params
         index_params_mock = mock_client.prepare_index_params.return_value
         index_params_mock.add_index.assert_called_once_with(
@@ -165,7 +164,7 @@ class TestMilvusService:
         assert call_kwargs['data'] == [[0.1] * 768]
         assert call_kwargs['limit'] == 5
         assert call_kwargs['filter'] is None
-        assert call_kwargs['output_fields'] == ["chunk_id", "content", "source_file", "chunk_type", "category", "metadata_json", "token_count", "line_start"]
+        assert call_kwargs['output_fields'] == ["chunk_id", "content", "source_file", "chunk_type", "metadata_json", "token_count", "line_start"]
         assert len(results) == 2
         assert call_kwargs['search_params'] == {"metric_type": "COSINE", "params": {}}
 
@@ -198,21 +197,6 @@ class TestMilvusService:
 
         call_kwargs = mock_client.search.call_args[1]
         assert call_kwargs['filter'] == '(source_file == "a.md" || source_file == "b.md")'
-        assert len(results) == 1
-
-    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
-    def test_search_with_category_filter(self, mock_client_class):
-        """Test search with category filter."""
-        mock_client = Mock()
-        mock_client_class.return_value = mock_client
-        mock_client.search.return_value = [["result1"]]
-
-        service = MilvusService()
-        results = service.search([0.1] * 768, limit=3, categories=["guidelines", "product"])
-
-        call_kwargs = mock_client.search.call_args[1]
-        assert call_kwargs['filter'] == '(category == "guidelines" || category == "product")'
-        assert call_kwargs['limit'] == 3
         assert len(results) == 1
 
     @patch('opencrane.mcp.services.milvus_client.MilvusClient')

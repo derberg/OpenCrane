@@ -7,7 +7,7 @@ from opencrane.mcp.server import (
     search_product_docs, _search_documentation_impl,
     health_check, list_tools, call_tool,
     get_embeddings_service, get_milvus_service, get_keyword_service,
-    get_yaml_definition, get_metadata_schema, _rehydrate_to_yaml, main
+    get_yaml_definition, get_metadata_schema, _rehydrate_to_yaml, _has_yaml_chunks, main
 )
 from mcp.types import TextContent
 
@@ -15,9 +15,10 @@ from mcp.types import TextContent
 class TestMCPServer:
     """Test cases for MCP server functions."""
 
+    @patch('opencrane.mcp.server._has_yaml_chunks', return_value=True)
     @pytest.mark.anyio
-    async def test_list_tools(self):
-        """Test list_tools returns correct tools."""
+    async def test_list_tools_with_yaml_chunks(self, mock_has_yaml):
+        """Test list_tools includes YAML tools when YAML chunks exist."""
         tools = await list_tools()
 
         assert len(tools) == 4
@@ -25,6 +26,16 @@ class TestMCPServer:
         assert tools[1].name == "health"
         assert tools[2].name == "get_yaml_definition"
         assert tools[3].name == "get_metadata_schema"
+
+    @patch('opencrane.mcp.server._has_yaml_chunks', return_value=False)
+    @pytest.mark.anyio
+    async def test_list_tools_without_yaml_chunks(self, mock_has_yaml):
+        """Test list_tools excludes YAML tools when no YAML chunks exist."""
+        tools = await list_tools()
+
+        assert len(tools) == 2
+        assert tools[0].name == "search_product_docs"
+        assert tools[1].name == "health"
 
     @patch('opencrane.mcp.server.EmbeddingService')
     def test_get_embeddings_service_lazy_init(self, mock_embedding_service):
@@ -894,6 +905,53 @@ def test_build_chunk_index_caching(tmp_path, monkeypatch):
     chunks_path.unlink()
     result2 = server_module._build_chunk_index()
     assert result2 is result1
+
+
+def test_has_yaml_chunks_true(tmp_path, monkeypatch):
+    """Test _has_yaml_chunks returns True when YAML chunks exist."""
+    import opencrane.mcp.server as server_module
+
+    monkeypatch.chdir(tmp_path)
+    server_module._chunk_index = None
+
+    chunks = [
+        {"chunk_id": "c1", "content": "prose text", "chunk_type": "prose"},
+        {"chunk_id": "c2", "content": {"spec": {}}, "chunk_type": "crd_definition"},
+    ]
+    (tmp_path / ".opencrane").mkdir()
+    (tmp_path / ".opencrane" / "chunks.json").write_text(json.dumps(chunks), encoding="utf-8")
+
+    assert server_module._has_yaml_chunks() is True
+
+
+def test_has_yaml_chunks_false(tmp_path, monkeypatch):
+    """Test _has_yaml_chunks returns False when no YAML chunks exist."""
+    import opencrane.mcp.server as server_module
+
+    monkeypatch.chdir(tmp_path)
+    server_module._chunk_index = None
+
+    chunks = [
+        {"chunk_id": "c1", "content": "prose text", "chunk_type": "prose"},
+        {"chunk_id": "c2", "content": "code", "chunk_type": "code_snippet"},
+    ]
+    (tmp_path / ".opencrane").mkdir()
+    (tmp_path / ".opencrane" / "chunks.json").write_text(json.dumps(chunks), encoding="utf-8")
+
+    assert server_module._has_yaml_chunks() is False
+
+
+def test_has_yaml_chunks_empty_index(tmp_path, monkeypatch):
+    """Test _has_yaml_chunks returns False when chunk index is empty."""
+    import opencrane.mcp.server as server_module
+
+    monkeypatch.chdir(tmp_path)
+    server_module._chunk_index = None
+
+    (tmp_path / ".opencrane").mkdir()
+    (tmp_path / ".opencrane" / "chunks.json").write_text("[]", encoding="utf-8")
+
+    assert server_module._has_yaml_chunks() is False
 
 
 def test_build_chunk_source_map_from_rag_chunks(tmp_path, monkeypatch):

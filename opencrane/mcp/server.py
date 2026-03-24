@@ -190,12 +190,21 @@ def get_keyword_service():
         _keyword_service = KeywordSearchService()
     return _keyword_service
 
+_YAML_CHUNK_TYPES = {"crd_definition", "openapi_spec", "json_schema"}
+
+
+def _has_yaml_chunks() -> bool:
+    """Check whether indexed chunks contain any YAML-based types (CRD, OpenAPI, JSON Schema)."""
+    chunk_index = _build_chunk_index()
+    return any(c.get("chunk_type") in _YAML_CHUNK_TYPES for c in chunk_index.values())
+
+
 app = Server("opencrane")
 
 @app.list_tools()
 async def list_tools() -> list[Tool]:
     """List available tools."""
-    return [
+    tools = [
         Tool(
             name="search_product_docs",
             description="Search product documentation: extensions, APIs, CRDs, deployment guides, and operational documentation.",
@@ -248,7 +257,10 @@ async def list_tools() -> list[Tool]:
                 "required": []
             }
         ),
-        Tool(
+    ]
+
+    if _has_yaml_chunks():
+        tools.append(Tool(
             name="get_yaml_definition",
             description="Retrieve complete YAML definition for CRD, OpenAPI, or JSON Schema chunks with breadcrumb comments. Use this when: 1) You need full YAML context with location breadcrumbs (e.g., 'spec.replicas is at spec.versions[0].schema.properties.spec.replicas in SMC CRD'), 2) Search results show truncated content and suggest using this tool, 3) You want to see neighbor chunks at the same tree level, 4) You need the documentation URL for a YAML chunk. Returns YAML with comment headers showing: location in tree, parent path, schema type/version information, and up to 5 sibling chunks.",
             inputSchema={
@@ -261,8 +273,8 @@ async def list_tools() -> list[Tool]:
                 },
                 "required": ["chunk_id"]
             }
-        ),
-        Tool(
+        ))
+        tools.append(Tool(
             name="get_metadata_schema",
             description="Retrieve comprehensive documentation of all metadata fields available in chunks. Use this when you need to understand what metadata fields mean (breadcrumb_path, logical_parent, neighbor_chunks, etc.) and how to use them programmatically for navigation, context expansion, and re-hydration. Returns detailed schema documentation with field definitions, examples, and usage patterns.",
             inputSchema={
@@ -270,8 +282,9 @@ async def list_tools() -> list[Tool]:
                 "properties": {},
                 "required": []
             }
-        )
-    ]
+        ))
+
+    return tools
 
 @app.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[TextContent]:

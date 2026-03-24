@@ -26,7 +26,12 @@ class SourceMapping:
             try:
                 with open(self.mapping_file, 'r') as f:
                     content = yaml.safe_load(f)
-                    return content if content else {"sources": {}}
+                    if not content:
+                        return {"sources": {}}
+                    # Normalize: `sources:` with no value parses as {"sources": None}
+                    if content.get("sources") is None:
+                        content["sources"] = {}
+                    return content
             except Exception as e:
                 logger.warning(f"Failed to load mapping file {self.mapping_file}: {e}")
                 return {"sources": {}}

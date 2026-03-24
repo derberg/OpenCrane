@@ -20,8 +20,7 @@
       "schema_title": "Volume Configuration Schema"
     },
     "token_count": 20,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "0a64618cb2870d2fa2eb74ce8ab2d4113fe0af7f416b077253db7fea45946076",
@@ -54,8 +53,7 @@
       "property_name": "name"
     },
     "token_count": 97,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "2885848e6b133bd919654e60b6beb74804354a4c858687f040b38c1d9d312677",
@@ -87,8 +85,7 @@
       "property_name": "path"
     },
     "token_count": 95,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "5d20f5842c4e511c968eb2053a431fddee6396a5abc53bb4c7572f793210b6ce",
@@ -120,8 +117,7 @@
       "property_name": "size"
     },
     "token_count": 123,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "7a103cdf180a08105e43fd7353e7dcadb4aaab662bcca330108bfdd16882e0fe",
@@ -157,8 +153,7 @@
       "property_name": "accessMode"
     },
     "token_count": 95,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "08ced79a9829d93d258dc1d39c9f553feed0901c1c6f1c02c186ffd467c4ccae",
@@ -189,8 +184,7 @@
       "property_name": "storageClass"
     },
     "token_count": 80,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "69090e1fd00abe40b57344c9df850e0cd246cda5cb2f64132608422abc28fa0c",
@@ -222,8 +216,7 @@
       "property_name": "encrypted"
     },
     "token_count": 82,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "2af7be13d548763ba8603cdf3a5ba004385ae5276b04ad8c0c3171d29efaa7d6",
@@ -272,7 +265,6 @@
       "property_name": "backup"
     },
     "token_count": 295,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   }
 ]

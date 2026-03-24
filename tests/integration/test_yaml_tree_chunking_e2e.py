@@ -76,7 +76,7 @@ class TestYAMLTreeChunkingE2E:
         # Validate all fixture chunks through Pydantic model to ensure structure is correct
         for chunk_data in expected_chunks_raw:
             # First check that all required fields are present in the JSON (not relying on defaults)
-            required_fields = ["chunk_id", "content", "source_file", "chunk_type", "metadata", "token_count", "category"]
+            required_fields = ["chunk_id", "content", "source_file", "chunk_type", "metadata", "token_count"]
             missing_fields = [field for field in required_fields if field not in chunk_data]
             if missing_fields:
                 pytest.fail(f"Fixture chunk missing required fields: {missing_fields}\nChunk: {json.dumps(chunk_data, indent=2)}")
@@ -182,7 +182,7 @@ class TestYAMLTreeChunkingE2E:
         # Validate all fixture chunks through Pydantic model to ensure structure is correct
         for chunk_data in expected_chunks_raw:
             # First check that all required fields are present in the JSON (not relying on defaults)
-            required_fields = ["chunk_id", "content", "source_file", "chunk_type", "metadata", "token_count", "category"]
+            required_fields = ["chunk_id", "content", "source_file", "chunk_type", "metadata", "token_count"]
             missing_fields = [field for field in required_fields if field not in chunk_data]
             if missing_fields:
                 pytest.fail(f"OpenAPI fixture chunk missing required fields: {missing_fields}\nChunk: {json.dumps(chunk_data, indent=2)}")
@@ -265,7 +265,7 @@ class TestYAMLTreeChunkingE2E:
         # Validate all fixture chunks through Pydantic model to ensure structure is correct
         for chunk_data in expected_chunks_raw:
             # First check that all required fields are present in the JSON (not relying on defaults)
-            required_fields = ["chunk_id", "content", "source_file", "chunk_type", "metadata", "token_count", "category"]
+            required_fields = ["chunk_id", "content", "source_file", "chunk_type", "metadata", "token_count"]
             missing_fields = [field for field in required_fields if field not in chunk_data]
             if missing_fields:
                 pytest.fail(f"JSON Schema fixture chunk missing required fields: {missing_fields}\nChunk: {json.dumps(chunk_data, indent=2)}")
@@ -356,7 +356,7 @@ class TestYAMLTreeChunkingE2E:
         # Validate all fixture chunks through Pydantic model
         for chunk_data in expected_chunks_raw:
             # Check all required fields are present
-            required_fields = ["chunk_id", "content", "source_file", "chunk_type", "metadata", "token_count", "category"]
+            required_fields = ["chunk_id", "content", "source_file", "chunk_type", "metadata", "token_count"]
             missing_fields = [field for field in required_fields if field not in chunk_data]
             if missing_fields:
                 pytest.fail(f"Array items fixture chunk missing required fields: {missing_fields}\nChunk: {json.dumps(chunk_data, indent=2)}")

@@ -68,7 +68,6 @@ class TestSearchResultStructure:
                     'content': 'This is test content',
                     'source_file': 'test.md',
                     'chunk_type': 'prose',
-                    'category': 'product',
                     'metadata_json': '{"key": "value"}',
                 }
             }),
@@ -80,7 +79,6 @@ class TestSearchResultStructure:
                     'content': 'More test content',
                     'source_file': 'test2.md',
                     'chunk_type': 'code_snippet',
-                    'category': 'product',
                     'metadata_json': '{}',
                 }
             })
@@ -126,7 +124,6 @@ class TestSearchResultStructure:
                 'content': 'Test content',
                 'source_file': 'test.md',
                 'chunk_type': 'prose',
-                'category': 'product',
                 'metadata_json': '{}',
                 'distance': 0.9
             }
@@ -163,7 +160,6 @@ class TestSearchResultStructure:
         ]
 
         optional_fields = [
-            'category',      # String
             'token_count',   # Integer
             'line_start',    # Integer
         ]
@@ -176,7 +172,6 @@ class TestSearchResultStructure:
             'chunk_type': 'prose',
             'metadata_json': '{}',
             'distance': 0.85,
-            'category': 'product',
         }
 
         # Verify all required fields present

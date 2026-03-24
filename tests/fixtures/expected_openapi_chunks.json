@@ -27,8 +27,7 @@
       "openapi_element": "info"
     },
     "token_count": 217,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "cb8592ffbc396729d6ce8d53d19c4239f4ea6bcbbbb70c06a9c153f781249b0e",
@@ -49,8 +48,7 @@
       "server_url": "https://www.gitlab.com/api/v4"
     },
     "token_count": 12,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "c15ddd3c0cdc87757ed0e4ade5cc8db982e8ad137be8f25d279deb778a39385b",
@@ -75,8 +73,7 @@
       "openapi_element": "security"
     },
     "token_count": 6,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "04c4b595886fe54cac392ee2c37a1f2cc5907579d047d791e12d4879a2691c81",
@@ -118,8 +115,7 @@
       "openapi_element": "tags"
     },
     "token_count": 66,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "f421a8b768e70ab8611f58778e18f098ace31a332fc8dcfe809fa9f2a826478b",
@@ -191,8 +187,7 @@
       "http_method": "get"
     },
     "token_count": 212,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "4ad72f98b259a27477dc65e54a342809ff191fa073f39301e0083840a639324b",
@@ -244,8 +239,7 @@
       "http_method": "post"
     },
     "token_count": 128,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "428de44f01db7191ff6b3535e86052cf23879c9e03ff914f5dc8b39ab1ac7373",
@@ -307,8 +301,7 @@
       "http_method": "get"
     },
     "token_count": 165,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "ca35fc2966ea61505a547ed8b3ba6aeefae646b5011c6c337e902c45b8129ba1",
@@ -391,8 +384,7 @@
       "http_method": "put"
     },
     "token_count": 226,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "fcad9461c044559215cf767e9dd1174bc33c1fa6e619f89feb44a72415b0af1b",
@@ -478,8 +470,7 @@
       "http_method": "get"
     },
     "token_count": 237,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "ade5ac99d536a12e82cc4c148979fb835f85fc7b865b97e98588fc4346d0da2e",
@@ -552,8 +543,7 @@
       "http_method": "post"
     },
     "token_count": 182,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "736d7c35b13a6bdcf5d1e580cce12779d8e347ff23701ce4f7cac4dbab02d166",
@@ -617,8 +607,7 @@
       "http_method": "get"
     },
     "token_count": 143,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "cc502f9e65261f31dc8dc7e7c7ca23c9be3a71d0d0c0c79c8d7d87f2b172bdb5",
@@ -676,8 +665,7 @@
       "http_method": "get"
     },
     "token_count": 127,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "b4d4fb78dcc301bf1ec4cb7a9a9682bbe5657e6b106476cae50d55d3d1f1877f",
@@ -738,8 +726,7 @@
       "schema_name": "API_Entities_AccessRequester"
     },
     "token_count": 134,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "da7435b41da58c4fb60dac9d82b3a93afa8a9486870fa5719f8afe545b8f1563",
@@ -790,8 +777,7 @@
       "schema_name": "API_Entities_Badge"
     },
     "token_count": 77,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "f5b432178edb8121c5f35a3156af4b12e318d413bc3cc27db41901ac0cdd174e",
@@ -856,8 +842,7 @@
       "schema_name": "API_Entities_Branch"
     },
     "token_count": 159,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "2a35b62c907778e5948feefc217caaf71445b7a7aa390b4c3572c8349224f0a1",
@@ -919,8 +904,7 @@
       "schema_name": "API_Entities_Commit"
     },
     "token_count": 204,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "b915b1f950fabca031b92d005dd589589d355ad8a2fed915a5d751ba881ca930",
@@ -995,8 +979,7 @@
       "schema_name": "API_Entities_Job"
     },
     "token_count": 295,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "ed41338c1dcae17884bbc116d7210c7b3798050b1626053a821d3fcecfbb3ce1",
@@ -1020,8 +1003,7 @@
       "security_scheme_name": "ApiKeyAuth"
     },
     "token_count": 13,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "d602d0e8b9776bdb8b0b500fe420b01b31597a5b96987bafd82260bc89cd87b6",
@@ -1051,8 +1033,7 @@
       "openapi_element": "info"
     },
     "token_count": 217,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "cac75a349f2d8bc7c26a189a58623905dd6912f8138325e55799cfc7ed1931e4",
@@ -1073,8 +1054,7 @@
       "server_url": "https://www.gitlab.com/api/v4"
     },
     "token_count": 12,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "a80f52fbe30d98572a23eaa6b80c39162bb4b1ab728974ce3e8914a9a346c91e",
@@ -1099,8 +1079,7 @@
       "openapi_element": "security"
     },
     "token_count": 6,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "3b013e8e738d00830edeb8e7b3d647a911ef06b1f244d0ba6b71034858d27ec4",
@@ -1142,8 +1121,7 @@
       "openapi_element": "tags"
     },
     "token_count": 66,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "d33d32676ba485503122076420042782a9b4ed418852c3d3e8177b4a07a9ffe2",
@@ -1215,8 +1193,7 @@
       "http_method": "get"
     },
     "token_count": 212,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "f8503878dc6ba6342f00006e1b571c4ba7cf66328f4ef980f7ae3234d2b1143d",
@@ -1268,8 +1245,7 @@
       "http_method": "post"
     },
     "token_count": 128,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "fbac250aca71fb7f31234d82e3a8e43aea1f158128fb793b88ef744747c0d9a2",
@@ -1331,8 +1307,7 @@
       "http_method": "get"
     },
     "token_count": 165,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "1a5f43b6464ddf321edb8114bdfd70d079dd866837850cc47ea0575d62a3e3ca",
@@ -1415,8 +1390,7 @@
       "http_method": "put"
     },
     "token_count": 226,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "adbfccd40eb551d5bdd3bfe1a5739c549248b1d9a6e651d7396b548df72097f0",
@@ -1502,8 +1476,7 @@
       "http_method": "get"
     },
     "token_count": 237,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "c7aa72c53c9d5e72944e6834971ab686f8c0aa9058341377db120bca4949cd90",
@@ -1576,8 +1549,7 @@
       "http_method": "post"
     },
     "token_count": 182,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "d7236cdb85a61f7cdf3905c01ac9e9d6ad6ca4e3f865a93be785283d0ade76dc",
@@ -1641,8 +1613,7 @@
       "http_method": "get"
     },
     "token_count": 143,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "533468b253e1a9fada3370a2cf00c4a3dca1db3a9d5070c524962ad4fcfccc54",
@@ -1700,8 +1671,7 @@
       "http_method": "get"
     },
     "token_count": 127,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "b2209ebb84f43c0c8ca6c62fd506b7ef556d7a365da2697979649369751957e3",
@@ -1762,8 +1732,7 @@
       "schema_name": "API_Entities_AccessRequester"
     },
     "token_count": 134,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "8d0ce1537dffca1b4b744e2a637a2550c58a7890319b1c9acfe373c28995ea5f",
@@ -1814,8 +1783,7 @@
       "schema_name": "API_Entities_Badge"
     },
     "token_count": 77,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "2e0237659c756b859e4eb03714b17cdb80d8562b039ed1dbec6e41c1f7a421df",
@@ -1880,8 +1848,7 @@
       "schema_name": "API_Entities_Branch"
     },
     "token_count": 159,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "dc4c6e04198b2f4f062affd2f375192cffbd489d44d9aa3df055fc16f6d0dd00",
@@ -1943,8 +1910,7 @@
       "schema_name": "API_Entities_Commit"
     },
     "token_count": 204,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "ad2e3224a82b5fe3bd928c041635fbd09b71fb303252cfeb4ffdd5349a48c2df",
@@ -2019,8 +1985,7 @@
       "schema_name": "API_Entities_Job"
     },
     "token_count": 295,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "8369affb55b966d58c27d3fb66d4932c435adebd6c3a440610c1c0b82f0aafde",
@@ -2044,7 +2009,6 @@
       "security_scheme_name": "ApiKeyAuth"
     },
     "token_count": 13,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   }
 ]

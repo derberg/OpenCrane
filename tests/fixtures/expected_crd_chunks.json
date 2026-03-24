@@ -30,8 +30,7 @@
       "crd_property_path": "spec.replicas"
     },
     "token_count": 30,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "8b72aff0a44f292610cfe23590dfbf9db87f9d08505b43853ae701cc4bf64f91",
@@ -85,8 +84,7 @@
       "crd_property_path": "spec.image"
     },
     "token_count": 102,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "22bba787e755ff117a139f37dd7ca3ddb6b32b68e1d7e9795a6e63ada1d461d0",
@@ -121,8 +119,7 @@
       "crd_property_path": "spec.config.logLevel"
     },
     "token_count": 26,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "a39b1cd8f713c9ead031149840c6e4998c24799f019300ea6698c6ff69654122",
@@ -151,8 +148,7 @@
       "crd_property_path": "spec.config.enableMetrics"
     },
     "token_count": 13,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "e09894c8602e062ca0810373af434c1a84f71421148f0f54bf1601dc5d28ca5e",
@@ -184,8 +180,7 @@
       "crd_property_path": "spec.config.metricsPort"
     },
     "token_count": 32,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "ce3236dd12adb288e01b1143718ca8a7921a29f4405d2d082dfe5b151e311e0d",
@@ -276,8 +271,7 @@
       "crd_property_path": "spec.config.database"
     },
     "token_count": 270,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "0f70dde52d4e05a8a3c50434e2015e2855ff76f6a957d89f04e781485049e936",
@@ -338,8 +332,7 @@
       "crd_property_path": "spec.config.cache"
     },
     "token_count": 154,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "2e779e3f1c5103e865da8f54b072c01f4eb843593fcfa08301165b30d3161c30",
@@ -425,8 +418,7 @@
       "crd_property_path": "spec.config.messaging"
     },
     "token_count": 247,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "33b24547a63a525c36a746b61cf6df514fd9f8c78efac4a8612dc423add63f11",
@@ -493,8 +485,7 @@
       "crd_property_path": "spec.storage"
     },
     "token_count": 163,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "f6fa4c256a77b0d52c3b69ce3d71011ba841e17351767487545a07e32833f854",
@@ -663,8 +654,7 @@
       "crd_property_path": "spec.networking"
     },
     "token_count": 510,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "fb0109823085b126eb2aa33c586779d673251ce2cfc9becbe9a2a107dc1d661d",
@@ -729,8 +719,7 @@
       "crd_property_path": "spec.resources"
     },
     "token_count": 167,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "d758c0898b62d5268df2ce9f08158b5889e8bb9366eda3e4bb73d393006a66d7",
@@ -798,8 +787,7 @@
       "crd_property_path": "spec.affinity"
     },
     "token_count": 146,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "93a9254c4cf2d18ba3676a29d11a837476d2f843f42e614b7b7c95d3623e407e",
@@ -876,8 +864,7 @@
       "crd_property_path": "spec.securityContext"
     },
     "token_count": 219,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "abd939e92dd890bb5be8b72349eebd5792600d78d83662da1fec410abbe99aed",
@@ -981,8 +968,7 @@
       "crd_property_path": "spec.monitoring"
     },
     "token_count": 288,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "c8c81e4bd3ac25929f6294946d641bc2308178fdce4861a0a4f53886e63218d1",
@@ -1015,8 +1001,7 @@
       "crd_property_path": "spec.replicas"
     },
     "token_count": 30,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "0a4848f98ca5d971eb09d2e66a359dad36b2d4921e2f4d0329aa9d54bbeaddb3",
@@ -1070,8 +1055,7 @@
       "crd_property_path": "spec.image"
     },
     "token_count": 102,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "2e3cd1c62479af619a24b415c5976d3891547d366221f4146e338005e7351c22",
@@ -1106,8 +1090,7 @@
       "crd_property_path": "spec.config.logLevel"
     },
     "token_count": 26,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "b4fae14790d0d68f0014fe4eb8de87408354eeea706869f90250d3b3d7054f16",
@@ -1136,8 +1119,7 @@
       "crd_property_path": "spec.config.enableMetrics"
     },
     "token_count": 13,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "a01edb1478af349ad1337ecc9a0ec85ac9195618ecc85581abf40dc908e70e44",
@@ -1169,8 +1151,7 @@
       "crd_property_path": "spec.config.metricsPort"
     },
     "token_count": 32,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "47977099fdb7dd709557727a36b384f4aeca3da391ddedf5f40a0cc0eb97b91f",
@@ -1261,8 +1242,7 @@
       "crd_property_path": "spec.config.database"
     },
     "token_count": 270,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "9beca6f2064a41b896e1cf8a4164f599c321710898818116c573184db45c2a1d",
@@ -1323,8 +1303,7 @@
       "crd_property_path": "spec.config.cache"
     },
     "token_count": 154,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "6c444c655cdc15f56929550af481f917cca7b47208e3cba9a4dc6cbbc492e758",
@@ -1410,8 +1389,7 @@
       "crd_property_path": "spec.config.messaging"
     },
     "token_count": 247,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "8ea15b610d4bd226d422cb15a3e105ff38e71f31daea3191748a0e46359f4b84",
@@ -1478,8 +1456,7 @@
       "crd_property_path": "spec.storage"
     },
     "token_count": 163,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "54695ef15ae66bd1b67b0183fd5e1ab4ceb76a09b58dab3a8301d01ecf53694d",
@@ -1648,8 +1625,7 @@
       "crd_property_path": "spec.networking"
     },
     "token_count": 510,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "0f834ed5bb9cb5c88b97c20399cb1f066d34386f371c0309821a17ea608a7734",
@@ -1714,8 +1690,7 @@
       "crd_property_path": "spec.resources"
     },
     "token_count": 167,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "5dde52401c3a7457bf50af2191706394c71e58a609a875e15ac243bd97393fc6",
@@ -1783,8 +1758,7 @@
       "crd_property_path": "spec.affinity"
     },
     "token_count": 146,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "41ac56e994e597408c215cf0dad5c93b423429434d250c0a7de34cdaab9d73ec",
@@ -1861,8 +1835,7 @@
       "crd_property_path": "spec.securityContext"
     },
     "token_count": 219,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   },
   {
     "chunk_id": "7f9116915efe75a4e0e20092f7467b014f7d800b9df37ebd26a890cb62e449a5",
@@ -1966,7 +1939,6 @@
       "crd_property_path": "spec.monitoring"
     },
     "token_count": 288,
-    "line_start": null,
-    "category": "product"
+    "line_start": null
   }
 ]

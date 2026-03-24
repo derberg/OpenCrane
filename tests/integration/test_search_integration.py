@@ -89,7 +89,7 @@ def milvus_with_test_data(temp_milvus_db):
             content="Third chunk for testing hybrid search with keywords.",
             source_file="test3.md",
             chunk_type="prose",
-            category="guidelines",
+            category="product",
             metadata_json='{"test": true}',
             token_count=10,
             line_start=5

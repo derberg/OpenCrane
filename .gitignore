@@ -63,7 +63,7 @@ Thumbs.db
 # Project-specific
 rag-chunks.json
 rag-embeddings.json
-.opencrane/fetch_docs.log
+.opencrane
 llmstxt/
 external-sources/
 specs/

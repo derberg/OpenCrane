@@ -196,6 +196,7 @@ _YAML_CHUNK_TYPES = {"crd_definition", "openapi_spec", "json_schema"}
 _CHUNK_TYPE_LABELS = {
     "prose": "prose (markdown documentation text)",
     "code_snippet": "code_snippet (fenced code blocks)",
+    "yaml_content": "yaml_content (generic YAML blocks)",
     "crd_definition": "crd_definition (Kubernetes CRD YAML properties)",
     "openapi_spec": "openapi_spec (OpenAPI specification endpoints/schemas)",
     "json_schema": "json_schema (JSON Schema definitions)",

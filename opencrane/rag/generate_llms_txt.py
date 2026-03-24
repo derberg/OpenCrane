@@ -559,23 +559,23 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             if is_root:
                 root_projects.add(project_name)
 
-        # Output root mirrors source path (relative if possible, otherwise as-is)
+        # Output root: strip .opencrane/sources/ prefix so output paths are clean
+        # e.g., .opencrane/sources/MicrosoftDocs → .opencrane/llmstxt/MicrosoftDocs
+        sources_base = Path.cwd() / ".opencrane" / "sources"
         try:
-            source_rel = source_dir.relative_to(Path.cwd())
-            output_root = LLMSTXT_BASE / source_rel
-        except ValueError:  # pragma: no cover
-            # source_dir not under cwd (e.g., tests with temp dirs) - use just the name
-            output_root = LLMSTXT_BASE / source_dir.name
-        
+            source_rel = source_dir.relative_to(sources_base)
+        except ValueError:
+            # source_dir not under .opencrane/sources/ (explicit --sources-dir or tests)
+            try:
+                source_rel = source_dir.relative_to(Path.cwd())
+            except ValueError:  # pragma: no cover
+                source_rel = Path(source_dir.name)
+        output_root = LLMSTXT_BASE / source_rel
+
         # Strip source_dir prefix from project names for output paths
         # since output_root already includes it
         output_mapping = {}
-        # Get source path for comparison (relative if possible)
-        try:
-            source_rel = source_dir.relative_to(Path.cwd())
-            source_prefix = f"{source_rel.as_posix()}/"
-        except ValueError:  # pragma: no cover
-            source_prefix = f"{source_dir.name}/"
+        source_prefix = f"{source_rel.as_posix()}/"
         
         for project_name, content in project_outputs.items():
             # Remove source directory prefix if present
@@ -589,13 +589,17 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
     # Top-level combined output used by setup.sh (llmstxt/llms-full.txt)
     # Keep the format consistent with per-source outputs: a sequence of "# Project:" blocks.
     combined_parts: List[str] = []
+    sources_base = Path.cwd() / ".opencrane" / "sources"
     for source_dir in sorted(source_dirs, key=lambda p: p.as_posix()):
-        # Get source path relative to cwd for output location
+        # Compute source_rel consistently with per-source output above
         try:
-            source_rel = source_dir.relative_to(Path.cwd())
-            source_llms = (LLMSTXT_BASE / source_rel / "llms-full.txt")
-        except ValueError:  # pragma: no cover
-            source_llms = (LLMSTXT_BASE / source_dir.name / "llms-full.txt")
+            source_rel = source_dir.relative_to(sources_base)
+        except ValueError:
+            try:
+                source_rel = source_dir.relative_to(Path.cwd())
+            except ValueError:  # pragma: no cover
+                source_rel = Path(source_dir.name)
+        source_llms = LLMSTXT_BASE / source_rel / "llms-full.txt"
         
         if source_llms.exists():
             combined_parts.append(source_llms.read_text(encoding="utf-8"))

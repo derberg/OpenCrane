@@ -31,7 +31,6 @@ class VectorChunk(BaseModel):
     content: str = Field(..., description="Chunk content")
     source_file: str = Field(..., description="Source file path")
     chunk_type: str = Field(..., description="Chunk type")
-    category: str = Field(default="product", description="Documentation category")
     metadata_json: Optional[str] = Field(None, description="JSON string of metadata")
     token_count: int = Field(..., description="Token count")
     line_start: Optional[int] = Field(None, description="Starting line number")
@@ -52,7 +51,6 @@ class VectorChunk(BaseModel):
             content=content_str,
             source_file=chunk.source_file,
             chunk_type=chunk.chunk_type,
-            category=getattr(chunk, 'category', 'product'),
             metadata_json=json.dumps(chunk.metadata) if chunk.metadata else None,
             token_count=chunk.token_count,
             line_start=chunk.line_start,

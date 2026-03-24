@@ -6,7 +6,6 @@ from pathlib import Path
 from opencrane.rag.services.base_strategy import ProcessingStrategy
 from opencrane.shared.models.chunk import Chunk
 from opencrane.shared.utils.token_counter import get_token_count
-from opencrane.shared.utils.category import infer_category_from_path
 
 
 class TabsChunkingStrategy(ProcessingStrategy):
@@ -84,11 +83,6 @@ class TabsChunkingStrategy(ProcessingStrategy):
                     metadata=metadata
                 )
                 
-                # Create chunk with tab context in metadata
-                # Use source_url from metadata for category if available (for llms-full.txt chunks),
-                # otherwise use source_file
-                category_path = metadata.get("source_url", str(source_file))
-
                 chunk = Chunk(
                     chunk_id=chunk_id,
                     content=cleaned_content,
@@ -96,7 +90,6 @@ class TabsChunkingStrategy(ProcessingStrategy):
                     chunk_type="prose",
                     metadata=metadata,
                     token_count=get_token_count(cleaned_content),
-                    category=infer_category_from_path(category_path)
                 )
                 chunks.append(chunk)
         

@@ -192,11 +192,6 @@ class YamlChunkingStrategy(ProcessingStrategy):
             metadata=metadata
         )
 
-        # Use source_url from metadata for category if available (for llms-full.txt chunks),
-        # otherwise use source_file
-        from opencrane.shared.utils.category import infer_category_from_path
-        category_path = metadata.get("source_url", str(source_file))
-
         chunk = Chunk(
             chunk_id=chunk_id,
             content=text,
@@ -204,7 +199,6 @@ class YamlChunkingStrategy(ProcessingStrategy):
             chunk_type="yaml_content",  # Use generic type for non-tree-walker YAML
             metadata=metadata,
             token_count=token_count,
-            category=infer_category_from_path(category_path)
         )
         return [chunk]
 

@@ -7,7 +7,6 @@ from pathlib import Path
 from opencrane.rag.services.base_strategy import ProcessingStrategy
 from opencrane.shared.models.chunk import Chunk
 from opencrane.shared.utils.token_counter import get_token_count
-from opencrane.shared.utils.category import infer_category_from_path
 from opencrane.shared.utils.metadata_helpers import is_openapi_spec, extract_openapi_metadata, extract_crd_identity
 from opencrane.shared.config import get_config
 
@@ -217,7 +216,6 @@ class CodeChunkingStrategy(ProcessingStrategy):
             "is_complete": True  # Assuming fenced blocks are complete
         }
 
-        # Add source_url to metadata before category inference
         if source_url:
             metadata["source_url"] = source_url
 
@@ -230,10 +228,6 @@ class CodeChunkingStrategy(ProcessingStrategy):
             metadata=metadata
         )
 
-        # Use source_url from metadata for category if available (for llms-full.txt chunks),
-        # otherwise use source_file
-        category_path = metadata.get("source_url", str(source_file))
-
         chunk = Chunk(
             chunk_id=chunk_id,
             content=code,
@@ -241,7 +235,6 @@ class CodeChunkingStrategy(ProcessingStrategy):
             chunk_type="code_snippet",
             metadata=metadata,
             token_count=token_count,
-            category=infer_category_from_path(category_path)
         )
         
         return chunk

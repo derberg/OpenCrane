@@ -7,7 +7,6 @@ from pathlib import Path
 from opencrane.rag.services.base_strategy import ProcessingStrategy
 from opencrane.shared.models.chunk import Chunk
 from opencrane.shared.utils.token_counter import get_token_count
-from opencrane.shared.utils.category import infer_category_from_path
 
 logger = logging.getLogger(__name__)
 
@@ -118,10 +117,6 @@ class ProseChunkingStrategy(ProcessingStrategy):
             metadata=metadata
         )
 
-        # Use source_url from metadata for category if available (for llms-full.txt chunks),
-        # otherwise use source_file
-        category_path = metadata.get("source_url", str(source_file))
-
         return Chunk(
             chunk_id=chunk_id,
             content=content,
@@ -129,7 +124,6 @@ class ProseChunkingStrategy(ProcessingStrategy):
             chunk_type="prose",
             metadata=metadata,
             token_count=get_token_count(content),
-            category=infer_category_from_path(category_path)
         )
 
     def _has_content(self) -> bool:

@@ -3,7 +3,6 @@
 from typing import List, Dict, Any
 from opencrane.rag.services.chunking_strategies.yaml_tree_walker import YamlTreeWalker
 from opencrane.shared.models.chunk import Chunk
-from opencrane.shared.utils.category import infer_category_from_path
 import yaml
 
 
@@ -317,10 +316,6 @@ class JsonSchemaTreeWalker(YamlTreeWalker):
         if self.original_yaml_file:
             metadata["original_yaml_file"] = self.original_yaml_file
 
-        # Use source_url from metadata for category if available (for llms-full.txt chunks),
-        # otherwise use source_file
-        category_path = metadata.get("source_url") or self.source_file or self.source_url
-
         chunk = Chunk(
             chunk_id=self._generate_chunk_id(
                 content=content,
@@ -333,7 +328,6 @@ class JsonSchemaTreeWalker(YamlTreeWalker):
             chunk_type="json_schema",
             metadata=metadata,
             token_count=token_count,
-            category=infer_category_from_path(category_path)
         )
 
         return chunk

@@ -65,10 +65,10 @@ docker run -p 8000:8000 your-registry/your-project-mcp:latest
 
 ```python
 # Search product documentation
-search_product_docs(query="kubernetes deployment", limit=5)
+search_docs(query="kubernetes deployment", limit=5)
 
 # Hybrid search with custom weighting
-search_product_docs(
+search_docs(
     query="configuration options",
     search_mode="hybrid",
     alpha=0.7,  # 70% semantic, 30% keyword
@@ -80,9 +80,9 @@ search_product_docs(
 
 The MCP server provides the following tools for interacting with documentation:
 
-### 1. `search_product_docs`
+### 1. `search_docs`
 
-Search product documentation: APIs, deployment guides, configuration references, and operational documentation.
+Search indexed documentation. The description and available chunk types are dynamically populated based on the indexed content and configured sources.
 
 **Parameters:**
 - `query` (string, required): The search query
@@ -94,7 +94,7 @@ Search product documentation: APIs, deployment guides, configuration references,
 
 **Example:**
 ```python
-search_product_docs(
+search_docs(
     query="authentication methods",
     search_mode="hybrid",
     chunk_types=["prose", "code_snippet"],

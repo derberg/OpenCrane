@@ -48,24 +48,24 @@ class TestMCPToolsAcceptance:
 
     @pytest.mark.anyio
     async def test_list_tools_exposes_search_tool(self):
-        """Verify search_product_docs is exposed via MCP."""
+        """Verify search_docs is exposed via MCP."""
         tools = await list_tools()
         tool_names = [t.name for t in tools]
 
-        assert "search_product_docs" in tool_names, "search_product_docs tool not exposed"
+        assert "search_docs" in tool_names, "search_docs tool not exposed"
 
         # Old unified tool should be removed
         assert "search_documentation" not in tool_names, "Old search_documentation tool still present"
 
-        # Verify tool description mentions product
-        product_tool = next(t for t in tools if t.name == "search_product_docs")
-        assert "product" in product_tool.description.lower()
+        # Verify tool has a description
+        search_tool = next(t for t in tools if t.name == "search_docs")
+        assert "documentation" in search_tool.description.lower()
 
     @pytest.mark.anyio
-    async def test_search_product_docs_returns_results(self):
-        """Test search_product_docs returns results via MCP protocol."""
+    async def test_search_docs_returns_results(self):
+        """Test search_docs returns results via MCP protocol."""
         # Use semantic mode for predictability (avoids keyword search variability)
-        results = await call_tool("search_product_docs", {
+        results = await call_tool("search_docs", {
             "query": "kubernetes deployment configuration",
             "search_mode": "semantic",
             "limit": 5
@@ -79,13 +79,13 @@ class TestMCPToolsAcceptance:
     async def test_tool_parameters_work_via_protocol(self):
         """Test that tool parameters (limit, search_mode, chunk_types) work via MCP."""
         # Test limit parameter
-        results_limit_2 = await call_tool("search_product_docs", {
+        results_limit_2 = await call_tool("search_docs", {
             "query": "configuration",
             "search_mode": "semantic",
             "limit": 2
         })
 
-        results_limit_5 = await call_tool("search_product_docs", {
+        results_limit_5 = await call_tool("search_docs", {
             "query": "configuration",
             "search_mode": "semantic",
             "limit": 5
@@ -113,7 +113,7 @@ class TestMCPToolsAcceptance:
         query = "kubernetes"
 
         # Test semantic mode
-        results_semantic = await call_tool("search_product_docs", {
+        results_semantic = await call_tool("search_docs", {
             "query": query,
             "search_mode": "semantic",
             "limit": 3
@@ -121,7 +121,7 @@ class TestMCPToolsAcceptance:
         assert len(results_semantic) >= 1, "Semantic mode should work"
 
         # Test keyword mode
-        results_keyword = await call_tool("search_product_docs", {
+        results_keyword = await call_tool("search_docs", {
             "query": query,
             "search_mode": "keyword",
             "limit": 3
@@ -129,7 +129,7 @@ class TestMCPToolsAcceptance:
         assert len(results_keyword) >= 1, "Keyword mode should work"
 
         # Test hybrid mode (default)
-        results_hybrid = await call_tool("search_product_docs", {
+        results_hybrid = await call_tool("search_docs", {
             "query": query,
             "search_mode": "hybrid",
             "limit": 3
@@ -139,7 +139,7 @@ class TestMCPToolsAcceptance:
     @pytest.mark.anyio
     async def test_empty_query_handled_gracefully(self):
         """Test that empty queries are handled gracefully."""
-        results = await call_tool("search_product_docs", {"query": ""})
+        results = await call_tool("search_docs", {"query": ""})
 
         assert len(results) == 1, "Should return single error message"
         assert "Error:" in results[0].text or "error" in results[0].text.lower(), \
@@ -149,7 +149,7 @@ class TestMCPToolsAcceptance:
     async def test_chunk_type_filter_works(self):
         """Test that chunk_types filter parameter works."""
         # Use keyword mode to avoid Milvus dependency
-        results = await call_tool("search_product_docs", {
+        results = await call_tool("search_docs", {
             "query": "configuration",
             "search_mode": "keyword",  # Changed to keyword for reliability
             "chunk_types": ["prose"],

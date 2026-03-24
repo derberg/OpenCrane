@@ -192,11 +192,111 @@ def get_keyword_service():
 
 _YAML_CHUNK_TYPES = {"crd_definition", "openapi_spec", "json_schema"}
 
+# Human-readable labels for chunk types
+_CHUNK_TYPE_LABELS = {
+    "prose": "prose (markdown documentation text)",
+    "code_snippet": "code_snippet (fenced code blocks)",
+    "crd_definition": "crd_definition (Kubernetes CRD YAML properties)",
+    "openapi_spec": "openapi_spec (OpenAPI specification endpoints/schemas)",
+    "json_schema": "json_schema (JSON Schema definitions)",
+}
+
+
+def _get_indexed_chunk_types() -> set[str]:
+    """Return the set of chunk_type values present in the indexed data."""
+    chunk_index = _build_chunk_index()
+    return {c.get("chunk_type") for c in chunk_index.values() if c.get("chunk_type")}
+
 
 def _has_yaml_chunks() -> bool:
     """Check whether indexed chunks contain any YAML-based types (CRD, OpenAPI, JSON Schema)."""
-    chunk_index = _build_chunk_index()
-    return any(c.get("chunk_type") in _YAML_CHUNK_TYPES for c in chunk_index.values())
+    return bool(_get_indexed_chunk_types() & _YAML_CHUNK_TYPES)
+
+
+def _get_source_topics() -> list[str]:
+    """Derive topic names from the source mapping file.
+
+    Returns human-readable topic names extracted from the mapping path keys
+    (e.g., ``MicrosoftDocs/microsoft-style-guide`` → ``microsoft-style-guide``).
+    """
+    mapping_file = Path(os.environ.get("MAPPING_FILE", ".opencrane/sources.yaml"))
+    if not mapping_file.exists():
+        return []
+    try:
+        import yaml as _yaml
+        data = _yaml.safe_load(mapping_file.read_text(encoding="utf-8")) or {}
+        sources = data.get("sources", {})
+        topics: list[str] = []
+        for key in sorted(sources.keys()):
+            # Use the last path component as the topic name, prettified
+            name = Path(key).name.replace("-", " ").replace("_", " ")
+            topics.append(name)
+        return topics
+    except Exception:
+        return []
+
+
+def _build_search_tool() -> Tool:
+    """Build the search_docs tool with description and schema derived from indexed data."""
+    chunk_types = sorted(_get_indexed_chunk_types())
+    topics = _get_source_topics()
+
+    # Build description
+    if topics:
+        topics_str = ", ".join(topics)
+        description = f"Search indexed documentation. Topics: {topics_str}."
+    else:
+        description = "Search indexed documentation."
+
+    # Build chunk_types filter — only include types that actually exist
+    chunk_types_property: dict = {
+        "type": "array",
+        "items": {"type": "string", "enum": chunk_types} if chunk_types else {"type": "string"},
+        "description": "Filter by content types. Available: "
+            + ", ".join(_CHUNK_TYPE_LABELS.get(ct, ct) for ct in chunk_types)
+            + "." if chunk_types else "Filter by content types.",
+    }
+
+    return Tool(
+        name="search_docs",
+        description=description,
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The search query"
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of results to return",
+                    "default": 5,
+                    "minimum": 1,
+                    "maximum": 50
+                },
+                "chunk_types": chunk_types_property,
+                "metadata_contains": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Filter results whose metadata JSON contains all provided substrings (AND logic). Example: ['SMC', 'v1alpha1'] finds chunks with both strings in metadata."
+                        + (" Use get_metadata_schema tool for details on available metadata fields." if _has_yaml_chunks() else "")
+                },
+                "search_mode": {
+                    "type": "string",
+                    "enum": ["semantic", "keyword", "hybrid"],
+                    "description": "Search mode. Use 'hybrid' (default) for general queries — it combines vector similarity with keyword matching. Use 'keyword' when searching for exact identifiers or specific terms. Use 'semantic' when searching by concept or natural-language question.",
+                    "default": "hybrid"
+                },
+                "alpha": {
+                    "type": "number",
+                    "description": "Weight for semantic score in hybrid mode (0-1). Higher values favor semantic similarity, lower values favor keyword matching. If omitted, defaults to the server's configured value (HYBRID_ALPHA env var, 0.6 by default).",
+                    "minimum": 0,
+                    "maximum": 1
+                }
+            },
+            "required": ["query"]
+        }
+    )
 
 
 app = Server("opencrane")
@@ -205,49 +305,7 @@ app = Server("opencrane")
 async def list_tools() -> list[Tool]:
     """List available tools."""
     tools = [
-        Tool(
-            name="search_product_docs",
-            description="Search product documentation: extensions, APIs, CRDs, deployment guides, and operational documentation.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "The search query"
-                    },
-                    "limit": {
-                        "type": "integer",
-                        "description": "Maximum number of results to return",
-                        "default": 5,
-                        "minimum": 1,
-                        "maximum": 50
-                    },
-                    "chunk_types": {
-                        "type": "array",
-                        "items": {"type": "string", "enum": ["prose", "code_snippet", "crd_definition", "openapi_spec", "json_schema"]},
-                        "description": "Filter by content types: 'prose' (markdown documentation text), 'code_snippet' (fenced code blocks), 'crd_definition' (Kubernetes CRD YAML properties), 'openapi_spec' (OpenAPI specification endpoints/schemas), 'json_schema' (JSON Schema definitions). Example: ['crd_definition', 'json_schema'] to search only schema definitions."
-                    },
-                    "metadata_contains": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Filter results whose metadata JSON contains all provided substrings (AND logic). Example: ['SMC', 'v1alpha1'] finds chunks with both strings in metadata. Use get_metadata_schema tool for details on available metadata fields."
-                    },
-                    "search_mode": {
-                        "type": "string",
-                        "enum": ["semantic", "keyword", "hybrid"],
-                        "description": "Search mode. Use 'hybrid' (default) for general queries — it combines vector similarity with keyword matching. Use 'keyword' when searching for exact identifiers, CRD field names, or API paths. Use 'semantic' when searching by concept or natural-language question with no specific term in mind.",
-                        "default": "hybrid"
-                    },
-                    "alpha": {
-                        "type": "number",
-                        "description": "Weight for semantic score in hybrid mode (0-1). Higher values favor semantic similarity, lower values favor keyword matching. If omitted, defaults to the server's configured value (HYBRID_ALPHA env var, 0.6 by default).",
-                        "minimum": 0,
-                        "maximum": 1
-                    }
-                },
-                "required": ["query"]
-            }
-        ),
+        _build_search_tool(),
         Tool(
             name="health",
             description="Check the health of the documentation search service",
@@ -296,7 +354,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     logger.info(f"🔧 Tool call: {name} | Args: {args_summary}")
 
     _TOOL_HANDLERS = {
-        "search_product_docs": search_product_docs,
+        "search_docs": search_docs,
         "health": health_check,
         "get_yaml_definition": get_yaml_definition,
         "get_metadata_schema": get_metadata_schema,
@@ -308,12 +366,12 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         raise ValueError(f"Unknown tool: {name}")
     return await handler(arguments)
 
-async def search_product_docs(arguments: dict) -> list[TextContent]:
+async def search_docs(arguments: dict) -> list[TextContent]:
     """
-    Search product documentation.
+    Search indexed documentation.
     Delegates to the shared search implementation.
     """
-    logger.info(f"🔍 Product docs search: {arguments.get('query', '')[:100]}")
+    logger.info(f"🔍 Search: {arguments.get('query', '')[:100]}")
 
     return await _search_documentation_impl(arguments)
 

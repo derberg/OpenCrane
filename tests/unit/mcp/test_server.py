@@ -4,10 +4,11 @@ import json
 import pytest
 from unittest.mock import Mock, patch, AsyncMock, mock_open
 from opencrane.mcp.server import (
-    search_product_docs, _search_documentation_impl,
+    search_docs, _search_documentation_impl, _build_search_tool,
     health_check, list_tools, call_tool,
     get_embeddings_service, get_milvus_service, get_keyword_service,
-    get_yaml_definition, get_metadata_schema, _rehydrate_to_yaml, _has_yaml_chunks, main
+    get_yaml_definition, get_metadata_schema, _rehydrate_to_yaml, _has_yaml_chunks,
+    _get_indexed_chunk_types, _get_source_topics, main
 )
 from mcp.types import TextContent
 
@@ -15,27 +16,43 @@ from mcp.types import TextContent
 class TestMCPServer:
     """Test cases for MCP server functions."""
 
+    @patch('opencrane.mcp.server._get_source_topics', return_value=["my project"])
+    @patch('opencrane.mcp.server._get_indexed_chunk_types', return_value={"prose", "crd_definition"})
     @patch('opencrane.mcp.server._has_yaml_chunks', return_value=True)
     @pytest.mark.anyio
-    async def test_list_tools_with_yaml_chunks(self, mock_has_yaml):
+    async def test_list_tools_with_yaml_chunks(self, mock_has_yaml, mock_types, mock_topics):
         """Test list_tools includes YAML tools when YAML chunks exist."""
         tools = await list_tools()
 
         assert len(tools) == 4
-        assert tools[0].name == "search_product_docs"
+        assert tools[0].name == "search_docs"
         assert tools[1].name == "health"
         assert tools[2].name == "get_yaml_definition"
         assert tools[3].name == "get_metadata_schema"
 
+        # Verify dynamic description includes topics
+        assert "my project" in tools[0].description
+
+        # Verify chunk_types enum only includes indexed types
+        enum = tools[0].inputSchema["properties"]["chunk_types"]["items"]["enum"]
+        assert "crd_definition" in enum
+        assert "prose" in enum
+        assert "openapi_spec" not in enum
+
+    @patch('opencrane.mcp.server._get_source_topics', return_value=[])
+    @patch('opencrane.mcp.server._get_indexed_chunk_types', return_value={"prose"})
     @patch('opencrane.mcp.server._has_yaml_chunks', return_value=False)
     @pytest.mark.anyio
-    async def test_list_tools_without_yaml_chunks(self, mock_has_yaml):
+    async def test_list_tools_without_yaml_chunks(self, mock_has_yaml, mock_types, mock_topics):
         """Test list_tools excludes YAML tools when no YAML chunks exist."""
         tools = await list_tools()
 
         assert len(tools) == 2
-        assert tools[0].name == "search_product_docs"
+        assert tools[0].name == "search_docs"
         assert tools[1].name == "health"
+
+        # No topics — generic description
+        assert "Topics:" not in tools[0].description
 
     @patch('opencrane.mcp.server.EmbeddingService')
     def test_get_embeddings_service_lazy_init(self, mock_embedding_service):
@@ -88,13 +105,13 @@ class TestMCPServer:
         assert service == mock_instance
         mock_keyword_service.assert_called_once()
 
-    @patch('opencrane.mcp.server.search_product_docs')
+    @patch('opencrane.mcp.server.search_docs')
     @pytest.mark.anyio
-    async def test_call_tool_search_product_docs(self, mock_search):
-        """Test call_tool for search_product_docs."""
+    async def test_call_tool_search_docs(self, mock_search):
+        """Test call_tool for search_docs."""
         mock_search.return_value = [TextContent(type="text", text="result")]
 
-        result = await call_tool("search_product_docs", {"query": "test"})
+        result = await call_tool("search_docs", {"query": "test"})
 
         mock_search.assert_called_once_with({"query": "test"})
         assert result == [TextContent(type="text", text="result")]
@@ -110,14 +127,14 @@ class TestMCPServer:
         mock_health.assert_called_once_with({})
         assert result == [TextContent(type="text", text="healthy")]
 
-    @patch('opencrane.mcp.server.search_product_docs')
+    @patch('opencrane.mcp.server.search_docs')
     @pytest.mark.anyio
     async def test_call_tool_long_args_summary(self, mock_search):
         """Test call_tool truncates long argument summaries."""
         mock_search.return_value = [TextContent(type="text", text="result")]
         long_args = {"query": "x" * 300}
 
-        result = await call_tool("search_product_docs", long_args)
+        result = await call_tool("search_docs", long_args)
 
         mock_search.assert_called_once_with(long_args)
         assert result == [TextContent(type="text", text="result")]
@@ -141,11 +158,11 @@ class TestMCPServer:
 
     @patch('opencrane.mcp.server._search_documentation_impl')
     @pytest.mark.anyio
-    async def test_search_product_docs_wrapper(self, mock_impl):
-        """Test search_product_docs wrapper delegates to impl."""
+    async def test_search_docs_wrapper(self, mock_impl):
+        """Test search_docs wrapper delegates to impl."""
         mock_impl.return_value = [TextContent(type="text", text="result")]
 
-        result = await search_product_docs({"query": "test"})
+        result = await search_docs({"query": "test"})
 
         # Verify it called the impl with the original arguments
         mock_impl.assert_called_once_with({"query": "test"})

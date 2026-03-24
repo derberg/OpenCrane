@@ -158,26 +158,25 @@ def main(config=None):
                 metadata = manual_repo_metadata.get(repo.name, {}) if is_manual else {}
 
                 org_name = metadata.get("org_name", config.org_name)
-                logger.info(f"Processing repository: {org_name}/{repo.name}")
+
+                # Determine docs_path, path_key, and github_url upfront
+                if is_manual:
+                    github_url = metadata.get("github_url")
+                    path_key = metadata.get("path_key")
+                    docs_path = metadata.get("docs_path", "docs")
+                else:
+                    github_url = f"https://github.com/{config.org_name}/{repo.name}"
+                    path_key = f"{config.target_dir.as_posix()}/{repo.name}"
+                    docs_path = "docs"
+
+                logger.info(f"Processing repository: {org_name}/{repo.name} (docs_path: {docs_path})")
 
                 try:
-                    # Get files for this repository
-                    files = repo_fetcher.get_repo_files(repo, org_name=org_name)
+                    # Get files for this repository using the configured docs_path
+                    files = repo_fetcher.get_repo_files(repo, org_name=org_name, docs_path=docs_path)
                     if not files:
-                        logger.warning(f"No files found in docs directory for {org_name}/{repo.name}")
+                        logger.warning(f"No files found in {docs_path}/ for {org_name}/{repo.name}")
                         return None
-
-                    # Determine path_key and metadata before storing files
-                    if is_manual:
-                        # Use metadata from manual entry
-                        github_url = metadata.get("github_url")
-                        path_key = metadata.get("path_key")
-                        docs_path = metadata.get("docs_path", "docs")
-                    else:
-                        # Auto-discovered repo
-                        github_url = f"https://github.com/{config.org_name}/{repo.name}"
-                        path_key = f"{config.target_dir.as_posix()}/{repo.name}"
-                        docs_path = "docs"
 
                     # Store files locally using the full path_key so manual entries
                     # with custom directories (e.g. "new/cgw") land in the right place
@@ -203,13 +202,18 @@ def main(config=None):
                 }
 
                 processed_count = 0
+                processed_paths = []
                 for future in as_completed(future_to_repo):
                     result = future.result()
                     if result:
                         processed_count += 1
+                        processed_paths.append(result)
                         logger.info(f"Successfully processed: {result}")
 
-            logger.info(f"Documentation fetch process completed. Processed {processed_count}/{len(all_repos)} repositories")
+            logger.info(f"Documentation fetch completed. Processed {processed_count}/{len(all_repos)} repositories")
+            if processed_paths:
+                for p in processed_paths:
+                    logger.info(f"  Fetched to: {workspace_root / p}")
 
         # Cleanup stale sources - only remove repos that LOST the "documentation" topic
         # NOT repos that failed to fetch or have no files

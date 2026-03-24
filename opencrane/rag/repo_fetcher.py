@@ -64,13 +64,14 @@ class RepoFetcher:
             logger.error(f"Failed to get manual repo {org_name}/{repo_name}: {e}")
             raise
 
-    def get_repo_files(self, repo_model: RepoModel, org_name: str = None) -> List[File]:
+    def get_repo_files(self, repo_model: RepoModel, org_name: str = None, docs_path: str = "docs") -> List[File]:
         """
         Get all files from a repository's docs directory.
 
         Args:
             repo_model: Repository model
             org_name: Organization name (defaults to config.org_name if not provided)
+            docs_path: Subdirectory within the repo to fetch (default: "docs")
 
         Returns:
             List of files from the repository
@@ -83,7 +84,7 @@ class RepoFetcher:
             org = self.github_client.client.get_organization(org_name)
             repo = org.get_repo(repo_model.name)
 
-            files = self.github_client.get_repo_files(repo)
+            files = self.github_client.get_repo_files(repo, docs_path=docs_path)
             logger.info(f"Retrieved {len(files)} files from {org_name}/{repo_model.name}")
             return files
         except Exception as e:

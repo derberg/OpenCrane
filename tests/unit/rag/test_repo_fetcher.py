@@ -80,7 +80,25 @@ class TestRepoFetcher:
         assert len(files) == 2
         mock_client.client.get_organization.assert_called_once_with("test_org")
         mock_org.get_repo.assert_called_once_with("test_repo")
-        mock_client.get_repo_files.assert_called_once_with(mock_repo)
+        mock_client.get_repo_files.assert_called_once_with(mock_repo, docs_path="docs")
+
+    def test_get_repo_files_with_custom_docs_path(self, repo_fetcher, mocker):
+        """Test retrieval of repository files with custom docs_path."""
+        mock_repo_model = RepoModel(name="test_repo", topics=["documentation"], has_docs_directory=True)
+
+        mock_client = repo_fetcher.github_client
+        mock_org = Mock()
+        mock_repo = Mock()
+        mock_org.get_repo.return_value = mock_repo
+        mock_client.client.get_organization.return_value = mock_org
+
+        mock_files = [Mock()]
+        mock_client.get_repo_files.return_value = mock_files
+
+        files = repo_fetcher.get_repo_files(mock_repo_model, docs_path="styleguide")
+
+        assert len(files) == 1
+        mock_client.get_repo_files.assert_called_once_with(mock_repo, docs_path="styleguide")
 
     def test_get_repo_files_error(self, repo_fetcher, mocker):
         """Test error handling when getting repository files fails."""
@@ -159,7 +177,7 @@ class TestRepoFetcher:
         assert len(files) == 2
         mock_client.client.get_organization.assert_called_once_with("example-org")
         mock_org.get_repo.assert_called_once_with("cgw")
-        mock_client.get_repo_files.assert_called_once_with(mock_repo)
+        mock_client.get_repo_files.assert_called_once_with(mock_repo, docs_path="docs")
 
     def test_repository_model_repr(self):
         """Test Repository model __repr__ method."""

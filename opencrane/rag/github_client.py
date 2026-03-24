@@ -185,9 +185,13 @@ class GitHubClient:
             logger.debug(f"No releases found for {repo.name}: {e}")
             return None
 
-    def get_repo_files(self, repo: Repository) -> List[File]:
+    def get_repo_files(self, repo: Repository, docs_path: str = "docs") -> List[File]:
         """Get all files from the docs directory of a repository using git tree API.
-        
+
+        Args:
+            repo: GitHub repository object.
+            docs_path: Subdirectory within the repo to fetch (default: "docs").
+
         Fetches from the latest release if available, otherwise falls back to default branch.
         """
         files = []
@@ -245,22 +249,30 @@ class GitHubClient:
                 logger.warning(f"No tree found for {repo.name}")
                 return []
 
-            # Filter for files in docs/ directory
-            doc_files = [
-                element for element in tree.tree 
-                if element.path.startswith("docs/") and element.type == "blob"
-            ]
-            
-            logger.debug(f"Found {len(doc_files)} files in docs/ for {repo.name}")
+            # Filter for files in the docs directory
+            docs_prefix = f"{docs_path}/" if docs_path else ""
+            if docs_prefix:
+                doc_files = [
+                    element for element in tree.tree
+                    if element.path.startswith(docs_prefix) and element.type == "blob"
+                ]
+            else:
+                # Empty docs_path means fetch from repo root
+                doc_files = [
+                    element for element in tree.tree
+                    if element.type == "blob"
+                ]
+
+            logger.debug(f"Found {len(doc_files)} files in {docs_path or 'root'}/ for {repo.name}")
             
             # Fetch file contents in parallel
-            files = self._fetch_files_parallel(repo, doc_files)
+            files = self._fetch_files_parallel(repo, doc_files, docs_path=docs_path)
             
         except Exception as e:
             logger.warning(f"Failed to get docs contents for {repo.name}: {e}")
         return files
 
-    def _fetch_files_parallel(self, repo: Repository, doc_files: List, max_workers: int = 5) -> List[File]:
+    def _fetch_files_parallel(self, repo: Repository, doc_files: List, max_workers: int = 5, docs_path: str = "docs") -> List[File]:
         """Fetch file contents in parallel."""
         files = []
         
@@ -276,7 +288,8 @@ class GitHubClient:
                 else:
                     content = blob.content.encode('utf-8')
                 
-                relative_path = element.path.replace("docs/", "", 1)
+                docs_prefix = f"{docs_path}/" if docs_path else ""
+                relative_path = element.path.replace(docs_prefix, "", 1) if docs_prefix else element.path
                 return File(
                     repo_name=repo.name,
                     relative_path=relative_path,

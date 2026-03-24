@@ -82,7 +82,7 @@ class TestFullWorkflow:
 
         mock_repo_fetcher.return_value.get_documentation_repos.assert_called_once()
         # Verify get_repo_files was called with org_name parameter
-        mock_repo_fetcher.return_value.get_repo_files.assert_called_once_with(mock_repo, org_name='test_org')
+        mock_repo_fetcher.return_value.get_repo_files.assert_called_once_with(mock_repo, org_name='test_org', docs_path='docs')
         expected_path_key = f"{test_config.target_dir.as_posix()}/test-repo"
         mock_file_manager.return_value.store_repo_files.assert_called_once_with(expected_path_key, [mock_file])
 
@@ -142,7 +142,7 @@ class TestFullWorkflow:
         main()
 
         # Verify file fetcher was called but file manager was not
-        mock_repo_fetcher.return_value.get_repo_files.assert_called_once_with(mock_repo, org_name='test_org')
+        mock_repo_fetcher.return_value.get_repo_files.assert_called_once_with(mock_repo, org_name='test_org', docs_path='docs')
         mock_file_manager.return_value.store_repo_files.assert_not_called()
 
     @patch('opencrane.rag.fetch_docs.get_current_repo_name', return_value='my-repo')
@@ -178,7 +178,7 @@ class TestFullWorkflow:
             size=6
         )
 
-        def side_effect(repo, org_name=None):
+        def side_effect(repo, org_name=None, docs_path=None):
             if repo.name == "test-repo-1":
                 return [mock_file]
             else:

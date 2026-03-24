@@ -240,49 +240,6 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="search_guidelines",
-            description="Search content guidelines: writing style, documentation templates, diagram conventions, and content strategy.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "The search query"
-                    },
-                    "limit": {
-                        "type": "integer",
-                        "description": "Maximum number of results to return",
-                        "default": 5,
-                        "minimum": 1,
-                        "maximum": 50
-                    },
-                    "chunk_types": {
-                        "type": "array",
-                        "items": {"type": "string", "enum": ["prose", "code_snippet", "crd_definition", "openapi_spec", "json_schema"]},
-                        "description": "Filter by content types: 'prose' (markdown documentation text), 'code_snippet' (fenced code blocks), 'crd_definition' (Kubernetes CRD YAML properties), 'openapi_spec' (OpenAPI specification endpoints/schemas), 'json_schema' (JSON Schema definitions)."
-                    },
-                    "metadata_contains": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Filter results whose metadata JSON contains all provided substrings (AND logic). Use get_metadata_schema tool for details on available metadata fields."
-                    },
-                    "search_mode": {
-                        "type": "string",
-                        "enum": ["semantic", "keyword", "hybrid"],
-                        "description": "Search mode. Use 'hybrid' (default) for general queries — it combines vector similarity with keyword matching. Use 'keyword' when searching for exact identifiers. Use 'semantic' when searching by concept or natural-language question.",
-                        "default": "hybrid"
-                    },
-                    "alpha": {
-                        "type": "number",
-                        "description": "Weight for semantic score in hybrid mode (0-1). Higher values favor semantic similarity, lower values favor keyword matching. If omitted, defaults to the server's configured value (HYBRID_ALPHA env var, 0.6 by default).",
-                        "minimum": 0,
-                        "maximum": 1
-                    }
-                },
-                "required": ["query"]
-            }
-        ),
-        Tool(
             name="health",
             description="Check the health of the documentation search service",
             inputSchema={
@@ -327,7 +284,6 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
     _TOOL_HANDLERS = {
         "search_product_docs": search_product_docs,
-        "search_guidelines": search_guidelines,
         "health": health_check,
         "get_yaml_definition": get_yaml_definition,
         "get_metadata_schema": get_metadata_schema,
@@ -341,29 +297,11 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
 async def search_product_docs(arguments: dict) -> list[TextContent]:
     """
-    Search product documentation only.
-    Wrapper that injects categories=["product"] and delegates to search logic.
+    Search product documentation.
+    Delegates to the shared search implementation.
     """
     logger.info(f"🔍 Product docs search: {arguments.get('query', '')[:100]}")
 
-    # Inject category filter for product docs
-    arguments["categories"] = ["product"]
-
-    # Delegate to existing search implementation
-    return await _search_documentation_impl(arguments)
-
-
-async def search_guidelines(arguments: dict) -> list[TextContent]:
-    """
-    Search guidelines and writing resources only.
-    Wrapper that injects categories=["guidelines"] and delegates to search logic.
-    """
-    logger.info(f"📚 Guidelines search: {arguments.get('query', '')[:100]}")
-
-    # Inject category filter for guidelines
-    arguments["categories"] = ["guidelines"]
-
-    # Delegate to existing search implementation
     return await _search_documentation_impl(arguments)
 
 
@@ -376,7 +314,6 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
     if not query or not query.strip():
         return [TextContent(type="text", text="Error: query must be a non-empty string.")]
     limit = arguments.get("limit", 5)
-    categories = arguments.get("categories", ["product"])
     chunk_types = arguments.get("chunk_types")
     metadata_contains = arguments.get("metadata_contains")
     search_mode = arguments.get("search_mode", "hybrid")
@@ -384,7 +321,7 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
 
     logger.info(
         f"   📖 search: query=\"{query}\" mode={search_mode} limit={limit} "
-        f"categories={categories} types={chunk_types} metadata={metadata_contains}"
+        f"types={chunk_types} metadata={metadata_contains}"
     )
 
     try:
@@ -470,7 +407,6 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
             return milvus_service.search(
                 query_vec,
                 limit=limit,
-                categories=categories,
                 chunk_types=chunk_types,
                 metadata_contains=metadata_contains,
             )
@@ -480,7 +416,6 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
             return keyword_service.search(
                 query,
                 limit=limit,
-                categories=categories,
                 chunk_types=chunk_types,
                 metadata_contains=metadata_contains,
             )

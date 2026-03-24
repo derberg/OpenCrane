@@ -4,7 +4,7 @@ import json
 import pytest
 from unittest.mock import Mock, patch, AsyncMock, mock_open
 from opencrane.mcp.server import (
-    search_product_docs, search_guidelines, _search_documentation_impl,
+    search_product_docs, _search_documentation_impl,
     health_check, list_tools, call_tool,
     get_embeddings_service, get_milvus_service, get_keyword_service,
     get_yaml_definition, get_metadata_schema, _rehydrate_to_yaml, main
@@ -20,12 +20,11 @@ class TestMCPServer:
         """Test list_tools returns correct tools."""
         tools = await list_tools()
 
-        assert len(tools) == 5
+        assert len(tools) == 4
         assert tools[0].name == "search_product_docs"
-        assert tools[1].name == "search_guidelines"
-        assert tools[2].name == "health"
-        assert tools[3].name == "get_yaml_definition"
-        assert tools[4].name == "get_metadata_schema"
+        assert tools[1].name == "health"
+        assert tools[2].name == "get_yaml_definition"
+        assert tools[3].name == "get_metadata_schema"
 
     @patch('opencrane.mcp.server.EmbeddingService')
     def test_get_embeddings_service_lazy_init(self, mock_embedding_service):
@@ -132,31 +131,13 @@ class TestMCPServer:
     @patch('opencrane.mcp.server._search_documentation_impl')
     @pytest.mark.anyio
     async def test_search_product_docs_wrapper(self, mock_impl):
-        """Test search_product_docs wrapper injects product category."""
+        """Test search_product_docs wrapper delegates to impl."""
         mock_impl.return_value = [TextContent(type="text", text="result")]
 
         result = await search_product_docs({"query": "test"})
 
-        # Verify it called the impl with product category injected
-        mock_impl.assert_called_once()
-        call_args = mock_impl.call_args[0][0]
-        assert call_args["categories"] == ["product"]
-        assert call_args["query"] == "test"
-        assert result == [TextContent(type="text", text="result")]
-
-    @patch('opencrane.mcp.server._search_documentation_impl')
-    @pytest.mark.anyio
-    async def test_search_guidelines_wrapper(self, mock_impl):
-        """Test search_guidelines wrapper injects guidelines category."""
-        mock_impl.return_value = [TextContent(type="text", text="result")]
-
-        result = await search_guidelines({"query": "test"})
-
-        # Verify it called the impl with guidelines category injected
-        mock_impl.assert_called_once()
-        call_args = mock_impl.call_args[0][0]
-        assert call_args["categories"] == ["guidelines"]
-        assert call_args["query"] == "test"
+        # Verify it called the impl with the original arguments
+        mock_impl.assert_called_once_with({"query": "test"})
         assert result == [TextContent(type="text", text="result")]
 
     @patch('opencrane.mcp.server.get_embeddings_service')
@@ -184,7 +165,7 @@ class TestMCPServer:
 
         mock_milvus_get.return_value = mock_milvus
 
-        arguments = {"query": "test query", "limit": 5, "search_mode": "semantic", "categories": ["product"]}
+        arguments = {"query": "test query", "limit": 5, "search_mode": "semantic"}
 
         results = await _search_documentation_impl(arguments)
 
@@ -194,7 +175,7 @@ class TestMCPServer:
         assert "file.md" in results[0].text
 
         mock_model.encode.assert_called_once_with(["test query"], batch_size=8, show_progress_bar=False)
-        mock_milvus.search.assert_called_once_with([0.1] * 768, limit=5, categories=["product"], chunk_types=None, metadata_contains=None)
+        mock_milvus.search.assert_called_once_with([0.1] * 768, limit=5, chunk_types=None, metadata_contains=None)
 
     @patch('opencrane.mcp.server.get_embeddings_service')
     @patch('opencrane.mcp.server.get_milvus_service')
@@ -211,14 +192,14 @@ class TestMCPServer:
         mock_milvus.search.return_value = []
         mock_milvus_get.return_value = mock_milvus
 
-        arguments = {"query": "test", "limit": 3, "chunk_types": ["prose", "code"], "search_mode": "semantic", "categories": ["product"]}
+        arguments = {"query": "test", "limit": 3, "chunk_types": ["prose", "code"], "search_mode": "semantic"}
 
         results = await _search_documentation_impl(arguments)
 
         assert len(results) == 1
         assert "No results found." in results[0].text
 
-        mock_milvus.search.assert_called_once_with([0.1] * 768, limit=3, categories=["product"], chunk_types=["prose", "code"], metadata_contains=None)
+        mock_milvus.search.assert_called_once_with([0.1] * 768, limit=3, chunk_types=["prose", "code"], metadata_contains=None)
 
     @patch('opencrane.mcp.server.get_embeddings_service')
     @patch('opencrane.mcp.server.get_milvus_service')
@@ -233,7 +214,7 @@ class TestMCPServer:
 
         mock_milvus_get.return_value = Mock()
 
-        arguments = {"query": "test", "categories": ["product"]}
+        arguments = {"query": "test"}
 
         results = await _search_documentation_impl(arguments)
 
@@ -342,7 +323,7 @@ class TestMCPServer:
         mock_milvus_get.return_value = mock_milvus
         mock_build_map.return_value = {}
 
-        arguments = {"query": "test", "limit": 5, "search_mode": "semantic", "categories": ["product"]}
+        arguments = {"query": "test", "limit": 5, "search_mode": "semantic"}
         results = await _search_documentation_impl(arguments)
 
         assert len(results) == 1
@@ -374,7 +355,7 @@ class TestMCPServer:
         mock_milvus_get.return_value = mock_milvus
         mock_build_map.return_value = {"test_id_123": "https://github.com/test/repo/blob/main/file.md"}
 
-        arguments = {"query": "test", "limit": 5, "search_mode": "semantic", "categories": ["product"]}
+        arguments = {"query": "test", "limit": 5, "search_mode": "semantic"}
         results = await _search_documentation_impl(arguments)
 
         assert len(results) == 1
@@ -582,7 +563,6 @@ class TestMCPServer:
                 "query": "test",
                 "limit": 1,
                 "search_mode": "semantic",
-                "categories": ["product"]
             })
 
             # Should handle the error gracefully
@@ -620,7 +600,6 @@ class TestMCPServer:
                 "query": "test",
                 "limit": 1,
                 "search_mode": "semantic",
-                "categories": ["product"]
             })
 
             # Should have truncation message
@@ -659,7 +638,6 @@ class TestMCPServer:
                 "query": "test crd",
                 "limit": 1,
                 "search_mode": "semantic",
-                "categories": ["product"]
             })
 
             # Should have hint to use get_yaml_definition
@@ -671,14 +649,14 @@ class TestMCPServer:
     @pytest.mark.anyio
     async def test_search_documentation_empty_query(self):
         """Test search_documentation returns error for empty query."""
-        result = await _search_documentation_impl({"query": "", "categories": ["product"]})
+        result = await _search_documentation_impl({"query": ""})
         assert len(result) == 1
         assert "Error: query must be a non-empty string." in result[0].text
 
     @pytest.mark.anyio
     async def test_search_documentation_whitespace_query(self):
         """Test search_documentation returns error for whitespace-only query."""
-        result = await _search_documentation_impl({"query": "   ", "categories": ["product"]})
+        result = await _search_documentation_impl({"query": "   "})
         assert len(result) == 1
         assert "Error: query must be a non-empty string." in result[0].text
 
@@ -720,7 +698,6 @@ class TestMCPServer:
                 "query": "test",
                 "limit": 1,
                 "search_mode": "semantic",
-                "categories": ["product"]
             })
 
             # Should include token count in output
@@ -989,7 +966,7 @@ async def test_search_documentation_metadata_display_prose(mock_milvus_get, mock
     mock_milvus_get.return_value = mock_milvus
     monkeypatch.setattr(server_module, "_build_chunk_source_map", lambda: {})
 
-    results = await server_module._search_documentation_impl({"query": "test", "search_mode": "semantic", "categories": ["product"]})
+    results = await server_module._search_documentation_impl({"query": "test", "search_mode": "semantic"})
 
     assert len(results) == 2
 

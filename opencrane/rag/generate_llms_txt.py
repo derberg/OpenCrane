@@ -340,9 +340,21 @@ def _combine_existing_llmstxt(llmstxt_base: Path) -> List[Path]:
         return []
 
     combined_parts = []
+    mapping = get_source_mapping()
     for subdir in existing:
         llms_file = subdir / "llms-full.txt"
-        combined_parts.append(llms_file.read_text(encoding="utf-8"))
+        content = llms_file.read_text(encoding="utf-8")
+        # Inject docs_url into headings if configured for this source
+        source = mapping.get_source(subdir.name)
+        if source and source.get("docs_url"):
+            docs_url = source["docs_url"].rstrip("/")
+            content = re.sub(
+                r"^(#{1,6})\s+(.+)$",
+                rf"\1 [{docs_url}] \2",
+                content,
+                flags=re.MULTILINE,
+            )
+        combined_parts.append(content)
 
     llmstxt_base.mkdir(parents=True, exist_ok=True)
     (llmstxt_base / "llms-full.txt").write_text(
@@ -445,8 +457,12 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             key=lambda p: p.name,
         )
         if not source_dirs:
-            print("⊘ Skipping llms-full.txt generation: no source directories found from mapping file")
-            print(f"  Expected sources in: {sources_base}")
+            # All sources may be of type llmstxt (no local directories). Fall back
+            # to combining pre-existing llms-full.txt files with docs_url injection.
+            existing_files = _combine_existing_llmstxt(LLMSTXT_BASE)
+            if not existing_files:
+                print("⊘ Skipping llms-full.txt generation: no source directories found from mapping file")
+                print(f"  Expected sources in: {sources_base}")
             return
     for source_dir in sorted(source_dirs, key=lambda p: p.name):
         # Store workspace root for relative path computation

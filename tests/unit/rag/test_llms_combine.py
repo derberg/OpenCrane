@@ -70,6 +70,46 @@ def test_no_sources_no_llmstxt_files_warns(llmstxt_workspace, monkeypatch, capsy
 
 
 @pytest.mark.unit
+def test_combine_injects_docs_url_into_headings(llmstxt_workspace, monkeypatch):
+    """When a llmstxt source has docs_url, headings get URL prefixes."""
+    sources_yaml = llmstxt_workspace / ".opencrane" / "sources.yaml"
+    sources_yaml.write_text(
+        "sources:\n"
+        "  project-a:\n"
+        "    type: llmstxt\n"
+        "    url: https://example.com/a.txt\n"
+        "    docs_url: https://docs.example.com\n"
+        "    manual: true\n"
+    )
+    monkeypatch.setenv("MAPPING_FILE", str(sources_yaml))
+    monkeypatch.chdir(llmstxt_workspace)
+
+    llmstxt_dir = llmstxt_workspace / ".opencrane" / "llmstxt"
+    generate_outputs(force=True, llmstxt_dir=llmstxt_dir)
+
+    combined = llmstxt_dir / "llms-full.txt"
+    content = combined.read_text()
+    assert "[https://docs.example.com]" in content
+    assert "# [https://docs.example.com] Project A docs" in content
+
+
+@pytest.mark.unit
+def test_combine_no_docs_url_leaves_headings_unchanged(llmstxt_workspace, monkeypatch):
+    """Without docs_url, headings are not modified."""
+    monkeypatch.chdir(llmstxt_workspace)
+    llmstxt_dir = llmstxt_workspace / ".opencrane" / "llmstxt"
+    generate_outputs(force=True, llmstxt_dir=llmstxt_dir)
+
+    combined = llmstxt_dir / "llms-full.txt"
+    content = combined.read_text()
+    assert "# Project A docs" in content
+    # Verify no URL prefix brackets in headings
+    for line in content.split("\n"):
+        if line.startswith("#"):
+            assert "[" not in line
+
+
+@pytest.mark.unit
 def test_combine_skips_non_directory_entries(llmstxt_workspace, monkeypatch):
     """The combine logic should only look at subdirectories, not stray files."""
     llmstxt_dir = llmstxt_workspace / ".opencrane" / "llmstxt"

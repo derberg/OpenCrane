@@ -51,21 +51,24 @@ class SourceMapping:
     def add_source(
         self,
         path_key: str,
-        github_url: str,
+        url: str,
         docs_path: str = "",
         manual: bool = False,
         docs_url: str = "",
+        type: str = "github",
     ) -> None:
         """
         Add or update a source mapping entry.
 
         Args:
             path_key: Local path key (e.g., "content-guidelines", "external-sources/extension-5g-core")
-            github_url: Full GitHub URL (e.g., "https://github.com/test/repo")
+            url: Full source URL (e.g., "https://github.com/test/repo" or "https://example.com/llms-full.txt")
             docs_path: Path within repo where docs are stored (e.g., "docs", "")
             manual: When True, the entry is user-managed and must not be overwritten by auto-refresh
             docs_url: Optional base URL of the published documentation site. When set, this is used
-                      instead of github_url when embedding source links in llms-full.txt files.
+                      instead of url when embedding source links in llms-full.txt files.
+            type: Source type (e.g., "github", "llmstxt"). Defaults to "github" and is omitted from
+                  the entry when it matches the default.
         """
         existing = self.data.get("sources", {}).get(path_key)
 
@@ -78,10 +81,12 @@ class SourceMapping:
             return
 
         entry = {
-            "github_url": github_url,
+            "url": url,
             "docs_path": docs_path,
             "manual": manual,
         }
+        if type != "github":
+            entry["type"] = type
         if docs_url:
             entry["docs_url"] = docs_url
         self.data["sources"][path_key] = entry

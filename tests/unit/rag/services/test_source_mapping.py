@@ -6,6 +6,12 @@ from unittest.mock import patch
 from opencrane.rag.services.source_mapping import SourceMapping
 
 
+@pytest.fixture
+def tmp_mapping(tmp_path):
+    """Return a SourceMapping backed by a temp file."""
+    return SourceMapping(tmp_path / "sources.yaml")
+
+
 class TestSourceMapping:
     """Tests for SourceMapping class."""
 
@@ -29,7 +35,7 @@ class TestSourceMapping:
 
             mapping.add_source(
                 path_key="source-a",
-                github_url="https://github.com/test/repo-a",
+                url="https://github.com/test/repo-a",
                 docs_path=""
             )
             mapping.save()
@@ -42,7 +48,7 @@ class TestSourceMapping:
 
             mapping.add_source(
                 path_key="test",
-                github_url="https://github.com/test/test-repo",
+                url="https://github.com/test/test-repo",
                 docs_path=""
             )
 
@@ -57,12 +63,12 @@ class TestSourceMapping:
 
             mapping.add_source(
                 path_key="source-a",
-                github_url="https://github.com/test/repo-a",
+                url="https://github.com/test/repo-a",
                 docs_path=""
             )
 
             source = mapping.get_source("source-a")
-            assert source["github_url"] == "https://github.com/test/repo-a"
+            assert source["url"] == "https://github.com/test/repo-a"
             assert source["docs_path"] == ""
             assert source["manual"] is False
 
@@ -73,7 +79,7 @@ class TestSourceMapping:
             mapping1 = SourceMapping(mapping_file)
             mapping1.add_source(
                 path_key="parent-source/child-source",
-                github_url="https://github.com/test/repo-b",
+                url="https://github.com/test/repo-b",
                 docs_path="docs"
             )
             mapping1.save()
@@ -90,7 +96,7 @@ class TestSourceMapping:
 
             mapping.add_source(
                 path_key="source-a",
-                github_url="https://github.com/test/repo-a",
+                url="https://github.com/test/repo-a",
                 docs_path=""
             )
 
@@ -106,12 +112,12 @@ class TestSourceMapping:
 
             mapping.add_source(
                 path_key="parent-source",
-                github_url="https://github.com/test/parent-repo",
+                url="https://github.com/test/parent-repo",
                 docs_path=""
             )
             mapping.add_source(
                 path_key="parent-source/child-source",
-                github_url="https://github.com/test/child-repo",
+                url="https://github.com/test/child-repo",
                 docs_path="docs"
             )
 
@@ -127,7 +133,7 @@ class TestSourceMapping:
 
             mapping.add_source(
                 path_key="source-a",
-                github_url="https://github.com/test/repo-a",
+                url="https://github.com/test/repo-a",
                 docs_path=""
             )
 
@@ -141,12 +147,12 @@ class TestSourceMapping:
 
             mapping.add_source(
                 path_key="source-a",
-                github_url="https://github.com/test/repo-a",
+                url="https://github.com/test/repo-a",
                 docs_path=""
             )
             mapping.add_source(
                 path_key="source-b/subsource",
-                github_url="https://github.com/test/repo-b",
+                url="https://github.com/test/repo-b",
                 docs_path="docs"
             )
 
@@ -161,7 +167,7 @@ class TestSourceMapping:
             mapping = SourceMapping(mapping_file)
             mapping.add_source(
                 path_key="source-a",
-                github_url="https://github.com/test/repo-a",
+                url="https://github.com/test/repo-a",
                 docs_path="docs",
                 docs_url="https://docs.example.com/product-a"
             )
@@ -174,7 +180,7 @@ class TestSourceMapping:
             mapping = SourceMapping(mapping_file)
             mapping.add_source(
                 path_key="source-a",
-                github_url="https://github.com/test/repo-a",
+                url="https://github.com/test/repo-a",
                 docs_path=""
             )
             source = mapping.get_source("source-a")
@@ -189,7 +195,7 @@ class TestSourceMapping:
             # Add manual entry
             mapping.add_source(
                 path_key="source-a",
-                github_url="https://github.com/test/repo-original",
+                url="https://github.com/test/repo-original",
                 docs_path="",
                 manual=True
             )
@@ -197,14 +203,14 @@ class TestSourceMapping:
             # Try to auto-update (manual=False) - should be skipped
             mapping.add_source(
                 path_key="source-a",
-                github_url="https://github.com/test/repo-updated",
+                url="https://github.com/test/repo-updated",
                 docs_path="docs",
                 manual=False
             )
 
             # Verify original manual entry is preserved
             source = mapping.get_source("source-a")
-            assert source["github_url"] == "https://github.com/test/repo-original"
+            assert source["url"] == "https://github.com/test/repo-original"
             assert source["docs_path"] == ""
             assert source["manual"] is True
 
@@ -217,7 +223,7 @@ class TestSourceMapping:
             # Add a source
             mapping.add_source(
                 path_key="source-a",
-                github_url="https://github.com/test/repo-a",
+                url="https://github.com/test/repo-a",
                 docs_path=""
             )
 
@@ -250,19 +256,19 @@ class TestSourceMapping:
             # Add auto-generated sources
             mapping.add_source(
                 path_key="source-a",
-                github_url="https://github.com/test/repo-a",
+                url="https://github.com/test/repo-a",
                 docs_path="",
                 manual=False
             )
             mapping.add_source(
                 path_key="source-b",
-                github_url="https://github.com/test/repo-b",
+                url="https://github.com/test/repo-b",
                 docs_path="",
                 manual=False
             )
             mapping.add_source(
                 path_key="source-c",
-                github_url="https://github.com/test/repo-c",
+                url="https://github.com/test/repo-c",
                 docs_path="",
                 manual=False
             )
@@ -286,7 +292,7 @@ class TestSourceMapping:
             # Add manual entry
             mapping.add_source(
                 path_key="manual-source",
-                github_url="https://github.com/test/manual-repo",
+                url="https://github.com/test/manual-repo",
                 docs_path="",
                 manual=True
             )
@@ -294,7 +300,7 @@ class TestSourceMapping:
             # Add auto-generated source
             mapping.add_source(
                 path_key="auto-source",
-                github_url="https://github.com/test/auto-repo",
+                url="https://github.com/test/auto-repo",
                 docs_path="",
                 manual=False
             )
@@ -317,13 +323,13 @@ class TestSourceMapping:
             # Add multiple auto-generated sources
             mapping.add_source(
                 path_key="source-a",
-                github_url="https://github.com/test/repo-a",
+                url="https://github.com/test/repo-a",
                 docs_path="",
                 manual=False
             )
             mapping.add_source(
                 path_key="source-b",
-                github_url="https://github.com/test/repo-b",
+                url="https://github.com/test/repo-b",
                 docs_path="",
                 manual=False
             )
@@ -345,13 +351,13 @@ class TestSourceMapping:
             # Add sources
             mapping.add_source(
                 path_key="source-a",
-                github_url="https://github.com/test/repo-a",
+                url="https://github.com/test/repo-a",
                 docs_path="",
                 manual=False
             )
             mapping.add_source(
                 path_key="source-b",
-                github_url="https://github.com/test/repo-b",
+                url="https://github.com/test/repo-b",
                 docs_path="",
                 manual=False
             )
@@ -363,3 +369,25 @@ class TestSourceMapping:
             # Nothing should be removed
             assert removed == []
             assert len(mapping.get_all_sources()) == 2
+
+
+@pytest.mark.unit
+def test_add_source_with_llmstxt_type(tmp_mapping):
+    tmp_mapping.add_source(
+        path_key="my-llmstxt",
+        url="https://example.com/llms-full.txt",
+        manual=True,
+        type="llmstxt",
+    )
+    entry = tmp_mapping.get_source("my-llmstxt")
+    assert entry["url"] == "https://example.com/llms-full.txt"
+    assert entry["type"] == "llmstxt"
+    assert entry["manual"] is True
+
+
+@pytest.mark.unit
+def test_add_source_github_type_omitted_from_entry(tmp_mapping):
+    tmp_mapping.add_source(path_key="my-repo", url="https://github.com/org/repo")
+    entry = tmp_mapping.get_source("my-repo")
+    assert "type" not in entry  # github is default, not stored
+    assert entry["url"] == "https://github.com/org/repo"

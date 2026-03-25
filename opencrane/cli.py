@@ -4,6 +4,32 @@ import sys
 import click
 
 
+# ── CLI output helpers ──────────────────────────────────────────────────────
+def _step(msg: str) -> None:
+    """Print a pipeline step (bold cyan)."""
+    click.secho(msg, fg="cyan", bold=True)
+
+def _success(msg: str) -> None:
+    """Print a success message (green)."""
+    click.secho(msg, fg="green")
+
+def _warn(msg: str) -> None:
+    """Print a warning (yellow)."""
+    click.secho(msg, fg="yellow")
+
+def _error(msg: str) -> None:
+    """Print an error (red, to stderr)."""
+    click.secho(msg, fg="red", err=True)
+
+def _info(msg: str, **kwargs) -> None:
+    """Print informational text (dim)."""
+    click.secho(msg, dim=True, **kwargs)
+
+def _hint(msg: str) -> None:
+    """Print a hint/command the user should run (bright white)."""
+    click.secho(msg, fg="bright_white")
+
+
 def load_config(config_arg: str | None):
     """Load OpenCraneConfig from a module:Class string or YAML file path.
 
@@ -81,7 +107,7 @@ def fetch(config_path, org, repo):
             config.fetch_repo = repo
         fetch_main(config=config)
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        _error(f"Error: {e}")
         sys.exit(1)
 
 
@@ -107,7 +133,7 @@ def llms(config_path, sources_dirs, llmstxt_dir, force):
             force=force,
         )
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        _error(f"Error: {e}")
         sys.exit(1)
 
 
@@ -130,7 +156,7 @@ def chunk(config_path, llmstxt_dir, chunks_file):
             chunks_file=Path(chunks_file) if chunks_file else None,
         )
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        _error(f"Error: {e}")
         sys.exit(1)
 
 
@@ -152,7 +178,7 @@ def embed(config_path, chunks_file, embeddings_file):
             embeddings_file=Path(embeddings_file) if embeddings_file else None,
         )
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        _error(f"Error: {e}")
         sys.exit(1)
 
 
@@ -171,7 +197,7 @@ def tokens(source_dir, output_file):
             output_file=Path(output_file) if output_file else None,
         )
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        _error(f"Error: {e}")
         sys.exit(1)
 
 
@@ -185,7 +211,7 @@ def index(config_path):
         from opencrane.mcp.init_vector_db import main as index_main
         index_main()
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        _error(f"Error: {e}")
         sys.exit(1)
 
 
@@ -204,42 +230,42 @@ def serve(config_path, transport):
 
         if transport == "http":
             port = __import__("os").environ.get("MCP_HTTP_PORT", "8000")
-            click.echo(f"OpenCrane MCP server starting (HTTP transport, port {port})...", err=True)
+            _step("OpenCrane MCP server starting (HTTP transport)...")
             click.echo("", err=True)
-            click.echo("  MCP endpoint:  http://localhost:{port}/http".replace("{port}", port), err=True)
-            click.echo("  Health check:  http://localhost:{port}/health".replace("{port}", port), err=True)
+            _info(f"  MCP endpoint:  http://localhost:{port}/http", err=True)
+            _info(f"  Health check:  http://localhost:{port}/health", err=True)
             click.echo("", err=True)
-            click.echo("  Claude Code (HTTP):", err=True)
-            click.echo(f"    claude mcp add myopencranemcp --transport http http://localhost:{port}/http", err=True)
+            _info("  Claude Code (HTTP):", err=True)
+            _hint(f"    claude mcp add myopencranemcp --transport http http://localhost:{port}/http")
             click.echo("", err=True)
             from opencrane.mcp.http_server import main as http_main
             asyncio.run(http_main())
         else:
-            click.echo("OpenCrane MCP server starting (stdio transport)...", err=True)
+            _step("OpenCrane MCP server starting (stdio transport)...")
             click.echo("", err=True)
-            click.echo("Add to your agentic tool:", err=True)
+            _info("  Add to your agentic tool:", err=True)
             click.echo("", err=True)
-            click.echo("  Claude Code:", err=True)
-            click.echo("    claude mcp add myopencranemcp -- opencrane serve", err=True)
+            _info("  Claude Code:", err=True)
+            _hint("    claude mcp add myopencranemcp -- opencrane serve")
             click.echo("", err=True)
-            click.echo("  Cursor / Windsurf / VS Code (mcp.json):", err=True)
-            click.echo('    { "mcpServers": { "myopencranemcp": { "command": "opencrane", "args": ["serve"] } } }', err=True)
+            _info("  Cursor / Windsurf / VS Code (mcp.json):", err=True)
+            _hint('    { "mcpServers": { "myopencranemcp": { "command": "opencrane", "args": ["serve"] } } }')
             click.echo("", err=True)
-            click.echo("  Zed (settings.json):", err=True)
-            click.echo('    { "context_servers": { "myopencranemcp": { "command": { "path": "opencrane", "args": ["serve"] } } } }', err=True)
+            _info("  Zed (settings.json):", err=True)
+            _hint('    { "context_servers": { "myopencranemcp": { "command": { "path": "opencrane", "args": ["serve"] } } } }')
             click.echo("", err=True)
-            click.echo("  Amazon Q / any MCP-compatible tool:", err=True)
-            click.echo('    command: opencrane serve', err=True)
+            _info("  Amazon Q / any MCP-compatible tool:", err=True)
+            _hint("    command: opencrane serve")
             click.echo("", err=True)
-            click.echo("  Or serve over HTTP via Docker:", err=True)
-            click.echo("    docker-compose up --build   (after: opencrane init)", err=True)
-            click.echo("  Or with Podman:", err=True)
-            click.echo("    podman-compose up --build   (after: opencrane init --podman)", err=True)
+            _info("  Or serve over HTTP via Docker:", err=True)
+            _hint("    docker-compose up --build   (after: opencrane init)")
+            _info("  Or with Podman:", err=True)
+            _hint("    podman-compose up --build   (after: opencrane init --podman)")
             click.echo("", err=True)
             from opencrane.mcp.server import main as serve_main
             asyncio.run(serve_main())
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        _error(f"Error: {e}")
         sys.exit(1)
 
 
@@ -260,11 +286,11 @@ def build(config_path, sources_dirs, llmstxt_dir, chunks_file, embeddings_file):
         from pathlib import Path
         cfg = load_config(config_path)
 
-        click.echo("Step 1/5: Fetching documentation...")
+        _step("Step 1/5: Fetching documentation...")
         from opencrane.rag.fetch_docs import main as fetch_main
         fetch_main()
 
-        click.echo("Step 2/5: Generating llms-full.txt files...")
+        _step("Step 2/5: Generating llms-full.txt files...")
         from opencrane.rag.generate_llms_txt import generate_outputs
         generate_outputs(
             config=cfg,
@@ -276,11 +302,11 @@ def build(config_path, sources_dirs, llmstxt_dir, chunks_file, embeddings_file):
         effective_llmstxt_dir = Path(llmstxt_dir) if llmstxt_dir else Path(".opencrane/llmstxt")
         if not (effective_llmstxt_dir / "llms-full.txt").exists():
             click.echo("")
-            click.echo("Nothing to process — no llms-full.txt was generated.")
-            click.echo("Add sources with: opencrane add")
+            _warn("Nothing to process — no llms-full.txt was generated.")
+            _hint("  Add sources with: opencrane add")
             return
 
-        click.echo("Step 3/5: Chunking documentation...")
+        _step("Step 3/5: Chunking documentation...")
         from opencrane.rag.chunker import main as chunk_main
         chunk_main(
             config=cfg,
@@ -288,20 +314,20 @@ def build(config_path, sources_dirs, llmstxt_dir, chunks_file, embeddings_file):
             chunks_file=Path(chunks_file) if chunks_file else None,
         )
 
-        click.echo("Step 4/5: Generating embeddings...")
+        _step("Step 4/5: Generating embeddings...")
         from opencrane.rag.generate_embeddings import main as embed_main
         embed_main(
             chunks_file=Path(chunks_file) if chunks_file else None,
             embeddings_file=Path(embeddings_file) if embeddings_file else None,
         )
 
-        click.echo("Step 5/5: Initializing vector database...")
+        _step("Step 5/5: Initializing vector database...")
         from opencrane.mcp.init_vector_db import main as index_main
         index_main()
 
-        click.echo("Build complete.")
+        _success("Build complete.")
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        _error(f"Error: {e}")
         sys.exit(1)
 
 
@@ -314,14 +340,14 @@ def inspect(config_path):
     import subprocess
 
     if not shutil.which("npx"):
-        click.echo("Error: npx is not installed or not in PATH. Install Node.js to use this command.", err=True)
+        _error("npx is not installed or not in PATH. Install Node.js to use this command.")
         sys.exit(1)
 
     config_args = ["--config", config_path] if config_path else []
     serve_cmd = ["opencrane", "serve"] + config_args
 
-    click.echo("Starting MCP Inspector (stdio transport)...", err=True)
-    click.echo("Web UI will be available at http://localhost:5173", err=True)
+    _step("Starting MCP Inspector (stdio transport)...")
+    _info("Web UI will be available at http://localhost:5173", err=True)
 
     result = subprocess.run(
         ["npx", "@modelcontextprotocol/inspector@0.20.0", "--transport", "stdio"] + serve_cmd
@@ -336,7 +362,8 @@ def add():
 
     opencrane_dir = Path(".opencrane")
     if not opencrane_dir.exists():
-        click.echo("No .opencrane/ directory found. Run 'opencrane init' first.")
+        _warn("No .opencrane/ directory found.")
+        _hint("  Run: opencrane init")
         sys.exit(1)
 
     _add_sources_interactive()
@@ -370,9 +397,9 @@ def _add_sources_interactive():
                     docs_path=docs_path,
                     docs_url=docs_url,
                 )
-                click.echo(f"Added GitHub source '{name}' to .opencrane/sources.yaml")
+                _success(f"Added GitHub source '{name}' to .opencrane/sources.yaml")
             except Exception as e:
-                click.echo(f"Error: {e}", err=True)
+                _error(f"Error: {e}")
 
         elif choice == 2:
             name = click.prompt("Name for this source (used as directory name)")
@@ -380,16 +407,16 @@ def _add_sources_interactive():
             docs_url = click.prompt("Published docs URL (optional, for source links)", default="")
             try:
                 add_llmstxt_source(name=name, url=location, docs_url=docs_url)
-                click.echo(f"Added llmstxt source '{name}' to .opencrane/sources.yaml")
+                _success(f"Added llmstxt source '{name}' to .opencrane/sources.yaml")
             except Exception as e:
-                click.echo(f"Error: {e}", err=True)
+                _error(f"Error: {e}")
 
         if not click.confirm("Add another source?", default=False):
             break
 
     click.echo("")
-    click.echo("Next steps:")
-    click.echo("  Run: opencrane build")
+    _info("Next steps:")
+    _hint("  Run: opencrane build")
 
 
 @main.command()
@@ -410,24 +437,24 @@ def pack(name, output, version):
     output_path = Path(output) if output else None
     output_dir, wheel_path = do_pack(name=name, version=version, output=output_path)
 
-    click.echo(f"Packed MCP server to {output_dir}/")
+    _success(f"Packed MCP server to {output_dir}/")
     if wheel_path:
-        click.echo(f"Wheel built: {wheel_path}")
+        _info(f"Wheel built: {wheel_path}")
     else:
-        click.echo("Wheel not built (install 'build' package: pip install build)")
+        _warn("Wheel not built (install 'build' package: pip install build)")
     click.echo("")
-    click.echo("Share it:")
+    _info("Share it:")
     click.echo("")
-    click.echo("  1. Push to GitHub, then others run:")
-    click.echo(f'     claude mcp add {name} -- uvx --from "git+https://github.com/you/{name}" {name}')
+    _info("  1. Push to GitHub, then others run:")
+    _hint(f'     claude mcp add {name} -- uvx --from "git+https://github.com/you/{name}" {name}')
     click.echo("")
-    click.echo("  2. Or publish to PyPI:")
-    click.echo(f"     pip install build twine && python -m build {output_dir} && twine upload {output_dir}/dist/*")
-    click.echo("     Then others run:")
-    click.echo(f"     claude mcp add {name} -- uvx {name}")
+    _info("  2. Or publish to PyPI:")
+    _hint(f"     pip install build twine && python -m build {output_dir} && twine upload {output_dir}/dist/*")
+    _info("     Then others run:")
+    _hint(f"     claude mcp add {name} -- uvx {name}")
     click.echo("")
-    click.echo("  3. Or use locally:")
-    click.echo(f"     claude mcp add {name} -- uvx --from {output_dir} {name}")
+    _info("  3. Or use locally:")
+    _hint(f"     claude mcp add {name} -- uvx --from {output_dir} {name}")
 
 
 @main.command()
@@ -468,32 +495,32 @@ def init(podman, force, no_add):
     write_file(opencrane_dir / "docker-compose.yml", DOCKER_COMPOSE)
 
     if created:
-        click.echo("Created:")
+        _success("Created:")
         for f in created:
             click.echo(f"  {f}")
     if skipped:
-        click.echo("Skipped (already exist — use --force to overwrite):")
+        _warn("Skipped (already exist — use --force to overwrite):")
         for f in skipped:
             click.echo(f"  {f}")
     if protected:
-        click.echo("Protected (user-managed, never overwritten):")
+        _info("Protected (user-managed, never overwritten):")
         for f in protected:
             click.echo(f"  {f}")
 
     click.echo("")
     if no_add:
-        click.echo("Next steps:")
-        click.echo("  1. Add sources: opencrane add")
-        click.echo("  2. Run: opencrane build")
-        click.echo("  3. Run: opencrane serve")
+        _info("Next steps:")
+        _hint("  1. Add sources: opencrane add")
+        _hint("  2. Run: opencrane build")
+        _hint("  3. Run: opencrane serve")
     elif click.confirm("Would you like to add documentation sources now?", default=True):
         _add_sources_interactive()
     else:
         click.echo("")
-        click.echo("Next steps:")
-        click.echo("  1. Add sources: opencrane add")
-        click.echo("  2. Run: opencrane build")
-        click.echo("  3. Run: opencrane serve")
+        _info("Next steps:")
+        _hint("  1. Add sources: opencrane add")
+        _hint("  2. Run: opencrane build")
+        _hint("  3. Run: opencrane serve")
 
 
 if __name__ == "__main__":

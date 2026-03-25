@@ -58,7 +58,7 @@ This project stands on the shoulders of some excellent open-source work:
 Scaffold a new project without installing anything:
 
 ```bash
-uvx --from "opencrane @ git+https://github.com/derberg/OpenCrane.git" opencrane init
+uvx opencrane init
 ```
 
 This creates `.opencrane/`, `Dockerfile`, and `docker-compose.yml` in the current directory and walks you through adding documentation sources interactively. Then run `opencrane build` and `opencrane serve`.
@@ -67,10 +67,13 @@ This creates `.opencrane/`, `Dockerfile`, and `docker-compose.yml` in the curren
 
 ```bash
 # with pip
-pip install git+https://github.com/derberg/OpenCrane.git
+pip install opencrane
 
 # with uv
-uv pip install git+https://github.com/derberg/OpenCrane.git
+uv pip install opencrane
+
+# with uvx (no install needed)
+uvx opencrane <command>
 ```
 
 ## Usage

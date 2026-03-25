@@ -195,6 +195,44 @@ For containerized deployment over HTTP:
 The Docker image bakes the vector database at build time for fast startup.
 Configure the embedding model via `EMBEDDING_MODEL` env var in `{container_tool}-compose.yaml`.
 
+### Build and publish the Docker image
+
+```bash
+# Build the image
+{container_tool} build -t your-registry/opencrane-mcp:latest -f .opencrane/Dockerfile .
+
+# Push to a registry
+{container_tool} push your-registry/opencrane-mcp:latest
+```
+
+Others can then run it with:
+
+```bash
+{container_tool} run -p 8000:8000 your-registry/opencrane-mcp:latest
+```
+
+### MCP client configuration for Docker (HTTP)
+
+Once the container is running on port 8000, configure your MCP client to use the HTTP endpoint:
+
+**Claude Code:**
+
+```bash
+claude mcp add opencrane --transport http --url http://localhost:8000/http
+```
+
+**Cursor / Windsurf / VS Code (mcp.json):**
+
+```json
+{{
+  "mcpServers": {{
+    "opencrane": {{
+      "url": "http://localhost:8000/http"
+    }}
+  }}
+}}
+```
+
 ## Pipeline Steps
 
 `opencrane build` runs the full pipeline, but each step can be run independently:
@@ -303,15 +341,37 @@ claude mcp add {name} -- uvx {name}
 > **Note:** When you re-pack with updated documentation, bump `--version` so that
 > `uvx` pulls the new version instead of serving its cache.
 
+## Share via Docker
+
+Build and publish a Docker image for HTTP deployment:
+
+```bash
+# Build
+docker build -t your-registry/{name}:latest -f .opencrane/Dockerfile ..
+
+# Push
+docker push your-registry/{name}:latest
+```
+
+Run the container:
+
+```bash
+docker run -p 8000:8000 your-registry/{name}:latest
+```
+
+The MCP endpoint is available at `http://localhost:8000/http`.
+
 ## MCP client configuration
 
-### Claude Code
+### Stdio (uvx)
+
+**Claude Code:**
 
 ```bash
 claude mcp add {name} -- uvx {name}
 ```
 
-### Cursor / Windsurf / VS Code (mcp.json)
+**Cursor / Windsurf / VS Code (mcp.json):**
 
 ```json
 {{
@@ -324,7 +384,7 @@ claude mcp add {name} -- uvx {name}
 }}
 ```
 
-### Zed (settings.json)
+**Zed (settings.json):**
 
 ```json
 {{
@@ -334,6 +394,26 @@ claude mcp add {name} -- uvx {name}
         "path": "uvx",
         "args": ["{name}"]
       }}
+    }}
+  }}
+}}
+```
+
+### HTTP (Docker)
+
+**Claude Code:**
+
+```bash
+claude mcp add {name} --transport http --url http://localhost:8000/http
+```
+
+**Cursor / Windsurf / VS Code (mcp.json):**
+
+```json
+{{
+  "mcpServers": {{
+    "{name}": {{
+      "url": "http://localhost:8000/http"
     }}
   }}
 }}

@@ -80,54 +80,84 @@ def load_config(config_arg: str | None):
         return config
 
 
-class _ColorHelpFormatter(click.HelpFormatter):
-    """Click help formatter with ANSI color support."""
+def _colorize_help(text: str, is_group: bool = False) -> str:
+    """Post-process Click help text to add ANSI colors."""
+    import re
+    lines = text.split("\n")
+    result = []
 
-    def write_usage(self, prog: str, args: str = "", prefix: str | None = None) -> None:
-        prefix = click.style("Usage: ", fg="cyan", bold=True)
-        super().write_usage(prog, args, prefix=prefix)
+    if is_group:
+        result.append(
+            click.style("OpenCrane", fg="cyan", bold=True)
+            + click.style(" — RAG/MCP pipeline for AI-powered documentation search", dim=True)
+        )
+        result.append("")
 
-    def write_heading(self, heading: str) -> None:
-        self.write(click.style(f"{heading}:", fg="cyan", bold=True) + "\n")
+    in_commands = False
+    in_options = False
 
-    def write_dl(self, rows, col_max=6, col_spacing=2):
-        colored = []
-        for name, help_text in rows:
-            colored.append((click.style(name, fg="green"), help_text))
-        super().write_dl(colored, col_max=col_max, col_spacing=col_spacing)
+    for line in lines:
+        # Color section headings
+        if re.match(r"^(Usage|Options|Commands):", line):
+            result.append(click.style(line, fg="cyan", bold=True))
+            in_commands = line.startswith("Commands:")
+            in_options = line.startswith("Options:")
+            continue
+
+        # Color command names in Commands section
+        if in_commands and line.startswith("  "):
+            m = re.match(r"^(\s{2})(\S+)(\s+)(.*)", line)
+            if m:
+                result.append(
+                    m.group(1)
+                    + click.style(m.group(2), fg="green", bold=True)
+                    + m.group(3)
+                    + m.group(4)
+                )
+                continue
+
+        # Color option names in Options section
+        if in_options and line.startswith("  "):
+            m = re.match(r"^(\s{2})(--\S+(?:\s\S+)?)(.*)", line)
+            if m:
+                result.append(
+                    m.group(1)
+                    + click.style(m.group(2), fg="green")
+                    + m.group(3)
+                )
+                continue
+
+        # Reset section tracking on blank lines
+        if not line.strip():
+            in_commands = False
+            in_options = False
+
+        result.append(line)
+
+    return "\n".join(result)
 
 
-class _ColorGroup(click.Group):
-    def format_help(self, ctx, formatter):
-        formatter.write(click.style(
-            "OpenCrane", fg="cyan", bold=True
-        ) + click.style(
-            " — RAG/MCP pipeline for AI-powered documentation search\n\n", dim=True
-        ))
-        super().format_help(ctx, formatter)
+class _ColorMixin:
+    """Mixin that colorizes help output."""
 
-    def get_help_record(self, ctx):
-        return super().get_help_record(ctx)
-
-    def make_context(self, info_name, args, parent=None, **extra):
-        ctx = super().make_context(info_name, args, parent=parent, **extra)
-        ctx.formatter_class = _ColorHelpFormatter
-        return ctx
+    def get_help(self, ctx):
+        text = super().get_help(ctx)
+        is_group = isinstance(self, click.Group)
+        return _colorize_help(text, is_group=is_group)
 
 
-class _ColorCommand(click.Command):
-    def make_context(self, info_name, args, parent=None, **extra):
-        ctx = super().make_context(info_name, args, parent=parent, **extra)
-        ctx.formatter_class = _ColorHelpFormatter
-        return ctx
+class _ColorGroup(_ColorMixin, click.Group):
+    pass
+
+
+class _ColorCommand(_ColorMixin, click.Command):
+    pass
 
 
 @click.group(cls=_ColorGroup)
 @click.version_option()
-@click.pass_context
-def main(ctx):
+def main():
     """Pipeline: add → fetch → llms → chunk → embed → index → serve"""
-    ctx.formatter_class = _ColorHelpFormatter
 
 
 @main.command(cls=_ColorCommand)

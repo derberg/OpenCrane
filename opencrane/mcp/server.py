@@ -285,12 +285,12 @@ def _build_search_tool() -> Tool:
                 "search_mode": {
                     "type": "string",
                     "enum": ["semantic", "keyword", "hybrid"],
-                    "description": "Search mode. Use 'hybrid' (default) for general queries — it combines vector similarity with keyword matching. Use 'keyword' when searching for exact identifiers or specific terms. Use 'semantic' when searching by concept or natural-language question.",
+                    "description": "Search mode. 'hybrid' (default) combines vector similarity with keyword matching — best for most queries. Switch to 'keyword' when you have an exact identifier, field name, config key, or API path (e.g., 'spec.replicas', 'RetryPolicy', '/api/v1/users'). Switch to 'semantic' for conceptual questions where there's no specific term to match on (e.g., 'how does authentication work', 'what handles retry logic').",
                     "default": "hybrid"
                 },
                 "alpha": {
                     "type": "number",
-                    "description": "Weight for semantic score in hybrid mode (0-1). Higher values favor semantic similarity, lower values favor keyword matching. If omitted, defaults to the server's configured value (HYBRID_ALPHA env var, 0.6 by default).",
+                    "description": "Blend weight for hybrid mode (0-1). Controls the semantic vs keyword balance. Default 0.6 works well for most queries. Set alpha=0.2 when you have a specific term but want some fuzzy matching. Set alpha=0.9 for conceptual queries that happen to include a known term. Set alpha=1.0 for pure semantic within hybrid mode. Only used when search_mode is 'hybrid'.",
                     "minimum": 0,
                     "maximum": 1
                 }

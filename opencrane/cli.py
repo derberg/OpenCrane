@@ -80,14 +80,57 @@ def load_config(config_arg: str | None):
         return config
 
 
-@click.group()
+class _ColorHelpFormatter(click.HelpFormatter):
+    """Click help formatter with ANSI color support."""
+
+    def write_usage(self, prog: str, args: str = "", prefix: str | None = None) -> None:
+        prefix = click.style("Usage: ", fg="cyan", bold=True)
+        super().write_usage(prog, args, prefix=prefix)
+
+    def write_heading(self, heading: str) -> None:
+        self.write(click.style(f"{heading}:", fg="cyan", bold=True) + "\n")
+
+    def write_dl(self, rows, col_max=6, col_spacing=2):
+        colored = []
+        for name, help_text in rows:
+            colored.append((click.style(name, fg="green"), help_text))
+        super().write_dl(colored, col_max=col_max, col_spacing=col_spacing)
+
+
+class _ColorGroup(click.Group):
+    def format_help(self, ctx, formatter):
+        formatter.write(click.style(
+            "OpenCrane", fg="cyan", bold=True
+        ) + click.style(
+            " — RAG/MCP pipeline for AI-powered documentation search\n\n", dim=True
+        ))
+        super().format_help(ctx, formatter)
+
+    def get_help_record(self, ctx):
+        return super().get_help_record(ctx)
+
+    def make_context(self, info_name, args, parent=None, **extra):
+        ctx = super().make_context(info_name, args, parent=parent, **extra)
+        ctx.formatter_class = _ColorHelpFormatter
+        return ctx
+
+
+class _ColorCommand(click.Command):
+    def make_context(self, info_name, args, parent=None, **extra):
+        ctx = super().make_context(info_name, args, parent=parent, **extra)
+        ctx.formatter_class = _ColorHelpFormatter
+        return ctx
+
+
+@click.group(cls=_ColorGroup)
 @click.version_option()
-def main():
-    """OpenCrane — RAG/MCP library for documentation search."""
-    pass
+@click.pass_context
+def main(ctx):
+    """Pipeline: add → fetch → llms → chunk → embed → index → serve"""
+    ctx.formatter_class = _ColorHelpFormatter
 
 
-@main.command()
+@main.command(cls=_ColorCommand)
 @click.option("--config", "config_path", default=None,
               help="Python config class (module:Class) or YAML file path")
 @click.option("--org", default=None,
@@ -111,7 +154,7 @@ def fetch(config_path, org, repo):
         sys.exit(1)
 
 
-@main.command()
+@main.command(cls=_ColorCommand)
 @click.option("--config", "config_path", default=None,
               help="Python config class (module:Class) or YAML file path")
 @click.option("--sources-dir", "sources_dirs", multiple=True, type=click.Path(), default=None,
@@ -137,7 +180,7 @@ def llms(config_path, sources_dirs, llmstxt_dir, force):
         sys.exit(1)
 
 
-@main.command()
+@main.command(cls=_ColorCommand)
 @click.option("--config", "config_path", default=None,
               help="Python config class (module:Class) or YAML file path")
 @click.option("--llmstxt-dir", default=None, type=click.Path(),
@@ -160,7 +203,7 @@ def chunk(config_path, llmstxt_dir, chunks_file):
         sys.exit(1)
 
 
-@main.command()
+@main.command(cls=_ColorCommand)
 @click.option("--config", "config_path", default=None,
               help="Python config class (module:Class) or YAML file path")
 @click.option("--chunks-file", default=None, type=click.Path(),
@@ -182,7 +225,7 @@ def embed(config_path, chunks_file, embeddings_file):
         sys.exit(1)
 
 
-@main.command()
+@main.command(cls=_ColorCommand)
 @click.option("--source-dir", default=None, type=click.Path(),
               help="Directory containing llmstxt output to count (overrides TOKEN_SOURCE_DIR)")
 @click.option("--output-file", default=None, type=click.Path(),
@@ -201,7 +244,7 @@ def tokens(source_dir, output_file):
         sys.exit(1)
 
 
-@main.command()
+@main.command(cls=_ColorCommand)
 @click.option("--config", "config_path", default=None,
               help="Python config class (module:Class) or YAML file path")
 def index(config_path):
@@ -215,7 +258,7 @@ def index(config_path):
         sys.exit(1)
 
 
-@main.command()
+@main.command(cls=_ColorCommand)
 @click.option("--config", "config_path", default=None,
               help="Python config class (module:Class) or YAML file path")
 @click.option("--transport", "transport",
@@ -269,7 +312,7 @@ def serve(config_path, transport):
         sys.exit(1)
 
 
-@main.command()
+@main.command(cls=_ColorCommand)
 @click.option("--config", "config_path", default=None,
               help="Python config class (module:Class) or YAML file path")
 @click.option("--sources-dir", "sources_dirs", multiple=True, type=click.Path(), default=None,
@@ -331,7 +374,7 @@ def build(config_path, sources_dirs, llmstxt_dir, chunks_file, embeddings_file):
         sys.exit(1)
 
 
-@main.command()
+@main.command(cls=_ColorCommand)
 @click.option("--config", "config_path", default=None,
               help="Python config class (module:Class) or YAML file path")
 def inspect(config_path):
@@ -355,7 +398,7 @@ def inspect(config_path):
     sys.exit(result.returncode)
 
 
-@main.command()
+@main.command(cls=_ColorCommand)
 def add():
     """Interactively add documentation sources to the project."""
     from pathlib import Path
@@ -419,7 +462,7 @@ def _add_sources_interactive():
     _hint("  Run: opencrane build")
 
 
-@main.command()
+@main.command(cls=_ColorCommand)
 @click.option("--name", "name", default=None,
               help="Package name (e.g. my-docs-mcp)")
 @click.option("--output", "output", default=None, type=click.Path(),
@@ -457,7 +500,7 @@ def pack(name, output, version):
     _hint(f"     claude mcp add {name} -- uvx --from {output_dir} {name}")
 
 
-@main.command()
+@main.command(cls=_ColorCommand)
 @click.option("--podman", is_flag=True, default=False,
               help="Generate Containerfile instead of Dockerfile")
 @click.option("--force", is_flag=True, default=False,

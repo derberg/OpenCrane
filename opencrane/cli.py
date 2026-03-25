@@ -448,20 +448,20 @@ def _add_sources_interactive():
 
     while True:
         click.echo("")
-        click.echo("What type of source do you want to add?")
-        click.echo("  1. GitHub repository (fetch markdown docs)")
-        click.echo("  2. Existing llms.txt file (URL or local path)")
-        choice = click.prompt("Choice", type=click.IntRange(1, 2), default=1)
+        _step("What type of source do you want to add?")
+        click.echo("  " + click.style("1.", fg="green", bold=True) + " GitHub repository (fetch markdown docs)")
+        click.echo("  " + click.style("2.", fg="green", bold=True) + " Existing llms.txt file (URL or local path)")
+        choice = click.prompt(click.style("Choice", fg="cyan"), type=click.IntRange(1, 2), default=1)
 
         if choice == 1:
-            github_url = click.prompt("GitHub repository URL")
-            docs_path = click.prompt("Path to docs within the repo", default="docs")
-            docs_url = click.prompt("Published docs URL (optional, for source links)", default="")
+            github_url = click.prompt(click.style("GitHub repository URL", fg="cyan"))
+            docs_path = click.prompt(click.style("Path to docs within the repo", fg="cyan"), default="docs")
+            docs_url = click.prompt(click.style("Published docs URL (optional, for source links)", fg="cyan"), default="")
 
             # Suggest a name derived from the URL
             parts = github_url.rstrip("/").split("/")
             suggested = f"{parts[-2]}/{parts[-1]}" if len(parts) >= 2 else parts[-1]
-            name = click.prompt("Source name", default=suggested)
+            name = click.prompt(click.style("Source name", fg="cyan"), default=suggested)
 
             try:
                 add_github_source(
@@ -475,16 +475,16 @@ def _add_sources_interactive():
                 _error(f"Error: {e}")
 
         elif choice == 2:
-            name = click.prompt("Name for this source (used as directory name)")
-            location = click.prompt("llms.txt URL or local file path")
-            docs_url = click.prompt("Published docs URL (optional, for source links)", default="")
+            name = click.prompt(click.style("Name for this source (used as directory name)", fg="cyan"))
+            location = click.prompt(click.style("llms.txt URL or local file path", fg="cyan"))
+            docs_url = click.prompt(click.style("Published docs URL (optional, for source links)", fg="cyan"), default="")
             try:
                 add_llmstxt_source(name=name, url=location, docs_url=docs_url)
                 _success(f"Added llmstxt source '{name}' to .opencrane/sources.yaml")
             except Exception as e:
                 _error(f"Error: {e}")
 
-        if not click.confirm("Add another source?", default=False):
+        if not click.confirm(click.style("Add another source?", fg="cyan"), default=False):
             break
 
     click.echo("")
@@ -505,7 +505,7 @@ def pack(name, output, version):
     from opencrane.pack import pack as do_pack
 
     if name is None:
-        name = click.prompt("Package name (e.g. my-docs-mcp)")
+        name = click.prompt(click.style("Package name (e.g. my-docs-mcp)", fg="cyan"))
 
     output_path = Path(output) if output else None
     output_dir, wheel_path = do_pack(name=name, version=version, output=output_path)
@@ -586,7 +586,7 @@ def init(podman, force, no_add):
         _hint("  1. Add sources: opencrane add")
         _hint("  2. Run: opencrane build")
         _hint("  3. Run: opencrane serve")
-    elif click.confirm("Would you like to add documentation sources now?", default=True):
+    elif click.confirm(click.style("Would you like to add documentation sources now?", fg="cyan"), default=True):
         _add_sources_interactive()
     else:
         click.echo("")

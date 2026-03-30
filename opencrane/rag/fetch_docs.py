@@ -88,13 +88,8 @@ def main(config=None):
 
                 org_name, repo_name = parsed
 
-                # Skip repos from other orgs (only process repos matching current org)
-                # Bypass the org check when:
-                # - a specific --repo filter is active (path key already identifies the repo)
-                # - no org is configured (user is only using manual sources)
-                if config.org_name and org_name != config.org_name and not fetch_repo_filter:
-                    logger.info(f"Skipping {org_name}/{repo_name} (org filter: {config.org_name})")
-                    continue
+                # Manual repos are always fetched regardless of --org filter
+                # (they are explicitly listed by the user in sources.yaml)
 
                 # Skip self-reference (current repository)
                 if repo_name == current_repo_name and org_name == config.org_name:

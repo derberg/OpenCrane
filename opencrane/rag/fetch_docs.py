@@ -56,7 +56,7 @@ def main(config=None):
             if fetch_repo_filter:
                 repos = [
                     r for r in repos
-                    if f"{config.target_dir.as_posix()}/{r.name}" == fetch_repo_filter
+                    if r.name == fetch_repo_filter
                 ]
                 logger.info(f"Filtered auto-discovered repos to {fetch_repo_filter}: {len(repos)} match(es)")
         else:
@@ -120,13 +120,13 @@ def main(config=None):
 
         # Add auto-discovered repos to active set
         for repo in repos:
-            path_key = f"{config.target_dir.as_posix()}/{repo.name}"
+            path_key = repo.name
             active_repos.add(path_key)
 
         # Add manual repos to active set
         for repo in manual_repos:
             metadata = manual_repo_metadata.get(repo.name, {})
-            path_key = metadata.get("path_key", f"{config.target_dir.as_posix()}/{repo.name}")
+            path_key = metadata.get("path_key", repo.name)
             active_repos.add(path_key)
 
         # Also mark repos from other orgs as active (don't clean them up when filtering by --org)
@@ -208,7 +208,7 @@ def main(config=None):
                     docs_path = metadata.get("docs_path", "docs")
                 else:
                     url = f"https://github.com/{config.org_name}/{repo.name}"
-                    path_key = f"{config.target_dir.as_posix()}/{repo.name}"
+                    path_key = repo.name
                     docs_path = "docs"
 
                 logger.info(f"Processing repository: {org_name}/{repo.name} (docs_path: {docs_path})")
@@ -254,9 +254,8 @@ def main(config=None):
 
             logger.info(f"Documentation fetch completed. Processed {processed_count}/{len(all_repos)} repositories")
             if processed_paths:
-                sources_base = workspace_root / ".opencrane" / "sources"
                 for p in processed_paths:
-                    logger.info(f"  Fetched to: {sources_base / p}")
+                    logger.info(f"  Fetched to: {config.target_dir / p}")
 
         # Cleanup stale sources - only remove repos that LOST the "documentation" topic
         # NOT repos that failed to fetch or have no files
@@ -267,10 +266,9 @@ def main(config=None):
             workspace_root = Path.cwd()
             llmstxt_base = workspace_root / ".opencrane" / "llmstxt"
 
-            sources_base = workspace_root / ".opencrane" / "sources"
             for stale_path_key in removed_sources:
                 # Remove from source directory (e.g., .opencrane/sources/repo-name)
-                source_path = sources_base / stale_path_key
+                source_path = config.target_dir / stale_path_key
                 if source_path.exists() and source_path.is_dir():
                     logger.info(f"Removing stale source directory: {source_path}")
                     shutil.rmtree(source_path)

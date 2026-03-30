@@ -16,7 +16,7 @@ class TestFetchProcess:
             base_dir = Path(temp_dir)
 
             # Create config
-            config = Config(target_dir=base_dir / "external-sources" / "product-docs")
+            config = Config(target_dir=base_dir / "sources")
 
             # Mock GitHub client methods
             mock_github_client = mocker.patch('opencrane.rag.repo_fetcher.GitHubClient')
@@ -46,7 +46,7 @@ class TestFetchProcess:
             repos = fetcher.get_documentation_repos()
             for repo in repos:
                 files = fetcher.get_repo_files(repo)
-                file_manager.store_repo_files(str(config.target_dir / repo.name), files)
+                file_manager.store_repo_files(repo.name, files)
 
             # Verify file was stored
             repo_dir = config.target_dir / "test-repo"

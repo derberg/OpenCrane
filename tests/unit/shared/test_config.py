@@ -11,7 +11,7 @@ class TestConfig:
         """Test Config with default values."""
         config = Config()
         assert config.org_name == ""
-        assert str(config.target_dir) == "external-sources"
+        assert str(config.target_dir) == ".opencrane/sources"
         assert config.docs_topic == "documentation"
         assert config.schedule_timezone == "UTC"
         assert config.github_token == ""

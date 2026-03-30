@@ -8,7 +8,7 @@ import os
 class Config:
     org_name: str = field(default_factory=lambda: os.getenv("ORG_NAME", ""))
     repo_name: str = field(default_factory=lambda: os.getenv("REPO_NAME", ""))
-    target_dir: Path = field(default_factory=lambda: Path(os.getenv("TARGET_DIR", "external-sources")))
+    target_dir: Path = field(default_factory=lambda: Path(os.getenv("TARGET_DIR", ".opencrane/sources")))
     docs_topic: str = field(default_factory=lambda: os.getenv("DOCS_TOPIC", "documentation"))
     # Organizations that should have auto-discovery enabled (comma-separated)
     auto_discovery_orgs: List[str] = field(default_factory=lambda: [

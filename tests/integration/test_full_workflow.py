@@ -83,7 +83,7 @@ class TestFullWorkflow:
         mock_repo_fetcher.return_value.get_documentation_repos.assert_called_once()
         # Verify get_repo_files was called with org_name parameter
         mock_repo_fetcher.return_value.get_repo_files.assert_called_once_with(mock_repo, org_name='test_org', docs_path='docs')
-        expected_path_key = f"{test_config.target_dir.as_posix()}/test-repo"
+        expected_path_key = "test-repo"
         mock_file_manager.return_value.store_repo_files.assert_called_once_with(expected_path_key, [mock_file])
 
     @patch('opencrane.rag.fetch_docs.get_current_repo_name', return_value='my-repo')
@@ -239,17 +239,17 @@ class TestFullWorkflow:
         # Mock source mapping to return repos from multiple orgs
         mock_mapping_instance = Mock()
         mock_mapping_instance.get_all_sources.return_value = {
-            "external-sources/my-org-repo-1": {
+            "my-org-repo-1": {
                 "url": "https://github.com/my-org/my-org-repo-1",
                 "docs_path": "docs",
                 "manual": False
             },
-            "external-sources/my-org-repo-2": {
+            "my-org-repo-2": {
                 "url": "https://github.com/my-org/my-org-repo-2",
                 "docs_path": "docs",
                 "manual": False
             },
-            "external-sources/other-org-cgw": {
+            "other-org-cgw": {
                 "url": "https://github.com/other-org/cgw",
                 "docs_path": "docs",
                 "manual": True
@@ -284,9 +284,9 @@ class TestFullWorkflow:
         active_repos = cleanup_call_args[0][0]
 
         # Verify all repos are in active set (none should be marked stale)
-        assert "external-sources/my-org-repo-1" in active_repos, "my-org repos should be protected from cleanup"
-        assert "external-sources/my-org-repo-2" in active_repos, "my-org repos should be protected from cleanup"
-        assert "external-sources/other-org-cgw" in active_repos, "other-org repo should be in active set"
+        assert "my-org-repo-1" in active_repos, "my-org repos should be protected from cleanup"
+        assert "my-org-repo-2" in active_repos, "my-org repos should be protected from cleanup"
+        assert "other-org-cgw" in active_repos, "other-org repo should be in active set"
 
     @patch('opencrane.rag.fetch_docs.get_current_repo_name', return_value='my-repo')
     @patch('opencrane.rag.fetch_docs.SourceMapping')
@@ -310,18 +310,18 @@ class TestFullWorkflow:
             github_token="fake_token",
             mapping_file=mapping_file,
             auto_discovery_orgs=["my-org"],
-            fetch_repo="external-sources/cgw",
+            fetch_repo="cgw",
         )
         mock_get_config.return_value = config
 
         mock_mapping_instance = Mock()
         mock_mapping_instance.get_all_sources.return_value = {
-            "external-sources/cgw": {
+            "cgw": {
                 "url": "https://github.com/other-org/cgw",
                 "docs_path": "docs",
                 "manual": True,
             },
-            "external-sources/tsr": {
+            "tsr": {
                 "url": "https://github.com/other-org/tsr",
                 "docs_path": "docs",
                 "manual": True,
@@ -361,12 +361,12 @@ class TestFullWorkflow:
 
         config = Config(
             org_name="my-org",
-            target_dir=Path("external-sources"),
+            target_dir=temp_dir / "sources",
             docs_topic="documentation",
             github_token="fake_token",
             mapping_file=mapping_file,
             auto_discovery_orgs=["my-org"],
-            fetch_repo="external-sources/target-repo",
+            fetch_repo="target-repo",
         )
         mock_get_config.return_value = config
 
@@ -408,28 +408,28 @@ class TestFullWorkflow:
 
         config = Config(
             org_name="my-org",
-            target_dir=Path("external-sources"),
+            target_dir=temp_dir / "sources",
             docs_topic="documentation",
             github_token="fake_token",
             mapping_file=mapping_file,
             auto_discovery_orgs=["my-org"],
-            fetch_repo="external-sources/cgw",
+            fetch_repo="cgw",
         )
         mock_get_config.return_value = config
 
         mock_mapping_instance = Mock()
         mock_mapping_instance.get_all_sources.return_value = {
-            "external-sources/cgw": {
+            "cgw": {
                 "url": "https://github.com/other-org/cgw",
                 "docs_path": "docs",
                 "manual": True,
             },
-            "external-sources/tsr": {
+            "tsr": {
                 "url": "https://github.com/other-org/tsr",
                 "docs_path": "docs",
                 "manual": True,
             },
-            "external-sources/other-my-org-repo": {
+            "other-my-org-repo": {
                 "url": "https://github.com/my-org/other-my-org-repo",
                 "docs_path": "docs",
                 "manual": False,
@@ -449,6 +449,6 @@ class TestFullWorkflow:
 
         active_repos = mock_mapping_instance.cleanup_stale_sources.call_args[0][0]
         # All repos must be protected — only cgw was processed but others must not be removed
-        assert "external-sources/cgw" in active_repos
-        assert "external-sources/tsr" in active_repos, "tsr must be protected from cleanup"
-        assert "external-sources/other-my-org-repo" in active_repos, "other my-org repo must be protected"
+        assert "cgw" in active_repos
+        assert "tsr" in active_repos, "tsr must be protected from cleanup"
+        assert "other-my-org-repo" in active_repos, "other my-org repo must be protected"

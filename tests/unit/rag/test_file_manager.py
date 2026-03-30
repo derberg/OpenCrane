@@ -30,9 +30,9 @@ class TestFileManager:
                 File(repo_name="test-repo", relative_path="docs/subdir/file2.md", content=b"content2")
             ]
 
-            repo_dir = base_dir / "test-repo"
-            manager.store_repo_files(str(repo_dir), files)
+            manager.store_repo_files("test-repo", files)
 
+            repo_dir = base_dir / "test-repo"
             assert repo_dir.exists()
             assert (repo_dir / "docs" / "file1.md").read_bytes() == b"content1"
             assert (repo_dir / "docs" / "subdir" / "file2.md").read_bytes() == b"content2"
@@ -52,7 +52,7 @@ class TestFileManager:
                 File(repo_name="test-repo", relative_path="docs/new_file.md", content=b"new content")
             ]
 
-            manager.store_repo_files(str(repo_dir), files)
+            manager.store_repo_files("test-repo", files)
 
             # Old file should be gone, new file should exist
             assert not (repo_dir / "old_file.txt").exists()
@@ -70,9 +70,9 @@ class TestFileManager:
                 File(repo_name="test-repo", relative_path="api/v1/spec.json", content=b'{"version": "1"}')
             ]
 
-            repo_dir = base_dir / "test-repo"
-            manager.store_repo_files(str(repo_dir), files)
+            manager.store_repo_files("test-repo", files)
 
+            repo_dir = base_dir / "test-repo"
             assert (repo_dir / "README.md").read_bytes() == b"# README"
             assert (repo_dir / "api" / "v1" / "spec.json").read_bytes() == b'{"version": "1"}'
 
@@ -90,7 +90,7 @@ class TestFileManager:
             # Mock open to raise an exception
             with patch('builtins.open', side_effect=OSError("Disk full")):
                 with pytest.raises(OSError, match="Disk full"):
-                    manager.store_repo_files(str(base_dir / "test-repo"), files)
+                    manager.store_repo_files("test-repo", files)
 
     def test_file_model_repr(self):
         """Test File model __repr__ method."""

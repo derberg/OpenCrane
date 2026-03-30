@@ -503,16 +503,24 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             # When sources come from mapping (no explicit --sources-dir), files are
             # stored under .opencrane/sources/. When --sources-dir is explicit, the
             # user already told us where the files are.
-            path_base = workspace_root / ".opencrane" / "sources"
+            # When --sources-dir is explicit, resolve mapped paths relative to
+            # workspace root (mapped paths may reference the source dir by name).
+            # When using mapping-based discovery, sources live under .opencrane/sources/.
+            path_base_candidates = [workspace_root / ".opencrane" / "sources", workspace_root]
             for mapped_path in sorted(mapped_paths.keys()):
-                full_path = path_base / mapped_path
-                if not full_path.exists() or not full_path.is_dir():  # pragma: no cover
+                full_path = None
+                for pb in path_base_candidates:
+                    candidate = pb / mapped_path
+                    if candidate.exists() and candidate.is_dir():
+                        full_path = candidate
+                        break
+                if full_path is None:
                     continue
-                
+
                 # Only process if this path is under the current source_dir
                 try:
                     full_path.relative_to(source_dir)
-                except ValueError:  # pragma: no cover
+                except ValueError:
                     # This mapped path is not under current source_dir, skip it
                     continue
                 
@@ -588,24 +596,46 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
         write_outputs(output_mapping, output_root, root_projects)
 
     # Top-level combined output used by setup.sh (llmstxt/llms-full.txt)
-    # Keep the format consistent with per-source outputs: a sequence of "# Project:" blocks.
-    combined_parts: List[str] = []
-    covered_subdirs: set[str] = set()
+    # When there's a single source_dir that equals sources_base, write_outputs
+    # already wrote the combined file directly to LLMSTXT_BASE/llms-full.txt.
+    # Skip the combiner to avoid duplicating content.
     sources_base = Path.cwd() / ".opencrane" / "sources"
-    for source_dir in sorted(source_dirs, key=lambda p: p.as_posix()):
-        # Compute source_rel consistently with per-source output above
-        try:
-            source_rel = source_dir.relative_to(sources_base)
-        except ValueError:
-            try:
-                source_rel = source_dir.relative_to(Path.cwd())
-            except ValueError:  # pragma: no cover
-                source_rel = Path(source_dir.name)
-        source_llms = LLMSTXT_BASE / source_rel / "llms-full.txt"
+    single_source_is_base = (
+        len(source_dirs) == 1
+        and source_dirs[0].resolve() == sources_base.resolve()
+    )
 
-        if source_llms.exists():
-            combined_parts.append(source_llms.read_text(encoding="utf-8"))
-            covered_subdirs.add(source_rel.as_posix())
+    if single_source_is_base:
+        # write_outputs already produced the correct combined file — just
+        # pick up any pre-existing llmstxt sources not covered by mapping.
+        covered_subdirs: set[str] = set()
+        combined_parts: List[str] = []
+        # The combined file already exists; read it so we can append extras
+        top_llms = LLMSTXT_BASE / "llms-full.txt"
+        if top_llms.exists():
+            combined_parts.append(top_llms.read_text(encoding="utf-8"))
+            # Mark all project subdirs as covered
+            for sd in LLMSTXT_BASE.iterdir():
+                if sd.is_dir():
+                    covered_subdirs.add(sd.name)
+    else:
+        # Keep the format consistent with per-source outputs: a sequence of "# Project:" blocks.
+        combined_parts = []
+        covered_subdirs = set()
+        for source_dir in sorted(source_dirs, key=lambda p: p.as_posix()):
+            # Compute source_rel consistently with per-source output above
+            try:
+                source_rel = source_dir.relative_to(sources_base)
+            except ValueError:
+                try:
+                    source_rel = source_dir.relative_to(Path.cwd())
+                except ValueError:  # pragma: no cover
+                    source_rel = Path(source_dir.name)
+            source_llms = LLMSTXT_BASE / source_rel / "llms-full.txt"
+
+            if source_llms.exists():
+                combined_parts.append(source_llms.read_text(encoding="utf-8"))
+                covered_subdirs.add(source_rel.as_posix())
 
     # Include pre-existing llmstxt sources (e.g., added via `opencrane add` with
     # type: llmstxt) that weren't already covered by source-dir processing above.

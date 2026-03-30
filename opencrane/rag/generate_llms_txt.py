@@ -459,11 +459,15 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             return
         workspace_root = Path.cwd()
         sources_base = workspace_root / ".opencrane" / "sources"
-        top_level_dirs = {Path(k).parts[0] for k in sources.keys() if Path(k).parts}
-        source_dirs = sorted(
-            [sources_base / d for d in top_level_dirs if (sources_base / d).exists()],
-            key=lambda p: p.name,
-        )
+        # Use sources_base as a single source_dir when mapped paths exist there
+        if sources_base.exists() and any((sources_base / k).exists() for k in sources.keys()):
+            source_dirs = [sources_base]
+        else:
+            top_level_dirs = {Path(k).parts[0] for k in sources.keys() if Path(k).parts}
+            source_dirs = sorted(
+                [sources_base / d for d in top_level_dirs if (sources_base / d).exists()],
+                key=lambda p: p.name,
+            )
         if not source_dirs:
             # All sources may be of type llmstxt (no local directories). Fall back
             # to combining pre-existing llms-full.txt files with docs_url injection.
@@ -499,10 +503,7 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             # When sources come from mapping (no explicit --sources-dir), files are
             # stored under .opencrane/sources/. When --sources-dir is explicit, the
             # user already told us where the files are.
-            if sources_dirs_override:
-                path_base = workspace_root
-            else:
-                path_base = workspace_root / ".opencrane" / "sources"
+            path_base = workspace_root / ".opencrane" / "sources"
             for mapped_path in sorted(mapped_paths.keys()):
                 full_path = path_base / mapped_path
                 if not full_path.exists() or not full_path.is_dir():  # pragma: no cover

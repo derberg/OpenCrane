@@ -176,6 +176,8 @@ def fetch(config_path, org, repo):
         config = get_config()
         if org:
             config.org_name = org
+            if org not in config.auto_discovery_orgs:
+                config.auto_discovery_orgs.append(org)
         if repo:
             config.fetch_repo = repo
         fetch_main(config=config)

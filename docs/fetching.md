@@ -21,6 +21,7 @@ The fetch process automatically cleans up stale documentation sources:
 - **Mapping Cleanup**: Removes entries from your source mapping config (only auto-generated entries with `manual: false`)
 - **Directory Cleanup**: Deletes both source directories and generated output (`llmstxt/`)
 - **Manual Entry Protection**: Entries marked as `manual: true` are never automatically removed
+- **Local Entry Protection**: Entries marked as `local: true` are never fetched or removed (they reference local filesystem paths)
 - **Org Filtering**: The `--org` flag filters which repos are processed - repos from other orgs are skipped (not removed)
 - **Failure Protection**: Repos that **fail to fetch** (network errors, no files, etc.) are NOT removed - only repos that lose the topic are removed
 

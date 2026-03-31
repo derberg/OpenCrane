@@ -32,12 +32,17 @@ sources:
     url: https://github.com/my-org/another-project
     docs_path: docs
     manual: false
+  content-guidelines/writing:
+    local: true
 ```
 
 Then generation produces:
 - `llmstxt/external-sources/my-project/llms-full.txt` (includes all markdown from `guides/`, `releases/`, `technical-reference/`, etc.)
 - `llmstxt/external-sources/another-project/llms-full.txt` (includes all markdown recursively)
+- `llmstxt/content-guidelines/writing/llms-full.txt` (reads directly from local `content-guidelines/writing/` directory)
 - No files for `my-project/guides/` or other subdirectories
+
+**Local sources** (`local: true`) are resolved relative to the workspace root instead of `.opencrane/sources/`. This is useful for documentation that already exists in the same repository — no fetching or copying needed.
 
 **Why this matters:**
 - Prevents file explosion with hundreds of small files

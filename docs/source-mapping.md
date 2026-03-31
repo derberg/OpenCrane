@@ -20,6 +20,9 @@ sources:
     url: https://github.com/my-org/my-project
     docs_path: docs                       # Path within the repository
     manual: false                         # Entry created/updated automatically vs manually maintained
+
+  content-guidelines/writing:            # Local source (no fetching)
+    local: true
 ```
 
 Field Descriptions:
@@ -28,6 +31,7 @@ Field Descriptions:
 - url: Source repository URL for attribution and fetching
 - docs_path: Path within the source repository where docs are located (empty string means root)
 - manual: `false` = entry auto-generated and updated during fetch, `true` = manually added and maintained mapping
+- local: When `true`, the path key points to a local directory in the workspace — no fetching occurs and the pipeline reads directly from this path
 
 ## Configuring the Source Mapping File Path
 
@@ -139,9 +143,7 @@ Generated URL in llms-full.txt:
 # https://github.com/my-org/my-project/blob/main/docs/guides/setup.md Setup Guide
 ```
 
-## Manual vs Auto-Fetched Sources
-
-The `manual` flag distinguishes between two types of documentation:
+## Source Types
 
 ### Auto-Generated Entries (`manual: false`)
 - External repositories discovered via GitHub API
@@ -149,9 +151,28 @@ The `manual` flag distinguishes between two types of documentation:
 - Documentation fetched when `opencrane fetch` is run (locally or via CI/CD)
 
 ### Manual Entries (`manual: true`)
-- Documentation that lives in this repository or is manually curated
+- External repositories manually added to the mapping
 - Mapping entry manually created and maintained
-- Not discovered or updated automatically
-- Examples: Content guidelines, writing standards, templates
+- Not discovered or updated automatically, but still fetched from GitHub
+- The fetch operation respects this flag and won't overwrite manually configured entries
 
-The fetch operation respects this flag and won't overwrite manually configured entries.
+### Local Entries (`local: true`)
+- Documentation that already exists in the workspace (e.g., content in the same repo)
+- No fetching occurs — the pipeline reads directly from the local path
+- The path key is the local directory path relative to workspace root
+- `url` is optional (informational only, for reference)
+- Never removed by stale cleanup
+- Examples: Content guidelines, writing standards, templates that live alongside the OpenCrane project
+
+```yaml
+sources:
+  # Local content — no fetching, reads from workspace root
+  content-guidelines/writing:
+    local: true
+
+  # Remote content — fetched from GitHub
+  external-sources/my-project:
+    url: https://github.com/my-org/my-project
+    docs_path: docs
+    manual: true
+```

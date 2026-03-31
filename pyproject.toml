@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opencrane"
-version = "0.9.7"
+version = "0.10.0"
 description = "A standalone, extensible RAG/MCP library for building AI-powered documentation search."
 readme = "README.md"
 license = { text = "Apache-2.0" }

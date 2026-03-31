@@ -68,6 +68,10 @@ def main(config=None):
         manual_repo_metadata = {}  # Store org_name for each manual repo
 
         for path_key, source_config in source_mapping.get_all_sources().items():
+            # Skip local sources — they are read directly from the filesystem
+            if source_config.get("local"):
+                logger.info(f"Skipping local source: {path_key}")
+                continue
             if source_config.get("manual"):
                 # Skip non-GitHub sources (e.g., llmstxt) — handled separately
                 if source_config.get("type", "github") != "github":
@@ -134,6 +138,9 @@ def main(config=None):
         # When --repo filter is active, protect ALL other repos from cleanup too — we only
         # processed one repo so everything else must be preserved.
         for path_key, source_config in source_mapping.get_all_sources().items():
+            if source_config.get("local"):
+                active_repos.add(path_key)
+                continue
             if fetch_repo_filter and path_key != fetch_repo_filter:
                 logger.debug(f"Marking {path_key} as active (--repo filter active, protected from cleanup)")
                 active_repos.add(path_key)
@@ -153,6 +160,8 @@ def main(config=None):
 
         # Fetch llmstxt sources
         for path_key, source_config in source_mapping.get_all_sources().items():
+            if source_config.get("local"):
+                continue  # already handled above
             if source_config.get("type", "github") != "llmstxt":
                 continue
             if fetch_repo_filter and path_key != fetch_repo_filter:

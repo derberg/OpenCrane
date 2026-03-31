@@ -224,3 +224,60 @@ class TestFetchDocsLlmstxt:
 
         dest_file = tmp_path / ".opencrane" / "llmstxt" / "missing-src" / "llms-full.txt"
         assert not dest_file.exists()
+
+
+@pytest.mark.unit
+class TestFetchDocsLocal:
+    """Tests for local: true source handling in fetch_docs.main()."""
+
+    def test_local_entries_skip_fetch(self, tmp_path, caplog):
+        """Local entries are skipped during fetch — no GitHub API calls."""
+        setup_sources_yaml(tmp_path, {
+            "content-guidelines/writing": {"local": True},
+            "content-guidelines/templates": {"local": True},
+        })
+        config = make_config(tmp_path)
+
+        import logging
+        with caplog.at_level(logging.INFO, logger="opencrane.rag.fetch_docs"):
+            run_main_with_mocks(tmp_path, config)
+
+        assert "Skipping local source: content-guidelines/writing" in caplog.text
+        assert "Skipping local source: content-guidelines/templates" in caplog.text
+        assert "Fetched 0 manual repositories" in caplog.text
+
+    def test_local_entries_protected_from_cleanup(self, tmp_path):
+        """Local entries are not removed by stale source cleanup."""
+        sources_file = setup_sources_yaml(tmp_path, {
+            "content-guidelines/writing": {"local": True},
+        })
+        config = make_config(tmp_path)
+
+        run_main_with_mocks(tmp_path, config)
+
+        mapping = SourceMapping(sources_file)
+        assert mapping.get_source("content-guidelines/writing") is not None
+        assert mapping.get_source("content-guidelines/writing").get("local") is True
+
+    def test_local_and_remote_entries_coexist(self, tmp_path, caplog):
+        """A mix of local and remote entries: local skipped, remote fetched normally."""
+        local_src = tmp_path / "docs.txt"
+        local_src.write_text("content")
+
+        setup_sources_yaml(tmp_path, {
+            "content-guidelines/writing": {"local": True},
+            "my-llmstxt": {
+                "url": str(local_src),
+                "type": "llmstxt",
+                "manual": True,
+            },
+        })
+        config = make_config(tmp_path)
+
+        import logging
+        with caplog.at_level(logging.INFO, logger="opencrane.rag.fetch_docs"):
+            run_main_with_mocks(tmp_path, config)
+
+        assert "Skipping local source: content-guidelines/writing" in caplog.text
+        dest_file = tmp_path / ".opencrane" / "llmstxt" / "my-llmstxt" / "llms-full.txt"
+        assert dest_file.exists()

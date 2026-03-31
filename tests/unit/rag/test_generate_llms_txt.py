@@ -1,6 +1,7 @@
 import pytest
 import tempfile
 import shutil
+import yaml
 from pathlib import Path
 from unittest.mock import patch, mock_open, MagicMock
 from opencrane.rag.generate_llms_txt import (
@@ -848,6 +849,57 @@ class TestGenerateOutputs:
         # Should handle the ValueError gracefully and use fallback path
         # Verify subproject output was created
         assert (llmstxt_dir / "external_source" / "llms-full.txt").exists()
+
+    def test_generate_outputs_local_source_from_workspace_root(self, tmp_path, monkeypatch, isolate_outputs):
+        """Local sources are resolved relative to workspace root, not .opencrane/sources/."""
+        original_cwd = Path.cwd()
+        test_artifacts = original_cwd / ".test_local_source"
+
+        if test_artifacts.exists():
+            shutil.rmtree(test_artifacts)
+
+        try:
+            test_artifacts.mkdir(parents=True)
+            monkeypatch.chdir(test_artifacts)
+
+            # Create local source content at workspace root
+            local_dir = Path("content-guidelines") / "writing"
+            local_dir.mkdir(parents=True)
+            (local_dir / "guide.md").write_text("# Writing Guide\n\nSome content here.")
+
+            # Create .opencrane/sources.yaml with local entry
+            opencrane_dir = Path(".opencrane")
+            opencrane_dir.mkdir()
+            sources_yaml = opencrane_dir / "sources.yaml"
+            sources_yaml.write_text(yaml.dump({"sources": {
+                "content-guidelines/writing": {"local": True},
+            }}))
+
+            # Create llmstxt output dir
+            llmstxt_dir = opencrane_dir / "llmstxt"
+            llmstxt_dir.mkdir()
+
+            # Reset global source mapping
+            monkeypatch.setattr('opencrane.rag.generate_llms_txt._source_mapping', None)
+            monkeypatch.setattr('opencrane.rag.generate_llms_txt.ROOT', Path.cwd())
+            monkeypatch.setenv("MAPPING_FILE", str(sources_yaml))
+
+            # Remove env vars that would override source discovery
+            monkeypatch.delenv("AI_DOCS_SOURCES_DIRS", raising=False)
+            monkeypatch.delenv("AI_DOCS_SOURCES_DIR", raising=False)
+            monkeypatch.delenv("AI_DOCS_NO_FILTER", raising=False)
+
+            generate_outputs(force=True)
+
+            # Verify output was generated from local content
+            output_file = llmstxt_dir / "content-guidelines" / "writing" / "llms-full.txt"
+            assert output_file.exists(), f"Expected {output_file} to exist. Contents of llmstxt: {list(llmstxt_dir.rglob('*'))}"
+            content = output_file.read_text()
+            assert "Writing Guide" in content
+        finally:
+            monkeypatch.chdir(original_cwd)
+            if test_artifacts.exists():
+                shutil.rmtree(test_artifacts, ignore_errors=True)
 
 
 class TestGenerateOutputsSkipBehavior:

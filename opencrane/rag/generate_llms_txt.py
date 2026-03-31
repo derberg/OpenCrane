@@ -459,15 +459,24 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             return
         workspace_root = Path.cwd()
         sources_base = workspace_root / ".opencrane" / "sources"
-        # Use sources_base as a single source_dir when mapped paths exist there
-        if sources_base.exists() and any((sources_base / k).exists() for k in sources.keys()):
-            source_dirs = [sources_base]
-        else:
-            top_level_dirs = {Path(k).parts[0] for k in sources.keys() if Path(k).parts}
-            source_dirs = sorted(
+
+        source_dirs = []
+        # Check if .opencrane/sources/ has fetched (non-local) content
+        non_local_keys = [k for k, v in sources.items() if not v.get("local")]
+        if sources_base.exists() and any((sources_base / k).exists() for k in non_local_keys):
+            source_dirs.append(sources_base)
+        elif non_local_keys:
+            top_level_dirs = {Path(k).parts[0] for k in non_local_keys if Path(k).parts}
+            source_dirs.extend(sorted(
                 [sources_base / d for d in top_level_dirs if (sources_base / d).exists()],
                 key=lambda p: p.name,
-            )
+            ))
+
+        # Add workspace root if any local sources exist (local paths are relative to workspace root)
+        has_local = any(v.get("local") for v in sources.values())
+        if has_local and workspace_root not in source_dirs:
+            source_dirs.append(workspace_root)
+
         if not source_dirs:
             # All sources may be of type llmstxt (no local directories). Fall back
             # to combining pre-existing llms-full.txt files with docs_url injection.

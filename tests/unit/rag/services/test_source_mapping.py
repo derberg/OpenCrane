@@ -372,6 +372,40 @@ class TestSourceMapping:
 
 
 @pytest.mark.unit
+def test_local_source_round_trips_through_save_load(tmp_mapping):
+    """A hand-written local: true entry survives save/load cycle."""
+    import yaml
+    tmp_mapping.mapping_file.parent.mkdir(parents=True, exist_ok=True)
+    tmp_mapping.mapping_file.write_text(yaml.dump({"sources": {
+        "content-guidelines/writing": {"local": True},
+        "remote-repo": {"url": "https://github.com/org/repo", "docs_path": "docs", "manual": True},
+    }}))
+    mapping = SourceMapping(tmp_mapping.mapping_file)
+    mapping.add_source(path_key="new-repo", url="https://github.com/org/new", docs_path="")
+    mapping.save()
+    mapping2 = SourceMapping(tmp_mapping.mapping_file)
+    local_entry = mapping2.get_source("content-guidelines/writing")
+    assert local_entry is not None
+    assert local_entry.get("local") is True
+
+
+@pytest.mark.unit
+def test_cleanup_stale_sources_preserves_local_entries(tmp_mapping):
+    """Local entries are never removed by stale cleanup, even if not in active set."""
+    import yaml
+    tmp_mapping.mapping_file.parent.mkdir(parents=True, exist_ok=True)
+    tmp_mapping.mapping_file.write_text(yaml.dump({"sources": {
+        "local-source": {"local": True},
+        "auto-source": {"url": "https://github.com/org/repo", "docs_path": "", "manual": False},
+    }}))
+    mapping = SourceMapping(tmp_mapping.mapping_file)
+    removed = mapping.cleanup_stale_sources(set())
+    assert "auto-source" in removed
+    assert "local-source" not in removed
+    assert mapping.get_source("local-source") is not None
+
+
+@pytest.mark.unit
 def test_add_source_with_llmstxt_type(tmp_mapping):
     tmp_mapping.add_source(
         path_key="my-llmstxt",

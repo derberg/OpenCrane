@@ -129,7 +129,7 @@ class SourceMapping:
     def cleanup_stale_sources(self, active_path_keys: set[str]) -> list[str]:
         """
         Remove stale auto-generated source entries that are not in the active set.
-        Manual entries (manual: true) are never removed.
+        Manual entries (manual: true) and local entries (local: true) are never removed.
 
         Args:
             active_path_keys: Set of path keys that are currently active
@@ -142,7 +142,7 @@ class SourceMapping:
 
         for path_key, source in list(sources.items()):
             # Only remove auto-generated entries that are not active
-            if not source.get("manual") and path_key not in active_path_keys:
+            if not source.get("manual") and not source.get("local") and path_key not in active_path_keys:
                 del sources[path_key]
                 removed.append(path_key)
                 logger.info(f"Removed stale source mapping for {path_key}")

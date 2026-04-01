@@ -253,7 +253,9 @@ def chunk(config_path, llmstxt_dir, chunks_file):
               help="Input chunks JSON file (overrides AI_DOCS_CHUNKS_FILE)")
 @click.option("--embeddings-file", default=None, type=click.Path(),
               help="Output embeddings JSON file (overrides AI_DOCS_EMBEDDINGS_FILE)")
-def embed(config_path, chunks_file, embeddings_file):
+@click.option("--force", is_flag=True, default=False,
+              help="Regenerate even if chunks haven't changed since last embedding")
+def embed(config_path, chunks_file, embeddings_file, force):
     """Generate embeddings from rag-chunks.json."""
     try:
         from pathlib import Path
@@ -262,6 +264,7 @@ def embed(config_path, chunks_file, embeddings_file):
         embed_main(
             chunks_file=Path(chunks_file) if chunks_file else None,
             embeddings_file=Path(embeddings_file) if embeddings_file else None,
+            force=force,
         )
     except Exception as e:
         _error(f"Error: {e}")

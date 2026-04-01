@@ -425,3 +425,49 @@ def test_add_source_github_type_omitted_from_entry(tmp_mapping):
     entry = tmp_mapping.get_source("my-repo")
     assert "type" not in entry  # github is default, not stored
     assert entry["url"] == "https://github.com/org/repo"
+
+
+def test_get_ignore_patterns_global_only(tmp_path):
+    mapping_file = tmp_path / "config.yaml"
+    mapping_file.write_text("ignore_patterns:\n  - devel\n  - .draft\nsources: {}\n")
+    mapping = SourceMapping(mapping_file)
+    assert mapping.get_ignore_patterns() == ["devel", ".draft"]
+
+def test_get_ignore_patterns_with_source(tmp_path):
+    mapping_file = tmp_path / "config.yaml"
+    mapping_file.write_text(
+        "ignore_patterns:\n  - devel\n"
+        "sources:\n  my-repo:\n    url: https://github.com/x/y\n    ignore_patterns:\n      - internal\n"
+    )
+    mapping = SourceMapping(mapping_file)
+    assert mapping.get_ignore_patterns("my-repo") == ["devel", "internal"]
+
+def test_get_ignore_patterns_empty(tmp_path):
+    mapping_file = tmp_path / "config.yaml"
+    mapping_file.write_text("sources: {}\n")
+    mapping = SourceMapping(mapping_file)
+    assert mapping.get_ignore_patterns() == []
+
+def test_get_extensions_path(tmp_path):
+    mapping_file = tmp_path / "config.yaml"
+    mapping_file.write_text("extensions: extensions.py\nsources: {}\n")
+    mapping = SourceMapping(mapping_file)
+    assert mapping.get_extensions_path() == "extensions.py"
+
+def test_get_extensions_path_none(tmp_path):
+    mapping_file = tmp_path / "config.yaml"
+    mapping_file.write_text("sources: {}\n")
+    mapping = SourceMapping(mapping_file)
+    assert mapping.get_extensions_path() is None
+
+def test_save_preserves_non_sources_keys(tmp_path):
+    mapping_file = tmp_path / "config.yaml"
+    mapping_file.write_text("ignore_patterns:\n  - devel\nextensions: extensions.py\nsources: {}\n")
+    mapping = SourceMapping(mapping_file)
+    mapping.add_source("test", url="https://github.com/x/y", manual=True)
+    mapping.save()
+    import yaml
+    saved = yaml.safe_load(mapping_file.read_text())
+    assert saved["ignore_patterns"] == ["devel"]
+    assert saved["extensions"] == "extensions.py"
+    assert "test" in saved["sources"]

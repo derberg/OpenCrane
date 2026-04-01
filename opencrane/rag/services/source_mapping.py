@@ -15,7 +15,7 @@ class SourceMapping:
         Initialize source mapping.
         
         Args:
-            mapping_file: Path to .opencrane/sources.yaml file
+            mapping_file: Path to .opencrane/config.yaml file
         """
         self.mapping_file = mapping_file
         self.data = self._load_mapping()
@@ -108,6 +108,27 @@ class SourceMapping:
     def get_all_sources(self) -> Dict:
         """Get all source mappings."""
         return self.data.get("sources", {})
+
+    def get_ignore_patterns(self, source_key: str | None = None) -> list[str]:
+        """Get ignore patterns — global patterns extended by per-source patterns.
+
+        Args:
+            source_key: Optional source path key. When provided, the source's
+                own ignore_patterns are appended to the global list.
+
+        Returns:
+            Combined list of ignore pattern strings.
+        """
+        global_patterns = list(self.data.get("ignore_patterns") or [])
+        if source_key:
+            source = self.data.get("sources", {}).get(source_key, {})
+            source_patterns = source.get("ignore_patterns") or []
+            return global_patterns + list(source_patterns)
+        return global_patterns
+
+    def get_extensions_path(self) -> str | None:
+        """Get the extensions file path from config, or None if not set."""
+        return self.data.get("extensions")
 
     def remove_source(self, path_key: str) -> bool:
         """

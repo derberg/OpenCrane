@@ -31,11 +31,11 @@ def _hint(msg: str) -> None:
 
 
 def load_config(config_arg: str | None):
-    """Load OpenCraneConfig from a module:Class string or YAML file path.
+    """Load OpenCraneConfig from a module:Class string, or auto-discover from config.yaml.
 
     Resolution order:
     1. Explicit ``--config`` flag or ``OPENCRANE_CONFIG`` env var
-    2. Auto-discovery: ``.opencrane/config.py`` with a ``Config`` class
+    2. Auto-discovery: ``.opencrane/config.yaml`` with an ``extensions`` key
     3. Base ``OpenCraneConfig`` (no customisation)
     """
     import os
@@ -44,22 +44,28 @@ def load_config(config_arg: str | None):
     if config_arg is None:
         config_arg = os.environ.get("OPENCRANE_CONFIG")
 
-    # Auto-discover .opencrane/config.py when nothing is explicit
+    # Auto-discover extensions from .opencrane/config.yaml
     if config_arg is None:
         from pathlib import Path
-        auto_path = Path(".opencrane/config.py")
-        if auto_path.exists():
-            import importlib.util
-            # Add .opencrane/ to sys.path so sibling imports inside config.py work
-            opencrane_dir = str(auto_path.parent.resolve())
-            if opencrane_dir not in sys.path:
-                sys.path.insert(0, opencrane_dir)
-            spec = importlib.util.spec_from_file_location("_opencrane_config", auto_path.resolve())
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            return getattr(module, "Config")()
-
-    if config_arg is None:
+        config_yaml = Path(".opencrane/config.yaml")
+        if config_yaml.exists():
+            import yaml
+            try:
+                data = yaml.safe_load(config_yaml.read_text(encoding="utf-8")) or {}
+            except Exception:
+                data = {}
+            extensions = data.get("extensions")
+            if extensions:
+                ext_path = config_yaml.parent / extensions
+                if ext_path.exists():
+                    import importlib.util
+                    opencrane_dir = str(ext_path.parent.resolve())
+                    if opencrane_dir not in sys.path:
+                        sys.path.insert(0, opencrane_dir)
+                    spec = importlib.util.spec_from_file_location("_opencrane_extensions", ext_path.resolve())
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    return getattr(module, "Config")()
         return OpenCraneConfig()
 
     if ":" in config_arg:
@@ -70,14 +76,19 @@ def load_config(config_arg: str | None):
         cls = getattr(module, class_name)
         return cls()
     else:
-        # YAML file path
-        import yaml
+        # Treat as path to Python file
         from pathlib import Path
-        yaml.safe_load(Path(config_arg).read_text())
-        # For now, create base config; YAML overrides are a future enhancement
-        config = OpenCraneConfig()
-        # TODO: future work - map YAML keys to config attributes
-        return config
+        import importlib.util
+        ext_path = Path(config_arg)
+        if ext_path.exists():
+            opencrane_dir = str(ext_path.parent.resolve())
+            if opencrane_dir not in sys.path:
+                sys.path.insert(0, opencrane_dir)
+            spec = importlib.util.spec_from_file_location("_opencrane_config", ext_path.resolve())
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            return getattr(module, "Config")()
+        return OpenCraneConfig()
 
 
 def _colorize_help(text: str, is_group: bool = False) -> str:

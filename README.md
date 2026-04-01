@@ -24,7 +24,7 @@ A standalone, extensible RAG/MCP pipeline for building AI-powered documentation 
     - [inspect](#opencrane-inspect----launch-mcp-inspector)
   - [Default file and directory names](#default-file-and-directory-names)
   - [Environment variables](#environment-variables)
-  - [Source mapping file](#source-mapping-file-opencraneourcesyaml)
+  - [Source mapping file](#source-mapping-file-opencraneonfigyaml)
 - [Extending OpenCrane](#extending-opencrane)
   - [Extension points](#extension-points)
   - [Built-in YAML tree walkers](#built-in-yaml-tree-walkers)
@@ -92,8 +92,7 @@ Creates the `.opencrane/` directory and container files in the current directory
 
 | Generated file | Description |
 |---|---|
-| `.opencrane/config.py` | `OpenCraneConfig` subclass template with commented extension points |
-| `.opencrane/sources.yaml` | Source mapping template with commented remote and local examples |
+| `.opencrane/config.yaml` | Source mapping and project configuration template with commented remote and local examples |
 | `.opencrane/README.md` | Quick reference for the `.opencrane/` directory |
 | `Dockerfile` | Multi-stage build: deps → model download → Milvus index → runtime |
 | `docker-compose.yml` | Builds and runs the MCP server on port 8000 |
@@ -104,7 +103,7 @@ Creates the `.opencrane/` directory and container files in the current directory
 | `--force` | Overwrite existing files (default: skip) |
 | `--no-add` | Skip the interactive source addition prompt (useful for CI/scripts) |
 
-> **Convention**: OpenCrane auto-discovers `.opencrane/config.py` as the project config, so no `--config` flag or `OPENCRANE_CONFIG` env var is needed when using the `.opencrane/` layout.
+> **Convention**: OpenCrane auto-discovers `.opencrane/extensions.py` as the project extensions config, so no `--config` flag or `OPENCRANE_CONFIG` env var is needed when using the `.opencrane/` layout.
 
 After scaffolding, `init` prompts you to add documentation sources interactively (same flow as `opencrane add`). Use `--no-add` to skip the prompt.
 
@@ -116,7 +115,7 @@ opencrane add
 
 Interactively add documentation sources to your project. The command loops, asking for each source:
 
-1. **GitHub repository** — adds an entry to `.opencrane/sources.yaml` with the repo URL, docs path, and optional published docs URL. The `fetch` step will clone it on the next `opencrane build`.
+1. **GitHub repository** — adds an entry to `.opencrane/config.yaml` with the repo URL, docs path, and optional published docs URL. The `fetch` step will clone it on the next `opencrane build`.
 2. **Existing llms.txt file** — provide a URL or local file path. OpenCrane downloads/copies it into `.opencrane/llmstxt/<name>/llms-full.txt`, ready for chunking. No `fetch` or `llms` step needed for these sources.
 
 After each source, you're asked whether to add another or finish.
@@ -146,7 +145,7 @@ opencrane fetch [--config CLASS] [--org NAME] [--repo PATH_KEY]
 | Flag | Description |
 |---|---|
 | `--org NAME` | GitHub organisation to fetch from (overrides `ORG_NAME` env var) |
-| `--repo PATH_KEY` | Fetch only this one repo by its path key in `.opencrane/sources.yaml`, e.g. `external-sources/my-repo` (overrides `FETCH_REPO` env var) |
+| `--repo PATH_KEY` | Fetch only this one repo by its path key in `.opencrane/config.yaml`, e.g. `external-sources/my-repo` (overrides `FETCH_REPO` env var) |
 
 #### `opencrane llms` — generate llms-full.txt bundles
 
@@ -264,7 +263,7 @@ OpenCrane uses these defaults for all pipeline output. Override them with CLI fl
 | Chunks file | `.opencrane/chunks.json` | `--chunks-file` | `AI_DOCS_CHUNKS_FILE` |
 | Embeddings file | `.opencrane/embeddings.json` | `--embeddings-file` | `AI_DOCS_EMBEDDINGS_FILE` |
 | Token report output | `.opencrane/llmstxt/README.md` | `--output-file` | `TOKEN_OUTPUT_FILE` |
-| Source mapping file | `.opencrane/sources.yaml` | — | `MAPPING_FILE` |
+| Source mapping file | `.opencrane/config.yaml` | — | `MAPPING_FILE` |
 | Milvus database file (Lite mode) | _(server mode)_ | — | `MILVUS_DB_PATH` |
 
 ### Environment variables
@@ -275,7 +274,7 @@ CLI flags take precedence over environment variables. Use env vars for persisten
 
 | Variable | Default | Description |
 |---|---|---|
-| `MAPPING_FILE` | `.opencrane/sources.yaml` | Path to the source mapping file used by `fetch` (to record cloned repos) and `llms` (to embed source links) |
+| `MAPPING_FILE` | `.opencrane/config.yaml` | Path to the source mapping file used by `fetch` (to record cloned repos) and `llms` (to embed source links) |
 
 **`fetch` step** — only needed if you use `opencrane fetch` to pull docs from GitHub:
 
@@ -329,9 +328,9 @@ OpenCrane supports two Milvus modes. Set `MILVUS_DB_PATH` to use **Milvus Lite**
 | `MILVUS_COLLECTION` | `ai_docs_chunks_v1` | Milvus collection name |
 | `HYBRID_ALPHA` | `0.6` | Weight of vector search vs keyword search (1.0 = pure vector, 0.0 = pure BM25) |
 
-### Source mapping file (`.opencrane/sources.yaml`)
+### Source mapping file (`.opencrane/config.yaml`)
 
-OpenCrane maintains a file called `.opencrane/sources.yaml` that records where each documentation source lives and where its content can be found online. It is used by the `fetch` step (to track cloned repos) and by the `llms` step (to embed source links in llms-full.txt). The `fetch` step populates it automatically; for manually managed sources you can edit it directly.
+OpenCrane maintains a file called `.opencrane/config.yaml` that records where each documentation source lives and where its content can be found online. It is used by the `fetch` step (to track cloned repos) and by the `llms` step (to embed source links in llms-full.txt). The `fetch` step populates it automatically; for manually managed sources you can edit it directly.
 
 Each entry supports the following fields:
 

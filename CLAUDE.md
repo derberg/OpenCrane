@@ -74,7 +74,7 @@ add → fetch → llms → chunk → embed → index → serve
 - `opencrane init` — scaffolds project and offers interactive source addition (same as `add`)
 - Each step is independently callable via CLI (`opencrane <step>`) or via `opencrane build` for the full pipeline
 - `build` exits gracefully when no sources are configured (suggests `opencrane add`)
-- The `llms` step combines pre-existing llms-full.txt files even when `sources.yaml` is empty
+- The `llms` step combines pre-existing llms-full.txt files even when `config.yaml` is empty
 
 ## Development
 
@@ -117,13 +117,13 @@ LOG_LEVEL=DEBUG opencrane serve
 
 ## Extension Points
 
-Subclass `OpenCraneConfig` in `.opencrane/config.py` to customize:
+Subclass `OpenCraneConfig` in `.opencrane/extensions.py` to customize:
 
 1. **`fence_types`** — custom fence block handlers for llms-full.txt generation
 2. **`chunking_strategies`** — custom chunking strategies (first match wins)
 3. **`yaml_tree_walkers`** — custom YAML tree walkers for structured docs (K8s CRD, OpenAPI, JSON Schema built-in)
 
-Config is auto-discovered from `.opencrane/config.py:Config` or set via `--config` / `OPENCRANE_CONFIG` env var.
+Config is auto-discovered from `.opencrane/extensions.py:Config` or set via `--config` / `OPENCRANE_CONFIG` env var.
 
 ## Key Design Decisions
 
@@ -148,7 +148,7 @@ All outputs go to `.opencrane/` directory:
 - `.opencrane/llmstxt/` — generated llms-full.txt files
 - `.opencrane/chunks.json` — chunked documents
 - `.opencrane/embeddings.json` — embedding vectors
-- `.opencrane/sources.yaml` — source mapping
+- `.opencrane/config.yaml` — source mapping and project configuration
 - `.opencrane/milvus.db` — Milvus Lite database
 
 ## Documentation Maintenance

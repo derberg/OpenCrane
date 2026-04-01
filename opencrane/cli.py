@@ -551,10 +551,12 @@ def pack(name, output, version):
               help="Overwrite existing files")
 @click.option("--no-add", is_flag=True, default=False,
               help="Skip the interactive source addition prompt")
-def init(podman, force, no_add):
+@click.option("--extensions", "with_extensions", is_flag=True, default=False,
+              help="Generate extensions.py for custom Python extensions")
+def init(podman, force, no_add, with_extensions):
     """Scaffold a new OpenCrane project with .opencrane/ directory and container files."""
     from pathlib import Path
-    from opencrane.templates import CONFIG_PY, SOURCES_YAML, DOCKERFILE, DOCKER_COMPOSE, readme
+    from opencrane.templates import CONFIG_YAML, EXTENSIONS_PY, DOCKERFILE, DOCKER_COMPOSE, readme
 
     created = []
     skipped = []
@@ -573,8 +575,9 @@ def init(podman, force, no_add):
         created.append(str(path))
 
     opencrane_dir = Path(".opencrane")
-    write_file(opencrane_dir / "config.py", CONFIG_PY)
-    write_file(opencrane_dir / "sources.yaml", SOURCES_YAML, user_managed=True)
+    write_file(opencrane_dir / "config.yaml", CONFIG_YAML, user_managed=True)
+    if with_extensions:
+        write_file(opencrane_dir / "extensions.py", EXTENSIONS_PY)
     write_file(opencrane_dir / "README.md", readme(podman=podman))
 
     dockerfile_name = "Containerfile" if podman else "Dockerfile"

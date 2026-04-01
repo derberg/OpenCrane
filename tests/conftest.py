@@ -18,7 +18,7 @@ def setup_session_temp_root():
     _session_temp_root = tempfile.mkdtemp()
     session_root = Path(_session_temp_root)
     
-    # Get the mapping filename from config (default is opencrane-sources.yaml)
+    # Get the mapping filename from config (default is .opencrane/config.yaml)
     config = get_config()
     mapping_filename = config.mapping_file.name
     

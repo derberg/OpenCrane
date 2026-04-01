@@ -447,7 +447,7 @@ class TestGenerateOutputs:
         """Test that generation is skipped gracefully when no sources are configured."""
         monkeypatch.chdir(tmp_path)
         import opencrane.rag.generate_llms_txt as mod
-        empty_mapping = tmp_path / "opencrane-sources.yaml"
+        empty_mapping = tmp_path / "opencrane-config.yaml"
         empty_mapping.write_text("sources: {}\n")
         original = mod._source_mapping
         mod._source_mapping = None
@@ -642,7 +642,7 @@ class TestGenerateOutputs:
 
 
     def test_generate_outputs_with_source_mapping_filter(self, tmp_path, monkeypatch, isolate_outputs):
-        """Test that generation filters based on opencrane-sources.yaml."""
+        """Test that generation filters based on opencrane-config.yaml."""
         # Use a directory under workspace root so filtering logic works
         # (filtering is disabled for paths outside workspace root)
         original_cwd = Path.cwd()
@@ -683,7 +683,7 @@ class TestGenerateOutputs:
             (filtered_subproj / "filtered.md").write_text("# Filtered Subproject", encoding="utf-8")
 
             llmstxt_dir = Path("llmstxt")
-            mapping_file = Path("opencrane-sources.yaml")
+            mapping_file = Path("opencrane-config.yaml")
 
             # Create source mapping that includes:
             # - sources root (for root markdown)
@@ -867,11 +867,11 @@ class TestGenerateOutputs:
             local_dir.mkdir(parents=True)
             (local_dir / "guide.md").write_text("# Writing Guide\n\nSome content here.")
 
-            # Create .opencrane/sources.yaml with local entry
+            # Create .opencrane/config.yaml with local entry
             opencrane_dir = Path(".opencrane")
             opencrane_dir.mkdir()
-            sources_yaml = opencrane_dir / "sources.yaml"
-            sources_yaml.write_text(yaml.dump({"sources": {
+            config_yaml = opencrane_dir / "config.yaml"
+            config_yaml.write_text(yaml.dump({"sources": {
                 "content-guidelines/writing": {"local": True},
             }}))
 
@@ -882,7 +882,7 @@ class TestGenerateOutputs:
             # Reset global source mapping
             monkeypatch.setattr('opencrane.rag.generate_llms_txt._source_mapping', None)
             monkeypatch.setattr('opencrane.rag.generate_llms_txt.ROOT', Path.cwd())
-            monkeypatch.setenv("MAPPING_FILE", str(sources_yaml))
+            monkeypatch.setenv("MAPPING_FILE", str(config_yaml))
 
             # Remove env vars that would override source discovery
             monkeypatch.delenv("AI_DOCS_SOURCES_DIRS", raising=False)

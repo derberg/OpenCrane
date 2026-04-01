@@ -18,14 +18,14 @@ def reset_llms_globals():
 
 @pytest.fixture()
 def llmstxt_workspace(tmp_path, monkeypatch):
-    """Create a workspace with pre-existing llms-full.txt files but no sources.yaml entries."""
+    """Create a workspace with pre-existing llms-full.txt files but no config.yaml entries."""
     opencrane_dir = tmp_path / ".opencrane"
     opencrane_dir.mkdir()
-    sources_yaml = opencrane_dir / "sources.yaml"
-    sources_yaml.write_text("sources:\n")
+    config_yaml = opencrane_dir / "config.yaml"
+    config_yaml.write_text("sources:\n")
 
-    # Override MAPPING_FILE so get_source_mapping() uses our empty sources.yaml
-    monkeypatch.setenv("MAPPING_FILE", str(sources_yaml))
+    # Override MAPPING_FILE so get_source_mapping() uses our empty config.yaml
+    monkeypatch.setenv("MAPPING_FILE", str(config_yaml))
 
     llmstxt_dir = opencrane_dir / "llmstxt"
 
@@ -42,7 +42,7 @@ def llmstxt_workspace(tmp_path, monkeypatch):
 
 @pytest.mark.unit
 def test_combine_existing_llmstxt_files_when_no_sources(llmstxt_workspace, monkeypatch):
-    """When sources.yaml is empty but llmstxt subdirs have files, combine them."""
+    """When config.yaml is empty but llmstxt subdirs have files, combine them."""
     monkeypatch.chdir(llmstxt_workspace)
     llmstxt_dir = llmstxt_workspace / ".opencrane" / "llmstxt"
     generate_outputs(force=True, llmstxt_dir=llmstxt_dir)
@@ -56,7 +56,7 @@ def test_combine_existing_llmstxt_files_when_no_sources(llmstxt_workspace, monke
 
 @pytest.mark.unit
 def test_no_sources_no_llmstxt_files_warns(llmstxt_workspace, monkeypatch, capsys):
-    """When sources.yaml is empty AND no llmstxt subdirs exist, print warning."""
+    """When config.yaml is empty AND no llmstxt subdirs exist, print warning."""
     import shutil
     shutil.rmtree(llmstxt_workspace / ".opencrane" / "llmstxt")
 
@@ -72,8 +72,8 @@ def test_no_sources_no_llmstxt_files_warns(llmstxt_workspace, monkeypatch, capsy
 @pytest.mark.unit
 def test_combine_injects_docs_url_into_headings(llmstxt_workspace, monkeypatch):
     """When a llmstxt source has docs_url, headings get URL prefixes."""
-    sources_yaml = llmstxt_workspace / ".opencrane" / "sources.yaml"
-    sources_yaml.write_text(
+    config_yaml = llmstxt_workspace / ".opencrane" / "config.yaml"
+    config_yaml.write_text(
         "sources:\n"
         "  project-a:\n"
         "    type: llmstxt\n"
@@ -81,7 +81,7 @@ def test_combine_injects_docs_url_into_headings(llmstxt_workspace, monkeypatch):
         "    docs_url: https://docs.example.com\n"
         "    manual: true\n"
     )
-    monkeypatch.setenv("MAPPING_FILE", str(sources_yaml))
+    monkeypatch.setenv("MAPPING_FILE", str(config_yaml))
     monkeypatch.chdir(llmstxt_workspace)
 
     llmstxt_dir = llmstxt_workspace / ".opencrane" / "llmstxt"
@@ -118,8 +118,8 @@ def test_combine_includes_preexisting_llmstxt_alongside_source_dirs(tmp_path, mo
 
     opencrane_dir = tmp_path / ".opencrane"
     opencrane_dir.mkdir()
-    sources_yaml = opencrane_dir / "sources.yaml"
-    sources_yaml.write_text(
+    config_yaml = opencrane_dir / "config.yaml"
+    config_yaml.write_text(
         "sources:\n"
         "  likec4:\n"
         "    type: llmstxt\n"
@@ -127,7 +127,7 @@ def test_combine_includes_preexisting_llmstxt_alongside_source_dirs(tmp_path, mo
         "    docs_url: https://likec4.dev/tutorial/\n"
         "    manual: true\n"
     )
-    monkeypatch.setenv("MAPPING_FILE", str(sources_yaml))
+    monkeypatch.setenv("MAPPING_FILE", str(config_yaml))
 
     llmstxt_dir = opencrane_dir / "llmstxt"
 

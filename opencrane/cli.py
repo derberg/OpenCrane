@@ -177,7 +177,7 @@ def main():
 @click.option("--org", default=None,
               help="GitHub organization name (overrides ORG_NAME env var)")
 @click.option("--repo", default=None,
-              help="Fetch only this repo by its path key in .opencrane/sources.yaml (overrides FETCH_REPO env var)")
+              help="Fetch only this repo by its path key in .opencrane/config.yaml (overrides FETCH_REPO env var)")
 def fetch(config_path, org, repo):
     """Fetch documentation from GitHub."""
     try:
@@ -484,7 +484,7 @@ def _add_sources_interactive():
                     docs_path=docs_path,
                     docs_url=docs_url,
                 )
-                _success(f"Added GitHub source '{name}' to .opencrane/sources.yaml")
+                _success(f"Added GitHub source '{name}' to .opencrane/config.yaml")
             except Exception as e:
                 _error(f"Error: {e}")
 
@@ -494,7 +494,7 @@ def _add_sources_interactive():
             docs_url = click.prompt(click.style("Published docs URL (optional, for source links)", fg="cyan"), default="")
             try:
                 add_llmstxt_source(name=name, url=location, docs_url=docs_url)
-                _success(f"Added llmstxt source '{name}' to .opencrane/sources.yaml")
+                _success(f"Added llmstxt source '{name}' to .opencrane/config.yaml")
             except Exception as e:
                 _error(f"Error: {e}")
 

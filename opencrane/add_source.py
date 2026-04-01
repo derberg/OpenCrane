@@ -1,7 +1,7 @@
 """Source addition for OpenCrane.
 
 Provides functions to add GitHub repositories or pre-existing llms.txt files
-as sources, updating sources.yaml.
+as sources, updating config.yaml.
 """
 
 import logging
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 from opencrane.rag.services.source_mapping import SourceMapping
 
 OPENCRANE_DIR = Path(".opencrane")
-SOURCES_FILE = OPENCRANE_DIR / "sources.yaml"
+SOURCES_FILE = OPENCRANE_DIR / "config.yaml"
 
 
 def _get_mapping() -> SourceMapping:
@@ -27,7 +27,7 @@ def add_github_source(
     docs_path: str = "",
     docs_url: str = "",
 ) -> None:
-    """Add a GitHub repository source to sources.yaml."""
+    """Add a GitHub repository source to config.yaml."""
     mapping = _get_mapping()
     mapping.add_source(
         path_key=name,
@@ -44,7 +44,7 @@ def add_llmstxt_source(
     url: str,
     docs_url: str = "",
 ) -> None:
-    """Register a pre-existing llms.txt file as a source in sources.yaml.
+    """Register a pre-existing llms.txt file as a source in config.yaml.
 
     The actual download/copy happens during `opencrane fetch`.
 

@@ -21,7 +21,7 @@ class TestFullWorkflow:
     def test_config(self, temp_dir):
         """Create a test configuration."""
         # Create a mapping file
-        mapping_file = temp_dir / "opencrane-sources.yaml"
+        mapping_file = temp_dir / "opencrane-config.yaml"
         mapping_file.write_text("sources: {}")
 
         return Config(
@@ -223,7 +223,7 @@ class TestFullWorkflow:
                                                   mock_source_mapping, mock_get_repo_name, temp_dir):
         """Test that filtering by --org does not remove repos from other orgs."""
         # Setup config for other-org
-        mapping_file = temp_dir / "opencrane-sources.yaml"
+        mapping_file = temp_dir / "opencrane-config.yaml"
         mapping_file.write_text("sources: {}")
 
         other_org_config = Config(
@@ -299,7 +299,7 @@ class TestFullWorkflow:
                                              mock_github_client, mock_get_config, mock_setup_logging,
                                              mock_source_mapping, mock_get_repo_name, temp_dir):
         """Test that --repo filter restricts processing to a single manual repo by path key."""
-        mapping_file = temp_dir / "opencrane-sources.yaml"
+        mapping_file = temp_dir / "opencrane-config.yaml"
         mapping_file.write_text("sources: {}")
 
         # Use default org (my-org) — --repo should bypass the org filter entirely
@@ -356,7 +356,7 @@ class TestFullWorkflow:
                                                       mock_github_client, mock_get_config, mock_setup_logging,
                                                       mock_source_mapping, mock_get_repo_name, temp_dir):
         """Test that --repo filter restricts processing to a single auto-discovered repo by path key."""
-        mapping_file = temp_dir / "opencrane-sources.yaml"
+        mapping_file = temp_dir / "opencrane-config.yaml"
         mapping_file.write_text("sources: {}")
 
         config = Config(
@@ -403,7 +403,7 @@ class TestFullWorkflow:
             mock_github_client, mock_get_config, mock_setup_logging,
             mock_source_mapping, mock_get_repo_name, temp_dir):
         """Test that --repo filter does not cause other repos to be cleaned up."""
-        mapping_file = temp_dir / "opencrane-sources.yaml"
+        mapping_file = temp_dir / "opencrane-config.yaml"
         mapping_file.write_text("sources: {}")
 
         config = Config(

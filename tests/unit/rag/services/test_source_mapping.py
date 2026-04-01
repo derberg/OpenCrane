@@ -9,7 +9,7 @@ from opencrane.rag.services.source_mapping import SourceMapping
 @pytest.fixture
 def tmp_mapping(tmp_path):
     """Return a SourceMapping backed by a temp file."""
-    return SourceMapping(tmp_path / "sources.yaml")
+    return SourceMapping(tmp_path / "config.yaml")
 
 
 class TestSourceMapping:

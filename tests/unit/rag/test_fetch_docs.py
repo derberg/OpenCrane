@@ -10,7 +10,7 @@ from opencrane.rag.services.source_mapping import SourceMapping
 
 def make_config(tmp_path, fetch_repo=""):
     """Create a Config with mapping_file pointing to tmp_path."""
-    mapping_file = tmp_path / ".opencrane" / "sources.yaml"
+    mapping_file = tmp_path / ".opencrane" / "config.yaml"
     return Config(
         org_name="",
         mapping_file=mapping_file,
@@ -19,11 +19,11 @@ def make_config(tmp_path, fetch_repo=""):
 
 
 def setup_sources_yaml(tmp_path, sources: dict):
-    """Write a sources.yaml with the given sources dict."""
+    """Write a config.yaml with the given sources dict."""
     import yaml
     opencrane_dir = tmp_path / ".opencrane"
     opencrane_dir.mkdir(parents=True, exist_ok=True)
-    mapping_file = opencrane_dir / "sources.yaml"
+    mapping_file = opencrane_dir / "config.yaml"
     mapping_file.write_text(yaml.dump({"sources": sources}))
     return mapping_file
 
@@ -161,7 +161,7 @@ class TestFetchDocsLlmstxt:
         fake_content = b"pre-existing content"
         existing_file.write_bytes(fake_content)
 
-        # The llmstxt entry is listed in sources.yaml, so cleanup should not touch it.
+        # The llmstxt entry is listed in config.yaml, so cleanup should not touch it.
         # We verify by checking that the SourceMapping does not remove it.
         source_mapping = SourceMapping(sources_yaml)
         active = {"protected-llmstxt"}

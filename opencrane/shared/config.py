@@ -36,7 +36,7 @@ class Config:
     # Search configuration
     hybrid_alpha: float = field(default_factory=lambda: float(os.getenv("HYBRID_ALPHA", "0.6")))
     # Source mapping file configuration
-    mapping_file: Path = field(default_factory=lambda: Path(os.getenv("MAPPING_FILE", ".opencrane/sources.yaml")))
+    mapping_file: Path = field(default_factory=lambda: Path(os.getenv("MAPPING_FILE", ".opencrane/config.yaml")))
     # Optional: restrict fetch to a single repo by path key (e.g. "external-sources/cgw")
     fetch_repo: str = field(default_factory=lambda: os.getenv("FETCH_REPO", ""))
 

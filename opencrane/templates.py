@@ -1,6 +1,6 @@
 """Templates for opencrane init command."""
 
-CONFIG_PY = '''\
+EXTENSIONS_PY = '''\
 from opencrane import OpenCraneConfig
 # Uncomment to add custom fence type handlers:
 # from opencrane.fences import CodeFenceConfig
@@ -28,25 +28,36 @@ class Config(OpenCraneConfig):
     # yaml_tree_walkers = [*OpenCraneConfig.yaml_tree_walkers, MyCustomWalker]
 '''
 
-SOURCES_YAML = '''\
-# OpenCrane source mapping
+CONFIG_YAML = '''\
+# OpenCrane configuration
 # Tip: Run `opencrane add` to interactively add sources instead of editing this file.
-# Defines repositories and pre-existing llms.txt files to include in the knowledge base.
-#
+
+# Ignore patterns — directory names to exclude from llms-full.txt generation.
+# Applied globally to all sources. Per-source patterns can extend this list.
+ignore_patterns:
+  - devel
+
+# Optional: Python module with custom extensions (fence types, chunking strategies, walkers).
+# Path is relative to .opencrane/ directory.
+# extensions: extensions.py
+
+# Documentation sources.
 # Each entry maps a source name to its configuration.
 #
 # GitHub repository example:
-# external-sources/my-repo:
-#   url: https://github.com/my-org/my-repo
-#   docs_path: docs        # subdirectory inside the repo to fetch (empty = root)
-#   manual: true           # true = always fetch, false = only if repo has the configured topic
+#   external-sources/my-repo:
+#     url: https://github.com/my-org/my-repo
+#     docs_path: docs        # subdirectory inside the repo to fetch (empty = root)
+#     manual: true           # true = always fetch, false = only if repo has the configured topic
+#     ignore_patterns:       # optional, extends global ignore_patterns
+#       - internal
 #
 # Pre-existing llms.txt example:
-# anthropic-docs:
-#   type: llmstxt
-#   url: https://docs.anthropic.com/llms-full.txt
-#   docs_url: https://docs.anthropic.com  # optional, for source links
-#   manual: true
+#   anthropic-docs:
+#     type: llmstxt
+#     url: https://docs.anthropic.com/llms-full.txt
+#     docs_url: https://docs.anthropic.com  # optional, for source links
+#     manual: true
 
 sources:
 '''
@@ -157,8 +168,8 @@ This directory contains OpenCrane configuration and generated data files.
 
 | File | Description | Commit? |
 |---|---|---|
-| `config.py` | Custom fence types, chunking strategies, tree walkers | Yes |
-| `sources.yaml` | Which repos/directories to fetch documentation from | Yes |
+| `config.yaml` | Sources, ignore patterns, and optional extensions reference | Yes |
+| `extensions.py` | Custom fence types, chunking strategies, tree walkers (optional) | Yes |
 | `chunks.json` | Generated document chunks (`opencrane chunk`) | Your choice |
 | `embeddings.json` | Generated vector embeddings (`opencrane embed`) | Your choice |
 

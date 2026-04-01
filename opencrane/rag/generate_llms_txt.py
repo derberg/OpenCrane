@@ -67,14 +67,25 @@ def get_source_mapping() -> SourceMapping:
     return _source_mapping
 
 
-def is_in_devel_folder(file_path: Path) -> bool:
-    """Check if a file is within a 'devel' directory at any level."""
-    return "devel" in file_path.parts
+def _matches_ignore_pattern(file_path: Path, patterns: List[str]) -> bool:
+    """Check if a file path contains any of the ignore pattern directory names."""
+    return any(pattern in file_path.parts for pattern in patterns)
 
 
-def filter_markdown_files(files: Iterable[Path]) -> List[Path]:
-    """Filter out markdown files that are in 'devel' folders."""
-    return [f for f in files if not is_in_devel_folder(f)]
+def filter_markdown_files(files: Iterable[Path], ignore_patterns: List[str] | None = None) -> List[Path]:
+    """Filter out markdown files matching ignore patterns.
+
+    Args:
+        files: Iterable of file paths to filter.
+        ignore_patterns: Directory names to exclude. Defaults to ["devel"]
+            when None (preserves legacy behavior for callers that don't
+            pass patterns).
+    """
+    if ignore_patterns is None:
+        ignore_patterns = ["devel"]
+    if not ignore_patterns:
+        return list(files)
+    return [f for f in files if not _matches_ignore_pattern(f, ignore_patterns)]
 
 
 def slugify(text: str) -> str:
@@ -533,14 +544,16 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
                     # This mapped path is not under current source_dir, skip it
                     continue
                 
-                # Collect ALL markdown files recursively (excluding devel folders)
-                md_files = filter_markdown_files(sorted(full_path.rglob("*.md")))
+                # Collect ALL markdown files recursively (excluding ignore pattern folders)
+                ignore_patterns = mapping.get_ignore_patterns(mapped_path)
+                md_files = filter_markdown_files(sorted(full_path.rglob("*.md")), ignore_patterns)
                 if md_files:
                     projects.append((mapped_path, full_path, md_files, False))
         else:
             # No filtering - use old discovery logic for backward compatibility
             # Include Markdown files directly under the source root as a pseudo-project
-            root_md_files = filter_markdown_files(sorted(source_dir.glob("*.md")))
+            ignore_patterns = mapping.get_ignore_patterns()
+            root_md_files = filter_markdown_files(sorted(source_dir.glob("*.md")), ignore_patterns)
             if root_md_files:
                 projects.append((source_dir.name, source_dir, root_md_files, True))
 
@@ -548,7 +561,7 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             project_dirs = [p for p in source_dir.iterdir() if p.is_dir()]
             for project_dir in sorted(project_dirs, key=lambda p: p.name):
                 # Process markdown files directly under project_dir as a project
-                direct_md_files = filter_markdown_files(sorted(project_dir.glob("*.md")))
+                direct_md_files = filter_markdown_files(sorted(project_dir.glob("*.md")), ignore_patterns)
                 if direct_md_files:
                     try:
                         project_name = project_dir.relative_to(workspace_root).as_posix()
@@ -559,7 +572,7 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
                 # Now, for each immediate subdirectory, treat as subproject
                 subproject_dirs = [sp for sp in project_dir.iterdir() if sp.is_dir()]
                 for subproject_dir in sorted(subproject_dirs, key=lambda p: p.name):
-                    sub_md_files = filter_markdown_files(sorted(subproject_dir.rglob("*.md")))
+                    sub_md_files = filter_markdown_files(sorted(subproject_dir.rglob("*.md")), ignore_patterns)
                     if sub_md_files:
                         try:
                             subproject_name = subproject_dir.relative_to(workspace_root).as_posix()

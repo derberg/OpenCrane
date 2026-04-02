@@ -21,7 +21,7 @@ from typing import Callable, Dict, Iterable, List, NamedTuple, Optional
 
 from opencrane.rag.services.source_mapping import SourceMapping
 from opencrane.shared.config import get_config
-from opencrane.shared.utils.git import has_changes
+from opencrane.shared.utils.git import get_repo_subdir, has_changes
 
 # Default paths are relative to cwd (resolved at call time via generate_outputs).
 # These module-level values are only used as fallbacks and by legacy __main__ invocation.
@@ -206,14 +206,22 @@ def get_source_url(rel_with_project: Path, project_name: str) -> str | None:
     if not url:
         return None
 
+    # For local sources the workspace may sit inside a repo subdirectory.
+    # Prepend that prefix so the GitHub blob URL points to the correct path.
+    repo_prefix = ""
+    if source.get("local"):
+        subdir = get_repo_subdir()
+        if subdir:
+            repo_prefix = f"{subdir}/"
+
     if docs_path:
         docs_prefix = f"{docs_path.rstrip('/')}/"
         file_rel = relative_after_key
         if file_rel.startswith(docs_prefix):
             file_rel = file_rel[len(docs_prefix):]
-        return f"{url}/blob/main/{docs_path.rstrip('/')}/{file_rel}"
+        return f"{url}/blob/main/{repo_prefix}{docs_path.rstrip('/')}/{file_rel}"
 
-    return f"{url}/blob/main/{rel_str}"
+    return f"{url}/blob/main/{repo_prefix}{rel_str}"
 
 
 def prefix_headings_with_path(content: str, rel_with_project: Path, project_name: str) -> str:

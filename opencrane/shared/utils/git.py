@@ -6,6 +6,37 @@ from typing import List
 logger = logging.getLogger(__name__)
 
 
+_repo_subdir: str | None = None
+
+
+def get_repo_subdir() -> str:
+    """Return the relative path from git repo root to CWD, or empty string.
+
+    Useful for building GitHub blob URLs when the workspace is in a
+    subdirectory of the repository.  The result is cached for the process
+    lifetime.
+    """
+    global _repo_subdir
+    if _repo_subdir is not None:
+        return _repo_subdir
+
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-prefix"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            _repo_subdir = result.stdout.strip().rstrip("/")
+            return _repo_subdir
+    except (OSError, FileNotFoundError):
+        logger.debug("git not available; cannot determine repo subdir")
+
+    _repo_subdir = ""
+    return ""
+
+
 def has_changes(paths: List[Path]) -> bool:
     """Return True if git detects any tracked or untracked changes under any of the given paths.
 

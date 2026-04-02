@@ -165,7 +165,8 @@ def test_module_name_from_dots(pack_dir, monkeypatch):
 
 
 @pytest.mark.unit
-def test_metadata_schema_from_docs_dir(pack_dir, monkeypatch):
+def test_metadata_schema_copied_from_package(pack_dir, monkeypatch):
+    """metadata-schema.md is copied from the installed opencrane package."""
     monkeypatch.setattr(
         "opencrane.pack.importlib.metadata.version", lambda _pkg: "0.1.0"
     )
@@ -173,19 +174,16 @@ def test_metadata_schema_from_docs_dir(pack_dir, monkeypatch):
         "opencrane.pack.subprocess.run",
         lambda *args, **kwargs: None,
     )
-
-    docs_dir = pack_dir / "docs"
-    docs_dir.mkdir()
-    (docs_dir / "metadata-schema.md").write_text("# Schema from docs")
 
     output_dir, _ = pack(name="test-mcp")
     schema = output_dir / "test_mcp" / "data" / "metadata-schema.md"
     assert schema.exists()
-    assert "Schema from docs" in schema.read_text()
+    assert "Chunk Metadata Schema" in schema.read_text()
 
 
 @pytest.mark.unit
-def test_metadata_schema_from_opencrane_dir(pack_dir, monkeypatch):
+def test_metadata_schema_package_read_failure(pack_dir, monkeypatch):
+    """Pack succeeds even if package resource read fails (non-critical)."""
     monkeypatch.setattr(
         "opencrane.pack.importlib.metadata.version", lambda _pkg: "0.1.0"
     )
@@ -193,44 +191,9 @@ def test_metadata_schema_from_opencrane_dir(pack_dir, monkeypatch):
         "opencrane.pack.subprocess.run",
         lambda *args, **kwargs: None,
     )
-
-    (pack_dir / ".opencrane" / "metadata-schema.md").write_text("# Schema from .opencrane")
-
-    output_dir, _ = pack(name="test-mcp")
-    schema = output_dir / "test_mcp" / "data" / "metadata-schema.md"
-    assert schema.exists()
-    assert "Schema from .opencrane" in schema.read_text()
-
-
-@pytest.mark.unit
-def test_metadata_schema_docs_takes_priority(pack_dir, monkeypatch):
-    """docs/metadata-schema.md is checked first and takes priority."""
     monkeypatch.setattr(
-        "opencrane.pack.importlib.metadata.version", lambda _pkg: "0.1.0"
-    )
-    monkeypatch.setattr(
-        "opencrane.pack.subprocess.run",
-        lambda *args, **kwargs: None,
-    )
-
-    docs_dir = pack_dir / "docs"
-    docs_dir.mkdir()
-    (docs_dir / "metadata-schema.md").write_text("# From docs")
-    (pack_dir / ".opencrane" / "metadata-schema.md").write_text("# From .opencrane")
-
-    output_dir, _ = pack(name="test-mcp")
-    schema = output_dir / "test_mcp" / "data" / "metadata-schema.md"
-    assert "From docs" in schema.read_text()
-
-
-@pytest.mark.unit
-def test_no_metadata_schema(pack_dir, monkeypatch):
-    monkeypatch.setattr(
-        "opencrane.pack.importlib.metadata.version", lambda _pkg: "0.1.0"
-    )
-    monkeypatch.setattr(
-        "opencrane.pack.subprocess.run",
-        lambda *args, **kwargs: None,
+        "importlib.resources.files",
+        lambda _pkg: (_ for _ in ()).throw(Exception("Resource not found")),
     )
 
     output_dir, _ = pack(name="test-mcp")

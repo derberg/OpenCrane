@@ -1,6 +1,7 @@
 """MCP Server for semantic search over documentation."""
 
 import asyncio
+import importlib.resources
 import json
 import logging
 import os
@@ -643,30 +644,16 @@ async def get_metadata_schema(arguments: dict) -> list[TextContent]:
     Provides detailed information about all metadata fields, their purpose,
     format, and usage patterns for programmatic navigation and context expansion.
 
-    Note: Requires docs/metadata-schema.md to be present in the working directory.
-    This file is copied into the Docker image via Dockerfile.
+    The schema file is bundled inside the opencrane package.
     """
     logger.info("   get_metadata_schema: retrieving schema documentation")
 
     try:
-        # Read the metadata schema documentation.
-        # Check METADATA_SCHEMA_PATH env var first (used by opencrane pack),
-        # then .opencrane/ (new convention), then docs/ (legacy).
-        env_path = os.environ.get("METADATA_SCHEMA_PATH")
-        if env_path:
-            docs_path = Path(env_path)
-        else:
-            docs_path = Path(".opencrane/metadata-schema.md")
-            if not docs_path.exists():
-                docs_path = Path("docs/metadata-schema.md")
-        if not docs_path.exists():
-            logger.warning("   get_metadata_schema: schema file not found")
-            return [TextContent(
-                type="text",
-                text="Metadata schema documentation file not found. Place it at .opencrane/metadata-schema.md."
-            )]
-
-        schema_content = docs_path.read_text(encoding="utf-8")
+        schema_content = (
+            importlib.resources.files("opencrane.mcp")
+            .joinpath("metadata-schema.md")
+            .read_text(encoding="utf-8")
+        )
         logger.info(f"   get_metadata_schema: returned {len(schema_content)} chars")
 
         return [TextContent(type="text", text=schema_content)]

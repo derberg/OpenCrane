@@ -275,7 +275,6 @@ def main():
     data_dir = Path(__file__).parent / "data"
     os.environ.setdefault("MILVUS_DB_PATH", str(data_dir / "milvus.db"))
     os.environ.setdefault("AI_DOCS_CHUNKS_FILE", str(data_dir / "chunks.json"))
-    os.environ.setdefault("METADATA_SCHEMA_PATH", str(data_dir / "metadata-schema.md"))
 
     import asyncio
     from opencrane.mcp.server import main as serve_main

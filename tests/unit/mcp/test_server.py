@@ -829,17 +829,10 @@ class TestMCPServer:
         assert "Failed to fetch chunk" in result[0].text
         assert "YAML conversion failed" in result[0].text
 
-    @patch('opencrane.mcp.server.Path')
     @pytest.mark.anyio
-    async def test_get_metadata_schema_success(self, mock_path):
-        """Test get_metadata_schema returns schema documentation."""
+    async def test_get_metadata_schema_success(self):
+        """Test get_metadata_schema returns schema from bundled package file."""
         from opencrane.mcp.server import get_metadata_schema
-
-        schema_content = "# Chunk Metadata Schema\n\nbreadcrumb_path: ...\nlogical_parent: ...\nneighbor_chunks: ..."
-        mock_path_instance = Mock()
-        mock_path_instance.exists.return_value = True
-        mock_path_instance.read_text.return_value = schema_content
-        mock_path.return_value = mock_path_instance
 
         result = await get_metadata_schema({})
 
@@ -849,31 +842,13 @@ class TestMCPServer:
         assert "logical_parent" in result[0].text
         assert "neighbor_chunks" in result[0].text
 
-    @patch('opencrane.mcp.server.Path')
+    @patch('importlib.resources.files')
     @pytest.mark.anyio
-    async def test_get_metadata_schema_file_not_found(self, mock_path):
-        """Test get_metadata_schema when schema file doesn't exist."""
+    async def test_get_metadata_schema_read_error(self, mock_files):
+        """Test get_metadata_schema with package resource read error."""
         from opencrane.mcp.server import get_metadata_schema
 
-        mock_path_instance = Mock()
-        mock_path_instance.exists.return_value = False
-        mock_path.return_value = mock_path_instance
-
-        result = await get_metadata_schema({})
-
-        assert len(result) == 1
-        assert "not found" in result[0].text
-
-    @patch('opencrane.mcp.server.Path')
-    @pytest.mark.anyio
-    async def test_get_metadata_schema_read_error(self, mock_path):
-        """Test get_metadata_schema with file read error."""
-        from opencrane.mcp.server import get_metadata_schema
-
-        mock_path_instance = Mock()
-        mock_path_instance.exists.return_value = True
-        mock_path_instance.read_text.side_effect = Exception("Read failed")
-        mock_path.return_value = mock_path_instance
+        mock_files.side_effect = Exception("Resource not found")
 
         result = await get_metadata_schema({})
 

@@ -1,6 +1,7 @@
 """Core packing logic for the opencrane pack command."""
 
 import importlib.metadata
+import importlib.resources
 import re
 import shutil
 import subprocess
@@ -79,14 +80,16 @@ def pack(
     shutil.copy2(milvus_db, data_dir / "milvus.db")
     shutil.copy2(chunks_json, data_dir / "chunks.json")
 
-    # Copy metadata-schema.md if it exists
-    for candidate in [
-        Path("docs/metadata-schema.md"),
-        Path(".opencrane/metadata-schema.md"),
-    ]:
-        if candidate.exists():
-            shutil.copy2(candidate, data_dir / "metadata-schema.md")
-            break
+    # Copy metadata-schema.md from the installed package
+    try:
+        schema_content = (
+            importlib.resources.files("opencrane.mcp")
+            .joinpath("metadata-schema.md")
+            .read_text(encoding="utf-8")
+        )
+        (data_dir / "metadata-schema.md").write_text(schema_content, encoding="utf-8")
+    except Exception:
+        pass  # Non-critical — tool will read from package at runtime
 
     # Write README.md
     (output / "README.md").write_text(PACK_README.format(name=name))

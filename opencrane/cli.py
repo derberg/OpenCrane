@@ -230,7 +230,9 @@ def llms(config_path, sources_dirs, llmstxt_dir, force):
               help="Directory containing llms-full.txt (overrides AI_DOCS_LLMSTXT_DIR)")
 @click.option("--chunks-file", default=None, type=click.Path(),
               help="Output path for rag-chunks.json (overrides AI_DOCS_CHUNKS_FILE)")
-def chunk(config_path, llmstxt_dir, chunks_file):
+@click.option("--force", is_flag=True, default=False,
+              help="Accepted for CLI compatibility (chunking always regenerates)")
+def chunk(config_path, llmstxt_dir, chunks_file, force):
     """Generate rag-chunks.json from documentation."""
     try:
         from pathlib import Path

@@ -256,6 +256,34 @@ class TestGetSourceUrl:
                 assert result == "https://docs.example.com/guide/intro.md"
 
 
+    def test_local_source_with_docs_path(self):
+        """Test GitHub URL for local source where key differs from docs_path.
+
+        When docs_path is used for file discovery, process_file constructs
+        rel_with_project as ``Path(key) / file.relative_to(project_dir)``
+        so the file path starts with the config key, not docs_path.
+        """
+        import yaml
+        with tempfile.TemporaryDirectory() as tmp:
+            mapping_file = Path(tmp) / "mapping.yaml"
+            mapping_file.write_text(yaml.dump({"sources": {
+                "content-guidelines": {
+                    "local": True,
+                    "docs_path": "docs",
+                    "url": "https://github.com/org/repo",
+                },
+            }}))
+            mapping = SourceMapping(mapping_file)
+
+            with patch("opencrane.rag.generate_llms_txt._source_mapping", mapping):
+                with patch("opencrane.rag.generate_llms_txt.get_repo_subdir", return_value="subdir"):
+                    # rel_with_project is key/file — as built by process_file
+                    rel_path = Path("content-guidelines/guide.md")
+                    result = get_source_url(rel_path, "content-guidelines")
+                    # docs_path appears in the URL between repo_prefix and the file
+                    assert result == "https://github.com/org/repo/blob/main/subdir/docs/guide.md"
+
+
 class TestPrefixHeadingsWithPath:
     """Unit tests for prefix_headings_with_path function."""
 
@@ -896,6 +924,54 @@ class TestGenerateOutputs:
             assert output_file.exists(), f"Expected {output_file} to exist. Contents of llmstxt: {list(llmstxt_dir.rglob('*'))}"
             content = output_file.read_text()
             assert "Writing Guide" in content
+        finally:
+            monkeypatch.chdir(original_cwd)
+            if test_artifacts.exists():
+                shutil.rmtree(test_artifacts, ignore_errors=True)
+
+
+    def test_generate_outputs_local_source_with_docs_path(self, tmp_path, monkeypatch, isolate_outputs):
+        """Local source with docs_path resolves files from docs_path dir, not config key."""
+        original_cwd = Path.cwd()
+        test_artifacts = original_cwd / ".test_local_docs_path"
+
+        if test_artifacts.exists():
+            shutil.rmtree(test_artifacts)
+
+        try:
+            test_artifacts.mkdir(parents=True)
+            monkeypatch.chdir(test_artifacts)
+
+            # Create local source content at docs_path ("docs/"), NOT at config key ("content-guidelines")
+            local_dir = Path("docs")
+            local_dir.mkdir(parents=True)
+            (local_dir / "guide.md").write_text("# Style Guide\n\nWriting rules here.")
+
+            # Config key is "content-guidelines" but docs_path points to "docs"
+            opencrane_dir = Path(".opencrane")
+            opencrane_dir.mkdir()
+            config_yaml = opencrane_dir / "config.yaml"
+            config_yaml.write_text(yaml.dump({"sources": {
+                "content-guidelines": {"local": True, "docs_path": "docs"},
+            }}))
+
+            llmstxt_dir = opencrane_dir / "llmstxt"
+            llmstxt_dir.mkdir()
+
+            monkeypatch.setattr('opencrane.rag.generate_llms_txt._source_mapping', None)
+            monkeypatch.setattr('opencrane.rag.generate_llms_txt.ROOT', Path.cwd())
+            monkeypatch.setenv("MAPPING_FILE", str(config_yaml))
+            monkeypatch.delenv("AI_DOCS_SOURCES_DIRS", raising=False)
+            monkeypatch.delenv("AI_DOCS_SOURCES_DIR", raising=False)
+            monkeypatch.delenv("AI_DOCS_NO_FILTER", raising=False)
+
+            generate_outputs(force=True)
+
+            # Output uses the config key for the directory structure
+            output_file = llmstxt_dir / "content-guidelines" / "llms-full.txt"
+            assert output_file.exists(), f"Expected {output_file} to exist. Contents of llmstxt: {list(llmstxt_dir.rglob('*'))}"
+            content = output_file.read_text()
+            assert "Style Guide" in content
         finally:
             monkeypatch.chdir(original_cwd)
             if test_artifacts.exists():

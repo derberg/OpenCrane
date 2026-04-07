@@ -182,19 +182,19 @@ class SourceMapping:
         """
         sources = self.data.get("sources", {})
         file_str = file_path.as_posix()
-        
+
         # Find the longest matching prefix (most specific match)
         best_match: Optional[Dict] = None
         best_match_key: Optional[str] = None
         best_match_len = -1
-        
+
         for local_path_str in sources.keys():
             if file_str.startswith(local_path_str):
                 if len(local_path_str) > best_match_len:
                     best_match = sources[local_path_str]
                     best_match_key = local_path_str
                     best_match_len = len(local_path_str)
-        
+
         if best_match is None:
             return None
         return best_match, best_match_key

@@ -536,9 +536,16 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             # When using mapping-based discovery, sources live under .opencrane/sources/.
             path_base_candidates = [workspace_root / ".opencrane" / "sources", workspace_root]
             for mapped_path in sorted(mapped_paths.keys()):
+                source_config = mapped_paths[mapped_path]
+                # For local sources with docs_path, use docs_path as the
+                # filesystem directory instead of the config key.
+                resolve_path = mapped_path
+                if source_config.get("local") and source_config.get("docs_path"):
+                    resolve_path = source_config["docs_path"]
+
                 full_path = None
                 for pb in path_base_candidates:
-                    candidate = pb / mapped_path
+                    candidate = pb / resolve_path
                     if candidate.exists() and candidate.is_dir():
                         full_path = candidate
                         break

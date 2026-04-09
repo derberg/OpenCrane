@@ -56,6 +56,10 @@ class SourceMapping:
         manual: bool = False,
         docs_url: str = "",
         type: str = "github",
+        sha: str = "",
+        tag: str = "",
+        release: str = "",
+        branch: str = "",
     ) -> None:
         """
         Add or update a source mapping entry.
@@ -89,6 +93,14 @@ class SourceMapping:
             entry["type"] = type
         if docs_url:
             entry["docs_url"] = docs_url
+        if sha:
+            entry["sha"] = sha
+        if tag:
+            entry["tag"] = tag
+        if release:
+            entry["release"] = release
+        if branch:
+            entry["branch"] = branch
         self.data["sources"][path_key] = entry
         logger.info(f"Added/updated source mapping for {path_key}")
 

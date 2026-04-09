@@ -26,6 +26,10 @@ def add_github_source(
     url: str,
     docs_path: str = "",
     docs_url: str = "",
+    sha: str = "",
+    tag: str = "",
+    release: str = "",
+    branch: str = "",
 ) -> None:
     """Add a GitHub repository source to config.yaml."""
     mapping = _get_mapping()
@@ -35,6 +39,10 @@ def add_github_source(
         docs_path=docs_path,
         manual=True,
         docs_url=docs_url,
+        sha=sha,
+        tag=tag,
+        release=release,
+        branch=branch,
     )
     mapping.save()
 

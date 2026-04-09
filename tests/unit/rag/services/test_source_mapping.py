@@ -471,3 +471,50 @@ def test_save_preserves_non_sources_keys(tmp_path):
     assert saved["ignore_patterns"] == ["devel"]
     assert saved["extensions"] == "extensions.py"
     assert "test" in saved["sources"]
+
+
+@pytest.mark.unit
+def test_add_source_with_tag_stores_field(tmp_mapping):
+    tmp_mapping.add_source(path_key="repo", url="https://github.com/test/repo", tag="v1.0")
+    source = tmp_mapping.get_source("repo")
+    assert source["tag"] == "v1.0"
+
+
+@pytest.mark.unit
+def test_add_source_with_branch_stores_field(tmp_mapping):
+    tmp_mapping.add_source(path_key="repo", url="https://github.com/test/repo", branch="develop")
+    source = tmp_mapping.get_source("repo")
+    assert source["branch"] == "develop"
+
+
+@pytest.mark.unit
+def test_add_source_with_sha_stores_field(tmp_mapping):
+    tmp_mapping.add_source(path_key="repo", url="https://github.com/test/repo", sha="abc123")
+    source = tmp_mapping.get_source("repo")
+    assert source["sha"] == "abc123"
+
+
+@pytest.mark.unit
+def test_add_source_with_release_stores_field(tmp_mapping):
+    tmp_mapping.add_source(path_key="repo", url="https://github.com/test/repo", release="v2.0.0")
+    source = tmp_mapping.get_source("repo")
+    assert source["release"] == "v2.0.0"
+
+
+@pytest.mark.unit
+def test_add_source_ref_fields_omitted_when_empty(tmp_mapping):
+    tmp_mapping.add_source(path_key="repo", url="https://github.com/test/repo")
+    source = tmp_mapping.get_source("repo")
+    assert "sha" not in source
+    assert "tag" not in source
+    assert "release" not in source
+    assert "branch" not in source
+
+
+@pytest.mark.unit
+def test_add_source_ref_fields_round_trip(tmp_mapping):
+    tmp_mapping.add_source(path_key="repo", url="https://github.com/test/repo", tag="v2.0")
+    tmp_mapping.save()
+    mapping2 = SourceMapping(tmp_mapping.mapping_file)
+    source = mapping2.get_source("repo")
+    assert source["tag"] == "v2.0"

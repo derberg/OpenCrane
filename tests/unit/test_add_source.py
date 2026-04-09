@@ -108,6 +108,60 @@ def test_cli_add_multiple_sources(workspace):
 
 
 @pytest.mark.unit
+def test_add_github_source_with_tag(workspace):
+    add_github_source(
+        name="my/repo",
+        url="https://github.com/org/repo",
+        docs_path="docs",
+        tag="v2.1.0",
+    )
+    sources = yaml.safe_load((workspace / ".opencrane" / "config.yaml").read_text())
+    entry = sources["sources"]["my/repo"]
+    assert entry["tag"] == "v2.1.0"
+
+
+@pytest.mark.unit
+def test_add_github_source_with_branch(workspace):
+    add_github_source(
+        name="my/repo",
+        url="https://github.com/org/repo",
+        docs_path="docs",
+        branch="develop",
+    )
+    sources = yaml.safe_load((workspace / ".opencrane" / "config.yaml").read_text())
+    entry = sources["sources"]["my/repo"]
+    assert entry["branch"] == "develop"
+
+
+@pytest.mark.unit
+def test_add_github_source_with_sha(workspace):
+    add_github_source(
+        name="my/repo",
+        url="https://github.com/org/repo",
+        docs_path="docs",
+        sha="abc123def",
+    )
+    sources = yaml.safe_load((workspace / ".opencrane" / "config.yaml").read_text())
+    entry = sources["sources"]["my/repo"]
+    assert entry["sha"] == "abc123def"
+
+
+@pytest.mark.unit
+def test_add_github_source_no_ref_omits_fields(workspace):
+    add_github_source(
+        name="my/repo",
+        url="https://github.com/org/repo",
+        docs_path="docs",
+    )
+    sources = yaml.safe_load((workspace / ".opencrane" / "config.yaml").read_text())
+    entry = sources["sources"]["my/repo"]
+    assert "sha" not in entry
+    assert "tag" not in entry
+    assert "release" not in entry
+    assert "branch" not in entry
+
+
+@pytest.mark.unit
 def test_cli_add_without_opencrane_dir(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()
@@ -156,3 +210,17 @@ def test_init_no_add_flag_skips_prompt(tmp_path, monkeypatch):
     assert result.exit_code == 0
     assert (tmp_path / ".opencrane" / "config.yaml").exists()
     assert "opencrane add" in result.output.lower() or "next steps" in result.output.lower()
+
+
+@pytest.mark.unit
+def test_cli_add_github_source_with_branch_ref(workspace):
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_main,
+        ["add"],
+        input="1\nhttps://github.com/org/repo\ndocs\n\norg/repo\n1\ndevelop\nn\n",
+    )
+    assert result.exit_code == 0
+    sources = yaml.safe_load((workspace / ".opencrane" / "config.yaml").read_text())
+    entry = sources["sources"]["org/repo"]
+    assert entry["branch"] == "develop"

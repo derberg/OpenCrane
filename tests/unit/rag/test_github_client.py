@@ -672,3 +672,166 @@ class TestGitHubClient:
         # Should return empty list (exception is caught by outer try-except)
         files = client.get_repo_files(mock_repo)
         assert len(files) == 0
+
+    def test_resolve_ref_config_sha(self):
+        """Test _resolve_ref_config with sha key."""
+        mock_repo = Mock()
+        mock_repo.name = "test-repo"
+        mock_commit = Mock()
+        mock_commit.sha = "abc123"
+        mock_repo.get_git_commit.return_value = mock_commit
+
+        client = GitHubClient("fake_token")
+        ref_str, commit_sha = client._resolve_ref_config(mock_repo, {"sha": "abc123"})
+
+        assert ref_str == "sha:abc123"
+        assert commit_sha == "abc123"
+        mock_repo.get_git_commit.assert_called_once_with("abc123")
+
+    def test_resolve_ref_config_tag_lightweight(self):
+        """Test _resolve_ref_config with lightweight tag."""
+        mock_repo = Mock()
+        mock_repo.name = "test-repo"
+        mock_ref = Mock()
+        mock_ref.object.sha = "commit_sha_123"
+        mock_ref.object.type = "commit"
+        mock_repo.get_git_ref.return_value = mock_ref
+
+        client = GitHubClient("fake_token")
+        ref_str, commit_sha = client._resolve_ref_config(mock_repo, {"tag": "v1.0.0"})
+
+        assert ref_str == "tags/v1.0.0"
+        assert commit_sha == "commit_sha_123"
+        mock_repo.get_git_ref.assert_called_once_with("tags/v1.0.0")
+
+    def test_resolve_ref_config_tag_annotated(self):
+        """Test _resolve_ref_config with annotated tag (dereferences to commit)."""
+        mock_repo = Mock()
+        mock_repo.name = "test-repo"
+        mock_ref = Mock()
+        mock_ref.object.sha = "tag_obj_sha"
+        mock_ref.object.type = "tag"
+        mock_repo.get_git_ref.return_value = mock_ref
+
+        mock_tag = Mock()
+        mock_tag.object.sha = "actual_commit_sha"
+        mock_repo.get_git_tag.return_value = mock_tag
+
+        client = GitHubClient("fake_token")
+        ref_str, commit_sha = client._resolve_ref_config(mock_repo, {"tag": "v1.0.0"})
+
+        assert ref_str == "tags/v1.0.0"
+        assert commit_sha == "actual_commit_sha"
+        mock_repo.get_git_ref.assert_called_once_with("tags/v1.0.0")
+        mock_repo.get_git_tag.assert_called_once_with("tag_obj_sha")
+
+    def test_resolve_ref_config_release(self):
+        """Test _resolve_ref_config with release key."""
+        mock_repo = Mock()
+        mock_repo.name = "test-repo"
+        mock_release = Mock()
+        mock_release.tag_name = "v2.0.0"
+        mock_repo.get_release.return_value = mock_release
+
+        mock_ref = Mock()
+        mock_ref.object.sha = "release_commit_sha"
+        mock_ref.object.type = "commit"
+        mock_repo.get_git_ref.return_value = mock_ref
+
+        client = GitHubClient("fake_token")
+        ref_str, commit_sha = client._resolve_ref_config(mock_repo, {"release": "v2.0.0"})
+
+        assert ref_str == "tags/v2.0.0"
+        assert commit_sha == "release_commit_sha"
+        mock_repo.get_release.assert_called_once_with("v2.0.0")
+        mock_repo.get_git_ref.assert_called_once_with("tags/v2.0.0")
+
+    def test_resolve_ref_config_branch(self):
+        """Test _resolve_ref_config with branch key."""
+        mock_repo = Mock()
+        mock_repo.name = "test-repo"
+        mock_ref = Mock()
+        mock_ref.object.sha = "branch_head_sha"
+        mock_repo.get_git_ref.return_value = mock_ref
+
+        client = GitHubClient("fake_token")
+        ref_str, commit_sha = client._resolve_ref_config(mock_repo, {"branch": "develop"})
+
+        assert ref_str == "heads/develop"
+        assert commit_sha == "branch_head_sha"
+        mock_repo.get_git_ref.assert_called_once_with("heads/develop")
+
+    def test_resolve_ref_config_priority_sha_wins(self, caplog):
+        """Test that sha takes priority when multiple keys are provided."""
+        import logging
+
+        mock_repo = Mock()
+        mock_repo.name = "test-repo"
+        mock_commit = Mock()
+        mock_commit.sha = "abc"
+        mock_repo.get_git_commit.return_value = mock_commit
+
+        client = GitHubClient("fake_token")
+        with caplog.at_level(logging.WARNING):
+            ref_str, commit_sha = client._resolve_ref_config(
+                mock_repo, {"sha": "abc", "tag": "v1", "branch": "main"}
+            )
+
+        assert ref_str == "sha:abc"
+        assert commit_sha == "abc"
+        mock_repo.get_git_commit.assert_called_once_with("abc")
+        assert "using 'sha'" in caplog.text
+        assert "ignoring" in caplog.text
+
+    def test_resolve_ref_config_empty_raises(self):
+        """Test that empty ref_config raises ValueError."""
+        mock_repo = Mock()
+        mock_repo.name = "test-repo"
+
+        client = GitHubClient("fake_token")
+        with pytest.raises(ValueError, match="no valid keys"):
+            client._resolve_ref_config(mock_repo, {})
+
+    def test_get_repo_files_with_ref_config_branch(self, mocker):
+        """Test get_repo_files with ref_config uses pinned ref and skips auto-detection."""
+        mock_repo = Mock()
+        mock_repo.name = "test-repo"
+
+        # Mock git ref for branch
+        mock_ref = Mock()
+        mock_ref.object.sha = "branch_head_sha"
+        mock_repo.get_git_ref.return_value = mock_ref
+
+        # Mock git commit (called twice: once by _resolve_ref_config return, once by get_repo_files)
+        mock_commit = Mock()
+        mock_commit.tree.sha = "tree_sha"
+        mock_repo.get_git_commit.return_value = mock_commit
+
+        # Mock git tree elements
+        mock_element = Mock()
+        mock_element.path = "docs/README.md"
+        mock_element.type = "blob"
+        mock_element.sha = "sha1"
+        mock_element.size = 11
+
+        mock_tree = Mock()
+        mock_tree.tree = [mock_element]
+        mock_repo.get_git_tree.return_value = mock_tree
+
+        # Mock git blob
+        mock_blob = Mock()
+        mock_blob.encoding = "base64"
+        mock_blob.content = "SGVsbG8gV29ybGQ="  # "Hello World" in base64
+        mock_repo.get_git_blob.return_value = mock_blob
+
+        client = GitHubClient("fake_token")
+        files = client.get_repo_files(mock_repo, ref_config={"branch": "develop"})
+
+        assert len(files) == 1
+        assert files[0].relative_path == "README.md"
+
+        # Verify get_git_ref was called for the branch, not for a release tag
+        mock_repo.get_git_ref.assert_called_once_with("heads/develop")
+
+        # Verify get_latest_release_ref was NOT called (pinned ref skips auto-detection)
+        mock_repo.get_latest_release.assert_not_called()

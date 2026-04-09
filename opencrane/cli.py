@@ -482,12 +482,32 @@ def _add_sources_interactive():
             suggested = f"{parts[-2]}/{parts[-1]}" if len(parts) >= 2 else parts[-1]
             name = click.prompt(click.style("Source name", fg="cyan"), default=suggested)
 
+            # Optional ref pinning
+            ref_kwargs = {}
+            click.echo("")
+            _step("Pin to a specific git ref? (leave blank for auto: latest release / default branch)")
+            click.echo("  " + click.style("1.", fg="green", bold=True) + " branch")
+            click.echo("  " + click.style("2.", fg="green", bold=True) + " tag")
+            click.echo("  " + click.style("3.", fg="green", bold=True) + " release (by tag name)")
+            click.echo("  " + click.style("4.", fg="green", bold=True) + " commit SHA")
+            ref_choice = click.prompt(click.style("Choice", fg="cyan"), default="", show_default=False)
+
+            if ref_choice == "1":
+                ref_kwargs["branch"] = click.prompt(click.style("Branch name", fg="cyan"))
+            elif ref_choice == "2":
+                ref_kwargs["tag"] = click.prompt(click.style("Tag name", fg="cyan"))
+            elif ref_choice == "3":
+                ref_kwargs["release"] = click.prompt(click.style("Release tag name", fg="cyan"))
+            elif ref_choice == "4":
+                ref_kwargs["sha"] = click.prompt(click.style("Commit SHA", fg="cyan"))
+
             try:
                 add_github_source(
                     name=name,
                     url=github_url,
                     docs_path=docs_path,
                     docs_url=docs_url,
+                    **ref_kwargs,
                 )
                 _success(f"Added GitHub source '{name}' to .opencrane/config.yaml")
             except Exception as e:

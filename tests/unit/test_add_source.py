@@ -74,7 +74,7 @@ def test_add_llmstxt_source_from_url(workspace):
 @pytest.mark.unit
 def test_cli_add_github_source(workspace):
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["add"], input="1\nhttps://github.com/org/repo\ndocs\n\norg/repo\nn\n")
+    result = runner.invoke(cli_main, ["add"], input="1\nhttps://github.com/org/repo\ndocs\n\norg/repo\n\nn\n")
     assert result.exit_code == 0
     assert "Added" in result.output
     sources = yaml.safe_load((workspace / ".opencrane" / "config.yaml").read_text())
@@ -120,7 +120,7 @@ def test_cli_add_without_opencrane_dir(tmp_path, monkeypatch):
 def test_cli_add_github_error_handling(workspace):
     runner = CliRunner()
     with patch("opencrane.add_source._get_mapping", side_effect=Exception("test error")):
-        result = runner.invoke(cli_main, ["add"], input="1\nhttps://github.com/org/repo\ndocs\n\norg/repo\nn\n")
+        result = runner.invoke(cli_main, ["add"], input="1\nhttps://github.com/org/repo\ndocs\n\norg/repo\n\nn\n")
     assert result.exit_code == 0  # Should not crash
 
 

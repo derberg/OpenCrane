@@ -108,7 +108,12 @@ def main(config=None):
                         "org_name": org_name,
                         "path_key": path_key,
                         "url": url,
-                        "docs_path": source_config.get("docs_path", "docs")
+                        "docs_path": source_config.get("docs_path", "docs"),
+                        "ref_config": {
+                            k: source_config[k]
+                            for k in ("sha", "tag", "release", "branch")
+                            if k in source_config
+                        },
                     }
                 except Exception as e:
                     logger.error(f"Failed to fetch manual repo {org_name}/{repo_name}: {e}")
@@ -224,7 +229,8 @@ def main(config=None):
 
                 try:
                     # Get files for this repository using the configured docs_path
-                    files = repo_fetcher.get_repo_files(repo, org_name=org_name, docs_path=docs_path)
+                    ref_config = metadata.get("ref_config") if is_manual else None
+                    files = repo_fetcher.get_repo_files(repo, org_name=org_name, docs_path=docs_path, ref_config=ref_config)
                     if not files:
                         logger.warning(f"No files found in {docs_path}/ for {org_name}/{repo.name}")
                         return None

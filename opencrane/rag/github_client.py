@@ -185,12 +185,70 @@ class GitHubClient:
             logger.debug(f"No releases found for {repo.name}: {e}")
             return None
 
-    def get_repo_files(self, repo: Repository, docs_path: str = "docs") -> List[File]:
+    def _resolve_ref_config(self, repo: Repository, ref_config: dict) -> tuple[str, str]:
+        """Resolve a ref_config dict to a (ref_string, commit_sha) tuple.
+
+        Supports pinning to a specific SHA, tag, release, or branch.
+        Priority order: sha > tag > release > branch.
+
+        Args:
+            repo: GitHub repository object.
+            ref_config: Dict with one or more of: sha, tag, release, branch.
+
+        Returns:
+            Tuple of (ref_string, commit_sha).
+
+        Raises:
+            Exception: If the specified ref cannot be resolved.
+        """
+        priority = ["sha", "tag", "release", "branch"]
+        present = [k for k in priority if k in ref_config and ref_config[k]]
+
+        if not present:
+            raise ValueError(f"ref_config for {repo.name} has no valid keys (expected: sha, tag, release, branch)")
+
+        winner = present[0]
+        ignored = present[1:]
+        if ignored:
+            logger.warning(
+                f"Multiple ref fields for {repo.name}: using '{winner}', ignoring {ignored}"
+            )
+
+        value = ref_config[winner]
+
+        if winner == "sha":
+            commit = repo.get_git_commit(value)
+            return (f"sha:{value}", commit.sha)
+
+        if winner == "tag":
+            git_ref = repo.get_git_ref(f"tags/{value}")
+            sha = git_ref.object.sha
+            if git_ref.object.type == "tag":
+                tag_obj = repo.get_git_tag(sha)
+                return (f"tags/{value}", tag_obj.object.sha)
+            return (f"tags/{value}", sha)
+
+        if winner == "release":
+            release = repo.get_release(value)
+            git_ref = repo.get_git_ref(f"tags/{release.tag_name}")
+            sha = git_ref.object.sha
+            if git_ref.object.type == "tag":
+                tag_obj = repo.get_git_tag(sha)
+                return (f"tags/{release.tag_name}", tag_obj.object.sha)
+            return (f"tags/{release.tag_name}", sha)
+
+        # branch
+        git_ref = repo.get_git_ref(f"heads/{value}")
+        return (f"heads/{value}", git_ref.object.sha)
+
+    def get_repo_files(self, repo: Repository, docs_path: str = "docs", ref_config: dict | None = None) -> List[File]:
         """Get all files from the docs directory of a repository using git tree API.
 
         Args:
             repo: GitHub repository object.
             docs_path: Subdirectory within the repo to fetch (default: "docs").
+            ref_config: Optional dict to pin to a specific ref. Keys (priority order):
+                sha, tag, release, branch. If None, uses latest release or default branch.
 
         Fetches from the latest release if available, otherwise falls back to default branch.
         """
@@ -198,6 +256,14 @@ class GitHubClient:
         try:
             # Use get_git_tree for faster traversal
             def _get_tree():
+                # If ref_config is provided, use pinned ref (no fallback)
+                if ref_config:
+                    ref_str, commit_sha = self._resolve_ref_config(repo, ref_config)
+                    logger.info(f"Fetching {repo.name} from pinned ref: {ref_str}")
+                    commit = repo.get_git_commit(commit_sha)
+                    tree = repo.get_git_tree(commit.tree.sha, recursive=True)
+                    return tree
+
                 # Try to get latest release first
                 release_ref = self.get_latest_release_ref(repo)
 

@@ -340,6 +340,12 @@ Each entry supports the following fields:
 | `docs_path` | No | Path within the repo where docs are stored (e.g. `docs`) |
 | `docs_url` | No | Base URL of the published documentation site (e.g. `https://docs.example.com/product`). When set, this is used instead of `url` when embedding source links in llms-full.txt — lets AI agents point users to rendered docs rather than raw GitHub files. If neither is set, no source links are embedded. |
 | `manual` | No | When `true`, the entry is user-managed and will not be overwritten by `opencrane fetch` auto-discovery |
+| `branch` | No | Pin to a specific branch (e.g. `develop`) |
+| `tag` | No | Pin to a specific git tag (e.g. `v2.1.0`) |
+| `release` | No | Pin to a specific GitHub release by its tag name (e.g. `v2.1.0`) — validated via the Releases API |
+| `sha` | No | Pin to a specific commit SHA |
+
+**Ref pinning**: By default, `opencrane fetch` pulls from the latest GitHub release, falling back to the default branch if no releases exist. Use `branch`, `tag`, `release`, or `sha` to pin a source to a specific ref instead. Only one should be set; if multiple are present, priority is `sha` > `tag` > `release` > `branch` (a warning is logged).
 
 Example:
 
@@ -350,6 +356,7 @@ sources:
     docs_path: docs
     docs_url: https://docs.myorg.com/my-product
     manual: true
+    tag: v2.1.0
 ```
 
 ## Extending OpenCrane

@@ -113,7 +113,7 @@ def main(config=None):
                             k: source_config[k]
                             for k in ("sha", "tag", "release", "branch")
                             if k in source_config
-                        },
+                        } or None,
                     }
                 except Exception as e:
                     logger.error(f"Failed to fetch manual repo {org_name}/{repo_name}: {e}")
@@ -239,11 +239,15 @@ def main(config=None):
                     # with custom directories (e.g. "new/cgw") land in the right place
                     file_manager.store_repo_files(path_key, files)
 
+                    ref_fields = {}
+                    if ref_config:
+                        ref_fields = {k: ref_config[k] for k in ("sha", "tag", "release", "branch") if k in ref_config}
                     source_mapping.add_source(
                         path_key=path_key,
                         url=url,
                         docs_path=docs_path,
-                        manual=is_manual
+                        manual=is_manual,
+                        **ref_fields,
                     )
 
                     return path_key

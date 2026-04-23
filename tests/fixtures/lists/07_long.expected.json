@@ -1,0 +1,40 @@
+[
+  {
+    "chunk_id": "$prose_intro",
+    "content": "## Supported regions\n\nThe service is available in the following regions:",
+    "source_file": "tests/fixtures/lists/07_long.md",
+    "chunk_type": "prose",
+    "metadata": {}
+  },
+  {
+    "_comment": "Item 1 of 17. After excluding self, there are 16 siblings — exceeds preview cap of 15. sibling_ids MUST contain all 16 real IDs (full list). sibling_previews MUST contain exactly 16 entries: first 15 are real previews, the 16th is the overflow marker '... +1 more'.",
+    "chunk_id": "$item_01",
+    "content": "# Supported regions\nus-east-1",
+    "source_file": "tests/fixtures/lists/07_long.md",
+    "chunk_type": "list_item",
+    "metadata": {
+      "breadcrumb_path": "Supported regions",
+      "list_id": "$list_regions",
+      "list_style": "unordered",
+      "position": 1,
+      "total_siblings": 17,
+      "sibling_ids": [
+        "$item_02", "$item_03", "$item_04", "$item_05", "$item_06",
+        "$item_07", "$item_08", "$item_09", "$item_10", "$item_11",
+        "$item_12", "$item_13", "$item_14", "$item_15", "$item_16",
+        "$item_17"
+      ],
+      "sibling_previews": [
+        "us-east-2", "us-west-1", "us-west-2", "eu-west-1", "eu-west-2",
+        "eu-central-1", "ap-south-1", "ap-southeast-1", "ap-southeast-2", "ap-northeast-1",
+        "ap-northeast-2", "sa-east-1", "ca-central-1", "af-south-1", "me-south-1",
+        "... +1 more"
+      ],
+      "parent_item_id": null,
+      "depth": 0
+    }
+  },
+  {
+    "_comment": "Items 2..17 follow the same pattern. For each item, sibling_ids has 16 entries (all others, in order, excluding self), sibling_previews has 16 entries: first 15 real previews + overflow marker '... +1 more'. Assertion should verify: (a) sibling_ids length == total_siblings - 1 for every item, (b) sibling_previews length == min(total_siblings - 1, 15) + (1 if total_siblings - 1 > 15 else 0), (c) when overflow applies, the last preview entry starts with '... +' and ends with 'more'."
+  }
+]

@@ -66,7 +66,7 @@ def test_real_chunking_pipeline_generates_valid_chunks(llms_full_path, output_pa
         # Validate chunk_type
         assert chunk["chunk_type"] in [
             "prose", "code_snippet", "crd_definition",
-            "openapi_spec", "yaml_content", "json_schema"
+            "openapi_spec", "yaml_content", "json_schema", "list_item"
         ], f"Chunk {i} has invalid chunk_type: {chunk['chunk_type']}"
         
         # Validate token_count is positive

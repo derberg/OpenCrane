@@ -10,7 +10,7 @@ class Chunk(BaseModel):
     chunk_id: str | None = Field(None, description="Unique identifier (UUID) for the chunk")
     content: Union[str, Dict[str, Any], list] = Field(..., description="Chunk payload: string for prose/code, dict/list for YAML")
     source_file: str = Field(..., description="Absolute or repo-relative path of the source file")
-    chunk_type: Literal["prose", "code_snippet", "crd_definition", "openapi_spec", "yaml_content", "json_schema"] = Field(
+    chunk_type: Literal["prose", "code_snippet", "crd_definition", "openapi_spec", "yaml_content", "json_schema", "list_item"] = Field(
         ..., description="Categorizes processing strategy"
     )
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Contextual data")
@@ -65,6 +65,19 @@ class Chunk(BaseModel):
                 raise ValueError(f"json_schema chunks must have {', '.join(missing)} in metadata")
             if not isinstance(self.content, (dict, list)):
                 raise ValueError("json_schema chunks must have dict or list content")
+        elif self.chunk_type == "list_item":
+            required = [
+                "breadcrumb_path", "list_id", "list_style", "position",
+                "total_siblings", "sibling_ids", "sibling_previews",
+                "parent_item_id", "depth",
+            ]
+            missing = [f for f in required if f not in self.metadata]
+            if missing:
+                raise ValueError(f"list_item chunks must have {', '.join(missing)} in metadata")
+            if self.metadata["list_style"] not in ("ordered", "unordered"):
+                raise ValueError("list_item list_style must be 'ordered' or 'unordered'")
+            if not isinstance(self.content, str):
+                raise ValueError("list_item chunks must have string content")
 
         return self
 

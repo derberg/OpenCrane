@@ -1,0 +1,84 @@
+[
+  {
+    "chunk_id": "$prose_intro",
+    "content": "## Prerequisites\n\nBefore starting, verify:",
+    "source_file": "tests/fixtures/lists/06_multiple_same_section.md",
+    "chunk_type": "prose",
+    "metadata": {}
+  },
+  {
+    "chunk_id": "$item_ca",
+    "content": "# Prerequisites\nCA certificate is available",
+    "source_file": "tests/fixtures/lists/06_multiple_same_section.md",
+    "chunk_type": "list_item",
+    "metadata": {
+      "breadcrumb_path": "Prerequisites",
+      "list_id": "$list_verify",
+      "list_style": "unordered",
+      "position": 1,
+      "total_siblings": 2,
+      "sibling_ids": ["$item_key"],
+      "sibling_previews": ["Private key is created"],
+      "parent_item_id": null,
+      "depth": 0
+    }
+  },
+  {
+    "chunk_id": "$item_key",
+    "content": "# Prerequisites\nPrivate key is created",
+    "source_file": "tests/fixtures/lists/06_multiple_same_section.md",
+    "chunk_type": "list_item",
+    "metadata": {
+      "breadcrumb_path": "Prerequisites",
+      "list_id": "$list_verify",
+      "list_style": "unordered",
+      "position": 2,
+      "total_siblings": 2,
+      "sibling_ids": ["$item_ca"],
+      "sibling_previews": ["CA certificate is available"],
+      "parent_item_id": null,
+      "depth": 0
+    }
+  },
+  {
+    "chunk_id": "$prose_separator",
+    "content": "Then install:",
+    "source_file": "tests/fixtures/lists/06_multiple_same_section.md",
+    "chunk_type": "prose",
+    "metadata": {}
+  },
+  {
+    "chunk_id": "$item_base",
+    "content": "# Prerequisites\n1. Install the base chart.",
+    "source_file": "tests/fixtures/lists/06_multiple_same_section.md",
+    "chunk_type": "list_item",
+    "metadata": {
+      "breadcrumb_path": "Prerequisites",
+      "list_id": "$list_install",
+      "list_style": "ordered",
+      "position": 1,
+      "total_siblings": 2,
+      "sibling_ids": ["$item_support"],
+      "sibling_previews": ["2. Install the support chart."],
+      "parent_item_id": null,
+      "depth": 0
+    }
+  },
+  {
+    "chunk_id": "$item_support",
+    "content": "# Prerequisites\n2. Install the support chart.",
+    "source_file": "tests/fixtures/lists/06_multiple_same_section.md",
+    "chunk_type": "list_item",
+    "metadata": {
+      "breadcrumb_path": "Prerequisites",
+      "list_id": "$list_install",
+      "list_style": "ordered",
+      "position": 2,
+      "total_siblings": 2,
+      "sibling_ids": ["$item_base"],
+      "sibling_previews": ["1. Install the base chart."],
+      "parent_item_id": null,
+      "depth": 0
+    }
+  }
+]

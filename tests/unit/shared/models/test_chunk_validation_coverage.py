@@ -184,3 +184,52 @@ class TestChunkValidationCoverage:
                 },
                 token_count=10
             )
+
+    def _valid_list_item_metadata(self):
+        return {
+            "breadcrumb_path": "Section",
+            "list_id": "abc123",
+            "list_style": "ordered",
+            "position": 1,
+            "total_siblings": 1,
+            "sibling_ids": [],
+            "sibling_previews": [],
+            "parent_item_id": None,
+            "depth": 0,
+        }
+
+    def test_list_item_missing_metadata(self):
+        """list_item with a missing required field reports it by name."""
+        md = self._valid_list_item_metadata()
+        md.pop("list_id")
+        with pytest.raises(ValidationError, match="list_item chunks must have list_id in metadata"):
+            Chunk(
+                content="# S\nText",
+                source_file="test.md",
+                chunk_type="list_item",
+                metadata=md,
+                token_count=3,
+            )
+
+    def test_list_item_invalid_list_style(self):
+        md = self._valid_list_item_metadata()
+        md["list_style"] = "bullets"
+        with pytest.raises(ValidationError, match="list_style must be 'ordered' or 'unordered'"):
+            Chunk(
+                content="# S\nText",
+                source_file="test.md",
+                chunk_type="list_item",
+                metadata=md,
+                token_count=3,
+            )
+
+    def test_list_item_non_string_content(self):
+        md = self._valid_list_item_metadata()
+        with pytest.raises(ValidationError, match="list_item chunks must have string content"):
+            Chunk(
+                content={"k": "v"},
+                source_file="test.md",
+                chunk_type="list_item",
+                metadata=md,
+                token_count=3,
+            )

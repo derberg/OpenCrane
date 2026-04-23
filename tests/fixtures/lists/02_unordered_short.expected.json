@@ -1,0 +1,84 @@
+[
+  {
+    "chunk_id": "$prose_intro",
+    "content": "## Manage Secrets\n\nThere are four different kinds of data:",
+    "source_file": "tests/fixtures/lists/02_unordered_short.md",
+    "chunk_type": "prose",
+    "metadata": {}
+  },
+  {
+    "chunk_id": "$item1",
+    "content": "# Manage Secrets\nPublic/private keys",
+    "source_file": "tests/fixtures/lists/02_unordered_short.md",
+    "chunk_type": "list_item",
+    "metadata": {
+      "breadcrumb_path": "Manage Secrets",
+      "list_id": "$list_b",
+      "list_style": "unordered",
+      "position": 1,
+      "total_siblings": 4,
+      "sibling_ids": ["$item2", "$item3", "$item4"],
+      "sibling_previews": ["Certificates", "CA certificates", "Certificate revocation lists"],
+      "parent_item_id": null,
+      "depth": 0
+    }
+  },
+  {
+    "chunk_id": "$item2",
+    "content": "# Manage Secrets\nCertificates",
+    "source_file": "tests/fixtures/lists/02_unordered_short.md",
+    "chunk_type": "list_item",
+    "metadata": {
+      "breadcrumb_path": "Manage Secrets",
+      "list_id": "$list_b",
+      "list_style": "unordered",
+      "position": 2,
+      "total_siblings": 4,
+      "sibling_ids": ["$item1", "$item3", "$item4"],
+      "sibling_previews": ["Public/private keys", "CA certificates", "Certificate revocation lists"],
+      "parent_item_id": null,
+      "depth": 0
+    }
+  },
+  {
+    "chunk_id": "$item3",
+    "content": "# Manage Secrets\nCA certificates",
+    "source_file": "tests/fixtures/lists/02_unordered_short.md",
+    "chunk_type": "list_item",
+    "metadata": {
+      "breadcrumb_path": "Manage Secrets",
+      "list_id": "$list_b",
+      "list_style": "unordered",
+      "position": 3,
+      "total_siblings": 4,
+      "sibling_ids": ["$item1", "$item2", "$item4"],
+      "sibling_previews": ["Public/private keys", "Certificates", "Certificate revocation lists"],
+      "parent_item_id": null,
+      "depth": 0
+    }
+  },
+  {
+    "chunk_id": "$item4",
+    "content": "# Manage Secrets\nCertificate revocation lists",
+    "source_file": "tests/fixtures/lists/02_unordered_short.md",
+    "chunk_type": "list_item",
+    "metadata": {
+      "breadcrumb_path": "Manage Secrets",
+      "list_id": "$list_b",
+      "list_style": "unordered",
+      "position": 4,
+      "total_siblings": 4,
+      "sibling_ids": ["$item1", "$item2", "$item3"],
+      "sibling_previews": ["Public/private keys", "Certificates", "CA certificates"],
+      "parent_item_id": null,
+      "depth": 0
+    }
+  },
+  {
+    "chunk_id": "$prose_trailing",
+    "content": "All these files follow the same schema.",
+    "source_file": "tests/fixtures/lists/02_unordered_short.md",
+    "chunk_type": "prose",
+    "metadata": {}
+  }
+]

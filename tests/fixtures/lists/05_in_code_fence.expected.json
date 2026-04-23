@@ -1,0 +1,21 @@
+[
+  {
+    "chunk_id": "$prose_intro",
+    "content": "## Configuration\n\nExample YAML:",
+    "source_file": "tests/fixtures/lists/05_in_code_fence.md",
+    "chunk_type": "prose",
+    "metadata": {}
+  },
+  {
+    "_comment": "YAML fence handled by the existing YAML strategy — exact chunk shape is whatever today's behavior produces. This fixture's acceptance assertion is NOT on the YAML chunk's content/type, but on the invariant: ZERO list_item chunks emitted from the fenced lines, even though they start with '- '.",
+    "chunk_id": "$yaml_or_code",
+    "chunk_type": "(yaml_content | code_snippet, per existing behavior)"
+  },
+  {
+    "chunk_id": "$prose_trailing",
+    "content": "Save this as `values.yaml`.",
+    "source_file": "tests/fixtures/lists/05_in_code_fence.md",
+    "chunk_type": "prose",
+    "metadata": {}
+  }
+]

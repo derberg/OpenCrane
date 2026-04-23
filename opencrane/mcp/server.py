@@ -201,7 +201,135 @@ _CHUNK_TYPE_LABELS = {
     "crd_definition": "crd_definition (Kubernetes CRD YAML properties)",
     "openapi_spec": "openapi_spec (OpenAPI specification endpoints/schemas)",
     "json_schema": "json_schema (JSON Schema definitions)",
+    "list_item": "list_item (individual markdown list items)",
 }
+
+
+def _has_list_item_chunks() -> bool:
+    return "list_item" in _get_indexed_chunk_types()
+
+
+def _get_list_members(list_id: str) -> list[dict]:
+    """Return all indexed chunks belonging to a given list_id, ordered by position."""
+    chunk_index = _build_chunk_index()
+    members = []
+    for chunk in chunk_index.values():
+        if chunk.get("chunk_type") != "list_item":
+            continue
+        metadata = chunk.get("metadata", {}) or {}
+        if metadata.get("list_id") == list_id:
+            members.append(chunk)
+    members.sort(key=lambda c: c.get("metadata", {}).get("position", 0))
+    return members
+
+
+def _group_list_item_results(results: list[dict]) -> list[dict]:
+    """Collapse consecutive result slots that share a list_id into a grouped slot.
+
+    When two or more list_item hits share the same list_id, combine them into a
+    single result dict tagged with ``_grouped=True`` and containing a
+    ``_grouped_items`` list preserving per-item score, position, and content.
+    The grouped slot inherits the max score of its members. Non list_item
+    results pass through untouched.
+    """
+    # Build groups keyed by list_id (None for non-list_item hits)
+    groups: dict = {}
+    order: list = []
+    for r in results:
+        if r.get("chunk_type") != "list_item":
+            order.append(("single", id(r)))
+            groups[("single", id(r))] = [r]
+            continue
+        metadata_json = r.get("metadata_json", "{}")
+        try:
+            metadata = json.loads(metadata_json) if isinstance(metadata_json, str) else metadata_json
+        except (json.JSONDecodeError, TypeError, ValueError):  # pragma: no cover - defensive
+            metadata = {}  # pragma: no cover
+        list_id = metadata.get("list_id")
+        if not list_id:  # pragma: no cover - validated list_item chunks always carry list_id
+            order.append(("single", id(r)))
+            groups[("single", id(r))] = [r]
+            continue
+        key = ("list", list_id)
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(r)
+
+    merged: list[dict] = []
+    for key in order:
+        members = groups[key]
+        if key[0] == "single" or len(members) == 1:
+            merged.append(members[0])
+            continue
+        # Grouped slot — sort members by position, inherit the max score
+        def _pos(rec):
+            try:
+                return json.loads(rec.get("metadata_json") or "{}").get("position", 0)
+            except Exception:  # pragma: no cover
+                return 0
+        members_sorted = sorted(members, key=_pos)
+        max_score = max(float(m.get("distance", 0.0)) for m in members_sorted)
+        head = dict(members_sorted[0])
+        head["distance"] = max_score
+        head["_grouped"] = True
+        head["_grouped_items"] = members_sorted
+        merged.append(head)
+    return merged
+
+
+def _format_grouped_list_item(result: dict, chunk_index: dict) -> str:
+    """Format a grouped list_item result slot showing all matched members inline."""
+    members = result["_grouped_items"]
+    try:
+        head_meta = json.loads(members[0].get("metadata_json") or "{}")
+    except Exception:  # pragma: no cover
+        head_meta = {}
+    breadcrumb = head_meta.get("breadcrumb_path", "")
+    list_id = head_meta.get("list_id", "")
+    total = head_meta.get("total_siblings", len(members))
+    list_style = head_meta.get("list_style", "")
+
+    lines = [
+        f"Matched List ({len(members)} of {total} items):",
+    ]
+    if breadcrumb:
+        lines.append(f"Location: {breadcrumb}")
+    lines.append(f"List ID: {list_id}  style={list_style}")
+    lines.append("Matched items:")
+    for m in members:
+        try:
+            mm = json.loads(m.get("metadata_json") or "{}")
+        except Exception:  # pragma: no cover
+            mm = {}
+        pos = mm.get("position")
+        content = m.get("content", "")
+        # Drop breadcrumb header prefix when displaying inline for readability
+        stripped = content
+        if breadcrumb and stripped.startswith(f"# {breadcrumb}\n"):
+            stripped = stripped[len(breadcrumb) + 3:].lstrip("\n")
+        lines.append(f"  [{pos}] {stripped}")
+
+    unmatched_previews = head_meta.get("sibling_previews") or []
+    matched_positions = {
+        json.loads(m.get("metadata_json") or "{}").get("position")
+        for m in members
+    }
+    unmatched = []
+    if unmatched_previews:
+        # sibling_previews excludes self; map via sibling_ids to detect matched ones.
+        sibling_ids = head_meta.get("sibling_ids") or []
+        member_ids = {m.get("chunk_id") for m in members}
+        for sid, preview in zip(sibling_ids, unmatched_previews):
+            if sid not in member_ids:
+                unmatched.append(preview)
+        if unmatched:
+            lines.append("Other items in list (not matched):")
+            for p in unmatched:
+                lines.append(f"  - {p}")
+
+    lines.append(f"💡 Tip: Use get_list_members(list_id='{list_id}') for the full list.")
+    return "\n".join(lines) + "\n"
 
 
 def _get_indexed_chunk_types() -> set[str]:
@@ -319,6 +447,22 @@ async def list_tools() -> list[Tool]:
         ),
     ]
 
+    if _has_list_item_chunks():
+        tools.append(Tool(
+            name="get_list_members",
+            description="Fetch every chunk that belongs to the same markdown list, ordered by position. Use when a search returned one or more list_item chunks sharing a list_id and you need the full list for reconstructing a procedure, enumeration, or step-by-step instruction.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "list_id": {
+                        "type": "string",
+                        "description": "The list_id from a list_item chunk's metadata (see sibling grouping in search_docs output)."
+                    }
+                },
+                "required": ["list_id"],
+            },
+        ))
+
     if _has_yaml_chunks():
         tools.append(Tool(
             name="get_yaml_definition",
@@ -334,12 +478,19 @@ async def list_tools() -> list[Tool]:
                 "required": ["chunk_id"]
             }
         ))
+
+    if _has_yaml_chunks() or _has_list_item_chunks():
         tools.append(Tool(
             name="get_metadata_schema",
-            description="Retrieve comprehensive documentation of all metadata fields available in chunks. Use this when you need to understand what metadata fields mean (breadcrumb_path, logical_parent, neighbor_chunks, etc.) and how to use them programmatically for navigation, context expansion, and re-hydration. Returns detailed schema documentation with field definitions, examples, and usage patterns.",
+            description="Retrieve comprehensive documentation of all metadata fields available in chunks. Use this when you need to understand what metadata fields mean (breadcrumb_path, logical_parent, neighbor_chunks, list_id, sibling_ids, etc.) and how to use them programmatically for navigation, context expansion, and re-hydration. Pass chunk_type to get only the section for a specific type (e.g., 'list_item' returns the list_item metadata fields plus the universal fields).",
             inputSchema={
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "chunk_type": {
+                        "type": "string",
+                        "description": "Optional: filter the schema to a specific chunk type (e.g., 'list_item', 'crd_definition', 'openapi_spec', 'json_schema'). When omitted, the full schema is returned."
+                    }
+                },
                 "required": []
             }
         ))
@@ -360,6 +511,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         "health": health_check,
         "get_yaml_definition": get_yaml_definition,
         "get_metadata_schema": get_metadata_schema,
+        "get_list_members": get_list_members,
     }
 
     handler = _TOOL_HANDLERS.get(name)
@@ -402,12 +554,19 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
             if not results:
                 logger.info("   📖 search: 0 results found")
                 return [TextContent(type="text", text="No results found.")]
-            logger.info(f"   📖 search: {len(results)} results found")
+
+            # Collapse list_item hits that share a list_id into one slot each.
+            results = _group_list_item_results(results)
+            logger.info(f"   📖 search: {len(results)} results found (after list grouping)")
 
             source_map = _build_chunk_source_map()
             chunk_index = _build_chunk_index()
             formatted: list[TextContent] = []
             for i, result in enumerate(results, 1):
+                if result.get("_grouped"):
+                    grouped_body = _format_grouped_list_item(result, chunk_index)
+                    formatted.append(TextContent(type="text", text=f"Result {i}:\n{grouped_body}"))
+                    continue
                 content = result.get("content", "")
                 source_file = result.get("source_file", "")
                 chunk_type = result.get("chunk_type", "")
@@ -638,15 +797,44 @@ async def get_yaml_definition(arguments: dict) -> list[TextContent]:
         logger.error(f"Failed to fetch chunk {chunk_id}: {e}")
         return [TextContent(type="text", text=f"Failed to fetch chunk: {str(e)}")]
 
+_CHUNK_TYPE_SECTION_HEADINGS = {
+    "list_item": "List Item Metadata",
+    "crd_definition": "CRD-Specific Metadata",
+    "openapi_spec": "OpenAPI-Specific Metadata",
+    "json_schema": "JSON Schema-Specific Metadata",
+    "prose": "Universal Metadata",
+    "code_snippet": "Universal Metadata",
+    "yaml_content": "Universal Metadata",
+}
+
+
+def _extract_schema_section(full_schema: str, heading_prefix: str) -> str | None:
+    """Return the ``## {heading_prefix}…`` section up to the next top-level heading.
+
+    The schema uses ``## Section Name`` for each chunk-type section, so we can
+    slice between headings of that level.
+    """
+    marker = f"\n## {heading_prefix}"
+    idx = full_schema.find(marker)
+    if idx == -1:
+        return None
+    # Find the next '\n## ' after our section start
+    rest_start = idx + 1
+    next_idx = full_schema.find("\n## ", rest_start + 1)
+    if next_idx == -1:
+        return full_schema[idx:].rstrip() + "\n"
+    return full_schema[idx:next_idx].rstrip() + "\n"
+
+
 async def get_metadata_schema(arguments: dict) -> list[TextContent]:
     """Return comprehensive metadata schema documentation.
 
-    Provides detailed information about all metadata fields, their purpose,
-    format, and usage patterns for programmatic navigation and context expansion.
-
-    The schema file is bundled inside the opencrane package.
+    When called with no arguments, returns the full schema. When called with
+    ``chunk_type="list_item"`` (or any supported type), returns just the
+    Universal Metadata section plus the chunk-type-specific section.
     """
-    logger.info("   get_metadata_schema: retrieving schema documentation")
+    chunk_type = arguments.get("chunk_type") if arguments else None
+    logger.info(f"   get_metadata_schema: chunk_type={chunk_type!r}")
 
     try:
         schema_content = (
@@ -654,13 +842,60 @@ async def get_metadata_schema(arguments: dict) -> list[TextContent]:
             .joinpath("metadata-schema.md")
             .read_text(encoding="utf-8")
         )
-        logger.info(f"   get_metadata_schema: returned {len(schema_content)} chars")
 
-        return [TextContent(type="text", text=schema_content)]
+        if not chunk_type:
+            return [TextContent(type="text", text=schema_content)]
+
+        heading = _CHUNK_TYPE_SECTION_HEADINGS.get(chunk_type)
+        if heading is None:
+            return [TextContent(
+                type="text",
+                text=f"Unknown chunk_type '{chunk_type}'. Omit chunk_type to retrieve the full schema.",
+            )]
+
+        universal = _extract_schema_section(schema_content, "Universal Metadata") or ""
+        specific = _extract_schema_section(schema_content, heading) or ""
+        body = universal + "\n" + specific if specific else universal
+        logger.info(f"   get_metadata_schema: returned {len(body)} chars (filtered to {chunk_type})")
+        return [TextContent(type="text", text=body)]
 
     except Exception as e:
         logger.error(f"Failed to retrieve metadata schema: {e}")
         return [TextContent(type="text", text=f"Failed to retrieve metadata schema: {str(e)}")]
+
+
+async def get_list_members(arguments: dict) -> list[TextContent]:
+    """Return every chunk belonging to the given list_id, ordered by position."""
+    list_id = arguments.get("list_id")
+    logger.info(f"   📋 get_list_members: list_id={list_id!r}")
+    if not list_id:
+        return [TextContent(type="text", text="Error: list_id must be a non-empty string.")]
+
+    members = _get_list_members(list_id)
+    if not members:
+        return [TextContent(type="text", text=f"No list found for list_id={list_id!r}.")]
+
+    first_meta = members[0].get("metadata", {}) or {}
+    breadcrumb = first_meta.get("breadcrumb_path", "")
+    style = first_meta.get("list_style", "")
+    total = first_meta.get("total_siblings", len(members))
+
+    lines = [f"List ({len(members)} of {total} items, style={style})"]
+    if breadcrumb:
+        lines.append(f"Location: {breadcrumb}")
+    lines.append("")
+    for m in members:
+        mm = m.get("metadata", {}) or {}
+        pos = mm.get("position")
+        depth = mm.get("depth", 0)
+        indent = "  " * depth
+        content = m.get("content", "")
+        # Strip breadcrumb header for readable inline display
+        if breadcrumb and content.startswith(f"# {breadcrumb}\n"):
+            content = content[len(breadcrumb) + 3:].lstrip("\n")
+        lines.append(f"{indent}[{pos}] {content}")
+
+    return [TextContent(type="text", text="\n".join(lines) + "\n")]
 
 async def main():
     """Main entry point for the MCP server."""
@@ -672,6 +907,6 @@ async def main():
             app.create_initialization_options()
         )
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     import asyncio
     asyncio.run(main())

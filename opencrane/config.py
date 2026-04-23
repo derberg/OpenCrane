@@ -10,6 +10,7 @@ from opencrane.fences import CodeFenceConfig
 from opencrane.rag.services.base_strategy import ProcessingStrategy
 from opencrane.rag.services.yaml_chunker import YamlChunkingStrategy
 from opencrane.rag.services.code_chunker import CodeChunkingStrategy
+from opencrane.rag.services.list_chunker import ListChunkingStrategy
 from opencrane.rag.services.prose_chunker import ProseChunkingStrategy
 from opencrane.walkers import K8sCRDTreeWalker, OpenAPITreeWalker, JsonSchemaTreeWalker
 
@@ -36,6 +37,7 @@ class OpenCraneConfig:
     chunking_strategies: List[ProcessingStrategy] = [
         YamlChunkingStrategy(),
         CodeChunkingStrategy(),
+        ListChunkingStrategy(),
         ProseChunkingStrategy(),
     ]
 

@@ -1,0 +1,77 @@
+[
+  {
+    "chunk_id": "$prose_intro",
+    "content": "## Options",
+    "source_file": "tests/fixtures/lists/03_nested.md",
+    "chunk_type": "prose",
+    "metadata": {}
+  },
+  {
+    "chunk_id": "$item_A",
+    "content": "# Options\nOption A: retry policy",
+    "source_file": "tests/fixtures/lists/03_nested.md",
+    "chunk_type": "list_item",
+    "metadata": {
+      "breadcrumb_path": "Options",
+      "list_id": "$list_top",
+      "list_style": "unordered",
+      "position": 1,
+      "total_siblings": 2,
+      "sibling_ids": ["$item_B"],
+      "sibling_previews": ["Option B: timeout policy"],
+      "parent_item_id": null,
+      "depth": 0
+    }
+  },
+  {
+    "chunk_id": "$item_A_sub1",
+    "content": "# Options\nOption A: retry policy\nOnly applies when server returns 5xx",
+    "source_file": "tests/fixtures/lists/03_nested.md",
+    "chunk_type": "list_item",
+    "metadata": {
+      "breadcrumb_path": "Options",
+      "list_id": "$list_A_children",
+      "list_style": "unordered",
+      "position": 1,
+      "total_siblings": 2,
+      "sibling_ids": ["$item_A_sub2"],
+      "sibling_previews": ["Ignored for 4xx"],
+      "parent_item_id": "$item_A",
+      "depth": 1
+    }
+  },
+  {
+    "chunk_id": "$item_A_sub2",
+    "content": "# Options\nOption A: retry policy\nIgnored for 4xx",
+    "source_file": "tests/fixtures/lists/03_nested.md",
+    "chunk_type": "list_item",
+    "metadata": {
+      "breadcrumb_path": "Options",
+      "list_id": "$list_A_children",
+      "list_style": "unordered",
+      "position": 2,
+      "total_siblings": 2,
+      "sibling_ids": ["$item_A_sub1"],
+      "sibling_previews": ["Only applies when server retu…"],
+      "parent_item_id": "$item_A",
+      "depth": 1
+    }
+  },
+  {
+    "chunk_id": "$item_B",
+    "content": "# Options\nOption B: timeout policy",
+    "source_file": "tests/fixtures/lists/03_nested.md",
+    "chunk_type": "list_item",
+    "metadata": {
+      "breadcrumb_path": "Options",
+      "list_id": "$list_top",
+      "list_style": "unordered",
+      "position": 2,
+      "total_siblings": 2,
+      "sibling_ids": ["$item_A"],
+      "sibling_previews": ["Option A: retry policy"],
+      "parent_item_id": null,
+      "depth": 0
+    }
+  }
+]

@@ -52,6 +52,7 @@ class MilvusService:
         schema.add_field(field_name="embedding", datatype=DataType.FLOAT_VECTOR, dim=768)
         schema.add_field(field_name="content", datatype=DataType.VARCHAR, max_length=65535)
         schema.add_field(field_name="source_file", datatype=DataType.VARCHAR, max_length=512)
+        schema.add_field(field_name="source_name", datatype=DataType.VARCHAR, max_length=256)
         schema.add_field(field_name="chunk_type", datatype=DataType.VARCHAR, max_length=32)
         schema.add_field(field_name="metadata_json", datatype=DataType.VARCHAR, max_length=65535)
         schema.add_field(field_name="token_count", datatype=DataType.INT64)
@@ -113,6 +114,7 @@ class MilvusService:
                 "embedding": chunk.embedding,
                 "content": content,
                 "source_file": source_file,
+                "source_name": chunk.source_name or "",
                 "chunk_type": chunk.chunk_type,
                 "metadata_json": metadata_json,
                 "token_count": chunk.token_count,
@@ -135,11 +137,12 @@ class MilvusService:
         limit: int = 5,
         chunk_types: Optional[List[str]] = None,
         source_files: Optional[List[str]] = None,
+        source_names: Optional[List[str]] = None,
         metadata_contains: Optional[List[str]] = None,
     ) -> List[Dict]:
         """Search for similar chunks with optional scalar and metadata filters."""
         logger.info(
-            f"Searching with limit {limit}, chunk_types: {chunk_types}, source_files: {source_files}, metadata_contains: {metadata_contains}"
+            f"Searching with limit {limit}, chunk_types: {chunk_types}, source_files: {source_files}, source_names: {source_names}, metadata_contains: {metadata_contains}"
         )
 
         search_params = {
@@ -154,6 +157,9 @@ class MilvusService:
         if source_files:
             file_filter = " || ".join(f'source_file == "{s}"' for s in source_files)
             filter_clauses.append(f"({file_filter})")
+        if source_names:
+            name_filter = " || ".join(f'source_name == "{s}"' for s in source_names)
+            filter_clauses.append(f"({name_filter})")
         filter_expr = " && ".join(filter_clauses) if filter_clauses else None
 
         try:
@@ -166,6 +172,7 @@ class MilvusService:
                     "chunk_id",
                     "content",
                     "source_file",
+                    "source_name",
                     "chunk_type",
                     "metadata_json",
                     "token_count",
@@ -191,6 +198,7 @@ class MilvusService:
                         "chunk_id": hit.entity.get("chunk_id") if hasattr(hit, 'entity') else None,
                         "content": hit.entity.get("content") if hasattr(hit, 'entity') else "",
                         "source_file": hit.entity.get("source_file") if hasattr(hit, 'entity') else "",
+                        "source_name": hit.entity.get("source_name") if hasattr(hit, 'entity') else "",
                         "chunk_type": hit.entity.get("chunk_type") if hasattr(hit, 'entity') else "",
                         "metadata_json": hit.entity.get("metadata_json") if hasattr(hit, 'entity') else "{}",
                         "token_count": hit.entity.get("token_count") if hasattr(hit, 'entity') else 0,

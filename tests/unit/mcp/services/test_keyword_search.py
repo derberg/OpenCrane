@@ -38,6 +38,18 @@ def test_keyword_search_with_filters():
     assert [r["chunk_id"] for r in res3] == ["b"]
 
 
+def test_keyword_search_filters_by_source_name():
+    chunks = [
+        {"chunk_id": "a", "content": "alpha", "source_file": "x.md", "chunk_type": "prose", "metadata": {}, "source_name": "Org/repo-a"},
+        {"chunk_id": "b", "content": "alpha", "source_file": "y.md", "chunk_type": "prose", "metadata": {}, "source_name": "Org/repo-b"},
+        {"chunk_id": "c", "content": "alpha", "source_file": "z.md", "chunk_type": "prose", "metadata": {}},
+    ]
+    svc = KeywordSearchService(chunks=chunks)
+    res = svc.search("alpha", limit=5, source_names=["Org/repo-a"])
+    assert [r["chunk_id"] for r in res] == ["a"]
+    assert res[0]["source_name"] == "Org/repo-a"
+
+
 def test_keyword_search_no_results():
     """Test search with query that matches no chunks."""
     chunks = [

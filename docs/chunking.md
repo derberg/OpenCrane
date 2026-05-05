@@ -83,6 +83,13 @@ Strategies are evaluated in order; first match wins.
 - Example: `"llmstxt/llms-full.txt"`
 - Usage: Track chunk origins for debugging and filtering
 
+##### `source_name` (string, optional)
+- Purpose: Human-readable source identifier matching a path key in `.opencrane/config.yaml` sources.
+- Example: `"MicrosoftDocs/microsoft-style-guide"`
+- Resolved at chunking time by matching the chunk's `metadata.source_url` against the `url` / `docs_url` of each configured source (longest prefix wins).
+- Value is `null` when no configured source matches the chunk's URL.
+- Stored as a top-level Milvus field, enabling fast scalar filtering via the `source_names` parameter on `search_docs`.
+
 ##### `token_count` (integer)
 - Purpose: Number of tokens in chunk content
 - Encoding: `cl100k_base` (tiktoken) - used by GPT-4, GPT-3.5-turbo, text-embedding-ada-002

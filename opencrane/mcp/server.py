@@ -349,6 +349,19 @@ def _get_source_topics() -> list[str]:
     Returns human-readable topic names extracted from the mapping path keys
     (e.g., ``MicrosoftDocs/microsoft-style-guide`` → ``microsoft-style-guide``).
     """
+    sources = _get_source_keys()
+    return [
+        Path(key).name.replace("-", " ").replace("_", " ")
+        for key in sources
+    ]
+
+
+def _get_source_keys() -> list[str]:
+    """Return the raw source path keys (e.g., ``MicrosoftDocs/microsoft-style-guide``).
+
+    These are the values stored in chunks' ``source_name`` field and accepted
+    by the ``source_names`` filter on ``search_docs``.
+    """
     mapping_file = Path(os.environ.get("MAPPING_FILE", ".opencrane/sources.yaml"))
     if not mapping_file.exists():
         return []
@@ -356,12 +369,7 @@ def _get_source_topics() -> list[str]:
         import yaml as _yaml
         data = _yaml.safe_load(mapping_file.read_text(encoding="utf-8")) or {}
         sources = data.get("sources", {})
-        topics: list[str] = []
-        for key in sorted(sources.keys()):
-            # Use the last path component as the topic name, prettified
-            name = Path(key).name.replace("-", " ").replace("_", " ")
-            topics.append(name)
-        return topics
+        return sorted(sources.keys())
     except Exception:
         return []
 
@@ -370,6 +378,7 @@ def _build_search_tool() -> Tool:
     """Build the search_docs tool with description and schema derived from indexed data."""
     chunk_types = sorted(_get_indexed_chunk_types())
     topics = _get_source_topics()
+    source_keys = _get_source_keys()
 
     # Build description
     if topics:
@@ -387,30 +396,42 @@ def _build_search_tool() -> Tool:
             + "." if chunk_types else "Filter by content types.",
     }
 
+    properties: dict = {
+        "query": {
+            "type": "string",
+            "description": "The search query"
+        },
+        "limit": {
+            "type": "integer",
+            "description": "Maximum number of results to return",
+            "default": 5,
+            "minimum": 1,
+            "maximum": 50
+        },
+        "chunk_types": chunk_types_property,
+        "metadata_contains": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Filter results whose metadata JSON contains all provided substrings (AND logic). Example: ['SMC', 'v1alpha1'] finds chunks with both strings in metadata."
+                + (" Use get_metadata_schema tool for details on available metadata fields." if _has_yaml_chunks() else "")
+        },
+    }
+
+    if source_keys:
+        properties["source_names"] = {
+            "type": "array",
+            "items": {"type": "string", "enum": source_keys},
+            "description": "Restrict results to one or more configured sources (OR logic). Available: "
+                + ", ".join(source_keys) + ".",
+        }
+
     return Tool(
         name="search_docs",
         description=description,
         inputSchema={
             "type": "object",
             "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query"
-                },
-                "limit": {
-                    "type": "integer",
-                    "description": "Maximum number of results to return",
-                    "default": 5,
-                    "minimum": 1,
-                    "maximum": 50
-                },
-                "chunk_types": chunk_types_property,
-                "metadata_contains": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Filter results whose metadata JSON contains all provided substrings (AND logic). Example: ['SMC', 'v1alpha1'] finds chunks with both strings in metadata."
-                        + (" Use get_metadata_schema tool for details on available metadata fields." if _has_yaml_chunks() else "")
-                },
+                **properties,
                 "search_mode": {
                     "type": "string",
                     "enum": ["semantic", "keyword", "hybrid"],
@@ -540,13 +561,14 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text="Error: query must be a non-empty string.")]
     limit = arguments.get("limit", 5)
     chunk_types = arguments.get("chunk_types")
+    source_names = arguments.get("source_names")
     metadata_contains = arguments.get("metadata_contains")
     search_mode = arguments.get("search_mode", "hybrid")
     alpha = max(0.0, min(1.0, float(arguments.get("alpha", get_config().hybrid_alpha))))
 
     logger.info(
         f"   📖 search: query=\"{query}\" mode={search_mode} limit={limit} "
-        f"types={chunk_types} metadata={metadata_contains}"
+        f"types={chunk_types} sources={source_names} metadata={metadata_contains}"
     )
 
     try:
@@ -599,8 +621,12 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
                 if not source_url:
                     source_url = source_file
 
+                source_name = result.get("source_name") or ""
+
                 result_text = f"Result {i}:\n"
                 result_text += f"Source: {source_url}\n"
+                if source_name:
+                    result_text += f"Source Name: {source_name}\n"
                 result_text += f"Type: {chunk_type}\n"
                 result_text += f"Chunk ID: {chunk_id}\n"
                 if token_count is not None:
@@ -640,6 +666,7 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
                 query_vec,
                 limit=limit,
                 chunk_types=chunk_types,
+                source_names=source_names,
                 metadata_contains=metadata_contains,
             )
 
@@ -649,6 +676,7 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
                 query,
                 limit=limit,
                 chunk_types=chunk_types,
+                source_names=source_names,
                 metadata_contains=metadata_contains,
             )
 

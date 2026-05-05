@@ -6,8 +6,22 @@ import sys
 from pathlib import Path
 from opencrane.rag.services.file_processor import FileProcessor
 from opencrane.rag.services.chunk_serializer import ChunkSerializer
+from opencrane.rag.services.source_mapping import SourceMapping
+from opencrane.rag.services.source_resolver import SourceResolver
+from opencrane.shared.config import get_config
 
 logger = logging.getLogger(__name__)
+
+
+def _annotate_source_names(chunks, mapping_file: Path) -> None:
+    """Set ``source_name`` on each chunk using its metadata source_url."""
+    if not mapping_file.exists():
+        return
+    mapping = SourceMapping(mapping_file)
+    resolver = SourceResolver(mapping.get_all_sources())
+    for chunk in chunks:
+        url = chunk.metadata.get("source_url") if chunk.metadata else None
+        chunk.source_name = resolver.resolve(url)
 
 
 def main(config=None, llmstxt_dir=None, chunks_file=None):
@@ -35,6 +49,11 @@ def main(config=None, llmstxt_dir=None, chunks_file=None):
     try:
         processor = FileProcessor(config=config)
         chunks = processor.process_file(input_file)
+
+        mapping_file = get_config().mapping_file
+        if not mapping_file.is_absolute():
+            mapping_file = Path.cwd() / mapping_file
+        _annotate_source_names(chunks, mapping_file)
 
         ChunkSerializer.serialize_chunks(chunks, output)
 

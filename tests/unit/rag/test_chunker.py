@@ -9,8 +9,10 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import pytest
+import yaml
 
-from opencrane.rag.chunker import main
+from opencrane.rag.chunker import _annotate_source_names, main
+from opencrane.shared.models.chunk import Chunk
 
 
 class TestChunkerWarnings:
@@ -127,3 +129,45 @@ Content with marker.
             assert '%' in warning_message, "Warning should include percentage"
             assert f"{len(chunks_without_source)} out of {len(chunks)}" in warning_message, \
                 "Warning should include counts"
+
+
+class TestAnnotateSourceNames:
+    """Verify chunks pick up source_name from the source mapping."""
+
+    def test_sets_source_name_from_metadata_url(self, tmp_path):
+        mapping_file = tmp_path / "config.yaml"
+        mapping_file.write_text(yaml.safe_dump({
+            "sources": {
+                "Org/repo-a": {"url": "https://github.com/Org/repo-a"},
+            }
+        }))
+        chunks = [
+            Chunk(
+                content="alpha",
+                source_file="llms-full.txt",
+                chunk_type="prose",
+                metadata={"source_url": "https://github.com/Org/repo-a/blob/main/x.md"},
+                token_count=1,
+            ),
+            Chunk(
+                content="beta",
+                source_file="llms-full.txt",
+                chunk_type="prose",
+                metadata={"source_url": "https://other.example/foo"},
+                token_count=1,
+            ),
+        ]
+        _annotate_source_names(chunks, mapping_file)
+        assert chunks[0].source_name == "Org/repo-a"
+        assert chunks[1].source_name is None
+
+    def test_no_op_when_mapping_file_missing(self, tmp_path):
+        chunk = Chunk(
+            content="alpha",
+            source_file="llms-full.txt",
+            chunk_type="prose",
+            metadata={"source_url": "https://github.com/Org/repo-a/x"},
+            token_count=1,
+        )
+        _annotate_source_names([chunk], tmp_path / "missing.yaml")
+        assert chunk.source_name is None

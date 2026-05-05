@@ -10,6 +10,10 @@ class Chunk(BaseModel):
     chunk_id: str | None = Field(None, description="Unique identifier (UUID) for the chunk")
     content: Union[str, Dict[str, Any], list] = Field(..., description="Chunk payload: string for prose/code, dict/list for YAML")
     source_file: str = Field(..., description="Absolute or repo-relative path of the source file")
+    source_name: str | None = Field(
+        None,
+        description="Human-readable source identifier (matches a key in .opencrane/config.yaml sources). Resolved from source_url at chunking time; None when no mapping matches."
+    )
     chunk_type: Literal["prose", "code_snippet", "crd_definition", "openapi_spec", "yaml_content", "json_schema", "list_item"] = Field(
         ..., description="Categorizes processing strategy"
     )

@@ -9,7 +9,7 @@ from opencrane.mcp import server as mcp_server
 @patch('opencrane.mcp.server.get_keyword_service')
 async def test__search_documentation_impl_keyword_mode(mock_get_keyword, monkeypatch):
     class DummyKeyword:
-        def search(self, query, limit=5, categories=None, chunk_types=None, source_files=None, metadata_contains=None):
+        def search(self, query, limit=5, categories=None, chunk_types=None, source_files=None, source_names=None, metadata_contains=None):
             return [{
                 "chunk_id": "k1",
                 "content": "keyword content",
@@ -50,7 +50,7 @@ async def test__search_documentation_impl_hybrid_mode(mock_get_embed, mock_get_m
         model = DummyModel()
 
     class DummyMilvus:
-        def search(self, vector, limit=5, categories=None, chunk_types=None, metadata_contains=None):
+        def search(self, vector, limit=5, categories=None, chunk_types=None, source_names=None, metadata_contains=None):
             return [{
                 "chunk_id": "sem1",
                 "content": "semantic result",
@@ -61,7 +61,7 @@ async def test__search_documentation_impl_hybrid_mode(mock_get_embed, mock_get_m
             }]
 
     class DummyKeyword:
-        def search(self, query, limit=5, categories=None, chunk_types=None, metadata_contains=None):
+        def search(self, query, limit=5, categories=None, chunk_types=None, source_names=None, metadata_contains=None):
             return [{
                 "chunk_id": "key1",
                 "content": "keyword result",
@@ -124,11 +124,11 @@ async def test__search_documentation_impl_hybrid_empty_results(mock_get_embed, m
         model = DummyModel()
 
     class DummyMilvus:
-        def search(self, vector, limit=5, categories=None, chunk_types=None, metadata_contains=None):
+        def search(self, vector, limit=5, categories=None, chunk_types=None, source_names=None, metadata_contains=None):
             return []
 
     class DummyKeyword:
-        def search(self, query, limit=5, categories=None, chunk_types=None, metadata_contains=None):
+        def search(self, query, limit=5, categories=None, chunk_types=None, source_names=None, metadata_contains=None):
             return []
 
     mock_get_embed.return_value = DummyEmbeddings()
@@ -159,7 +159,7 @@ async def test__search_documentation_impl_semantic_none_results(mock_get_embed, 
         model = DummyModel()
 
     class DummyMilvus:
-        def search(self, vector, limit=5, categories=None, chunk_types=None, metadata_contains=None):
+        def search(self, vector, limit=5, categories=None, chunk_types=None, source_names=None, metadata_contains=None):
             return None  # Simulate error returning None
 
     mock_get_embed.return_value = DummyEmbeddings()
@@ -182,7 +182,7 @@ async def test__search_documentation_impl_semantic_none_results(mock_get_embed, 
 async def test__search_documentation_impl_keyword_none_results(mock_get_keyword, monkeypatch):
     """Test keyword search when service returns None."""
     class DummyKeyword:
-        def search(self, query, limit=5, categories=None, chunk_types=None, metadata_contains=None):
+        def search(self, query, limit=5, categories=None, chunk_types=None, source_names=None, metadata_contains=None):
             return None  # Simulate error returning None
 
     mock_get_keyword.return_value = DummyKeyword()
@@ -212,11 +212,11 @@ async def test__search_documentation_impl_hybrid_none_results(mock_get_embed, mo
         model = DummyModel()
 
     class DummyMilvus:
-        def search(self, vector, limit=5, categories=None, chunk_types=None, metadata_contains=None):
+        def search(self, vector, limit=5, categories=None, chunk_types=None, source_names=None, metadata_contains=None):
             return None
 
     class DummyKeyword:
-        def search(self, query, limit=5, categories=None, chunk_types=None, metadata_contains=None):
+        def search(self, query, limit=5, categories=None, chunk_types=None, source_names=None, metadata_contains=None):
             return None
 
     mock_get_embed.return_value = DummyEmbeddings()

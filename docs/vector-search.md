@@ -91,6 +91,7 @@ Search indexed documentation. The description and available chunk types are dyna
 - `alpha` (number, optional): Weight for semantic score in hybrid mode (0-1, default: 0.6)
 - `chunk_types` (array, optional): Filter by content type - "prose", "code_snippet", "crd_definition", "openapi_spec", "json_schema"
 - `metadata_contains` (array, optional): Filter by metadata content (AND logic)
+- `source_names` (array, optional): Restrict results to one or more configured sources (OR logic). Values must be path keys from `.opencrane/config.yaml` sources (e.g. `MicrosoftDocs/microsoft-style-guide`). The tool schema only advertises this parameter when sources are configured, and the enum lists the exact valid values.
 
 **Example:**
 ```python
@@ -98,6 +99,7 @@ search_docs(
     query="authentication methods",
     search_mode="hybrid",
     chunk_types=["prose", "code_snippet"],
+    source_names=["MicrosoftDocs/microsoft-style-guide"],
     limit=10
 )
 ```

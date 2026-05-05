@@ -30,6 +30,7 @@ class VectorChunk(BaseModel):
     embedding: List[float] = Field(..., description="Embedding vector")
     content: str = Field(..., description="Chunk content")
     source_file: str = Field(..., description="Source file path")
+    source_name: Optional[str] = Field(None, description="Source identifier from config.yaml (e.g., 'MicrosoftDocs/microsoft-style-guide')")
     chunk_type: str = Field(..., description="Chunk type")
     metadata_json: Optional[str] = Field(None, description="JSON string of metadata")
     token_count: int = Field(..., description="Token count")
@@ -39,17 +40,18 @@ class VectorChunk(BaseModel):
     def from_chunk_and_embedding(cls, chunk, embedding_record):
         """Create VectorChunk from Chunk and EmbeddingRecord."""
         import json
-        
+
         # Serialize dict/list content to JSON string for storage
         content_str = chunk.content
         if isinstance(chunk.content, (dict, list)):
             content_str = json.dumps(chunk.content)
-        
+
         return cls(
             chunk_id=embedding_record.chunk_id,
             embedding=embedding_record.vector,
             content=content_str,
             source_file=chunk.source_file,
+            source_name=getattr(chunk, "source_name", None),
             chunk_type=chunk.chunk_type,
             metadata_json=json.dumps(chunk.metadata) if chunk.metadata else None,
             token_count=chunk.token_count,

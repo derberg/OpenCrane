@@ -19,7 +19,7 @@ async def test__search_documentation_impl_hybrid_missing_chunk_record(
         model = DummyModel()
 
     class DummyMilvus:
-        def search(self, vector, limit=5, categories=None, chunk_types=None, metadata_contains=None):
+        def search(self, vector, limit=5, categories=None, chunk_types=None, source_names=None, metadata_contains=None):
             return [
                 {
                     "chunk_id": "valid1",
@@ -40,7 +40,7 @@ async def test__search_documentation_impl_hybrid_missing_chunk_record(
             ]
 
     class DummyKeyword:
-        def search(self, query, limit=5, categories=None, chunk_types=None, metadata_contains=None):
+        def search(self, query, limit=5, categories=None, chunk_types=None, source_names=None, metadata_contains=None):
             return [
                 {
                     "chunk_id": "valid2",

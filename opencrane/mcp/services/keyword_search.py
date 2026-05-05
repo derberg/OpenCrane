@@ -31,6 +31,7 @@ class KeywordDoc:
     chunk_id: str
     content: str
     source_file: str
+    source_name: str
     chunk_type: str
     metadata_json: str
 
@@ -63,10 +64,11 @@ class KeywordSearchService:
                 elif not isinstance(content, str):
                     content = str(content)
                 source_file = ch.get("source_file", "")
+                source_name = ch.get("source_name") or ""
                 chunk_type = ch.get("chunk_type", "")
                 metadata = ch.get("metadata") or {}
                 metadata_json = json.dumps(metadata, ensure_ascii=False)
-                docs.append(KeywordDoc(chunk_id, content, source_file, chunk_type, metadata_json))
+                docs.append(KeywordDoc(chunk_id, content, source_file, source_name, chunk_type, metadata_json))
             except Exception:  # pragma: no cover - skip malformed
                 continue
 
@@ -82,6 +84,7 @@ class KeywordSearchService:
         limit: int = 5,
         chunk_types: Optional[List[str]] = None,
         source_files: Optional[List[str]] = None,
+        source_names: Optional[List[str]] = None,
         metadata_contains: Optional[List[str]] = None,
     ) -> List[Dict]:
         self._load()
@@ -97,6 +100,8 @@ class KeywordSearchService:
             if chunk_types and doc.chunk_type not in set(chunk_types):
                 return False
             if source_files and doc.source_file not in set(source_files):
+                return False
+            if source_names and doc.source_name not in set(source_names):
                 return False
             if metadata_contains:
                 meta = doc.metadata_json
@@ -114,6 +119,7 @@ class KeywordSearchService:
                 "chunk_id": doc.chunk_id,
                 "content": doc.content,
                 "source_file": doc.source_file,
+                "source_name": doc.source_name,
                 "chunk_type": doc.chunk_type,
                 "metadata_json": doc.metadata_json,
                 # Use a unified key name for score compatibility with vector results

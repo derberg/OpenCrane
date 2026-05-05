@@ -54,6 +54,25 @@ class TestMCPServer:
         # No topics — generic description
         assert "Topics:" not in tools[0].description
 
+    @patch('opencrane.mcp.server._get_source_keys', return_value=["Org/repo-a", "Org/repo-b"])
+    @patch('opencrane.mcp.server._get_source_topics', return_value=["repo a", "repo b"])
+    @patch('opencrane.mcp.server._get_indexed_chunk_types', return_value={"prose"})
+    @patch('opencrane.mcp.server._has_yaml_chunks', return_value=False)
+    def test_search_tool_advertises_source_names_filter(self, *_mocks):
+        """search_docs tool exposes a source_names filter when sources are configured."""
+        tool = _build_search_tool()
+        props = tool.inputSchema["properties"]
+        assert "source_names" in props
+        assert props["source_names"]["items"]["enum"] == ["Org/repo-a", "Org/repo-b"]
+
+    @patch('opencrane.mcp.server._get_source_keys', return_value=[])
+    @patch('opencrane.mcp.server._get_source_topics', return_value=[])
+    @patch('opencrane.mcp.server._get_indexed_chunk_types', return_value={"prose"})
+    @patch('opencrane.mcp.server._has_yaml_chunks', return_value=False)
+    def test_search_tool_omits_source_names_when_no_sources(self, *_mocks):
+        tool = _build_search_tool()
+        assert "source_names" not in tool.inputSchema["properties"]
+
     @patch('opencrane.mcp.server.EmbeddingService')
     def test_get_embeddings_service_lazy_init(self, mock_embedding_service):
         """Test lazy initialization of embeddings service."""
@@ -203,7 +222,36 @@ class TestMCPServer:
         assert "file.md" in results[0].text
 
         mock_model.encode.assert_called_once_with(["test query"], batch_size=8, show_progress_bar=False)
-        mock_milvus.search.assert_called_once_with([0.1] * 768, limit=5, chunk_types=None, metadata_contains=None)
+        mock_milvus.search.assert_called_once_with([0.1] * 768, limit=5, chunk_types=None, source_names=None, metadata_contains=None)
+
+    @patch('opencrane.mcp.server.get_embeddings_service')
+    @patch('opencrane.mcp.server.get_milvus_service')
+    @pytest.mark.anyio
+    async def test_search_result_includes_source_name(self, mock_milvus_get, mock_embeddings_get):
+        """When a hit carries source_name, it's surfaced in the formatted output."""
+        mock_embeddings = Mock()
+        mock_model = Mock()
+        mock_model.encode.return_value = [[0.1] * 768]
+        mock_embeddings.model = mock_model
+        mock_embeddings_get.return_value = mock_embeddings
+
+        mock_milvus = Mock()
+        mock_milvus.search.return_value = [
+            {
+                "content": "test",
+                "source_file": "file.md",
+                "source_name": "Org/repo-a",
+                "chunk_type": "prose",
+                "metadata_json": "{}",
+                "distance": 0.5,
+            }
+        ]
+        mock_milvus_get.return_value = mock_milvus
+
+        results = await _search_documentation_impl({
+            "query": "q", "limit": 1, "search_mode": "semantic",
+        })
+        assert "Source Name: Org/repo-a" in results[0].text
 
     @patch('opencrane.mcp.server.get_embeddings_service')
     @patch('opencrane.mcp.server.get_milvus_service')
@@ -227,7 +275,7 @@ class TestMCPServer:
         assert len(results) == 1
         assert "No results found." in results[0].text
 
-        mock_milvus.search.assert_called_once_with([0.1] * 768, limit=3, chunk_types=["prose", "code"], metadata_contains=None)
+        mock_milvus.search.assert_called_once_with([0.1] * 768, limit=3, chunk_types=["prose", "code"], source_names=None, metadata_contains=None)
 
     @patch('opencrane.mcp.server.get_embeddings_service')
     @patch('opencrane.mcp.server.get_milvus_service')

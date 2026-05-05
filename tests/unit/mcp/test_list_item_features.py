@@ -341,3 +341,25 @@ def test_get_source_topics_missing_file_returns_empty(tmp_path, monkeypatch):
     from opencrane.mcp.server import _get_source_topics
     monkeypatch.setenv("MAPPING_FILE", str(tmp_path / "does-not-exist.yaml"))
     assert _get_source_topics() == []
+
+
+def test_get_source_keys_returns_path_keys(tmp_path, monkeypatch):
+    from opencrane.mcp.server import _get_source_keys
+    mapping = tmp_path / "config.yaml"
+    mapping.write_text("sources:\n  Acme/example-repo: docs\n  Other/project-docs: .\n")
+    monkeypatch.setenv("MAPPING_FILE", str(mapping))
+    assert _get_source_keys() == ["Acme/example-repo", "Other/project-docs"]
+
+
+def test_get_source_keys_missing_file_returns_empty(tmp_path, monkeypatch):
+    from opencrane.mcp.server import _get_source_keys
+    monkeypatch.setenv("MAPPING_FILE", str(tmp_path / "missing.yaml"))
+    assert _get_source_keys() == []
+
+
+def test_get_source_keys_malformed_yaml_returns_empty(tmp_path, monkeypatch):
+    from opencrane.mcp.server import _get_source_keys
+    mapping = tmp_path / "broken.yaml"
+    mapping.write_text("sources: [unclosed\n")
+    monkeypatch.setenv("MAPPING_FILE", str(mapping))
+    assert _get_source_keys() == []

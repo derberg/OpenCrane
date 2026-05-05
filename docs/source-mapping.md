@@ -4,11 +4,12 @@ The source mapping config file (e.g., `source-mapping.yaml`) is the control cent
 
 ## Purpose
 
-The source mapping serves three critical functions:
+The source mapping serves four critical functions:
 
 1. **Documentation Discovery**: Tracks all documentation sources
 2. **Output Control**: Determines which directories get `llms-full.txt` files generated
 3. **Source Attribution**: Provides GitHub URLs for proper attribution in generated content
+4. **Search Filtering**: Each path key becomes a chunk's `source_name`, exposing it as a `source_names` filter on the MCP `search_docs` tool so agents can scope queries to specific sources. The match is performed by prefix-matching a chunk's `source_url` against the entry's `url` and `docs_url`
 
 ## File Structure
 

@@ -343,7 +343,7 @@ def write_outputs(project_outputs: Dict[str, str], output_root: Path = OUTPUT_RO
 def _combine_existing_llmstxt(llmstxt_base: Path) -> List[Path]:
     """Scan llmstxt subdirectories for existing llms-full.txt files and combine them.
 
-    Used when no sources are configured in sources.yaml but pre-existing
+    Used when no sources are configured in config.yaml but pre-existing
     llms-full.txt files exist (e.g., added via ``opencrane add``).
 
     Returns the list of found files (empty if none exist).

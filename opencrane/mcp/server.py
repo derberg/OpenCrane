@@ -362,7 +362,7 @@ def _get_source_keys() -> list[str]:
     These are the values stored in chunks' ``source_name`` field and accepted
     by the ``source_names`` filter on ``search_docs``.
     """
-    mapping_file = Path(os.environ.get("MAPPING_FILE", ".opencrane/sources.yaml"))
+    mapping_file = Path(os.environ.get("MAPPING_FILE", ".opencrane/config.yaml"))
     if not mapping_file.exists():
         return []
     try:

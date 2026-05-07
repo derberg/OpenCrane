@@ -93,7 +93,7 @@ def main(config=None):
                 org_name, repo_name = parsed
 
                 # Manual repos are always fetched regardless of --org filter
-                # (they are explicitly listed by the user in sources.yaml)
+                # (they are explicitly listed by the user in config.yaml)
 
                 # Skip self-reference (current repository)
                 if repo_name == current_repo_name and org_name == config.org_name:

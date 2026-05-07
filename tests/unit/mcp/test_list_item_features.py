@@ -363,3 +363,16 @@ def test_get_source_keys_malformed_yaml_returns_empty(tmp_path, monkeypatch):
     mapping.write_text("sources: [unclosed\n")
     monkeypatch.setenv("MAPPING_FILE", str(mapping))
     assert _get_source_keys() == []
+
+
+def test_get_source_keys_default_path_is_config_yaml(tmp_path, monkeypatch):
+    """Without MAPPING_FILE set, the default path must be .opencrane/config.yaml."""
+    from opencrane.mcp.server import _get_source_keys
+    monkeypatch.delenv("MAPPING_FILE", raising=False)
+    monkeypatch.chdir(tmp_path)
+    opencrane_dir = tmp_path / ".opencrane"
+    opencrane_dir.mkdir()
+    (opencrane_dir / "config.yaml").write_text(
+        "sources:\n  Acme/example-repo: docs\n  Other/project-docs: .\n"
+    )
+    assert _get_source_keys() == ["Acme/example-repo", "Other/project-docs"]

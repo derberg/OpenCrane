@@ -27,6 +27,7 @@ A standalone, extensible RAG/MCP pipeline for building AI-powered documentation 
   - [Source mapping file](#source-mapping-file-opencraneonfigyaml)
 - [Extending OpenCrane](#extending-opencrane)
   - [Extension points](#extension-points)
+  - [Built-in fence types](#built-in-fence-types)
   - [Built-in YAML tree walkers](#built-in-yaml-tree-walkers)
   - [Writing a custom fence type](#writing-a-custom-fence-type)
   - [Writing a custom YAML tree walker](#writing-a-custom-yaml-tree-walker)
@@ -37,7 +38,7 @@ A standalone, extensible RAG/MCP pipeline for building AI-powered documentation 
 
 - **Flexible RAG pipeline**: run the full flow (fetch → generate llms-full.txt → chunk → embed → index → serve) or use only the steps you need
 - **MCP server**: exposes search tools consumable by Claude, Cursor, and any MCP-compatible client
-- **Extensible**: subclass `OpenCraneConfig` to add custom fence types, chunking strategies, and YAML tree walkers
+- **Extensible**: subclass `OpenCraneConfig` to add custom fence types, chunking strategies, and YAML tree walkers; `openapi`, `asyncapi`, `crd`, and `json-schema` fence types are built in
 - **CLI**: every pipeline step is a subcommand; works in CI/CD and non-Python projects
 
 
@@ -366,21 +367,17 @@ Subclass `OpenCraneConfig` to register project-specific extensions:
 ```python
 # myproject/config.py
 from opencrane import OpenCraneConfig
-from opencrane.fences import CodeFenceConfig
+from opencrane.fences import CodeFenceConfig, inline_file
 from opencrane.rag.services.yaml_chunker import YamlChunkingStrategy
 from opencrane.rag.services.code_chunker import CodeChunkingStrategy
 from opencrane.rag.services.prose_chunker import ProseChunkingStrategy
 from myproject.strategies.custom import CustomChunkingStrategy
 from myproject.walkers.terraform import TerraformTreeWalker
 
-def my_openapi_handler(content: str) -> str:
-    # content is the raw text inside the ```openapi ... ``` block
-    # process it however you like and return the replacement string
-    return f"```yaml\n{content}\n```\n"
-
 class MyConfig(OpenCraneConfig):
     fence_types = {
-        "openapi": CodeFenceConfig(fence_type="openapi", handler=my_openapi_handler),
+        **OpenCraneConfig.fence_types,  # keep openapi, asyncapi, crd, json-schema
+        "terraform": CodeFenceConfig(fence_type="terraform", handler=inline_file),
     }
     chunking_strategies = [
         YamlChunkingStrategy(),
@@ -407,6 +404,24 @@ opencrane build --config myproject.config:MyConfig
 | `fence_types` | `llms` | Register custom fence language identifiers and control how matching blocks are transformed during llms-full.txt generation |
 | `chunking_strategies` | `chunk` | Add or replace chunking strategies for different content types |
 | `yaml_tree_walkers` | `chunk` | Add walkers for custom YAML document formats |
+
+### Built-in fence types
+
+`openapi`, `asyncapi`, `crd`, and `json-schema` are registered by default in `OpenCraneConfig`. Each uses the `opencrane.fences.inline_file` handler, which reads the file path written inside the fence block, inlines the file content, and adds a `### URL` section marker so the chunker assigns a per-file source URL to the resulting chunks.
+
+Usage in markdown:
+
+````markdown
+```openapi
+path/to/openapi.json
+```
+
+```asyncapi
+path/to/asyncapi.yaml
+```
+````
+
+No `extensions.py` is needed for these types. To extend with additional fence types that use the same inlining behaviour, pass `**OpenCraneConfig.fence_types` when defining `fence_types` in your config subclass (as shown in the example above).
 
 ### Built-in YAML tree walkers
 
@@ -435,25 +450,17 @@ fence_types = {
 }
 ```
 
-To inline a file referenced by path inside the block, use `get_source_url` from `opencrane.fences` to add a source annotation:
+To inline a file referenced by path inside the block, use the built-in `inline_file` handler from `opencrane.fences`:
 
 ```python
-from pathlib import Path
-from opencrane.fences import CodeFenceConfig, get_source_url
-
-def inline_handler(content: str, file_path: Path, project_dir: Path, project_name: str) -> str:
-    target = (file_path.parent / content.strip()).resolve()
-    language = "json" if target.suffix == ".json" else "yaml"
-    gh_url = get_source_url(Path(project_name) / target.relative_to(project_dir), project_name)
-    file_content = target.read_text(encoding="utf-8").rstrip("\n")
-    if gh_url:
-        return f"```{language}\n# Source: {gh_url}\n{file_content}\n```\n"
-    return f"```{language}\n{file_content}\n```\n"
+from opencrane.fences import CodeFenceConfig, inline_file
 
 fence_types = {
-    "my-type": CodeFenceConfig(fence_type="my-type", handler=inline_handler),
+    "my-type": CodeFenceConfig(fence_type="my-type", handler=inline_file),
 }
 ```
+
+`inline_file` reads the file path from the fence block content, inlines the file, and adds a `### URL` source annotation so the chunker assigns per-file source URLs to the resulting chunks.
 
 ### Writing a custom YAML tree walker
 

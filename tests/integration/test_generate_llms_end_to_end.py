@@ -1,3 +1,4 @@
+import os
 import pytest
 import tempfile
 from pathlib import Path
@@ -141,4 +142,68 @@ class TestGenerateLlmsEndToEnd:
         
         source2_combined = (source2_out / "llms-full.txt").read_text()
         assert "Root Level Doc" in source2_combined  # Should be empty when no projects
+
+    def test_local_source_no_duplicate_in_combined(self):
+        """Regression: local sources must not duplicate content in all-projects llms-full.txt.
+
+        When a project uses a local source (local: true in config.yaml), the combined
+        llms-full.txt at LLMSTXT_BASE must contain each document exactly once.
+        Previously, write_outputs() wrote the combined file to LLMSTXT_BASE and then
+        the top-level combiner re-read that file AND the per-source subdir, producing
+        content twice (2x token count visible in `opencrane tokens` output).
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            workspace = Path(tmpdir)
+
+            # Simulate a project layout: workspace/telna/<docs>.md
+            docs_dir = workspace / "telna"
+            docs_dir.mkdir()
+            (docs_dir / "overview.md").write_text("# Overview\n\nUnique content here.")
+            (docs_dir / "api.md").write_text("# API Reference\n\nEndpoint details.")
+
+            # Write a config.yaml with one local source
+            opencrane_dir = workspace / ".opencrane"
+            opencrane_dir.mkdir()
+            (opencrane_dir / "config.yaml").write_text(
+                "sources:\n"
+                "  telna:\n"
+                "    local: true\n"
+                "    docs_path: telna\n"
+                "    url: https://github.com/example/telna-docs\n"
+            )
+
+            orig_dir = os.getcwd()
+            try:
+                os.chdir(workspace)
+                # Override MAPPING_FILE so get_source_mapping() reads the workspace config
+                # (conftest.py's isolate_outputs autouse fixture sets MAPPING_FILE to a
+                # shared test fixture, which would cause generate_outputs to see no sources).
+                import opencrane.rag.generate_llms_txt as gen_mod
+                gen_mod._source_mapping = None
+                with patch.dict(os.environ, {"MAPPING_FILE": str(opencrane_dir / "config.yaml")}):
+                    generate_outputs()
+            finally:
+                os.chdir(orig_dir)
+                gen_mod._source_mapping = None
+
+            llmstxt_base = workspace / ".opencrane" / "llmstxt"
+            combined = llmstxt_base / "llms-full.txt"
+            per_source = llmstxt_base / "telna" / "llms-full.txt"
+
+            assert combined.exists(), "Combined llms-full.txt must exist"
+            assert per_source.exists(), "Per-source telna/llms-full.txt must exist"
+
+            combined_text = combined.read_text()
+            per_source_text = per_source.read_text()
+
+            # Each unique phrase must appear exactly once in the combined file
+            assert combined_text.count("Unique content here.") == 1, (
+                "Content duplicated in combined llms-full.txt — top-level combiner re-added per-source content"
+            )
+            assert combined_text.count("Endpoint details.") == 1
+
+            # Combined and per-source files should have the same content
+            assert combined_text == per_source_text, (
+                "Combined llms-full.txt differs from per-source file — unexpected extra content"
+            )
 

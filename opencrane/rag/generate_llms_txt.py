@@ -633,13 +633,16 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
         write_outputs(output_mapping, output_root, root_projects)
 
     # Top-level combined output used by setup.sh (llmstxt/llms-full.txt)
-    # When there's a single source_dir that equals sources_base, write_outputs
-    # already wrote the combined file directly to LLMSTXT_BASE/llms-full.txt.
+    # When there's a single source_dir that maps to output_root == LLMSTXT_BASE,
+    # write_outputs already wrote the combined file directly to LLMSTXT_BASE/llms-full.txt.
     # Skip the combiner to avoid duplicating content.
+    # This covers two cases:
+    #   1. source_dirs[0] == .opencrane/sources (remote sources fetched to sources_base)
+    #   2. source_dirs[0] == workspace_root (local sources, source_rel resolves to '.')
     sources_base = Path.cwd() / ".opencrane" / "sources"
-    single_source_is_base = (
-        len(source_dirs) == 1
-        and source_dirs[0].resolve() == sources_base.resolve()
+    single_source_is_base = len(source_dirs) == 1 and (
+        source_dirs[0].resolve() == sources_base.resolve()
+        or source_dirs[0].resolve() == Path.cwd().resolve()
     )
 
     if single_source_is_base:

@@ -6,7 +6,7 @@ chunking strategies, and YAML tree walkers.
 
 from typing import Dict, List
 
-from opencrane.fences import CodeFenceConfig
+from opencrane.fences import CodeFenceConfig, inline_file
 from opencrane.rag.services.base_strategy import ProcessingStrategy
 from opencrane.rag.services.yaml_chunker import YamlChunkingStrategy
 from opencrane.rag.services.code_chunker import CodeChunkingStrategy
@@ -28,9 +28,14 @@ class OpenCraneConfig:
             }
     """
 
-    # Fence types for llms-full.txt generation.
-    # Empty by default — all fence types are project-specific.
-    fence_types: Dict[str, CodeFenceConfig] = {}
+    # Built-in fence types — treat block content as a relative file path and
+    # inline the file with a source URL section marker.
+    fence_types: Dict[str, CodeFenceConfig] = {
+        "openapi":      CodeFenceConfig(fence_type="openapi",      handler=inline_file),
+        "asyncapi":     CodeFenceConfig(fence_type="asyncapi",     handler=inline_file),
+        "crd":          CodeFenceConfig(fence_type="crd",          handler=inline_file),
+        "json-schema":  CodeFenceConfig(fence_type="json-schema",  handler=inline_file),
+    }
 
     # Chunking strategies applied in order (first match wins).
     # TabsChunkingStrategy is NOT included — it's project-specific.

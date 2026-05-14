@@ -1,3 +1,4 @@
 # ML dependencies (embeddings and vector DB)
 sentence-transformers>=2.0
-pymilvus[milvus_lite]>=2.3
+pymilvus[milvus_lite]>=2.5,<2.6
+milvus-lite>=2.4.0,<3.0.0

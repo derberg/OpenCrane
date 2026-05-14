@@ -6,7 +6,7 @@ from unittest.mock import patch
 import click
 import pytest
 
-from opencrane.pack import pack, _PEP508_NAME_RE
+from opencrane.pack import pack, _PEP508_NAME_RE, _preserve_extra_deps, _pkg_name
 
 
 @pytest.fixture()
@@ -198,6 +198,71 @@ def test_metadata_schema_package_read_failure(pack_dir, monkeypatch):
 
     output_dir, _ = pack(name="test-mcp")
     assert not (output_dir / "test_mcp" / "data" / "metadata-schema.md").exists()
+
+
+# === Dependency preservation ===
+
+
+@pytest.mark.unit
+def test_preserve_extra_deps_no_existing_file(tmp_path):
+    assert _preserve_extra_deps(tmp_path / "pyproject.toml", ["opencrane>=0.17.0"]) == ""
+
+
+@pytest.mark.unit
+def test_preserve_extra_deps_no_extras(tmp_path):
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text('[project]\ndependencies = ["opencrane>=0.17.0"]\n')
+    assert _preserve_extra_deps(pyproject, ["opencrane>=0.17.0"]) == ""
+
+
+@pytest.mark.unit
+def test_preserve_extra_deps_returns_user_additions(tmp_path):
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\ndependencies = ["opencrane>=0.17.0", "milvus-lite>=2.4.0,<3.0.0"]\n'
+    )
+    result = _preserve_extra_deps(pyproject, ["opencrane>=0.17.0"])
+    assert 'milvus-lite>=2.4.0,<3.0.0' in result
+    assert "opencrane" not in result
+
+
+@pytest.mark.unit
+def test_preserve_extra_deps_normalises_names(tmp_path):
+    """milvus-lite and milvus_lite should be treated as the same package."""
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\ndependencies = ["milvus-lite>=2.4.0,<3.0.0"]\n'
+    )
+    # When the managed list already contains milvus_lite (underscore form), no extra should appear
+    result = _preserve_extra_deps(pyproject, ["milvus_lite>=2.4.0,<3.0.0"])
+    assert result == ""
+
+
+@pytest.mark.unit
+def test_pack_preserves_user_deps_on_rerun(pack_dir, monkeypatch):
+    """Re-running pack keeps user-added dependencies in pyproject.toml."""
+    monkeypatch.setattr(
+        "opencrane.pack.importlib.metadata.version", lambda _pkg: "0.17.0"
+    )
+    monkeypatch.setattr("opencrane.pack.subprocess.run", lambda *a, **kw: None)
+
+    # First run
+    output_dir, _ = pack(name="test-mcp")
+
+    # User adds a dep manually
+    pyproject_path = output_dir / "pyproject.toml"
+    content = pyproject_path.read_text()
+    pyproject_path.write_text(
+        content.replace(
+            '    "opencrane>=0.17.0",\n',
+            '    "opencrane>=0.17.0",\n    "milvus-lite>=2.4.0,<3.0.0",\n',
+        )
+    )
+
+    # Second run — should preserve the user dep
+    pack(name="test-mcp")
+    result = pyproject_path.read_text()
+    assert "milvus-lite>=2.4.0,<3.0.0" in result
 
 
 # === Wheel build failure (graceful) ===

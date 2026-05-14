@@ -297,7 +297,7 @@ description = "MCP server for documentation search — built with OpenCrane"
 requires-python = ">=3.11"
 dependencies = [
     "opencrane>={opencrane_version}",
-]
+{extra_deps}]
 
 [project.scripts]
 {name} = "{module_name}.__main__:main"

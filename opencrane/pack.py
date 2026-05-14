@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import click
@@ -13,6 +14,32 @@ import click
 from opencrane.templates import PACK_MAIN_PY, PACK_PYPROJECT, PACK_README
 
 _PEP508_NAME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9._-]*$")
+
+
+def _pkg_name(dep: str) -> str:
+    """Normalise a PEP 508 specifier to a bare package name for comparison."""
+    return re.split(r"[>=<!;\[ ]", dep)[0].strip().lower().replace("-", "_")
+
+
+def _preserve_extra_deps(pyproject_path: Path, managed_deps: list[str]) -> str:
+    """Return extra dependency lines from an existing pyproject.toml.
+
+    Only deps not already covered by *managed_deps* are returned, formatted
+    as indented TOML lines ready to splice into the template.
+    """
+    if not pyproject_path.exists():
+        return ""
+    try:
+        with open(pyproject_path, "rb") as f:
+            existing = tomllib.load(f)
+    except Exception:
+        return ""
+    existing_deps = existing.get("project", {}).get("dependencies", [])
+    managed_names = {_pkg_name(d) for d in managed_deps}
+    extras = [d for d in existing_deps if _pkg_name(d) not in managed_names]
+    if not extras:
+        return ""
+    return "".join(f'    "{dep}",\n' for dep in extras)
 
 
 def _find_wheel(output: Path) -> Path | None:
@@ -62,13 +89,16 @@ def pack(
     data_dir = module_dir / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
 
-    # Write pyproject.toml
+    # Write pyproject.toml — preserve any user-added deps from a prior run
+    managed_deps = [f"opencrane>={opencrane_version}"]
+    extra_deps = _preserve_extra_deps(output / "pyproject.toml", managed_deps)
     (output / "pyproject.toml").write_text(
         PACK_PYPROJECT.format(
             name=name,
             module_name=module_name,
             version=version,
             opencrane_version=opencrane_version,
+            extra_deps=extra_deps,
         )
     )
 

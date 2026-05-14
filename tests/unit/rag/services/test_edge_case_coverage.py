@@ -3,7 +3,6 @@
 from pathlib import Path
 from unittest.mock import Mock
 from opencrane.rag.services.prose_chunker import ProseChunkingStrategy
-from opencrane.rag.services.tabs_chunker import TabsChunkingStrategy
 from opencrane.rag.services.file_processor import FileProcessor
 import logging
 
@@ -39,17 +38,3 @@ def test_file_processor_standalone_url_marker(caplog):
     # Check that the debug message was logged
     assert any("Filtered out H3 boundary marker" in record.message for record in caplog.records)
 
-
-
-def test_tabs_url_heading_standalone():
-    """Test tabs chunker handles standalone URL in heading."""
-    strategy = TabsChunkingStrategy()
-    
-    # Test the internal method that processes URLs in headings
-    text_with_standalone_url = """## https://example.com/api
-Some content"""
-    
-    result = strategy._strip_urls_from_headings(text_with_standalone_url)
-    
-    # The standalone URL heading should be kept as-is
-    assert "## https://example.com/api" in result

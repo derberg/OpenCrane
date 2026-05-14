@@ -38,7 +38,6 @@ class OpenCraneConfig:
     }
 
     # Chunking strategies applied in order (first match wins).
-    # TabsChunkingStrategy is NOT included — it's project-specific.
     chunking_strategies: List[ProcessingStrategy] = [
         YamlChunkingStrategy(),
         CodeChunkingStrategy(),

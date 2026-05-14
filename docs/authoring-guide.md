@@ -383,7 +383,40 @@ Every top-level list item becomes its own chunk, each carrying a `breadcrumb_pat
   ```
   ````
 
-- **Keep examples complete and runnable when possible.** A chunk containing half a config file with `…` ellipses is hard to reuse; a full minimal example is much more valuable.
+- **Keep examples complete and self-sufficient.** Each code fence becomes one chunk. If that chunk contains truncated fields the agent cannot act on it without additional search calls. When showing a large object, pick one of two approaches:
+
+  If the surrounding structure is irrelevant to the point, show only the relevant section and use prose to say where it goes:
+
+  ````md
+  Set `branch` under your source entry in `.opencrane/config.yaml`:
+
+  ```yaml
+  branch: main
+  ```
+  ````
+
+  If the structure context matters, use a comment to mark elision rather than literal `...` — the shown fields stay syntactically valid:
+
+  ````md
+  ```yaml
+  sources:
+    my-repo:
+      url: https://github.com/example/repo
+      # ... other fields ...
+      branch: main
+  ```
+  ````
+
+  Avoid literal `...` ellipsis syntax — it is not valid YAML and makes the chunk unparseable:
+
+  ````md
+  ```yaml
+  sources:
+    my-repo:
+      ...
+      branch: main
+  ```
+  ````
 
   Good:
 
@@ -406,15 +439,13 @@ Every top-level list item becomes its own chunk, each carrying a `breadcrumb_pat
   ```
   ````
 
-- **Do not include the literal string `Source missing`** in code content — those chunks are dropped.
-
 - **Prose-heavy pages stay prose.** The code chunker only claims a node if more than half its lines are code (or the node is under ~50 lines). In ordinary markdown docs each fenced block is its own node, so this is rarely an issue — just don't write one giant document that is mostly code fences with occasional paragraphs if you want the prose chunks to survive.
 
 ## Embedded Specs (CRD / OpenAPI / JSON Schema)
 
 Fenced YAML blocks are inspected by the chunker. If the YAML parses to a known structured type, a tree walker replaces the single-block chunk with rich per-property chunks.
 
-- **For Kubernetes CRDs:** paste the real spec — `apiVersion: apiextensions.k8s.io/...`, `kind: CustomResourceDefinition`, full `spec.versions[].schema.openAPIV3Schema`. Only the `spec.properties` subtree is walked; `apiVersion`, `kind`, `metadata`, `status` are ignored.
+- **For Kubernetes CRDs:** paste the real spec — `apiVersion: apiextensions.k8s.io/...`, `kind: CustomResourceDefinition`, full `spec.versions[].schema.openAPIV3Schema`. The tree walker completely replaces the raw YAML chunk — the original code block produces no chunk of its own. Only `spec.properties` produces chunks, but the CRD identity is not lost: every property chunk carries `crd_kind` (from `spec.names.kind`), `crd_api_version` (from `spec.group` + version), `crd_version`, and `crd_property_path` as metadata. The agent can filter and group results by kind and API version. What is intentionally skipped: `status` (runtime state, not user-configurable) and `metadata.name` (the full CRD name like `databases.example.com`, though `crd_kind` + `crd_api_version` together convey the same identity).
 
   Good — produces one chunk per spec property:
 
@@ -498,7 +529,7 @@ Fenced YAML blocks are inspected by the chunker. If the YAML parses to a known s
   ```
   ````
 
-- **Target ~300 tokens per property; schemas over 800 tokens with nested `properties` or `items` are split further.** Smaller schemas are emitted whole. If a single property is unusually large, break it up with `$ref` into named definitions.
+- **Properties under 800 tokens are emitted as one chunk. Properties over 800 tokens with nested `properties` or `items` are recursed into — each child becomes its own chunk instead.** No content is lost: every child chunk carries `crd_property_path` (full dot-notation path, e.g. `spec.config.database`), `logical_parent` (the parent's path), and `neighbor_chunks` (sibling IDs), so an agent can navigate the full schema tree from any leaf. The thresholds are hardcoded — there is no config knob. The only authoring lever is `$ref` into `$defs`: a large property broken into named definitions gives the walker more structure to recurse into.
 
   Good:
 
@@ -512,17 +543,6 @@ Fenced YAML blocks are inspected by the chunker. If the YAML parses to a known s
       type: object
       description: Database connection configuration.
       properties: { ... }
-  ```
-  ````
-
-- **Don't truncate specs with `# ...` placeholders.** The tree walkers expect real structure; truncated examples get chunked as plain YAML with weaker metadata.
-
-  Avoid:
-
-  ````md
-  ```yaml
-  spec:
-    # ... (rest of the spec elided)
   ```
   ````
 
@@ -569,17 +589,6 @@ Fenced YAML blocks are inspected by the chunker. If the YAML parses to a known s
   them via MCP.
   ````
 
-- **Don't put `apiVersion:`, `kind:`, or `openapi:` keys in front matter.** These keywords make the pipeline treat the block as a real YAML document.
-
-  Avoid:
-
-  ````md
-  ---
-  title: My Page
-  kind: Tutorial
-  ---
-  ````
-
 - **Front matter with nested values is NOT skipped.** If your front matter contains lists or maps, it will be chunked as YAML. Keep it flat-scalar or move complex metadata to a dedicated file.
 
   Chunked as YAML (not skipped):
@@ -605,96 +614,3 @@ Fenced YAML blocks are inspected by the chunker. If the YAML parses to a known s
   author: Lukasz
   ---
   ````
-
-## Authoring Checklist
-
-- [ ] Page opens with an `#` title
-- [ ] Every chunk-sized idea lives under its own `##` or `###`
-- [ ] `####+` is used only for sub-structure that belongs with the parent
-- [ ] Each section opens with concrete, searchable terminology in the first sentence
-- [ ] No section relies on pronouns or references to neighbouring sections
-- [ ] No section is under 15 characters (no empty placeholder headings)
-- [ ] Every list has a heading directly above it
-- [ ] Every list item is meaningful read on its own
-- [ ] Lists have roughly 15 or fewer top-level items
-- [ ] Every fenced code block has a language tag
-- [ ] Each code fence contains a single focused example
-- [ ] Embedded CRDs / OpenAPI / JSON Schema are complete, not truncated
-- [ ] Schema properties have real `description` fields
-- [ ] Front matter is flat scalar metadata only
-
----
-
-## Cennso-Specific Notes
-
-The `ai-docs` pipeline extends OpenCrane with a `TabsChunkingStrategy` (`.opencrane/tabs_chunker.py`) that is active by default. This section covers authoring rules specific to Cennso documentation.
-
-### MDX Tab Components
-
-`<Tabs>` / `<Tab>` components are chunked by the Cennso tabs chunker — one prose chunk per `<Tab>`, tagged with `tab_value` and `tab_label` metadata. The rules below override the generic OpenCrane defaults for this project.
-
-**Established tab values — use exactly these strings:**
-
-| `value=` | `label=` | When to use |
-|---|---|---|
-| `cmc` | `CMC` | Steps performed through the Cennso Management Console UI |
-| `cli` | `CLI` | Steps performed via `kubectl` or shell commands |
-| `cr` | `Custom Resource` | Raw Kubernetes Custom Resource YAML |
-| `helm` | `Helm chart` | Helm-based installation or configuration |
-| `imsi` | `IMSI` | IMSI-specific configuration or filtering |
-| `interface` | `Interface` | Network interface configuration |
-
-Do not invent new values without updating this table — inconsistent `tab_value` strings break label-based retrieval across repos.
-
-**`groupId` on `<Tabs>` is fine.** The standard Cennso pattern `<Tabs groupId="tools">` is recognised correctly.
-
-  ````mdx
-  <Tabs groupId="tools">
-    <Tab value="cmc" label="CMC">
-      ...
-    </Tab>
-    <Tab value="cli" label="CLI">
-      ...
-    </Tab>
-  </Tabs>
-  ````
-
-**Make each tab self-contained.** A tab chunk is retrieved without any surrounding context. Prerequisites, warnings, or shared setup must be repeated inside each tab or placed as prose above the `<Tabs>` block.
-
-  Avoid (prerequisite outside the tab):
-
-  ````mdx
-  Make sure the namespace exists before proceeding.
-
-  <Tabs groupId="tools">
-    <Tab value="cmc" label="CMC">
-      Go to **Cennso Management → Packages**.
-    </Tab>
-  </Tabs>
-  ````
-
-  Good (each tab stands alone):
-
-  ````mdx
-  <Tabs groupId="tools">
-    <Tab value="cmc" label="CMC">
-      Make sure the namespace exists, then go to
-      **Cennso Management → Packages** and choose the tile.
-    </Tab>
-    <Tab value="cli" label="CLI">
-      Make sure the namespace exists, then run:
-      ```bash
-      kubectl apply -f extension.yaml -n <namespace>
-      ```
-    </Tab>
-  </Tabs>
-  ````
-
-### Cennso Authoring Checklist
-
-In addition to the general checklist above:
-
-- [ ] `<Tab>` attributes are in `value=` then `label=` order
-- [ ] `tab_value` matches one of the established values in the table above
-- [ ] Each tab is self-contained — no cross-tab dependencies
-- [ ] Shared prerequisites appear as prose above the `<Tabs>` block, then repeated inside each tab

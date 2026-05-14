@@ -2,6 +2,8 @@
 
 The Structure-Aware Hybrid Chunker processes documentation into semantically meaningful chunks optimized for Retrieval-Augmented Generation (RAG) systems.
 
+> If you are authoring documentation that will be indexed by OpenCrane, see [docs/authoring-guide.md](authoring-guide.md) for how to structure your markdown so chunks are high quality and retrievable.
+
 ```bash
 opencrane chunk --config yourproject.config:YourConfig
 ```

@@ -177,6 +177,8 @@ opencrane tokens [--source-dir PATH] [--output-file PATH]
 opencrane chunk [--config CLASS] [--llmstxt-dir PATH] [--chunks-file PATH]
 ```
 
+> Authoring docs that will be chunked? See [docs/authoring-guide.md](docs/authoring-guide.md) for how to structure markdown so chunks are high quality and retrievable.
+
 | Flag | Description |
 |---|---|
 | `--llmstxt-dir PATH` | Directory containing llms-full.txt (overrides `AI_DOCS_LLMSTXT_DIR` env var) |

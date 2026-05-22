@@ -361,19 +361,19 @@ def test_write_combined_html(tmp_path):
     viz._write_combined_html([("Title", fig, "scatter")], out, _basic_ctx())
     body = out.read_text()
     assert "<!doctype html>" in body
-    # Brand + theme toggle present
+    # Bento-grid hero — brand + theme toggle present
     assert "OpenCrane" in body
+    assert 'class="strip"' in body
     assert "theme-toggle" in body
-    assert "brand-icon" in body  # crane SVG
-    # Hero / verdict
-    assert "verdict" in body
+    assert "brand-icon" in body
+    assert 'class="bento"' in body
+    # Verdict label appears (bento score cell)
     assert "RELATED, NOT DUPLICATE" in body
-    # Metrics
-    assert "Top neighbor" in body
-    assert "Neighbors checked" in body
+    # Stats strip cards
+    assert "Neighbors" in body
     assert "Corpus sample" in body
-    # Three-ways banner
-    assert "three ways to use this page" in body
+    # How-to-read strip (three uses)
+    assert "How to read this" in body
     # Glossary / per-chart helpers
     assert "Cosine similarity" in body
     assert "How to read this chart" in body
@@ -408,6 +408,19 @@ def test_verdict_data_thresholds(top_sim, expected_label, expected_level):
     assert v["label"] == expected_label
     assert v["level"] == expected_level
     assert "hook" in v
+
+
+@pytest.mark.unit
+def test_write_combined_html_truncates_long_text(tmp_path):
+    """Paragraph and neighbor snippets >280 chars are clipped with ellipsis."""
+    fig = go.Figure(data=[go.Scatter(x=[1], y=[1])])
+    out = tmp_path / "out.html"
+    ctx = _basic_ctx()
+    ctx["paragraph_preview"] = "x" * 500
+    ctx["top_snippet"] = "y" * 500
+    viz._write_combined_html([("Title", fig, "scatter")], out, ctx)
+    body = out.read_text()
+    assert "&hellip;" in body
 
 
 @pytest.mark.unit
@@ -490,17 +503,17 @@ def test_main_all_viz_writes_combined_html(tmp_path, workspace_files, patched_en
     body = out.read_text()
     assert "OpenCrane" in body
     assert "Local neighborhood" in body
-    # Combined HTML includes the glossary, inline captions, and per-chart help boxes
-    assert "Deep-dive glossary" in body
+    # Combined HTML includes the appendix-glossary, captions, and per-chart help
+    assert "field glossary" in body
     assert "Cosine similarity" in body
     # Inline always-visible captions for each viz
     assert "Each small dot is one" in body
-    # "What it helps with" debug-oriented boxes per chart + top banner
+    # "What it helps with" debug-oriented boxes per chart
     assert "What it helps with" in body
     assert "chunking-quality debugging" in body
-    assert "Debug chunking pipeline" in body
-    # Three-use-case banner including the RAG retrieval testing case
-    assert "three ways to use this page" in body
+    assert "Debug chunking" in body
+    # Three-use-case strip including the RAG retrieval testing case
+    assert "How to read this" in body
     assert "Test RAG retrieval" in body
 
 

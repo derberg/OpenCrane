@@ -27,9 +27,10 @@ Always include the version tag as a comment for reference.
 
 ```
 opencrane/                  # Main Python package
-├── cli.py                  # Click CLI entry point (12 subcommands)
+├── cli.py                  # Click CLI entry point
 ├── add_source.py           # Source addition logic (GitHub repos + llms.txt files)
 ├── config.py               # OpenCraneConfig base class (extension points)
+├── visualize.py            # `opencrane visualize` — embedding-placement HTML (needs viz extras)
 ├── fences/                 # Fence type configuration API
 ├── mcp/                    # MCP server (stdio + HTTP transport)
 │   ├── server.py           # Stdio MCP server

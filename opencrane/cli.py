@@ -448,6 +448,82 @@ def inspect(config_path):
 
 
 @main.command(cls=_ColorCommand)
+@click.option("--text", default=None,
+              help="Paragraph text to place on the map (inline).")
+@click.option("--file", "file_", default=None, type=click.Path(),
+              help="Path to a text file containing the paragraph "
+                   "(alternative to --text; stdin also supported).")
+@click.option("--embeddings-file", default=None, type=click.Path(),
+              help="Input embeddings JSON  [default: .opencrane/embeddings.json]")
+@click.option("--chunks-file", default=None, type=click.Path(),
+              help="Input chunks JSON  [default: .opencrane/chunks.json]")
+@click.option("--output", default=None, type=click.Path(),
+              help="Output HTML file  [default: .opencrane/visualization.html]")
+@click.option("--method", type=click.Choice(["pca", "umap", "tsne"]), default="umap",
+              show_default=True,
+              help="Dimensionality-reduction algorithm for the global scatter. "
+                   "PCA is fastest (linear); UMAP best preserves local neighborhoods; "
+                   "t-SNE gives cleanest clusters but is slowest.")
+@click.option("--dim", type=click.Choice(["2", "3"]), default="3",
+              show_default=True, help="2D or 3D scatter for the global view.")
+@click.option("--viz", type=click.Choice(["scatter", "neighbors", "sources", "all"]),
+              default="all", show_default=True,
+              help="Which views to render: scatter (global map), neighbors (local PCA on "
+                   "paragraph + top-K), sources (per-repo bar chart), or all three.")
+@click.option("--sample", type=int, default=4000, show_default=True,
+              help="Number of corpus points to sample for the scatter "
+                   "(smaller = faster but less detail).")
+@click.option("--neighbors", type=int, default=12, show_default=True,
+              help="How many nearest neighbors to highlight + show in the local map.")
+@click.option("--seed", type=int, default=42, show_default=True,
+              help="Random seed for corpus sampling and reducers (deterministic output).")
+@click.option("--no-open", "no_open", is_flag=True, default=False,
+              help="Don't auto-open the resulting HTML in a web browser.")
+def visualize(text, file_, embeddings_file, chunks_file, output, method, dim, viz,
+              sample, neighbors, seed, no_open):
+    """Render an interactive HTML showing where a paragraph lands in the embedding space.
+
+    Encodes the paragraph with the same model as the indexed corpus, projects everything
+    into low dimensions, and writes an HTML with three views: a global scatter
+    (PCA/UMAP/t-SNE), a local neighborhood map (PCA on paragraph + top-K), and a per-
+    source alignment bar chart.
+
+    Useful for spotting duplicates, finding which repo new content belongs to, and
+    sanity-checking whether a paragraph fits the indexed docs at all.
+
+    Requires the optional `viz` extras: `pip install 'opencrane[viz]'`.
+
+    Examples:
+
+      opencrane visualize --text "your paragraph here"
+      opencrane visualize --file paragraph.txt --method umap --viz neighbors
+      echo "your user query" | opencrane visualize --method tsne --dim 2
+    """
+    try:
+        from pathlib import Path
+        from opencrane.visualize import main as viz_main
+        viz_main(
+            text=text,
+            file=file_,
+            embeddings_file=Path(embeddings_file) if embeddings_file else None,
+            chunks_file=Path(chunks_file) if chunks_file else None,
+            output=Path(output) if output else None,
+            method=method,
+            dim=int(dim),
+            viz=viz,
+            sample=sample,
+            neighbors=neighbors,
+            seed=seed,
+            open_browser=not no_open,
+        )
+    except SystemExit:
+        raise
+    except Exception as e:
+        _error(f"Error: {e}")
+        sys.exit(1)
+
+
+@main.command(cls=_ColorCommand)
 def add():
     """Interactively add documentation sources to the project."""
     from pathlib import Path

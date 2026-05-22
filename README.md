@@ -22,6 +22,7 @@ A standalone, extensible RAG/MCP pipeline for building AI-powered documentation 
     - [serve](#opencrane-serve----start-mcp-server)
     - [pack](#opencrane-pack----package-for-distribution)
     - [inspect](#opencrane-inspect----launch-mcp-inspector)
+    - [visualize](#opencrane-visualize----see-where-a-paragraph-lands-in-the-embedding-space)
   - [Default file and directory names](#default-file-and-directory-names)
   - [Environment variables](#environment-variables)
   - [Source mapping file](#source-mapping-file-opencraneonfigyaml)
@@ -246,6 +247,40 @@ opencrane inspect [--config CLASS]
 Launches the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) web UI connected to the server via stdio — no Docker required. Requires `npx` (Node.js).
 
 Web UI available at `http://localhost:5173`.
+
+#### `opencrane visualize` — see where a paragraph lands in the embedding space
+
+```bash
+opencrane visualize --text "your paragraph here"
+opencrane visualize --file paragraph.txt
+echo "your paragraph" | opencrane visualize
+```
+
+Encodes the input paragraph with the same model as the indexed corpus, then renders an interactive HTML with three views side-by-side:
+
+- **Scatter** — global PCA / UMAP / t-SNE projection of a corpus sample, with the new paragraph as a highlighted diamond and its top-K neighbors ringed.
+- **Local neighborhood** — local PCA on just the paragraph + top-K neighbors. Every point has real coordinates, so distances between *neighbors* also carry meaning.
+- **Per-source alignment** — horizontal bar chart of mean similarity per source repo, answering "which docs does this paragraph best fit?"
+
+Key flags:
+
+| Flag | Default | What it does |
+|---|---|---|
+| `--method pca\|umap\|tsne` | `umap` | Dimensionality-reduction algorithm |
+| `--dim 2\|3` | `3` | Scatter dimensionality |
+| `--viz scatter\|neighbors\|sources\|all` | `all` | Which views to render |
+| `--color-by density\|source` | `density` | Scatter color mapping |
+| `--sample N` | `4000` | Corpus sample size (smaller = faster) |
+| `--neighbors K` | `12` | Number of nearest neighbors to highlight |
+| `--output PATH` | `.opencrane/visualization.html` | Output HTML path |
+| `--no-open` | — | Don't auto-open the HTML in a browser |
+
+Requires the optional `viz` extra: `pip install 'opencrane[viz]'` (adds plotly, scikit-learn, umap-learn).
+
+Useful for:
+- **Duplicate detection** — if the top neighbor has very high similarity, you might be writing something that already exists.
+- **Which-repo-does-this-belong-to** — the per-source bar chart tells you which docs site has the closest existing content.
+- **Sanity-checking new docs** — if neighbors are a random mix of unrelated repos at low similarity, your paragraph is out-of-distribution.
 
 ### Debugging
 

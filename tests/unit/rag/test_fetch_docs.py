@@ -172,7 +172,7 @@ class TestFetchDocsLlmstxt:
         assert existing_file.read_bytes() == fake_content
 
     def test_fetch_llmstxt_repo_filter_skips_other(self, tmp_path, caplog):
-        """When --repo filter is active, other llmstxt entries are skipped."""
+        """When --source filter is active, other llmstxt entries are skipped."""
         local_src = tmp_path / "docs.txt"
         local_src.write_text("content")
 
@@ -202,7 +202,32 @@ class TestFetchDocsLlmstxt:
         other_file = tmp_path / ".opencrane" / "llmstxt" / "other-llmstxt" / "llms-full.txt"
         assert not other_file.exists()
         assert "other-llmstxt" in caplog.text
-        assert "--repo filter active" in caplog.text
+        assert "--source filter active" in caplog.text
+
+    def test_fetch_source_filter_accepts_comma_separated_list(self, tmp_path, caplog):
+        """`--source a,b` fetches both a and b, skips other entries."""
+        local_src = tmp_path / "docs.txt"
+        local_src.write_text("content")
+
+        setup_sources_yaml(tmp_path, {
+            "first-src": {"url": str(local_src), "type": "llmstxt", "manual": True},
+            "second-src": {"url": str(local_src), "type": "llmstxt", "manual": True},
+            "third-src": {"url": str(local_src), "type": "llmstxt", "manual": True},
+        })
+        # Whitespace around commas is tolerated; spaces inside names are not
+        # part of the spec.
+        config = make_config(tmp_path, fetch_repo="first-src, second-src")
+
+        import logging
+        with caplog.at_level(logging.DEBUG, logger="opencrane.rag.fetch_docs"):
+            run_main_with_mocks(tmp_path, config)
+
+        # both named sources should be fetched
+        assert (tmp_path / ".opencrane" / "llmstxt" / "first-src" / "llms-full.txt").exists()
+        assert (tmp_path / ".opencrane" / "llmstxt" / "second-src" / "llms-full.txt").exists()
+        # the unnamed one should be skipped
+        assert not (tmp_path / ".opencrane" / "llmstxt" / "third-src" / "llms-full.txt").exists()
+        assert "third-src" in caplog.text
 
     def test_fetch_llmstxt_local_missing_file_continues(self, tmp_path, caplog):
         """A local path that does not exist logs an error and does not crash."""

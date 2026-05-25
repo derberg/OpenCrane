@@ -44,21 +44,22 @@ def main(config=None):
         current_repo_name = get_current_repo_name(workspace_root)
         logger.info(f"Current repository: {current_repo_name}")
 
-        # Optional single-repo filter (set via --repo flag / FETCH_REPO env var)
-        fetch_repo_filter = config.fetch_repo or ""
+        # Optional source filter (set via --source/--repo flag / FETCH_REPO
+        # env var). Accepts a single name or a comma-separated list.
+        fetch_repo_filter = {
+            s.strip() for s in (config.fetch_repo or "").split(",") if s.strip()
+        }
 
         # Get auto-discovered documentation repositories from configured org
         # Only auto-discover from orgs configured in auto_discovery_orgs
         if config.org_name in config.auto_discovery_orgs:
             repos = repo_fetcher.get_documentation_repos()
             logger.info(f"Auto-discovered {len(repos)} repos from {config.org_name} org")
-            # Filter to specific repo if requested
+            # Filter to specific source(s) if requested
             if fetch_repo_filter:
-                repos = [
-                    r for r in repos
-                    if r.name == fetch_repo_filter
-                ]
-                logger.info(f"Filtered auto-discovered repos to {fetch_repo_filter}: {len(repos)} match(es)")
+                repos = [r for r in repos if r.name in fetch_repo_filter]
+                logger.info(f"Filtered auto-discovered repos to {sorted(fetch_repo_filter)}: "
+                            f"{len(repos)} match(es)")
         else:
             logger.info(f"Skipping auto-discovery for {config.org_name} org (not in auto_discovery_orgs: {config.auto_discovery_orgs})")
             repos = []
@@ -76,9 +77,10 @@ def main(config=None):
                 # Skip non-GitHub sources (e.g., llmstxt) — handled separately
                 if source_config.get("type", "github") != "github":
                     continue
-                # Skip if a repo filter is active and this entry doesn't match
-                if fetch_repo_filter and path_key != fetch_repo_filter:
-                    logger.debug(f"Skipping {path_key} (--repo filter active: {fetch_repo_filter})")
+                # Skip if a source filter is active and this entry isn't in it
+                if fetch_repo_filter and path_key not in fetch_repo_filter:
+                    logger.debug(f"Skipping {path_key} (--source filter active: "
+                                 f"{sorted(fetch_repo_filter)})")
                     continue
                 url = source_config.get("url")
                 if not url:
@@ -146,8 +148,8 @@ def main(config=None):
             if source_config.get("local"):
                 active_repos.add(path_key)
                 continue
-            if fetch_repo_filter and path_key != fetch_repo_filter:
-                logger.debug(f"Marking {path_key} as active (--repo filter active, protected from cleanup)")
+            if fetch_repo_filter and path_key not in fetch_repo_filter:
+                logger.debug(f"Marking {path_key} as active (--source filter active, protected from cleanup)")
                 active_repos.add(path_key)
                 continue
             # Protect all llmstxt entries from stale cleanup — they are always user-managed
@@ -169,8 +171,9 @@ def main(config=None):
                 continue  # already handled above
             if source_config.get("type", "github") != "llmstxt":
                 continue
-            if fetch_repo_filter and path_key != fetch_repo_filter:
-                logger.debug(f"Skipping llmstxt {path_key} (--repo filter active: {fetch_repo_filter})")
+            if fetch_repo_filter and path_key not in fetch_repo_filter:
+                logger.debug(f"Skipping llmstxt {path_key} (--source filter active: "
+                             f"{sorted(fetch_repo_filter)})")
                 continue
 
             url = source_config.get("url", "")

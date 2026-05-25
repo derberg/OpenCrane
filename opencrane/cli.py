@@ -176,9 +176,13 @@ def main():
               help="Python config class (module:Class) or YAML file path")
 @click.option("--org", default=None,
               help="GitHub organization name (overrides ORG_NAME env var)")
-@click.option("--repo", default=None,
-              help="Fetch only this repo by its path key in .opencrane/config.yaml (overrides FETCH_REPO env var)")
-def fetch(config_path, org, repo):
+@click.option("--source", "--repo", "source", default=None,
+              help="Fetch only these sources by their path key in "
+                   ".opencrane/config.yaml. Accepts a single name or a "
+                   "comma-separated list (e.g. --source likec4,cgw). "
+                   "Overrides FETCH_REPO env var. `--repo` is kept as an "
+                   "alias for backward compatibility.")
+def fetch(config_path, org, source):
     """Fetch documentation from GitHub."""
     try:
         load_config(config_path)
@@ -189,8 +193,8 @@ def fetch(config_path, org, repo):
             config.org_name = org
             if org not in config.auto_discovery_orgs:
                 config.auto_discovery_orgs.append(org)
-        if repo:
-            config.fetch_repo = repo
+        if source:
+            config.fetch_repo = source
         fetch_main(config=config)
     except Exception as e:
         _error(f"Error: {e}")

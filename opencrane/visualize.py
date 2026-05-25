@@ -55,6 +55,12 @@ class CorpusData:
     sources: list[str]
     snippets: list[str]
     urls: list[str]
+    # Bookkeeping for the UI: how many chunks are in the corpus total, and
+    # how many we kept after sampling. These two numbers let the page tell
+    # the user whether the top-neighbor search ran on the full corpus or
+    # only a sample.
+    full_size: int = 0
+    sample_size: int = 0
 
 
 def read_paragraph(text: str | None, file: str | None) -> str:
@@ -68,8 +74,14 @@ def read_paragraph(text: str | None, file: str | None) -> str:
     raise SystemExit("Provide a paragraph via --text, --file, or stdin.")
 
 
-def load_corpus(embeddings_file: Path, chunks_file: Path, sample_size: int, seed: int) -> CorpusData:
-    """Load corpus embeddings + chunks, optionally downsampling."""
+def load_corpus(embeddings_file: Path, chunks_file: Path) -> CorpusData:
+    """Load the full corpus — every chunk, every embedding.
+
+    Sampling is no longer done here. Neighbor finding always runs on the full
+    corpus so the top-K match is the genuine top-K, not a sample-limited
+    approximation. The scatter view does its own downsampling later via
+    :func:`subsample_for_scatter`.
+    """
     np = _require("numpy")
 
     logger.info("Loading embeddings from %s", embeddings_file)
@@ -85,12 +97,6 @@ def load_corpus(embeddings_file: Path, chunks_file: Path, sample_size: int, seed
         chunks = json.load(f)
     chunk_by_id = {c["chunk_id"]: c for c in chunks}
 
-    if sample_size and sample_size < len(records):
-        rng = np.random.default_rng(seed)
-        idx = rng.choice(len(records), size=sample_size, replace=False)
-        records = [records[i] for i in idx]
-        logger.info("Downsampled corpus to %d points", len(records))
-
     vectors = np.array([r["vector"] for r in records], dtype=np.float32)
     sources, snippets, urls = [], [], []
     for r in records:
@@ -102,8 +108,44 @@ def load_corpus(embeddings_file: Path, chunks_file: Path, sample_size: int, seed
         snippets.append(snippet + ("…" if len(text) > 160 else ""))
         urls.append((c.get("metadata") or {}).get("source_url", ""))
 
+    n = len(records)
     return CorpusData(model_name=model_name, vectors=vectors,
-                      sources=sources, snippets=snippets, urls=urls)
+                      sources=sources, snippets=snippets, urls=urls,
+                      full_size=n, sample_size=n)
+
+
+def subsample_for_scatter(corpus: CorpusData, sample_size: int,
+                          neighbor_idx, seed: int):
+    """Build a smaller CorpusData for the scatter plot.
+
+    Always includes the top-K neighbors so their teal rings stay visible.
+    Returns ``(scatter_corpus, neighbor_idx_in_scatter)``.
+    """
+    np = _require("numpy")
+    n = corpus.full_size
+    if not sample_size or sample_size >= n:
+        # No sampling — use the full corpus. neighbor_idx unchanged.
+        return corpus, neighbor_idx
+
+    rng = np.random.default_rng(seed)
+    base = rng.choice(n, size=sample_size, replace=False)
+    keep = np.unique(np.concatenate([base, np.asarray(neighbor_idx)]))
+    # Re-map full-corpus indices to positions in the sliced arrays.
+    full_to_slice = {int(orig): int(pos) for pos, orig in enumerate(keep)}
+    new_neighbor_idx = np.array([full_to_slice[int(i)] for i in neighbor_idx])
+
+    sliced = CorpusData(
+        model_name=corpus.model_name,
+        vectors=corpus.vectors[keep],
+        sources=[corpus.sources[int(i)] for i in keep],
+        snippets=[corpus.snippets[int(i)] for i in keep],
+        urls=[corpus.urls[int(i)] for i in keep],
+        full_size=n,
+        sample_size=len(keep),
+    )
+    logger.info("Scatter sample: %d / %d corpus points (incl. %d neighbors)",
+                len(keep), n, len(neighbor_idx))
+    return sliced, new_neighbor_idx
 
 
 def encode_paragraph(model_name: str, paragraph: str):
@@ -1463,17 +1505,82 @@ code { background: var(--code-bg); padding: 1px 6px; color: var(--fg); }
 .cell-score[data-verdict="ood"] { --verdict-color: var(--mute); }
 .score-num {
   font-family: 'Geist', sans-serif;
-  font-weight: 200; letter-spacing: -0.07em; line-height: 0.85;
-  font-size: clamp(110px, 16vw, 200px);
+  font-weight: 200; letter-spacing: -0.06em; line-height: 0.88;
+  font-size: clamp(72px, 11vw, 140px);
   font-variant-numeric: tabular-nums;
   color: var(--fg);
-  margin: 8px 0 6px; word-break: keep-all; white-space: nowrap;
+  margin: 8px 0 14px; white-space: nowrap;
 }
 .score-num .dot { color: var(--verdict-color); }
-.score-caption {
-  font-family: 'Geist Mono', monospace; font-size: 11px;
-  letter-spacing: 0.08em; color: var(--mute); margin-bottom: 24px;
+/* The metric definition — placed PROMINENTLY above the number so the
+   user always knows what 0.621 (or whatever) actually measures. */
+.score-label {
+  font-family: 'Geist', sans-serif; font-weight: 600;
+  font-size: 22px; color: var(--fg); letter-spacing: -0.015em;
+  margin: 0 0 8px;
 }
+.score-label-scale {
+  font-family: 'Geist Mono', monospace; font-weight: 400;
+  font-size: 13px; color: var(--mute); margin-left: 6px;
+  letter-spacing: 0.04em;
+}
+.score-def {
+  font-size: 12.5px; color: var(--fg-soft); line-height: 1.55;
+  margin: 0 0 14px; max-width: 42ch;
+}
+.score-def strong { color: var(--fg); font-weight: 600; }
+.score-context {
+  font-size: 12.5px; color: var(--fg-soft); line-height: 1.55;
+  margin: -2px 0 22px; max-width: 42ch;
+}
+.score-context strong { color: var(--fg); font-weight: 600; }
+.score-context code { background: var(--code-bg); padding: 1px 5px;
+  font-family: 'Geist Mono', monospace; font-size: 0.86em; color: var(--fg); }
+.score-context-arrow { color: var(--verdict-color); font-weight: 700; }
+.score-divider {
+  font-family: 'Geist Mono', monospace; font-size: 9.5px;
+  letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--mute); margin: 0 0 8px;
+  display: flex; align-items: center; gap: 10px;
+}
+.score-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--line-alpha-soft);
+}
+/* Collapsed "how this number is computed" — opens to reveal the 3 steps */
+details.score-howto {
+  margin: 0 0 18px;
+  border: 1px solid var(--line-alpha-soft);
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--bg-elev) 60%, transparent);
+}
+details.score-howto > summary {
+  cursor: pointer; list-style: none;
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--fg-soft); font-weight: 500;
+  display: flex; align-items: center; gap: 8px;
+  padding: 2px 0;
+}
+details.score-howto > summary::-webkit-details-marker { display: none; }
+details.score-howto > summary::before {
+  content: '[+]'; color: var(--accent);
+}
+details.score-howto[open] > summary::before { content: '[−]'; }
+details.score-howto > summary:hover { color: var(--accent); }
+.score-howto-steps {
+  margin: 12px 0 8px; padding-left: 22px;
+  font-size: 12.5px; color: var(--fg-soft); line-height: 1.55;
+}
+.score-howto-steps li { margin: 6px 0; }
+.score-howto-steps li b { color: var(--fg); font-weight: 600; }
+.score-howto-steps code { background: var(--code-bg); padding: 1px 5px;
+  font-family: 'Geist Mono', monospace; font-size: 0.86em; color: var(--fg); }
+.score-howto-note {
+  margin: 12px 0 4px; padding: 8px 12px;
+  background: var(--bg-cell); border-left: 2px solid var(--accent);
+  font-size: 12px; color: var(--fg-soft); line-height: 1.55;
+}
+.score-howto-note b { color: var(--fg); font-weight: 600; }
 .score-verdict {
   display: inline-block; font-family: 'Geist Mono', monospace;
   font-size: 11px; font-weight: 500; letter-spacing: 0.14em;
@@ -1954,13 +2061,47 @@ def _write_combined_html(figs, out_path: Path, ctx: dict):
 
         # ── BENTO HERO ────────────────────────────────────────────
         '<section class="bento">',
-        # SCORE — big number + verdict badge + hook (spans 2 rows)
+        # SCORE — metric definition + big number + verdict (spans 2 rows)
         f'<div class="cell cell-score" data-verdict="{verdict["level"]}">',
         '<div class="cell-tag"><span class="num">01</span>'
-        '<span>duplicate-content check</span></div>',
+        '<span>the metric</span></div>',
+        '<div class="score-label">Cosine similarity '
+        '<span class="score-label-scale">(0 &ndash; 1)</span></div>',
+        '<div class="score-def">A number from 0 to 1 measuring how aligned '
+        'two pieces of text are in meaning. <strong>0 = unrelated, '
+        '1 = identical.</strong></div>',
         f'<div class="score-num">{sim_str}</div>',
-        f'<div class="score-caption">cos similarity &middot; '
-        f'{ctx["neighbor_count"]} neighbors checked</div>',
+        f'<div class="score-context">'
+        f'<span class="score-context-arrow">&darr;</span> '
+        f'between <strong>your paragraph</strong> and its single closest '
+        f'match in <code>{ctx["top_source"]}</code> '
+        f'(out of <strong>{ctx["full_size"]:,}</strong> chunks indexed).'
+        f'</div>',
+        # Collapsed "how this is computed" so users can dig into the math
+        '<details class="score-howto">',
+        '<summary>How this number is computed</summary>',
+        '<ol class="score-howto-steps">',
+        f'<li><b>Encode</b> &mdash; your paragraph is turned into a '
+        f'<b>768-number vector</b> by the same model that built the corpus '
+        f'(<code>{ctx["model_name"].split("/")[-1]}</code>, locally on CPU).</li>',
+        f'<li><b>Score every chunk</b> &mdash; cosine similarity is computed '
+        f'between your vector and <em>each of the {ctx["full_size"]:,} corpus '
+        f'chunks</em>. One numpy matrix multiplication, milliseconds.</li>',
+        f'<li><b>Pick the top</b> &mdash; sort the scores; the highest is '
+        f'<b>{ctx["top_sim"]:.3f}</b> (with <code>{ctx["top_source"]}</code>). '
+        f'The top {ctx["neighbor_count"]} highest are your &laquo;neighbors&raquo; '
+        f'shown in every chart below.</li>',
+        '</ol>',
+        '<p class="score-howto-note">Runs entirely in-process &mdash; '
+        'no Milvus, no remote service, no caching. '
+        f'The scatter below renders only <b>{ctx["sample_size"]:,}</b> of '
+        f'the {ctx["full_size"]:,} chunks (uniform random sample for browser '
+        f'performance and UMAP / t-SNE speed; the top-{ctx["neighbor_count"]} '
+        f'neighbors are always force-included so their teal rings stay '
+        f'visible). Pass <code>--sample {ctx["full_size"] + 1}</code> (or any '
+        f'number above the corpus size) to render the full corpus.</p>',
+        '</details>',
+        '<div class="score-divider">verdict</div>',
         f'<span class="score-verdict">{verdict["label"]}</span>',
         f'<p class="score-hook">{verdict["hook"]}</p>',
         '</div>',
@@ -2111,7 +2252,9 @@ def main(
     if not paragraph:
         raise SystemExit("Empty paragraph.")
 
-    corpus = load_corpus(embeddings_file, chunks_file, sample, seed)
+    # Always load the FULL corpus — neighbor finding must search every chunk,
+    # not a random sample, or "top neighbor" lies.
+    corpus = load_corpus(embeddings_file, chunks_file)
     new_vec = encode_paragraph(corpus.model_name, paragraph)
     if new_vec.shape[0] != corpus.vectors.shape[1]:
         raise SystemExit(
@@ -2119,9 +2262,17 @@ def main(
             f"corpus is {corpus.vectors.shape[1]}"
         )
 
+    # Top-K + per-chunk similarities on the FULL corpus.
     neighbor_idx, neighbor_sims, all_sims = _nearest_neighbors(corpus.vectors, new_vec, neighbors)
     logger.info("Top neighbor similarity: %.3f (%s)",
                 float(neighbor_sims[0]), corpus.sources[int(neighbor_idx[0])])
+
+    # Smaller subset for the scatter only — to keep the browser responsive and
+    # to keep UMAP/t-SNE fast. Always includes the top-K neighbors so they
+    # remain visible as teal rings on the chart.
+    scatter_corpus, neighbor_idx_in_scatter = subsample_for_scatter(
+        corpus, sample, neighbor_idx, seed
+    )
 
     paragraph_preview = (paragraph[:240].replace("\n", " ")
                          + ("…" if len(paragraph) > 240 else ""))
@@ -2129,11 +2280,13 @@ def main(
     figs = []
     info = ""
     if viz in ("scatter", "all"):
-        coords, new_coords, info = reduce_dims(corpus.vectors, new_vec, method, dim, seed)
+        coords, new_coords, info = reduce_dims(scatter_corpus.vectors, new_vec,
+                                               method, dim, seed)
         figs.append((
             f"Global scatter ({method.upper()}, {dim}D)",
-            _build_scatter_figure(coords, new_coords, corpus,
-                                  neighbor_idx, neighbor_sims, paragraph_preview, info),
+            _build_scatter_figure(coords, new_coords, scatter_corpus,
+                                  neighbor_idx_in_scatter, neighbor_sims,
+                                  paragraph_preview, info),
             "scatter",
         ))
     if viz in ("neighbors", "all"):
@@ -2160,7 +2313,8 @@ def main(
     ctx = dict(
         paragraph_preview=paragraph_preview,
         model_name=corpus.model_name,
-        sample_size=len(corpus.vectors),
+        full_size=corpus.full_size,            # whole indexed corpus
+        sample_size=scatter_corpus.sample_size, # scatter subset only
         top_sim=top_sim,
         top_source=top_source,
         top_snippet=top_snippet,

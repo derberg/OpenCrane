@@ -162,11 +162,13 @@ def test_read_paragraph_no_input_raises(monkeypatch):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.unit
-def test_load_corpus_full_sample(workspace_files):
+def test_load_corpus(workspace_files):
     emb_file, chunks_file = workspace_files
-    c = viz.load_corpus(emb_file, chunks_file, sample_size=0, seed=42)
+    c = viz.load_corpus(emb_file, chunks_file)
     assert c.model_name == "dummy-model"
     assert c.vectors.shape == (CORPUS_SIZE, DIM)
+    assert c.full_size == CORPUS_SIZE
+    assert c.sample_size == CORPUS_SIZE
     assert c.sources[0] == "repo-a"
     # dict / list / None content all handled
     assert "dict content" in c.snippets[1]
@@ -179,10 +181,27 @@ def test_load_corpus_full_sample(workspace_files):
 
 
 @pytest.mark.unit
-def test_load_corpus_downsamples(workspace_files):
+def test_subsample_for_scatter_downsamples(workspace_files):
+    """Sampling for scatter always includes the top-K neighbors."""
     emb_file, chunks_file = workspace_files
-    c = viz.load_corpus(emb_file, chunks_file, sample_size=3, seed=42)
-    assert len(c.vectors) == 3
+    full = viz.load_corpus(emb_file, chunks_file)
+    neighbor_idx = np.array([0, 2, 4])  # pretend these are top-K
+    sub, new_idx = viz.subsample_for_scatter(full, 3, neighbor_idx, seed=42)
+    # Subset must include all 3 neighbor positions; size >= 3
+    assert len(sub.vectors) >= 3
+    # Re-mapped neighbor indices point inside the sliced array
+    assert all(0 <= int(i) < len(sub.vectors) for i in new_idx)
+
+
+@pytest.mark.unit
+def test_subsample_for_scatter_returns_full_when_no_sample(workspace_files):
+    """sample_size=0 or >= corpus size → original corpus unchanged."""
+    emb_file, chunks_file = workspace_files
+    full = viz.load_corpus(emb_file, chunks_file)
+    neighbor_idx = np.array([0, 1])
+    sub, new_idx = viz.subsample_for_scatter(full, 0, neighbor_idx, seed=42)
+    assert sub is full
+    assert (new_idx == neighbor_idx).all()
 
 
 # ---------------------------------------------------------------------------
@@ -343,6 +362,7 @@ def _basic_ctx(top_sim=0.6, top_source="repo-x", top_snippet="snippet"):
     return dict(
         paragraph_preview="preview text",
         model_name="dummy-model",
+        full_size=500,
         sample_size=100,
         top_sim=top_sim,
         top_source=top_source,

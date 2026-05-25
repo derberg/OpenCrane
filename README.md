@@ -270,7 +270,7 @@ Key flags:
 | `--dim 2\|3` | `3` | Scatter dimensionality |
 | `--viz scatter\|neighbors\|sources\|all` | `all` | Which views to render |
 | `--color-by density\|source` | `density` | Scatter color mapping |
-| `--sample N` | `4000` | Corpus sample size (smaller = faster) |
+| `--sample N` | `0` (full corpus) | Cap the scatter at N randomly-sampled chunks (top-K neighbors always included). Use a smaller N if the browser slows down or UMAP / t-SNE is too slow. Neighbor finding always runs on the full corpus regardless. |
 | `--neighbors K` | `12` | Number of nearest neighbors to highlight |
 | `--output PATH` | `.opencrane/visualization.html` | Output HTML path |
 | `--no-open` | — | Don't auto-open the HTML in a browser |

@@ -470,9 +470,14 @@ def inspect(config_path):
               default="all", show_default=True,
               help="Which views to render: scatter (global map), neighbors (local PCA on "
                    "paragraph + top-K), sources (per-repo bar chart), or all three.")
-@click.option("--sample", type=int, default=4000, show_default=True,
-              help="Number of corpus points to sample for the scatter "
-                   "(smaller = faster but less detail).")
+@click.option("--sample", type=int, default=0, show_default=True,
+              help="Cap the scatter chart at N randomly-sampled chunks "
+                   "(top-K neighbors are always included so they stay "
+                   "visible). Default 0 = render the full corpus. Use a "
+                   "smaller N (e.g. 4000) if your browser is slow with "
+                   "many points or UMAP / t-SNE is taking too long. "
+                   "Neighbor finding always runs on the full corpus "
+                   "regardless of this flag.")
 @click.option("--neighbors", type=int, default=12, show_default=True,
               help="How many nearest neighbors to highlight + show in the local map.")
 @click.option("--seed", type=int, default=42, show_default=True,

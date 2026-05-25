@@ -245,7 +245,8 @@ def _build_scatter_figure(coords, new_coords, corpus: CorpusData,
 
     dim = coords.shape[1]
     hover = [
-        f"<b>{src}</b><br>{snip}<br><i>{url}</i>"
+        f"<b>{src}</b><br>{snip}"
+        + (f"<br><i>(click to open source)</i>" if url else "")
         for src, snip, url in zip(corpus.sources, corpus.snippets, corpus.urls)
     ]
     xs_all = coords[:, 0].tolist()
@@ -268,9 +269,10 @@ def _build_scatter_figure(coords, new_coords, corpus: CorpusData,
         cmin=0.0, cmax=1.0, opacity=0.9,
         colorbar=dict(title="density", thickness=12, len=0.6),
     )
+    # customdata carries the source URL — JS click handler opens it in a new tab.
     kw = dict(mode="markers", marker=density_marker, text=hover,
               hoverinfo="text", name="density", visible=density_initially_visible,
-              showlegend=False)
+              showlegend=False, customdata=list(corpus.urls))
     if dim == 3:
         traces.append(_scatter(xs_all, ys_all, zs_all, **kw))
     else:
@@ -281,6 +283,7 @@ def _build_scatter_figure(coords, new_coords, corpus: CorpusData,
         mask = [s == src for s in corpus.sources]
         xs_m = [x for x, m in zip(xs_all, mask) if m]
         ys_m = [y for y, m in zip(ys_all, mask) if m]
+        urls_m = [u for u, m in zip(corpus.urls, mask) if m]
         kw = dict(
             mode="markers",
             marker=dict(size=base_size, opacity=0.9),
@@ -288,6 +291,7 @@ def _build_scatter_figure(coords, new_coords, corpus: CorpusData,
             hoverinfo="text", name=src,
             visible=not density_initially_visible,
             legendgroup="sources",
+            customdata=urls_m,
         )
         if dim == 3:
             zs_m = [z for z, m in zip(zs_all, mask) if m]
@@ -300,16 +304,19 @@ def _build_scatter_figure(coords, new_coords, corpus: CorpusData,
 
     if len(neighbor_idx) > 0:
         nn_text = [
-            f"#{rank+1} sim={sim:.3f}<br><b>{corpus.sources[int(i)]}</b><br>{corpus.snippets[int(i)]}"
+            f"#{rank+1} sim={sim:.3f}<br><b>{corpus.sources[int(i)]}</b>"
+            f"<br>{corpus.snippets[int(i)]}<br><i>(click to open source)</i>"
             for rank, (i, sim) in enumerate(zip(neighbor_idx, neighbor_sims))
         ]
         nn_x = [float(coords[int(i), 0]) for i in neighbor_idx]
         nn_y = [float(coords[int(i), 1]) for i in neighbor_idx]
+        nn_urls = [corpus.urls[int(i)] for i in neighbor_idx]
         kw = dict(
             mode="markers",
             marker=dict(size=10, color="#00b4a8", symbol="circle",
                         line=dict(color="black", width=1)),
             text=nn_text, hoverinfo="text", name="nearest neighbors",
+            customdata=nn_urls,
         )
         if dim == 3:
             nn_z = [float(coords[int(i), 2]) for i in neighbor_idx]
@@ -423,11 +430,13 @@ def _build_local_neighborhood_figure(new_vec, corpus: CorpusData, neighbor_idx,
         xs = [float(nbr_xy[r, 0]) for r in ranks]
         ys = [float(nbr_xy[r, 1]) for r in ranks]
         labels = [f"#{r+1}" for r in ranks]
+        urls = [corpus.urls[int(neighbor_idx[r])] for r in ranks]
         hover = [
             f"#{r+1} sim={neighbor_sims[r]:.3f}<br>"
             f"<b>{corpus.sources[int(neighbor_idx[r])]}</b><br>"
-            f"{corpus.snippets[int(neighbor_idx[r])]}<br>"
-            f"<i>{corpus.urls[int(neighbor_idx[r])]}</i>"
+            f"{corpus.snippets[int(neighbor_idx[r])]}"
+            + (f"<br><i>(click to open source)</i>"
+               if corpus.urls[int(neighbor_idx[r])] else "")
             for r in ranks
         ]
         fig.add_trace(go.Scatter(
@@ -437,6 +446,7 @@ def _build_local_neighborhood_figure(new_vec, corpus: CorpusData, neighbor_idx,
             text=labels, textposition="top center",
             textfont=dict(size=12, color="#222"),
             hovertext=hover, hoverinfo="text", name=src,
+            customdata=urls,
         ))
 
     fig.add_trace(go.Scatter(
@@ -468,7 +478,11 @@ def _build_local_neighborhood_figure(new_vec, corpus: CorpusData, neighbor_idx,
 
 
 def _build_sources_figure(sources: list[str], all_sims, top_n: int = 30):
-    """Per-source alignment bar chart — mean of top-N similarities per repo."""
+    """Per-source alignment — one horizontal bar per repo (bar length = max
+    similarity in that repo). A small accent-colored tick inside each bar marks
+    the mean of the repo's top-N chunks. One visual element conveys both the
+    repo's peak match and its broad alignment with the paragraph.
+    """
     np = _require("numpy")
     _require("plotly")
     import plotly.graph_objects as go
@@ -482,7 +496,8 @@ def _build_sources_figure(sources: list[str], all_sims, top_n: int = 30):
         sims_sorted = sorted(sims, reverse=True)
         head = sims_sorted[: min(top_n, len(sims_sorted))]
         stats.append((src, float(np.mean(head)), float(max(sims_sorted)), len(sims_sorted)))
-    stats.sort(key=lambda x: x[1], reverse=True)
+    # Sort by max so the longest bar is at the top — visually consistent.
+    stats.sort(key=lambda x: x[2], reverse=True)
 
     names = [s[0] for s in stats]
     mean_sim = [s[1] for s in stats]
@@ -490,29 +505,71 @@ def _build_sources_figure(sources: list[str], all_sims, top_n: int = 30):
     counts = [s[3] for s in stats]
 
     fig = go.Figure()
+    # Bar 0 → max similarity. Subtle fill so the mean-tick reads on top of it.
     fig.add_trace(go.Bar(
-        y=names, x=mean_sim, orientation="h",
-        marker=dict(color=mean_sim, colorscale="Plasma",
-                    colorbar=dict(title="mean sim", thickness=12, len=0.6)),
-        name=f"mean of top-{top_n}",
-        hovertemplate=f"<b>%{{y}}</b><br>mean(top-{top_n})=%{{x:.3f}}<extra></extra>",
+        y=names, x=max_sim, orientation="h",
+        marker=dict(
+            color="rgba(26, 58, 90, 0.16)",
+            line=dict(color="rgba(26, 58, 90, 0.5)", width=1),
+        ),
+        text=[f"{m:.3f}" for m in max_sim],
+        textposition="outside",
+        textfont=dict(size=11, color="#1a3a5a", family="Geist Mono, monospace"),
+        hovertemplate=(
+            "<b>%{y}</b><br>"
+            "max similarity: %{x:.3f}<br>"
+            f"mean(top-{top_n}): "
+            "%{customdata[0]:.3f}<br>chunks sampled: %{customdata[1]}<extra></extra>"
+        ),
+        customdata=list(zip(mean_sim, counts)),
+        showlegend=False,
+        cliponaxis=False,
     ))
+    # Mean tick — vertical line drawn inside the bar at x=mean. Accent color.
     fig.add_trace(go.Scatter(
-        y=names, x=max_sim, mode="markers",
-        marker=dict(symbol="line-ns", size=18, color="#00b4a8",
-                    line=dict(width=3, color="#00b4a8")),
-        name="max similarity",
-        hovertext=[f"chunks sampled: {c}" for c in counts],
-        hovertemplate="<b>%{y}</b><br>max sim=%{x:.3f}<br>%{hovertext}<extra></extra>",
+        y=names, x=mean_sim,
+        mode="markers",
+        marker=dict(
+            symbol="line-ns", size=22,
+            line=dict(width=2.5, color="#c84a06"),
+        ),
+        hoverinfo="skip",
+        showlegend=False,
     ))
+    # Dynamic height — each bar gets ~32px of vertical room.
+    chart_h = max(260, 60 + 32 * len(names))
     fig.update_layout(
-        title=f"Per-source alignment · mean cosine sim of top-{top_n} chunks",
         template="plotly_white",
-        xaxis_title="cosine similarity (0 = unrelated → 1 = duplicate)",
-        yaxis=dict(autorange="reversed"),
-        margin=dict(l=180, r=40, t=60, b=40),
+        xaxis=dict(
+            title=dict(text="cosine similarity",
+                       font=dict(size=11, family="Geist Mono, monospace",
+                                 color="#5a4d3e")),
+            range=[0, min(1.0, max(max_sim) * 1.10) if max_sim else 1.0],
+            gridcolor="rgba(24, 20, 16, 0.06)",
+            zeroline=False,
+            tickfont=dict(size=11, family="Geist Mono, monospace"),
+        ),
+        yaxis=dict(
+            autorange="reversed",
+            tickfont=dict(size=12, family="Geist, sans-serif"),
+        ),
+        margin=dict(l=140, r=60, t=44, b=44),
         plot_bgcolor="#ffffff",
-        legend=dict(orientation="h", y=-0.1),
+        paper_bgcolor="#ffffff",
+        bargap=0.32,
+        height=chart_h,
+        annotations=[
+            # Small legend strip embedded in the chart, no separate plotly legend
+            dict(
+                xref="paper", yref="paper",
+                x=0, y=1.03, xanchor="left", yanchor="bottom",
+                showarrow=False, align="left",
+                text=("<span style='color:#1a3a5a'>▬ bar</span> max similarity "
+                      "&nbsp;·&nbsp; "
+                      f"<span style='color:#c84a06'>│ tick</span> mean of top-{top_n}"),
+                font=dict(size=11, family="Geist, sans-serif"),
+            ),
+        ],
     )
     return fig
 
@@ -606,19 +663,24 @@ GLOSSARY_HTML = """
       <summary><strong>Corpus &amp; sample</strong>
         <span class="tagline">&mdash; "all indexed docs" and the subset we draw</span></summary>
       <div class="term-body">
-        <p><strong>What they are:</strong> The <strong>corpus</strong> is every chunk
-        OpenCrane has indexed for this project. A typical corpus has tens of thousands
-        of chunks. A <strong>sample</strong> is a random subset (controlled by
-        <code>--sample</code>) used for the scatter chart, because drawing all of them
-        would freeze the browser.</p>
-        <p><strong>Why they're here:</strong> The scatter shows the sample as a backdrop.
-        The "top neighbor" and "per-source alignment" rankings are computed on the
-        full corpus only when the sample is large enough; otherwise on the sample.</p>
-        <p><strong>What you can read from it:</strong> If <code>corpus sample: N</code>
-        at the top of the page is much smaller than your full corpus, neighbor rankings
-        could miss chunks that happened to be left out of the sample.</p>
-        <p><strong>How it helps:</strong> Increase <code>--sample</code> when accuracy
-        matters more than speed. Default 4000 is a good balance for typical corpora.</p>
+        <p><strong>What they are:</strong> The <strong>corpus</strong> is every
+        chunk OpenCrane has indexed for this project &mdash; typically tens of
+        thousands of chunks. A <strong>sample</strong> is an optional uniform
+        random subset (controlled by <code>--sample N</code>) used <em>only</em>
+        for the scatter chart, in case your browser slows down with too many
+        points or UMAP / t-SNE takes too long.</p>
+        <p><strong>Why they're here:</strong> Neighbor finding, the verdict
+        score, and per-source alignment are always computed on the
+        <strong>full corpus</strong> &mdash; the sample only changes what the
+        scatter chart renders. So sampling never affects correctness, only
+        the visible backdrop in the scatter.</p>
+        <p><strong>What you can read from it:</strong> The "How this is
+        computed" box in the score cell shows the exact numbers
+        (e.g. <code>4,012 of 18,271</code>). The top-K neighbors are always
+        force-included in the sample so their teal rings stay visible.</p>
+        <p><strong>How it helps:</strong> By default <em>everything</em> is
+        rendered. Pass <code>--sample 4000</code> (or similar) if your
+        browser lags or UMAP feels slow on a very large corpus.</p>
       </div>
     </details>
 
@@ -664,8 +726,9 @@ GLOSSARY_HTML = """
         <p><strong>What it is:</strong> For each dot, how close are its 20 nearest
         on-screen neighbors? If they're packed tight = high density (yellow on the
         Plasma scale). If they're far apart = low density (dark purple).</p>
-        <p><strong>Why it's here:</strong> Without color, 4000 dots look like one blob.
-        Density coloring reveals where the docs actually cluster.</p>
+        <p><strong>Why it's here:</strong> Without color, thousands of dots
+        look like one undifferentiated blob. Density coloring reveals where
+        the docs actually cluster vs where they're sparse.</p>
         <p><strong>What you can read from it:</strong></p>
         <ul>
           <li><strong>Yellow zones</strong> = popular topics with many similar chunks
@@ -912,19 +975,28 @@ SOURCES_HELP = """
 <details class="help">
   <summary><strong>How to read this chart</strong></summary>
   <div class="help-body">
-    <p>For each documentation repository, we take the <strong>top 30 chunks</strong>
-    most similar to your paragraph (full-dimensional cosine similarity) and average
-    their similarity scores. The bars are sorted &mdash; <strong>top bar = the repo
-    your paragraph fits best</strong>.</p>
+    <p>One horizontal row per documentation repository, sorted by best match
+    at the top. Each row carries two numbers in a single visual:</p>
     <ul>
-      <li>Bar length / Plasma color = <strong>mean similarity</strong> of the
-      top-30 matches. Yellow = strong fit; dark purple = weak fit.</li>
-      <li><span style="color:#00b4a8">Teal tick</span> = <strong>single best
-      match</strong> from that repo. If the teal tick is far to the right of the bar,
-      one specific chunk hits hard even though the repo overall isn't a great match.</li>
+      <li><strong>Bar length</strong> = the repo's <strong>maximum cosine
+      similarity</strong> (its single closest-matching chunk). Long bar = at
+      least one chunk in that repo is highly relevant to your paragraph.</li>
+      <li><strong>Orange tick inside the bar</strong> = the repo's
+      <strong>mean similarity over its top-30 chunks</strong>. Tick position
+      tells you how broad the alignment is:
+        <ul>
+          <li><em>Tick near the right edge</em> &mdash; mean close to max,
+          the repo's top chunks are all consistently relevant.</li>
+          <li><em>Tick near the left edge of a long bar</em> &mdash; one
+          standout chunk hits hard while the rest of the repo is unrelated.</li>
+          <li><em>Tick centered</em> &mdash; moderate spread; the repo has
+          some good matches and some weaker ones.</li>
+        </ul>
+      </li>
     </ul>
-    <p><strong>Use it for:</strong> deciding which repo your new content belongs to;
-    spotting unexpected matches in repos you wouldn't have thought to check.</p>
+    <p><strong>Use it for:</strong> deciding which repo your new content
+    belongs to; spotting unexpected matches in repos you wouldn't have
+    thought to check.</p>
   </div>
 </details>
 """
@@ -1262,7 +1334,7 @@ SCATTER_CAPTION = (
     f"its top-K neighbors. Use the toggle above the chart to flip between "
     f"{_ABBR_DENSITY} coloring (heatmap of how crowded each region is) and "
     f"per-source coloring (one color per docs repo). "
-    f"<em>Hover any dot for snippet + URL.</em>"
+    f"<em>Hover any dot for snippet; click to open its source doc in a new tab.</em>"
 )
 
 NEIGHBORS_CAPTION = (
@@ -1270,15 +1342,16 @@ NEIGHBORS_CAPTION = (
     f"neighbors. With only ~13 points, both axes ({_ABBR_PC}) carry real "
     f"meaning, and distances between <em>any two dots</em> reflect actual "
     f"{_ABBR_COSINE} &mdash; not just distance to your paragraph. "
-    f"<em>Hover the diamond to see its exact (x, y).</em>"
+    f"<em>Click any neighbor to open its source doc in a new tab.</em>"
 )
 
 SOURCES_CAPTION = (
-    f"For each docs repo: the colored bar shows the {_ABBR_MEAN} {_ABBR_COSINE} "
-    f"of its top-30 chunks; the teal tick shows the {_ABBR_MAX}. "
-    f"Long bar = the repo broadly matches your topic. Teal tick far right with "
-    f"short bar = one strong chunk in an otherwise-unrelated repo. "
-    f"<em>Hover a bar to see the chunk count sampled per repo.</em>"
+    f"One row per docs repo. <strong>Bar length</strong> = the repo's "
+    f"{_ABBR_MAX} {_ABBR_COSINE} (the single best chunk). "
+    f"<strong>Orange tick inside the bar</strong> = the repo's {_ABBR_MEAN} "
+    f"across its top-30 chunks. Tick near the right edge = repo is uniformly "
+    f"strong; tick near the left = one outlier chunk hits hard while the rest "
+    f"don't. <em>Hover any bar to see exact numbers + chunk count.</em>"
 )
 
 VIZ_TO_CAPTION = {
@@ -1343,6 +1416,40 @@ THEME_TOGGLE_JS = (
     "document.documentElement.setAttribute('data-theme',n);"
     "try{localStorage.setItem('oc-theme',n);}catch(_){}});})();</script>"
 )
+
+# Click-to-open: every Plotly trace that carries customdata (URL strings)
+# becomes clickable. Click on a dot opens the source doc in a new tab.
+# Plotly's hover labels are non-interactive, so the dot itself is the trigger.
+PLOTLY_CLICK_JS = """
+<script>
+(function() {
+  function attachClickHandlers() {
+    document.querySelectorAll('.js-plotly-plot').forEach(function(div) {
+      if (div._ocClickAttached) return;
+      if (typeof div.on !== 'function') return;
+      div._ocClickAttached = true;
+      div.on('plotly_click', function(ev) {
+        if (!ev || !ev.points || !ev.points.length) return;
+        var p = ev.points[0];
+        var url = p && p.customdata;
+        if (Array.isArray(url)) url = url[0];
+        if (typeof url === 'string' && /^https?:\\/\\//.test(url)) {
+          window.open(url, '_blank', 'noopener,noreferrer');
+        }
+      });
+    });
+  }
+  // Plotly mounts asynchronously; retry a few times until it's there.
+  attachClickHandlers();
+  var tries = 0;
+  var iv = setInterval(function() {
+    attachClickHandlers();
+    if (++tries > 20) clearInterval(iv);
+  }, 300);
+  window.addEventListener('load', attachClickHandlers);
+})();
+</script>
+"""
 
 STYLES = """
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1787,6 +1894,9 @@ details.score-howto > summary:hover { color: var(--accent); }
   background: var(--chart-bg); border: 1px solid var(--line);
   padding: 0; margin: 24px 0;
 }
+/* Plotly markers become interactive — pointer cursor signals clickability. */
+.viz .js-plotly-plot .plotly .scatterlayer .points path,
+.viz .js-plotly-plot .scene .points path { cursor: pointer; }
 
 /* DETAILS — help / debug */
 details.help {
@@ -2092,14 +2202,23 @@ def _write_combined_html(figs, out_path: Path, ctx: dict):
         f'The top {ctx["neighbor_count"]} highest are your &laquo;neighbors&raquo; '
         f'shown in every chart below.</li>',
         '</ol>',
-        '<p class="score-howto-note">Runs entirely in-process &mdash; '
-        'no Milvus, no remote service, no caching. '
-        f'The scatter below renders only <b>{ctx["sample_size"]:,}</b> of '
-        f'the {ctx["full_size"]:,} chunks (uniform random sample for browser '
-        f'performance and UMAP / t-SNE speed; the top-{ctx["neighbor_count"]} '
-        f'neighbors are always force-included so their teal rings stay '
-        f'visible). Pass <code>--sample {ctx["full_size"] + 1}</code> (or any '
-        f'number above the corpus size) to render the full corpus.</p>',
+        (
+            '<p class="score-howto-note">Runs entirely in-process &mdash; '
+            'no Milvus, no remote service, no caching. '
+            f'The scatter below renders <b>{ctx["sample_size"]:,}</b> of '
+            f'the {ctx["full_size"]:,} chunks &mdash; '
+            + (
+                'the full corpus.'
+                if ctx["sample_size"] >= ctx["full_size"]
+                else (
+                    'a uniform random sample, with the top-'
+                    f'{ctx["neighbor_count"]} neighbors force-included so '
+                    f'their teal rings stay visible. Drop the <code>--sample</code> '
+                    'flag (or pass 0) to render the full corpus.'
+                )
+            )
+            + '</p>'
+        ),
         '</details>',
         '<div class="score-divider">verdict</div>',
         f'<span class="score-verdict">{verdict["label"]}</span>',
@@ -2211,6 +2330,7 @@ def _write_combined_html(figs, out_path: Path, ctx: dict):
         f'<div>{ctx["sample_size"]:,} embeddings &middot; '
         f'{ctx["unique_neighbor_sources"]} repos surveyed</div>',
         '</footer>',
+        PLOTLY_CLICK_JS,
         "</div></body></html>",
     ]
     out_path.write_text("\n".join(parts), encoding="utf-8")
@@ -2225,7 +2345,7 @@ def main(
     method: str = "umap",
     dim: int = 3,
     viz: str = "all",
-    sample: int = 4000,
+    sample: int = 0,
     neighbors: int = 12,
     seed: int = 42,
     open_browser: bool = True,

@@ -209,7 +209,7 @@ class CodeChunkingStrategy(ProcessingStrategy):
         
         # Default: create code snippet chunk
         token_count = get_token_count(code)
-        source_url = self._extract_source_url(code) or base_source_url
+        source_url = base_source_url or self._extract_source_url(code)
         
         metadata = {
             "language": language,

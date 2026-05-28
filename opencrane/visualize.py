@@ -101,7 +101,7 @@ def load_corpus(embeddings_file: Path, chunks_file: Path) -> CorpusData:
     sources, snippets, urls = [], [], []
     for r in records:
         c = chunk_by_id.get(r["chunk_id"], {})
-        sources.append(c.get("source_name", "unknown"))
+        sources.append(c.get("source_name") or "unknown")
         raw = c.get("content")
         text = raw if isinstance(raw, str) else json.dumps(raw, default=str) if raw is not None else ""
         snippet = text[:160].replace("\n", " ")

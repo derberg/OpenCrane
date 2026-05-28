@@ -213,7 +213,7 @@ class YamlChunkingStrategy(ProcessingStrategy):
         # For non-tree-walker YAML, use yaml_content type
         # This avoids validation errors for missing tree metadata
         metadata = {}
-        source_url = self._extract_source_url(text) or base_source_url
+        source_url = base_source_url or self._extract_source_url(text)
         if source_url:
             metadata["source_url"] = source_url
         

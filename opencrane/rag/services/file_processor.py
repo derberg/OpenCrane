@@ -13,6 +13,24 @@ from opencrane.shared.models.chunk import Chunk
 
 logger = logging.getLogger(__name__)
 
+_HEADING_PREFIX_RE = re.compile(r'^#{1,6}\s+')
+_GITHUB_URL_RE = re.compile(r'https://github\.com/[^\s\]]+')
+
+
+def _leading_github_url(heading_line: str) -> str | None:
+    """Return the GitHub URL when it is the first token after the heading hashes.
+
+    The ``llms`` step prefixes every heading with the page's source URL
+    (``### <page-url> <heading text>``). A genuine bare-GitHub file-boundary
+    marker is a heading whose first token *is* a GitHub URL. A GitHub URL that
+    appears later on the line (e.g. an inline issue/discussion link inside a
+    heading already prefixed with a docs URL) is content, not a marker, and must
+    not be used as the section's source URL.
+    """
+    after_hashes = _HEADING_PREFIX_RE.sub('', heading_line.strip(), count=1)
+    match = _GITHUB_URL_RE.match(after_hashes)
+    return match.group(0) if match else None
+
 
 class FileProcessor:
     """Orchestrates chunking of files using appropriate strategies."""
@@ -268,12 +286,15 @@ class FileProcessor:
                         if bracket_match:
                             current_source_url = bracket_match.group(0).strip('[]')
                             break
-                        # Bare GitHub URL: ### https://github.com/...
-                        if 'https://github.com/' in stripped_line:
-                            match = re.search(r'https://github\.com/[^\s\]]+', stripped_line)
-                            if match:
-                                current_source_url = match.group(0)
-                                break
+                        # Bare GitHub URL marker: ### https://github.com/...
+                        # The GitHub URL must be the FIRST token after the hashes
+                        # (the boundary marker emitted by the llms step). A GitHub
+                        # URL appearing later on the line is an inline link inside a
+                        # prefixed heading, not a file-boundary marker.
+                        leading = _leading_github_url(stripped_line)
+                        if leading:
+                            current_source_url = leading
+                            break
                 
                 in_code_block = False
                 in_html_block = False
@@ -286,7 +307,13 @@ class FileProcessor:
                     # Matches both bare GitHub URLs (### https://github.com/...)
                     # and bracketed docs URLs (# [https://...] Title).
                     if not in_html_block and not in_code_block:
-                        is_github_marker = stripped.startswith('###') and 'https://github.com/' in stripped
+                        # A bare-GitHub marker requires the GitHub URL to be the
+                        # FIRST token after the hashes. Inline GitHub links inside
+                        # a heading prefixed with the page URL (e.g. community pages
+                        # whose heading text links to an issue/discussion) are NOT
+                        # markers and must not steal the section's source_url.
+                        leading_github = _leading_github_url(stripped) if stripped.startswith('###') else None
+                        is_github_marker = leading_github is not None
                         bracket_url_match = re.search(r'\[https?://[^\]]+\]', stripped) if stripped.startswith('#') else None
                         is_url_marker = is_github_marker or bracket_url_match is not None
 
@@ -311,13 +338,13 @@ class FileProcessor:
                                 else:
                                     current_section = []
                             else:
-                                match = re.search(r'https://github\.com/[^\s\]]+', line)
-                                if match:
-                                    logger.debug(f"Found new marker, updating URL from {current_source_url[:60] if current_source_url else 'None'}... to {match.group(0)[:60]}...")
-                                    current_source_url = match.group(0)
+                                marker_url = leading_github
+                                if marker_url:
+                                    logger.debug(f"Found new marker, updating URL from {current_source_url[:60] if current_source_url else 'None'}... to {marker_url[:60]}...")
+                                    current_source_url = marker_url
 
                                     # Check if there's inline text after the URL (like "### https://...file.md Title")
-                                    url_end = line.find(match.group(0)) + len(match.group(0))
+                                    url_end = line.find(marker_url) + len(marker_url)
                                     inline_title = line[url_end:].strip()
                                     if inline_title:
                                         current_section = [f"### {inline_title}"]

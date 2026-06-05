@@ -375,6 +375,65 @@ class TestJsonSchemaTreeWalker:
         assert "phone" in def_names
         assert "disabled" not in def_names
 
+    def test_empty_property_schemas_skipped(self):
+        """Empty ``{}`` property schemas mean "any value allowed" — same as a
+        boolean ``true`` schema. They carry no semantic content, must not crash
+        the walk, and must not produce empty-dict chunks (which the Chunk model
+        rejects). Mirrors the AsyncAPI 3.1.0 binding objects, where bindings
+        like ``amqp1: {}`` are declared without a constraining schema.
+        """
+        schema_dict = {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "amqp1": {},   # Empty schema — "any value allowed"
+                "http": {},    # Empty schema — "any value allowed"
+                "age": {"type": "integer"},
+            },
+        }
+
+        walker = JsonSchemaTreeWalker(
+            schema_dict,
+            source_url="https://github.com/org/repo/blob/main/schemas/bindings.json"
+        )
+        chunks = walker.walk()  # Must not raise
+
+        property_chunks = [c for c in chunks if c.metadata.get("schema_element") == "properties"]
+        property_names = [c.metadata.get("property_name") for c in property_chunks]
+
+        assert len(property_chunks) == 2
+        assert "name" in property_names
+        assert "age" in property_names
+        assert "amqp1" not in property_names
+        assert "http" not in property_names
+
+    def test_empty_definition_schemas_skipped(self):
+        """Empty ``{}`` definition schemas are skipped like boolean schemas."""
+        schema_dict = {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "$defs": {
+                "address": {"type": "object"},
+                "anyBinding": {},   # Empty schema — "any value allowed"
+                "phone": {"type": "string"},
+            },
+        }
+
+        walker = JsonSchemaTreeWalker(
+            schema_dict,
+            source_url="https://github.com/org/repo/blob/main/schemas/user.json"
+        )
+        chunks = walker.walk()  # Must not raise
+
+        def_chunks = [c for c in chunks if c.metadata.get("schema_element") == "definitions"]
+        def_names = [c.metadata.get("definition_name") for c in def_chunks]
+
+        assert len(def_chunks) == 2
+        assert "address" in def_names
+        assert "phone" in def_names
+        assert "anyBinding" not in def_names
+
     def test_recursive_chunking_for_large_property(self):
         """Test that large properties with nested schemas are chunked recursively."""
         # Create a large nested property that exceeds token threshold (800 tokens)

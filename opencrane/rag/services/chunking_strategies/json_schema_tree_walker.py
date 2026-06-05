@@ -133,6 +133,14 @@ class JsonSchemaTreeWalker(YamlTreeWalker):
             # Sanitize content to ensure JSON serializability
             sanitized_content = self._sanitize_yaml_content(prop_schema)
 
+            # Skip empty schemas ({}). Like a boolean `true` schema, an empty
+            # schema means "any value allowed" and carries no content to embed.
+            # Emitting it would produce an empty-dict chunk, which the Chunk
+            # model rejects. (AsyncAPI 3.1.0 declares many bindings this way,
+            # e.g. channelBindingsObject.properties.amqp1: {}.)
+            if not sanitized_content:
+                continue
+
             # Calculate token count
             token_count = self._calculate_token_count(sanitized_content)
 
@@ -204,6 +212,11 @@ class JsonSchemaTreeWalker(YamlTreeWalker):
 
             # Sanitize content
             sanitized_content = self._sanitize_yaml_content(def_schema)
+
+            # Skip empty schemas ({}) — "any value allowed", no content to embed
+            # and an empty-dict chunk would be rejected by the Chunk model.
+            if not sanitized_content:
+                continue
 
             # Calculate token count
             token_count = self._calculate_token_count(sanitized_content)

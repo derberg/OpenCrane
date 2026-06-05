@@ -235,7 +235,9 @@ class TestGetSourceUrl:
             with patch("opencrane.rag.generate_llms_txt._source_mapping", mapping):
                 rel_path = Path("external-sources/product-a/docs/guide.md")
                 result = get_source_url(rel_path, "product-a")
-                assert result == "https://docs.example.com/product-a/guide.md"
+                # docs_url is a rendered site — the .md extension is dropped so
+                # the link resolves (raw .md paths are dead links on doc sites).
+                assert result == "https://docs.example.com/product-a/guide"
 
     def test_docs_url_without_docs_path(self):
         """Test docs_url when no docs_path is set."""
@@ -253,7 +255,37 @@ class TestGetSourceUrl:
             with patch("opencrane.rag.generate_llms_txt._source_mapping", mapping):
                 rel_path = Path("my-source/guide/intro.md")
                 result = get_source_url(rel_path, "my-source")
-                assert result == "https://docs.example.com/guide/intro.md"
+                assert result == "https://docs.example.com/guide/intro"
+
+    def test_docs_url_strips_md_extension_and_index(self):
+        """docs_url page links drop the .md extension, and index.md maps to its
+        containing directory — matching how rendered docs sites serve pages."""
+        with tempfile.TemporaryDirectory() as tmp:
+            mapping_file = Path(tmp) / "mapping.yaml"
+            mapping = SourceMapping(mapping_file)
+            mapping.add_source(
+                path_key="site",
+                url="https://github.com/test/repo",
+                docs_path="",
+                docs_url="https://www.asyncapi.com/docs",
+            )
+            mapping.save()
+
+            with patch("opencrane.rag.generate_llms_txt._source_mapping", mapping):
+                # Regular page → .md dropped
+                page = get_source_url(
+                    Path("site/community/010-contribution-guidelines/code-contributor-guide.md"),
+                    "site",
+                )
+                assert page == "https://www.asyncapi.com/docs/community/010-contribution-guidelines/code-contributor-guide"
+
+                # Nested index.md → directory
+                nested_index = get_source_url(Path("site/community/index.md"), "site")
+                assert nested_index == "https://www.asyncapi.com/docs/community"
+
+                # Root index.md → docs_url root
+                root_index = get_source_url(Path("site/index.md"), "site")
+                assert root_index == "https://www.asyncapi.com/docs"
 
 
     def test_local_source_with_docs_path(self):

@@ -166,6 +166,26 @@ def rewrite_links(
     return re.sub(r"\[(.*?)\]\((.*?)\)", replace, text)
 
 
+def _docs_site_page_path(file_rel: str) -> str:
+    """Map a markdown file path to its rendered docs-site page path.
+
+    Rendered docs sites serve markdown pages without the source extension
+    (``code-contributor-guide.md`` → ``code-contributor-guide``) and serve an
+    ``index`` page as its containing directory (``community/index.md`` →
+    ``community``, root ``index.md`` → ``""``). Used only for ``docs_url``;
+    GitHub blob links keep the raw ``.md`` path.
+    """
+    for ext in (".md", ".markdown"):
+        if file_rel.endswith(ext):
+            file_rel = file_rel[: -len(ext)]
+            break
+    if file_rel == "index":
+        return ""
+    if file_rel.endswith("/index"):
+        file_rel = file_rel[: -len("/index")]
+    return file_rel
+
+
 def get_source_url(rel_with_project: Path, project_name: str) -> str | None:
     """Return the source URL for a given file path and project name.
 
@@ -199,7 +219,13 @@ def get_source_url(rel_with_project: Path, project_name: str) -> str | None:
             docs_prefix = f"{docs_path.rstrip('/')}/"
             if file_rel.startswith(docs_prefix):
                 file_rel = file_rel[len(docs_prefix):]
-        return f"{docs_url.rstrip('/')}/{file_rel}"
+        # docs_url points at a rendered docs site, which serves markdown without
+        # the source file extension (and an index page as its directory). Keeping
+        # the raw ``.md`` path produces dead links, so normalise it here. The
+        # GitHub blob fallback below intentionally keeps the extension.
+        page_path = _docs_site_page_path(file_rel)
+        base = docs_url.rstrip("/")
+        return f"{base}/{page_path}" if page_path else base
 
     # Fall back to GitHub blob URL
     url = source.get("url", "")

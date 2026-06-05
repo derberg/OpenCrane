@@ -65,10 +65,14 @@ class ProseChunkingStrategy(ProcessingStrategy):
             # bracketed docs URLs (# [https://docs.example.com] Title)
             # injected by the llms step.
             if 'https://' in line and stripped.startswith('#'):
-                # Try bracketed URL first: # [https://...] Title
+                # Bracketed marker: # [base] <page-url> Title. The combine step
+                # tags headings with the source's base docs_url in brackets; the
+                # specific page URL follows it. Track the page URL, not the base.
                 bracket_match = re.search(r'\[https?://[^\]]+\]', line)
                 if bracket_match:
-                    self._current_source_url = bracket_match.group(0).strip('[]')
+                    after_bracket = line[line.index(']') + 1:]
+                    page = re.search(r'https?://[^\s\]]+', after_bracket)
+                    self._current_source_url = page.group(0) if page else bracket_match.group(0).strip('[]')
                 else:
                     # Bare URL: # https://github.com/... Title
                     match = re.search(r'https://[^\s\]]+', line)

@@ -14,22 +14,57 @@ from opencrane.shared.models.chunk import Chunk
 logger = logging.getLogger(__name__)
 
 _HEADING_PREFIX_RE = re.compile(r'^#{1,6}\s+')
-_GITHUB_URL_RE = re.compile(r'https://github\.com/[^\s\]]+')
+_LEADING_URL_RE = re.compile(r'(https?://[^\s\]]+)(.*)$')
 
 
-def _leading_github_url(heading_line: str) -> str | None:
-    """Return the GitHub URL when it is the first token after the heading hashes.
+def _bare_url_marker(heading_line: str) -> str | None:
+    """Return the source URL when a heading is a bare (non-bracketed) URL marker.
 
-    The ``llms`` step prefixes every heading with the page's source URL
-    (``### <page-url> <heading text>``). A genuine bare-GitHub file-boundary
-    marker is a heading whose first token *is* a GitHub URL. A GitHub URL that
-    appears later on the line (e.g. an inline issue/discussion link inside a
-    heading already prefixed with a docs URL) is content, not a marker, and must
-    not be used as the section's source URL.
+    The ``llms`` step writes a standalone ``### <page-url>`` line as each file's
+    boundary and prefixes every heading with that page URL. A heading is treated
+    as a bare URL marker when its first token after the hashes is a URL and
+    either:
+
+    * it is a GitHub URL — the file-boundary / prefixed-heading form used for
+      GitHub-sourced content (and the leading-token rule means an inline
+      issue/discussion link later on the line is *not* a marker); or
+    * the URL is the sole content of the heading — a standalone docs-site page
+      marker (``### https://www.asyncapi.com/docs/...``), which carries no
+      ``github.com`` and would otherwise go unrecognised.
+
+    A non-GitHub URL followed by more text (a prefixed content heading) is not a
+    boundary; its content inherits the page's own standalone marker.
     """
     after_hashes = _HEADING_PREFIX_RE.sub('', heading_line.strip(), count=1)
-    match = _GITHUB_URL_RE.match(after_hashes)
-    return match.group(0) if match else None
+    match = _LEADING_URL_RE.match(after_hashes)
+    if not match:
+        return None
+    url, rest = match.group(1), match.group(2).strip()
+    if url.startswith('https://github.com/') or not rest:
+        return url
+    return None
+
+
+_BRACKET_URL_RE = re.compile(r'\[https?://[^\]]+\]')
+
+
+def _bracketed_marker(heading_line: str):
+    """Parse a bracketed heading marker ``#+ [base] <page-url> <title>``.
+
+    The combine step tags every heading with the source's base docs_url in
+    brackets, followed by the page's own URL and (optionally) a title. The
+    section's source URL is the specific *page* URL after the bracket, not the
+    base tag. Returns ``(source_url, title)`` or ``None`` when not bracketed.
+    """
+    bracket = _BRACKET_URL_RE.search(heading_line)
+    if not bracket:
+        return None
+    after_bracket = heading_line[heading_line.index(']') + 1:].strip()
+    page = _LEADING_URL_RE.match(after_bracket)
+    if page:
+        return page.group(1), page.group(2).strip()
+    # No page URL follows the tag — fall back to the bracket content.
+    return bracket.group(0).strip('[]'), after_bracket
 
 
 class FileProcessor:
@@ -281,17 +316,14 @@ class FileProcessor:
                 for line in content.split('\n'):
                     stripped_line = line.strip()
                     if stripped_line.startswith('#'):
-                        # Bracketed URL: # [https://...] Title
-                        bracket_match = re.search(r'\[https?://[^\]]+\]', stripped_line)
-                        if bracket_match:
-                            current_source_url = bracket_match.group(0).strip('[]')
+                        # Bracketed marker: # [base] <page-url> Title → page URL
+                        bracketed = _bracketed_marker(stripped_line)
+                        if bracketed:
+                            current_source_url = bracketed[0]
                             break
-                        # Bare GitHub URL marker: ### https://github.com/...
-                        # The GitHub URL must be the FIRST token after the hashes
-                        # (the boundary marker emitted by the llms step). A GitHub
-                        # URL appearing later on the line is an inline link inside a
-                        # prefixed heading, not a file-boundary marker.
-                        leading = _leading_github_url(stripped_line)
+                        # Bare URL marker: GitHub leading URL, or a standalone
+                        # docs-site page URL (### https://www.asyncapi.com/docs/...).
+                        leading = _bare_url_marker(stripped_line) if stripped_line.startswith('###') else None
                         if leading:
                             current_source_url = leading
                             break
@@ -307,15 +339,15 @@ class FileProcessor:
                     # Matches both bare GitHub URLs (### https://github.com/...)
                     # and bracketed docs URLs (# [https://...] Title).
                     if not in_html_block and not in_code_block:
-                        # A bare-GitHub marker requires the GitHub URL to be the
-                        # FIRST token after the hashes. Inline GitHub links inside
-                        # a heading prefixed with the page URL (e.g. community pages
-                        # whose heading text links to an issue/discussion) are NOT
-                        # markers and must not steal the section's source_url.
-                        leading_github = _leading_github_url(stripped) if stripped.startswith('###') else None
-                        is_github_marker = leading_github is not None
-                        bracket_url_match = re.search(r'\[https?://[^\]]+\]', stripped) if stripped.startswith('#') else None
-                        is_url_marker = is_github_marker or bracket_url_match is not None
+                        # Markers update the current source URL and start a new
+                        # section. A bracketed marker (# [base] <page-url> ...)
+                        # uses the page URL after the bracket, not the base tag.
+                        # A bare marker is a leading GitHub URL or a standalone
+                        # docs-site page URL; an inline link later on a prefixed
+                        # heading is NOT a marker and cannot steal the URL.
+                        bracketed = _bracketed_marker(stripped) if stripped.startswith('#') else None
+                        bare_marker = _bare_url_marker(stripped) if (bracketed is None and stripped.startswith('###')) else None
+                        is_url_marker = bracketed is not None or bare_marker is not None
 
                         if is_url_marker:
                             # Save accumulated content before this marker
@@ -326,19 +358,18 @@ class FileProcessor:
                                     sections.append(FakeTextItem(section_text, current_source_url))
 
                             # Extract and update current source URL
-                            if bracket_url_match:
-                                new_url = bracket_url_match.group(0).strip('[]')
+                            if bracketed is not None:
+                                new_url, title = bracketed
                                 logger.debug(f"Found bracketed URL marker, updating URL from {current_source_url[:60] if current_source_url else 'None'}... to {new_url[:60]}...")
                                 current_source_url = new_url
-                                # Extract inline title: # [https://...] Title → # Title
-                                after_bracket = stripped[stripped.index(']') + 1:].strip()
+                                # Keep any title text (page URL already stripped).
                                 hashes = stripped.split()[0]  # e.g. '#', '##', '###'
-                                if after_bracket:
-                                    current_section = [f"{hashes} {after_bracket}"]
+                                if title:
+                                    current_section = [f"{hashes} {title}"]
                                 else:
                                     current_section = []
                             else:
-                                marker_url = leading_github
+                                marker_url = bare_marker
                                 if marker_url:
                                     logger.debug(f"Found new marker, updating URL from {current_source_url[:60] if current_source_url else 'None'}... to {marker_url[:60]}...")
                                     current_source_url = marker_url

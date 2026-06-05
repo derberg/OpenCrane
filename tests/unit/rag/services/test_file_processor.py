@@ -311,6 +311,66 @@ Content for section 2."""
             f"Follow-up content should keep docs page URL, got: " \
             f"{[c.metadata.get('source_url') for c in followup]}"
 
+    def test_bracketed_marker_uses_page_url_not_base_tag(self, tmp_path):
+        """Combined bundles tag every heading with the source's base docs_url in
+        brackets, followed by the specific page URL: ``### [base] <page-url>``.
+        The chunk source_url must be the specific page URL, not the base tag.
+        """
+        processor = FileProcessor()
+        base = "https://www.asyncapi.com/docs"
+        page = "https://www.asyncapi.com/docs/community/maintainership-guide/amp-community-values"
+        content = "\n".join([
+            f"### [{base}] {page}",
+            "",
+            f"## [{base}] {page} AMP Builds a Safe and Inclusive Culture",
+            "",
+            "Holds both mentors and mentees accountable for respectful conduct.",
+        ])
+        large_content = content + "\n" + ("x" * 100001)
+        test_file = tmp_path / "amp_bracketed.txt"
+        test_file.write_text(large_content, encoding="utf-8")
+
+        with patch.object(processor.docling_adapter, 'convert_file') as mock_convert:
+            from docling.exceptions import ConversionError
+            mock_convert.side_effect = ConversionError("test")
+            chunks = processor.process_file(test_file)
+
+        docs_urls = [
+            (c.metadata or {}).get("source_url")
+            for c in chunks
+            if "asyncapi.com/docs" in ((c.metadata or {}).get("source_url") or "")
+        ]
+        assert docs_urls, "Expected chunks attributed to the docs page"
+        assert all(u == page for u in docs_urls), \
+            f"source_url should be the specific page, not the base tag: {set(docs_urls)}"
+
+    def test_bare_non_github_url_marker_recognized(self, tmp_path):
+        """A bare standalone docs-site marker (``### <page-url>``, non-GitHub) is
+        a genuine file boundary. Its content must be attributed to that page URL,
+        not inherit a previous marker (or end up with no source_url)."""
+        processor = FileProcessor()
+        page = "https://www.asyncapi.com/docs/community/maintainership-guide/amp-community-values"
+        content = "\n".join([
+            f"### {page}",
+            "",
+            "## AMP Builds a Safe and Inclusive Culture",
+            "",
+            "Holds both mentors and mentees accountable for respectful conduct.",
+        ])
+        large_content = content + "\n" + ("x" * 100001)
+        test_file = tmp_path / "amp_bare.txt"
+        test_file.write_text(large_content, encoding="utf-8")
+
+        with patch.object(processor.docling_adapter, 'convert_file') as mock_convert:
+            from docling.exceptions import ConversionError
+            mock_convert.side_effect = ConversionError("test")
+            chunks = processor.process_file(test_file)
+
+        body = [c for c in chunks if "mentors and mentees" in c.content]
+        assert body, "Expected the body content chunk"
+        assert all((c.metadata or {}).get("source_url") == page for c in body), \
+            f"Body should be attributed to the page URL, got: {[(c.metadata or {}).get('source_url') for c in body]}"
+
     def test_small_plain_text_file_without_section_markers(self, tmp_path):
         """Test processing small plain text file with no section markers or YAML blocks."""
         processor = FileProcessor()

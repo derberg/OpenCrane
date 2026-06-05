@@ -259,6 +259,58 @@ Content for section 2."""
         assert len(file3_chunks) > 0, "Should have file3 chunks"
         assert all(c.metadata.get('source_url') == 'https://github.com/org/repo3/blob/main/file3.md' 
                    for c in file3_chunks), "File3 content should have repo3 URL"
+    def test_inline_github_link_in_prefixed_heading_is_not_a_marker(self, tmp_path):
+        """A heading prefixed with the page's docs URL whose text links to a
+        GitHub issue/discussion must keep the docs URL as source_url.
+
+        The ``llms`` step prefixes every heading with the page URL
+        (``##### <page-url> <heading text>``). On community pages the heading
+        text is itself an inline GitHub issue/discussion link, so the line ends
+        up containing ``github.com``. That inline link must NOT be mistaken for
+        a file-boundary marker — only a heading whose first token after the
+        hashes is a GitHub URL is a genuine marker.
+        """
+        processor = FileProcessor()
+
+        page = "https://www.asyncapi.com/docs/community/microgrant-program.md"
+        content = "\n".join([
+            f"### {page}",
+            "",
+            f"# {page} AsyncAPI Microgrant Program",
+            "",
+            f"## {page} Preface",
+            "",
+            "The motivation was to redistribute funds directly to maintainers.",
+            "",
+            # Prefixed heading whose text is an inline GitHub issue link.
+            f"##### {page} https://github.com/asyncapi/community/issues/1072",
+            "",
+            "Follow-up discussion content about the microgrant program.",
+        ])
+        # Pad past the 100KB threshold so section splitting is triggered.
+        large_content = content + "\n" + ("x" * 100001)
+
+        test_file = tmp_path / "microgrant.txt"
+        test_file.write_text(large_content, encoding="utf-8")
+
+        with patch.object(processor.docling_adapter, 'convert_file') as mock_convert:
+            from docling.exceptions import ConversionError
+            mock_convert.side_effect = ConversionError("test")
+            chunks = processor.process_file(test_file)
+
+        source_urls = [c.metadata.get('source_url', '') for c in chunks]
+
+        # The inline GitHub issue link must never become a chunk's source_url.
+        assert not any('issues/1072' in url for url in source_urls), \
+            f"Inline GitHub issue link wrongly used as source_url: {source_urls}"
+
+        # Content following the inline-link heading keeps the docs page URL.
+        followup = [c for c in chunks if 'Follow-up discussion' in c.content]
+        assert followup, "Should have the follow-up content chunk"
+        assert all(c.metadata.get('source_url') == page for c in followup), \
+            f"Follow-up content should keep docs page URL, got: " \
+            f"{[c.metadata.get('source_url') for c in followup]}"
+
     def test_small_plain_text_file_without_section_markers(self, tmp_path):
         """Test processing small plain text file with no section markers or YAML blocks."""
         processor = FileProcessor()

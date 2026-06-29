@@ -215,3 +215,134 @@ def test_can_process_rejects_non_text_nodes():
 
     blank = _mk_node("   \n\n")
     assert strategy.can_process(blank) is False
+
+
+# ---------------------------------------------------------------------------
+# Deterministic, platform-independent tests for specific branches/lines.
+# These construct minimal controlled inputs (raw line lists, crafted markdown,
+# direct _Item objects) so the target lines are hit regardless of how docling
+# or markdown happens to parse on a given platform / dependency version.
+# ---------------------------------------------------------------------------
+
+
+from opencrane.rag.services.list_chunker import _Item  # noqa: E402
+
+
+def test_segment_consecutive_blank_lines_then_prose():
+    """Two consecutive blank lines inside a list, then non-indented prose.
+
+    Forces the blank-peek loop to advance past more than one blank line
+    (the `j += 1` inside the while loop) before deciding the list ends.
+    """
+    strategy = ListChunkingStrategy()
+    text = "\n".join(
+        [
+            "- alpha",
+            "- beta",
+            "",
+            "",
+            "Trailing prose paragraph.",
+        ]
+    )
+    segments = strategy._segment(text)
+    kinds = [k for k, _ in segments]
+    assert kinds == ["list", "prose"]
+    list_seg = segments[0][1]
+    assert list_seg == ["- alpha", "- beta"]
+    prose_seg = segments[1][1]
+    assert prose_seg == ["Trailing prose paragraph."]
+
+
+def test_segment_list_immediately_followed_by_prose_no_blank():
+    """A non-indented, non-marker line directly after a list ends the list.
+
+    No blank line separates the list from the prose, so the segmenter takes
+    the branch that flushes the list and switches back to prose on the prose
+    line itself (it is reprocessed as prose).
+    """
+    strategy = ListChunkingStrategy()
+    text = "\n".join(
+        [
+            "- one",
+            "- two",
+            "Immediate prose line.",
+        ]
+    )
+    segments = strategy._segment(text)
+    kinds = [k for k, _ in segments]
+    assert kinds == ["list", "prose"]
+    assert segments[0][1] == ["- one", "- two"]
+    assert segments[1][1] == ["Immediate prose line."]
+
+
+def test_update_breadcrumb_pops_heading_at_same_level():
+    """Two headings at the same level must pop the earlier one off the stack."""
+    strategy = ListChunkingStrategy()
+    heading_stack: list = []
+    bc1 = strategy._update_breadcrumb(heading_stack, ["## First"])
+    assert bc1 == "First"
+    # Second heading at the same level (##) pops "First" before pushing "Second".
+    bc2 = strategy._update_breadcrumb(heading_stack, ["## Second"])
+    assert bc2 == "Second"
+    assert heading_stack == [(2, "Second")]
+
+
+def test_prose_chunk_includes_source_url_metadata():
+    """A prose chunk carries source_url in metadata when the node provides one."""
+    strategy = ListChunkingStrategy()
+    node = _mk_node(
+        "Intro paragraph.\n\n- a\n- b\n",
+        source_url="https://example.com/docs/page",
+    )
+    chunks = strategy.process(node, Path("doc.md"))
+    prose = [c for c in chunks if c.chunk_type == "prose"]
+    assert prose, "expected at least one prose chunk"
+    assert all(c.metadata.get("source_url") == "https://example.com/docs/page" for c in prose)
+
+
+def test_list_item_chunks_include_source_url_metadata():
+    """List-item chunks carry source_url in both hash metadata and final metadata."""
+    strategy = ListChunkingStrategy()
+    node = _mk_node(
+        "- first\n- second\n",
+        source_url="https://example.com/docs/list",
+    )
+    chunks = strategy.process(node, Path("doc.md"))
+    list_items = [c for c in chunks if c.chunk_type == "list_item"]
+    assert list_items, "expected list_item chunks"
+    assert all(
+        c.metadata.get("source_url") == "https://example.com/docs/list" for c in list_items
+    )
+
+
+def test_rendered_first_line_ordered_rstrips():
+    """Ordered-marker rendering joins marker + body and strips trailing space.
+
+    With an empty body the result is just the marker (no trailing space),
+    proving the rstrip() branch for ordered items is exercised.
+    """
+    item = _Item(
+        style="ordered",
+        marker="1.",
+        indent=0,
+        depth=0,
+        first_line="",
+        body_lines=["1. "],
+    )
+    assert ListChunkingStrategy._rendered_first_line(item) == "1."
+
+    item2 = _Item(
+        style="ordered",
+        marker="2.",
+        indent=0,
+        depth=0,
+        first_line="value",
+        body_lines=["2. value"],
+    )
+    assert ListChunkingStrategy._rendered_first_line(item2) == "2. value"
+
+
+def test_build_previews_empty_returns_empty_list():
+    """_build_previews returns [] when there are no sibling items."""
+    strategy = ListChunkingStrategy()
+    assert strategy._build_previews([]) == []

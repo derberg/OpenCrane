@@ -185,8 +185,13 @@ def test_command_help_colorized(runner):
 
 @pytest.mark.unit
 def test_version_option(runner):
-    result = runner.invoke(cli_main, ["--version"])
+    # Mock the metadata lookup so the test does not depend on opencrane being
+    # pip-installed (Click's version_option reads importlib.metadata; on a
+    # source-only checkout / CI without an install it would otherwise raise).
+    with patch("importlib.metadata.version", return_value="9.9.9-test"):
+        result = runner.invoke(cli_main, ["--version"])
     assert result.exit_code == 0
+    assert "9.9.9-test" in result.output
 
 
 # === fetch ===

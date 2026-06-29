@@ -389,3 +389,87 @@ another: data"""
         assert len(chunks) > 0
         # Should parse as yaml_content (not CRD/OpenAPI)
         assert any(c.chunk_type == "yaml_content" for c in chunks)
+
+
+class TestYamlChunkerModuleHelpers:
+    """Cover the module-level helper functions in yaml_chunker."""
+
+    def test_is_k8s_crd_true(self):
+        """``_is_k8s_crd`` returns True for a CRD document (line 18)."""
+        from opencrane.rag.services.yaml_chunker import _is_k8s_crd
+        doc = {
+            "apiVersion": "apiextensions.k8s.io/v1",
+            "kind": "CustomResourceDefinition",
+        }
+        assert _is_k8s_crd(doc) is True
+
+    def test_is_k8s_crd_false(self):
+        """``_is_k8s_crd`` returns False for a non-CRD document."""
+        from opencrane.rag.services.yaml_chunker import _is_k8s_crd
+        assert _is_k8s_crd({"apiVersion": "v1", "kind": "Pod"}) is False
+
+    def test_has_yaml_tree_chunking_support_crd(self):
+        """``_has_yaml_tree_chunking_support`` is True for a CRD (line 26)."""
+        from opencrane.rag.services.yaml_chunker import _has_yaml_tree_chunking_support
+        doc = {
+            "apiVersion": "apiextensions.k8s.io/v1",
+            "kind": "CustomResourceDefinition",
+        }
+        assert _has_yaml_tree_chunking_support(doc) is True
+
+    def test_has_yaml_tree_chunking_support_plain_yaml(self):
+        """``_has_yaml_tree_chunking_support`` is False for plain config YAML."""
+        from opencrane.rag.services.yaml_chunker import _has_yaml_tree_chunking_support
+        assert _has_yaml_tree_chunking_support({"foo": "bar"}) is False
+
+
+class TestYamlChunkerFrontMatter:
+    """Cover front matter detection branches."""
+
+    def test_can_process_rejects_front_matter(self):
+        """A flat front-matter block is rejected by ``can_process`` (line 56)."""
+        from pathlib import Path
+        from unittest.mock import Mock
+        from opencrane.rag.services.yaml_chunker import YamlChunkingStrategy
+
+        strategy = YamlChunkingStrategy()
+        node = Mock()
+        node.text = "---\ntitle: My Page\nauthor: Jane Doe\nslug: my-page\n"
+        assert strategy.can_process(node) is False
+
+    def test_is_front_matter_empty_body(self):
+        """An empty (delimiter-only) body is not front matter (line 101)."""
+        from opencrane.rag.services.yaml_chunker import YamlChunkingStrategy
+        assert YamlChunkingStrategy._is_front_matter("---") is False
+
+    def test_is_front_matter_with_nested_value(self):
+        """A block with a non-scalar value is not front matter (lines 116-118)."""
+        from opencrane.rag.services.yaml_chunker import YamlChunkingStrategy
+        text = "title: My Page\ntags:\n  - a\n  - b\n"
+        assert YamlChunkingStrategy._is_front_matter(text) is False
+
+    def test_is_front_matter_all_scalars(self):
+        """A flat all-scalar block is front matter (lines 116, 120)."""
+        from opencrane.rag.services.yaml_chunker import YamlChunkingStrategy
+        text = "title: My Page\nauthor: Jane\ncount: 3\n"
+        assert YamlChunkingStrategy._is_front_matter(text) is True
+
+
+class TestYamlChunkerNoWalkerMatch:
+    """Cover the no-walker-matched fallback in _process_with_tree_walker."""
+
+    def test_process_with_tree_walker_no_match_returns_empty(self):
+        """When no configured walker handles the doc, return [] (line 199)."""
+        from pathlib import Path
+        from opencrane.rag.services.yaml_chunker import YamlChunkingStrategy
+
+        class NeverWalker:
+            @classmethod
+            def can_handle(cls, doc):
+                return False
+
+        strategy = YamlChunkingStrategy(yaml_tree_walkers=[NeverWalker])
+        result = strategy._process_with_tree_walker(
+            {"any": "doc"}, Path("test.yaml"), None
+        )
+        assert result == []

@@ -285,3 +285,48 @@ code here
         lines = strategy._strip_urls_from_headings(text_with_url_heading)
         # Standalone URL heading should be kept as-is
         assert "## https://example.com/api" in lines
+
+    def test_can_process_node_without_text_attribute(self):
+        """A node lacking a ``text`` attribute cannot be processed (line 36)."""
+        strategy = CodeChunkingStrategy()
+
+        class Node:
+            pass  # no ``text`` attribute
+
+        assert not strategy.can_process(Node())
+
+    def test_strip_bracketed_url_from_heading_with_title(self):
+        """``# [https://...] Title`` becomes ``# Title`` (lines 273-277)."""
+        strategy = CodeChunkingStrategy()
+        text = "# [https://github.com/org/repo/doc.md] Real Title\nbody line"
+        result = strategy._strip_urls_from_headings(text)
+        assert "# Real Title" in result
+        assert "https://" not in result.splitlines()[0]
+
+    def test_strip_bracketed_url_from_heading_without_title_kept(self):
+        """A bracketed URL with no trailing title is kept as-is (lines 278-279)."""
+        strategy = CodeChunkingStrategy()
+        text = "# [https://github.com/org/repo/doc.md]\nbody"
+        result = strategy._strip_urls_from_headings(text)
+        assert "# [https://github.com/org/repo/doc.md]" in result
+
+    def test_strip_bracketed_url_from_heading_unterminated_kept(self):
+        """A bracketed URL with no closing bracket is kept as-is (lines 280-281)."""
+        strategy = CodeChunkingStrategy()
+        text = "# [https://github.com/org/repo/doc.md Title\nbody"
+        result = strategy._strip_urls_from_headings(text)
+        assert "# [https://github.com/org/repo/doc.md Title" in result
+
+    def test_strip_bare_url_from_heading_with_title(self):
+        """``# https://... Title`` becomes ``# Title`` (lines 286-287)."""
+        strategy = CodeChunkingStrategy()
+        text = "## https://example.com/api Some Title Here\nbody"
+        result = strategy._strip_urls_from_headings(text)
+        assert "## Some Title Here" in result
+        assert "https://" not in result.splitlines()[0]
+
+    def test_extract_source_url_prefers_bracketed(self):
+        """``_extract_source_url`` returns the bracketed URL stripped of brackets (line 305)."""
+        strategy = CodeChunkingStrategy()
+        text = "see [https://github.com/org/repo/file.md] for details"
+        assert strategy._extract_source_url(text) == "https://github.com/org/repo/file.md"

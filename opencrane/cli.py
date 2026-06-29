@@ -723,5 +723,5 @@ def init(podman, force, no_add, with_extensions):
         _hint("  3. Run: opencrane serve")
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()

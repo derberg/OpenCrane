@@ -368,3 +368,17 @@ class TestMilvusService:
 
         with pytest.raises(Exception, match="Creation failed"):
             service.create_collection()
+
+    @patch.dict('os.environ', {'MILVUS_DB_PATH': ''})
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_init_server_mode_uses_host_and_port(self, mock_client_class):
+        """When MILVUS_DB_PATH is empty, fall back to host/port server-mode URI."""
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        service = MilvusService(host="myhost", port=12345, collection_name="coll")
+
+        assert service.host == "myhost"
+        assert service.port == 12345
+        assert service.uri == "http://myhost:12345"
+        mock_client_class.assert_called_once_with(uri="http://myhost:12345")

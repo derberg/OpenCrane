@@ -2,7 +2,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch, mock_open
 from datetime import datetime, timezone
-from opencrane.rag.token_count import TokenSummary, TokenReport, count_tokens_in_file, generate_report, write_report_to_markdown
+from opencrane.rag.token_count import TokenSummary, TokenReport, count_tokens_in_file, generate_report, write_report_to_markdown, main
 from opencrane.shared.config import get_config
 from opencrane.shared.utils.token_counter import get_token_count, get_tokenizer
 
@@ -129,19 +129,82 @@ class TestGenerateReport:
             assert report.total_tokens == 4
 
 
+    def test_root_combined_file_counted(self, tmp_path):
+        """A base-level llms-full.txt (all-projects combined) is counted as total."""
+        # Base-level combined file present.
+        (tmp_path / "llms-full.txt").write_text("combined all projects")
+
+        # A source dir so the loop runs; total must come from the root combined file.
+        source1 = tmp_path / "source1"
+        source1.mkdir()
+        (source1 / "llms-full.txt").write_text("source1 content")
+
+        with patch("tiktoken.get_encoding") as mock_enc:
+            mock_enc.return_value.encode.return_value = ["token"]
+            report = generate_report(tmp_path)
+
+            # Total is taken from the root combined file (1 token), not summed
+            # from the per-source files.
+            assert report.total_tokens == 1
+            # The per-source summary is still recorded.
+            assert any(s.folder_name == "source1" for s in report.summaries)
+
+
 class TestWriteReportToMarkdown:
     def test_write_report(self, tmp_path):
         summaries = [TokenSummary("test", 100, 5)]
         report = TokenReport(summaries, 100, datetime(2023, 1, 1, 10, 30, tzinfo=timezone.utc), "/source")
         output_file = tmp_path / "subdir" / "report.md"
-        
+
         write_report_to_markdown(report, output_file)
-        
+
         content = output_file.read_text()
         assert "# Token Count Summary" in content
         assert "[test](test/llms-full.txt)" in content
         assert "| Folder | Tokens |" in content
         assert "**Total**" not in content
+
+    def test_write_report_nested_folder_name(self, tmp_path):
+        """A summary whose folder_name contains a slash exercises the nested-path branch."""
+        summaries = [TokenSummary("src/proj", 42, 1)]
+        report = TokenReport(summaries, 42, datetime(2023, 1, 1, tzinfo=timezone.utc), "/source")
+        output_file = tmp_path / "report.md"
+
+        write_report_to_markdown(report, output_file)
+
+        content = output_file.read_text()
+        assert "[src/proj](src/proj/llms-full.txt)" in content
+
+
+class TestMain:
+    def test_main_success(self, tmp_path, capsys):
+        """main() generates a report and writes it to the output file."""
+        source_dir = tmp_path / "llmstxt"
+        source_dir.mkdir()
+        (source_dir / "src1").mkdir()
+        (source_dir / "src1" / "llms-full.txt").write_text("hello")
+        output_file = tmp_path / "README.md"
+
+        with patch("tiktoken.get_encoding") as mock_enc:
+            mock_enc.return_value.encode.return_value = ["token"]
+            main(source_dir=source_dir, output_file=output_file)
+
+        assert output_file.exists()
+        captured = capsys.readouterr()
+        assert f"Report written to {output_file}" in captured.out
+
+    def test_main_handles_exception_and_exits(self, capsys):
+        """main() prints an error and exits non-zero when report generation fails."""
+        with patch(
+            "opencrane.rag.token_count.generate_report",
+            side_effect=RuntimeError("boom"),
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                main(source_dir=Path("whatever"), output_file=Path("out.md"))
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "Error generating report: boom" in captured.err
 
 
 class TestConfig:

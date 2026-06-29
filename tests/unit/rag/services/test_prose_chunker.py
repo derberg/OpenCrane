@@ -342,3 +342,66 @@ More content."""
         # Third chunk: No URL in heading, metadata carries forward
         assert chunks[2].metadata["source_url"] == "https://github.com/org/repo/doc.md"
         assert "## Regular Section" in chunks[2].content
+
+    def test_bracketed_heading_marker_tracks_page_url(self):
+        """A bracketed ``# [base] <page-url> Title`` heading tracks the page URL (lines 73-75)."""
+        strategy = ProseChunkingStrategy()
+
+        node = Mock()
+        node.node_type = "text"
+        node.source_url = None  # Force use of _current_source_url tracking
+        node.text = (
+            "# [https://docs.example.com] https://docs.example.com/guide Getting Started\n\n"
+            "This is the body content of the guide section.\n"
+        )
+
+        chunks = strategy.process(node, Path("test.md"))
+
+        assert len(chunks) == 1
+        # The specific page URL after the bracket is tracked, not the base tag.
+        assert chunks[0].metadata["source_url"] == "https://docs.example.com/guide"
+
+    def test_bracketed_heading_marker_without_page_url_falls_back_to_base(self):
+        """When no page URL follows the bracket, fall back to the bracket content (line 75)."""
+        strategy = ProseChunkingStrategy()
+
+        node = Mock()
+        node.node_type = "text"
+        node.source_url = None
+        node.text = (
+            "# [https://docs.example.com/base] Section Title Only\n\n"
+            "Body content for the section under the base tag.\n"
+        )
+
+        chunks = strategy.process(node, Path("test.md"))
+
+        assert len(chunks) == 1
+        # No page URL after the bracket → fall back to the stripped bracket content.
+        assert chunks[0].metadata["source_url"] == "https://docs.example.com/base"
+
+    def test_source_separator_resets_url_context(self):
+        """A ``======`` separator clears the tracked source URL (line 61)."""
+        strategy = ProseChunkingStrategy()
+
+        node = Mock()
+        node.node_type = "text"
+        node.source_url = None
+        node.text = (
+            "# https://github.com/org/repo/first.md First\n\n"
+            "First section body content goes here.\n\n"
+            "# Boundary Heading\n\n"
+            "More first-source content here.\n\n"
+            "======\n\n"
+            "# Second Without URL\n\n"
+            "Second section body content goes here.\n"
+        )
+
+        chunks = strategy.process(node, Path("test.md"))
+
+        # An early chunk inherits the URL from the first heading marker.
+        assert any(
+            c.metadata.get("source_url") == "https://github.com/org/repo/first.md"
+            for c in chunks
+        )
+        # After the ====== reset, the final section's chunk carries no source_url.
+        assert "source_url" not in chunks[-1].metadata

@@ -518,3 +518,13 @@ def test_add_source_ref_fields_round_trip(tmp_mapping):
     mapping2 = SourceMapping(tmp_mapping.mapping_file)
     source = mapping2.get_source("repo")
     assert source["tag"] == "v2.0"
+
+
+@pytest.mark.unit
+def test_load_empty_file_returns_empty_sources(tmp_path):
+    """An existing but empty YAML file parses to falsy content and yields the
+    default empty-sources structure."""
+    mapping_file = tmp_path / "config.yaml"
+    mapping_file.write_text("")
+    mapping = SourceMapping(mapping_file)
+    assert mapping.data == {"sources": {}}

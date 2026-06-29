@@ -835,3 +835,80 @@ class TestGitHubClient:
 
         # Verify get_latest_release_ref was NOT called (pinned ref skips auto-detection)
         mock_repo.get_latest_release.assert_not_called()
+
+    def test_resolve_ref_config_release_annotated_tag(self):
+        """Test _resolve_ref_config release path dereferences an annotated tag."""
+        mock_repo = Mock()
+        mock_repo.name = "test-repo"
+
+        mock_release = Mock()
+        mock_release.tag_name = "v3.0.0"
+        mock_repo.get_release.return_value = mock_release
+
+        # git ref points to an annotated tag object, not a commit
+        mock_ref = Mock()
+        mock_ref.object.sha = "tag_obj_sha"
+        mock_ref.object.type = "tag"
+        mock_repo.get_git_ref.return_value = mock_ref
+
+        # the tag object dereferences to the actual commit
+        mock_tag = Mock()
+        mock_tag.object.sha = "actual_commit_sha"
+        mock_repo.get_git_tag.return_value = mock_tag
+
+        client = GitHubClient("fake_token")
+        ref_str, commit_sha = client._resolve_ref_config(mock_repo, {"release": "v3.0.0"})
+
+        assert ref_str == "tags/v3.0.0"
+        assert commit_sha == "actual_commit_sha"
+        mock_repo.get_release.assert_called_once_with("v3.0.0")
+        mock_repo.get_git_ref.assert_called_once_with("tags/v3.0.0")
+        mock_repo.get_git_tag.assert_called_once_with("tag_obj_sha")
+
+    def test_get_repo_files_empty_docs_path_fetches_root(self, mocker):
+        """An empty docs_path fetches every blob in the repo root tree."""
+        mock_repo = Mock()
+        mock_repo.name = "test-repo"
+        mock_repo.default_branch = "main"
+
+        # No releases -> use default branch
+        mock_repo.get_latest_release.side_effect = Exception("Not Found")
+
+        # Tree with a blob and a (ignored) tree entry
+        mock_blob_el = Mock()
+        mock_blob_el.path = "README.md"
+        mock_blob_el.type = "blob"
+        mock_blob_el.sha = "sha1"
+        mock_blob_el.size = 5
+
+        mock_dir_el = Mock()
+        mock_dir_el.path = "docs"
+        mock_dir_el.type = "tree"
+        mock_dir_el.sha = "sha2"
+        mock_dir_el.size = 0
+
+        mock_tree = Mock()
+        mock_tree.tree = [mock_blob_el, mock_dir_el]
+
+        mock_ref = Mock()
+        mock_ref.object.sha = "commit_sha"
+        mock_ref.object.type = "commit"
+        mock_commit = Mock()
+        mock_commit.tree.sha = "tree_sha"
+
+        mock_repo.get_git_ref.return_value = mock_ref
+        mock_repo.get_git_commit.return_value = mock_commit
+        mock_repo.get_git_tree.return_value = mock_tree
+
+        mock_blob = Mock()
+        mock_blob.encoding = "base64"
+        mock_blob.content = "SGVsbG8="  # "Hello"
+        mock_repo.get_git_blob.return_value = mock_blob
+
+        client = GitHubClient("fake_token")
+        files = client.get_repo_files(mock_repo, docs_path="")
+
+        # Only the blob is returned, at its full root-relative path
+        assert len(files) == 1
+        assert files[0].relative_path == "README.md"
+        assert files[0].content == b"Hello"

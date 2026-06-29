@@ -162,3 +162,34 @@ class TestInitVectorDb:
         
         with pytest.raises(Exception, match="Milvus error"):
             main()
+
+    @patch.dict('os.environ', {'DROP_EXISTING': 'true'})
+    @patch('opencrane.mcp.init_vector_db.setup_logging')
+    @patch('opencrane.mcp.init_vector_db.MilvusService')
+    @patch('opencrane.mcp.init_vector_db.EmbeddingService')
+    @patch('builtins.open', new_callable=mock_open, read_data='[{"content": "test", "chunk_type": "prose", "source_file": "test.md", "token_count": 10, "line_start": 1, "metadata": {}}]')
+    @patch('opencrane.mcp.init_vector_db.Path')
+    def test_main_drop_existing_true(self, mock_path, mock_file, mock_embedding_class, mock_milvus_class, mock_logging):
+        """DROP_EXISTING=true drops an existing collection and recreates it."""
+        mock_path.return_value.exists.return_value = True
+
+        mock_embedding_service = MagicMock()
+        mock_embedding_class.return_value = mock_embedding_service
+        mock_embeddings = MagicMock()
+        mock_embeddings.embeddings = [
+            MagicMock(chunk_id="test_id", vector=[0.1] * 768)
+        ]
+        mock_embedding_service.load_embeddings.return_value = mock_embeddings
+
+        mock_milvus = MagicMock()
+        mock_milvus_class.return_value = mock_milvus
+        mock_milvus.client.has_collection.return_value = True
+        mock_milvus.get_collection_stats.return_value = {"row_count": 1}
+
+        main()
+
+        # Should drop the existing collection (DROP_EXISTING branch) and recreate
+        mock_milvus.client.drop_collection.assert_called_once()
+        # get_collection_stats only called once at the end (not for the populated check)
+        mock_milvus.create_collection.assert_called_once()
+        mock_milvus.insert_chunks.assert_called_once()

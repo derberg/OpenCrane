@@ -171,3 +171,42 @@ class TestAnnotateSourceNames:
         )
         _annotate_source_names([chunk], tmp_path / "missing.yaml")
         assert chunk.source_name is None
+
+
+class TestChunkerRelativeMappingFile:
+    """Cover the relative mapping_file resolution branch in main()."""
+
+    def test_relative_mapping_file_resolved_against_cwd(self, tmp_path, monkeypatch):
+        """A relative MAPPING_FILE is joined with cwd before annotation (line 55)."""
+        # Work entirely inside a temp dir used as the cwd.
+        monkeypatch.chdir(tmp_path)
+
+        llms_dir = tmp_path / "llmstxt"
+        llms_dir.mkdir()
+        lines = ["### https://github.com/org/repo/blob/main/file.md", "", "# Section 1"]
+        for i in range(60):
+            lines.append(f"Line {i+1} of prose content with proper URL marker.")
+        (llms_dir / "llms-full.txt").write_text("\n".join(lines))
+
+        # A relative mapping file that resolves under cwd and actually exists,
+        # so the is_absolute() guard is False and Path.cwd() is prepended.
+        rel_mapping = Path(".opencrane") / "config.yaml"
+        (tmp_path / ".opencrane").mkdir()
+        (tmp_path / rel_mapping).write_text(yaml.safe_dump({
+            "sources": {
+                "org/repo": {"url": "https://github.com/org/repo"},
+            }
+        }))
+
+        test_output = tmp_path / "out.json"
+
+        monkeypatch.setenv("MAPPING_FILE", str(rel_mapping))
+        monkeypatch.setenv("AI_DOCS_LLMSTXT_DIR", str(llms_dir))
+        monkeypatch.setenv("AI_DOCS_CHUNKS_FILE", str(test_output))
+
+        main()
+
+        with open(test_output) as f:
+            chunks = json.load(f)
+        # Source name should be resolved from the relative mapping file.
+        assert any(c.get("source_name") == "org/repo" for c in chunks)

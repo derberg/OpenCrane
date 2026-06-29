@@ -1009,6 +1009,60 @@ class TestGenerateOutputs:
             if test_artifacts.exists():
                 shutil.rmtree(test_artifacts, ignore_errors=True)
 
+    def test_mixed_remote_and_local_sources_no_duplication(self, tmp_path, monkeypatch, isolate_outputs):
+        """Mixing a remote-fetched source with a local: true source must not
+        duplicate the remote content in the combined llms-full.txt.
+
+        Regression: .opencrane/sources/ is nested under the workspace root, so
+        when both end up in source_dirs the remote source was reachable from
+        both and emitted multiple times into the combined bundle.
+        """
+        original_cwd = Path.cwd()
+        test_artifacts = original_cwd / ".test_mixed_sources"
+        if test_artifacts.exists():
+            shutil.rmtree(test_artifacts)
+
+        try:
+            test_artifacts.mkdir(parents=True)
+            monkeypatch.chdir(test_artifacts)
+
+            # Remote-fetched source lands under .opencrane/sources/
+            opencrane_dir = Path(".opencrane")
+            remote_dir = opencrane_dir / "sources" / "RemoteDocs"
+            remote_dir.mkdir(parents=True)
+            (remote_dir / "article.md").write_text("# Remote Article\n\nUNIQUE_REMOTE_TOKEN body.\n")
+
+            # Local source lives at the workspace root
+            local_dir = Path("content-guidelines") / "writing"
+            local_dir.mkdir(parents=True)
+            (local_dir / "guide.md").write_text("# Local Guide\n\nUNIQUE_LOCAL_TOKEN body.\n")
+
+            config_yaml = opencrane_dir / "config.yaml"
+            config_yaml.write_text(yaml.dump({"sources": {
+                "RemoteDocs": {},
+                "content-guidelines/writing": {"local": True},
+            }}))
+
+            llmstxt_dir = opencrane_dir / "llmstxt"
+            llmstxt_dir.mkdir()
+
+            monkeypatch.setattr('opencrane.rag.generate_llms_txt._source_mapping', None)
+            monkeypatch.setattr('opencrane.rag.generate_llms_txt.ROOT', Path.cwd())
+            monkeypatch.setenv("MAPPING_FILE", str(config_yaml))
+            monkeypatch.delenv("AI_DOCS_SOURCES_DIRS", raising=False)
+            monkeypatch.delenv("AI_DOCS_SOURCES_DIR", raising=False)
+            monkeypatch.delenv("AI_DOCS_NO_FILTER", raising=False)
+
+            generate_outputs(force=True)
+
+            combined = (llmstxt_dir / "llms-full.txt").read_text()
+            assert combined.count("UNIQUE_REMOTE_TOKEN") == 1, "Remote content must appear exactly once"
+            assert combined.count("UNIQUE_LOCAL_TOKEN") == 1, "Local content must appear exactly once"
+        finally:
+            monkeypatch.chdir(original_cwd)
+            if test_artifacts.exists():
+                shutil.rmtree(test_artifacts, ignore_errors=True)
+
 
 class TestGenerateOutputsSkipBehavior:
     """Tests for the git-change-based skip logic in generate_outputs."""

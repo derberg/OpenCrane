@@ -6,7 +6,13 @@ from unittest.mock import patch
 import click
 import pytest
 
-from opencrane.pack import pack, _PEP508_NAME_RE, _preserve_extra_deps, _pkg_name
+from opencrane.pack import (
+    pack,
+    _PEP508_NAME_RE,
+    _preserve_extra_deps,
+    _pkg_name,
+    _find_wheel,
+)
 
 
 @pytest.fixture()
@@ -282,3 +288,34 @@ def test_wheel_build_failure_returns_none(pack_dir, monkeypatch):
     output_dir, wheel_path = pack(name="test-mcp")
     assert output_dir.exists()
     assert wheel_path is None
+
+
+@pytest.mark.unit
+def test_preserve_extra_deps_malformed_toml(tmp_path):
+    """A pyproject.toml that fails to parse yields no extra deps (returns '')."""
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text("this is not = valid toml [[[\n")
+    assert _preserve_extra_deps(pyproject, ["opencrane>=0.17.0"]) == ""
+
+
+@pytest.mark.unit
+def test_find_wheel_returns_first_wheel(tmp_path):
+    """_find_wheel returns the first .whl when dist/ contains wheels."""
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    wheel = dist / "test_mcp-1.0.0-py3-none-any.whl"
+    wheel.write_bytes(b"fake-wheel")
+    assert _find_wheel(tmp_path) == wheel
+
+
+@pytest.mark.unit
+def test_find_wheel_no_dist_dir(tmp_path):
+    """_find_wheel returns None when no dist/ directory exists."""
+    assert _find_wheel(tmp_path) is None
+
+
+@pytest.mark.unit
+def test_find_wheel_empty_dist_dir(tmp_path):
+    """_find_wheel returns None when dist/ exists but has no wheels."""
+    (tmp_path / "dist").mkdir()
+    assert _find_wheel(tmp_path) is None

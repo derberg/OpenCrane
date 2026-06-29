@@ -380,8 +380,177 @@ Content for section 2."""
         test_file.write_text("Just some plain text content.\nNo markers, no code blocks.\n", encoding="utf-8")
         
         chunks = processor.process_file(test_file)
-        
+
         # Should create at least one chunk from the plain text
         assert len(chunks) >= 1
         # Content should be preserved
         assert any("plain text content" in chunk.content for chunk in chunks)
+
+
+class TestFileProcessorModuleHelpers:
+    """Cover the module-level heading-marker parsing helpers."""
+
+    def test_bare_url_marker_no_url_returns_none(self):
+        """A heading with no leading URL is not a bare marker (line 41)."""
+        from opencrane.rag.services.file_processor import _bare_url_marker
+        assert _bare_url_marker("### Just a plain heading") is None
+
+    def test_bare_url_marker_github_url(self):
+        """A leading GitHub URL is recognised as a bare marker."""
+        from opencrane.rag.services.file_processor import _bare_url_marker
+        url = "https://github.com/org/repo/blob/main/x.md"
+        assert _bare_url_marker(f"### {url} Title") == url
+
+    def test_bracketed_marker_without_page_url_falls_back_to_bracket(self):
+        """When no page URL follows the bracket, the bracket content is used (line 67)."""
+        from opencrane.rag.services.file_processor import _bracketed_marker
+        result = _bracketed_marker("# [https://docs.example.com/base] Only A Title")
+        assert result == ("https://docs.example.com/base", "Only A Title")
+
+    def test_bracketed_marker_with_page_url(self):
+        """A page URL after the bracket is preferred over the base tag."""
+        from opencrane.rag.services.file_processor import _bracketed_marker
+        result = _bracketed_marker(
+            "# [https://docs.example.com] https://docs.example.com/page Title"
+        )
+        assert result == ("https://docs.example.com/page", "Title")
+
+    def test_module_level_process_file_convenience(self, tmp_path):
+        """The module-level ``process_file`` builds a processor and runs it (lines 456-457)."""
+        from opencrane.rag.services.file_processor import process_file as module_process_file
+        test_file = tmp_path / "plain.txt"
+        test_file.write_text("Some plain prose content that is long enough to keep.\n")
+        chunks = module_process_file(test_file)
+        assert len(chunks) >= 1
+
+
+class TestFallbackDocumentIteration:
+    """Cover branches of the fallback FakeDocument.iterate_items / split logic."""
+
+    def _doc(self, content, tmp_path):
+        processor = FileProcessor()
+        f = tmp_path / "doc.txt"
+        f.write_text(content, encoding="utf-8")
+        return processor._create_fallback_document(f)
+
+    def test_empty_content_yields_no_items(self, tmp_path):
+        """Whitespace-only content returns no items (line 232)."""
+        doc = self._doc("   \n  \n", tmp_path)
+        assert list(doc.iterate_items()) == []
+
+    def test_small_file_with_yaml_block_extracted(self, tmp_path):
+        """A small file with a YAML fence triggers extraction (lines 253-256)."""
+        content = (
+            "Some intro prose here.\n\n"
+            "```yaml\n"
+            "apiVersion: apiextensions.k8s.io/v1\n"
+            "kind: CustomResourceDefinition\n"
+            "metadata:\n"
+            "  name: widgets.example.com\n"
+            "spec:\n"
+            "  group: example.com\n"
+            "  names:\n"
+            "    kind: Widget\n"
+            "  versions:\n"
+            "  - name: v1\n"
+            "    schema:\n"
+            "      openAPIV3Schema:\n"
+            "        properties:\n"
+            "          spec:\n"
+            "            properties:\n"
+            "              size:\n"
+            "                type: integer\n"
+            "```\n"
+        )
+        doc = self._doc(content, tmp_path)
+        items = list(doc.iterate_items())
+        # A YAML item (fenced) is produced in addition to prose.
+        assert any("```yaml" in item.text for item in items)
+
+    def test_section_with_yaml_fence_but_no_extractable_blocks(self, tmp_path):
+        """A section with a yaml fence marker but no real blocks keeps the section (line 291)."""
+        processor = FileProcessor()
+        f = tmp_path / "doc.txt"
+        f.write_text("placeholder", encoding="utf-8")
+        doc = processor._create_fallback_document(f)
+
+        # A fake section whose text mentions ```yaml but yields no extractable blocks.
+        class Section:
+            text = "```yaml mention only with no real fenced block here"
+            source_url = None
+
+        result = doc._extract_yaml_from_sections([Section()])
+        # No blocks extracted → the original section is kept as-is.
+        assert len(result) == 1
+        assert result[0].text == Section.text
+
+    def test_split_sections_with_html_tabs_block(self, tmp_path):
+        """A <Tabs> HTML block is tracked and emitted as a complete section (lines 394-409)."""
+        content = (
+            "### https://github.com/org/repo/blob/main/a.md\n\n"
+            "# Intro\n\nSome intro prose content.\n\n"
+            "<Tabs>\n"
+            "  <Tab>First tab body content goes here.</Tab>\n"
+            "  <Tab>Second tab body content goes here.</Tab>\n"
+            "</Tabs>\n\n"
+            "More prose after the tabs block.\n"
+        )
+        doc = self._doc(content, tmp_path)
+        sections = doc._split_into_sections(content)
+        # The complete <Tabs>...</Tabs> block should appear intact in one section.
+        assert any("<Tabs>" in s.text and "</Tabs>" in s.text for s in sections)
+
+    def test_split_sections_bare_marker_with_inline_title(self, tmp_path):
+        """A bare URL marker with inline title seeds the next section heading (lines 381-382)."""
+        url = "https://github.com/org/repo/blob/main/page.md"
+        content = (
+            f"### {url} The Page Title\n\n"
+            "Body content for the page section here.\n"
+        )
+        doc = self._doc(content, tmp_path)
+        sections = doc._split_into_sections(content)
+        # The inline title becomes a heading on the section, and URL is tracked.
+        assert any(
+            s.source_url == url and "### The Page Title" in s.text for s in sections
+        )
+
+    def test_docling_conversion_success_path(self, tmp_path):
+        """A non-.txt file converted by docling exercises the success branch (line 118)."""
+        processor = FileProcessor()
+        md_file = tmp_path / "doc.md"
+        md_file.write_text("# Heading\n\nProse body content goes here.\n", encoding="utf-8")
+
+        class FakeNode:
+            text = "# Heading\n\nProse body content goes here."
+            node_type = "text"
+            source_url = None
+
+        class FakeDoc:
+            def iterate_items(self_inner):
+                return [FakeNode()]
+
+        with patch.object(processor.docling_adapter, "convert_file", return_value=FakeDoc()):
+            chunks = processor.process_file(md_file)
+
+        assert len(chunks) >= 1
+
+    def test_nodes_processed_zero_triggers_plain_text_fallback(self, tmp_path):
+        """When the converted doc yields no processable nodes, fall back (lines 144-155)."""
+        processor = FileProcessor()
+        md_file = tmp_path / "doc.md"
+        md_file.write_text("# Heading\n\nReal prose content for the fallback path.\n", encoding="utf-8")
+
+        class UnprocessableNode:
+            # No 'text' attribute → no strategy can process it.
+            pass
+
+        class EmptyDoc:
+            def iterate_items(self_inner):
+                return [UnprocessableNode()]
+
+        with patch.object(processor.docling_adapter, "convert_file", return_value=EmptyDoc()):
+            chunks = processor.process_file(md_file)
+
+        # The plain-text fallback should still produce chunks from the file content.
+        assert len(chunks) >= 1
+        assert any("prose content" in c.content for c in chunks)

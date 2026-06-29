@@ -60,6 +60,9 @@ dmypy.json
 .DS_Store
 Thumbs.db
 
+# Per-topic git worktrees (one checked-out branch each) — see dev-workflow skill
+.worktrees/
+
 # Project-specific
 rag-chunks.json
 rag-embeddings.json

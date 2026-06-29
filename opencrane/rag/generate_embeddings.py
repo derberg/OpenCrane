@@ -71,5 +71,5 @@ def main(chunks_file=None, embeddings_file=None, force=False):
     logger.info(f"Output: {embeddings_file}")
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()

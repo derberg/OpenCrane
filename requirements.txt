@@ -4,3 +4,4 @@
 -r requirements/ml.txt
 -r requirements/rag.txt
 -r requirements/dev.txt
+-r requirements/viz.txt

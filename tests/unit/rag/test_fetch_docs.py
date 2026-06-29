@@ -306,3 +306,365 @@ class TestFetchDocsLocal:
         assert "Skipping local source: content-guidelines/writing" in caplog.text
         dest_file = tmp_path / ".opencrane" / "llmstxt" / "my-llmstxt" / "llms-full.txt"
         assert dest_file.exists()
+
+
+def make_repo(name):
+    """Create a mock GitHub repo object with a name."""
+    repo = MagicMock()
+    repo.name = name
+    return repo
+
+
+def run_main_github(tmp_path, config, repo_fetcher, mock_urlopen=None,
+                    current_repo_name="opencrane"):
+    """Run fetch_docs.main() with a custom RepoFetcher mock.
+
+    Returns nothing; assertions are made against the filesystem / SourceMapping
+    afterwards. The GitHubClient and FileManager are stubbed.
+    """
+    with patch("opencrane.rag.fetch_docs.setup_logging"), \
+         patch("opencrane.rag.fetch_docs.GitHubClient"), \
+         patch("opencrane.rag.fetch_docs.RepoFetcher", return_value=repo_fetcher), \
+         patch("opencrane.rag.fetch_docs.FileManager") as mock_fm_cls, \
+         patch("opencrane.rag.fetch_docs.get_current_repo_name",
+               return_value=current_repo_name), \
+         patch("opencrane.rag.fetch_docs.Path.cwd", return_value=tmp_path):
+        mock_fm_cls.return_value = MagicMock()
+        from opencrane.rag import fetch_docs
+        if mock_urlopen is not None:
+            with patch("opencrane.rag.fetch_docs.urlopen", mock_urlopen):
+                fetch_docs.main(config)
+        else:
+            fetch_docs.main(config)
+
+
+@pytest.mark.unit
+class TestFetchDocsGitHub:
+    """Tests for the GitHub repo fetching / processing paths of main()."""
+
+    def test_config_none_uses_get_config(self, tmp_path):
+        """main(None) resolves config via get_config()."""
+        setup_sources_yaml(tmp_path, {})
+        config = make_config(tmp_path)
+        with patch("opencrane.rag.fetch_docs.get_config", return_value=config) as mock_gc:
+            repo_fetcher = MagicMock()
+            repo_fetcher.get_documentation_repos.return_value = []
+            run_main_github(tmp_path, None, repo_fetcher)
+            mock_gc.assert_called_once()
+
+    def test_relative_mapping_file_resolved_against_cwd(self, tmp_path):
+        """A relative mapping_file is resolved relative to the patched cwd."""
+        setup_sources_yaml(tmp_path, {})
+        # Relative mapping file — exercises the is_absolute() branch
+        config = Config(org_name="", mapping_file=Path(".opencrane/config.yaml"))
+        repo_fetcher = MagicMock()
+        repo_fetcher.get_documentation_repos.return_value = []
+        # Should not raise; config.yaml under tmp_path is found via Path.cwd patch
+        run_main_github(tmp_path, config, repo_fetcher)
+
+    def test_auto_discovery_processes_repo(self, tmp_path):
+        """Auto-discovered repos are fetched and written to the source mapping."""
+        setup_sources_yaml(tmp_path, {})
+        config = Config(
+            org_name="myorg",
+            mapping_file=tmp_path / ".opencrane" / "config.yaml",
+            target_dir=tmp_path / ".opencrane" / "sources",
+        )
+        config.auto_discovery_orgs = ["myorg"]
+
+        repo = make_repo("auto-repo")
+        repo_fetcher = MagicMock()
+        repo_fetcher.get_documentation_repos.return_value = [repo]
+        repo_fetcher.get_repo_files.return_value = [MagicMock()]
+
+        run_main_github(tmp_path, config, repo_fetcher)
+
+        mapping = SourceMapping(tmp_path / ".opencrane" / "config.yaml")
+        assert mapping.get_source("auto-repo") is not None
+        assert mapping.get_source("auto-repo")["url"].endswith("myorg/auto-repo")
+
+    def test_auto_discovery_filtered_by_source(self, tmp_path):
+        """--source filter narrows auto-discovered repos."""
+        setup_sources_yaml(tmp_path, {})
+        config = Config(
+            org_name="myorg",
+            mapping_file=tmp_path / ".opencrane" / "config.yaml",
+            target_dir=tmp_path / ".opencrane" / "sources",
+            fetch_repo="wanted",
+        )
+        config.auto_discovery_orgs = ["myorg"]
+
+        wanted = make_repo("wanted")
+        unwanted = make_repo("unwanted")
+        repo_fetcher = MagicMock()
+        repo_fetcher.get_documentation_repos.return_value = [wanted, unwanted]
+        repo_fetcher.get_repo_files.return_value = [MagicMock()]
+
+        run_main_github(tmp_path, config, repo_fetcher)
+
+        mapping = SourceMapping(tmp_path / ".opencrane" / "config.yaml")
+        assert mapping.get_source("wanted") is not None
+        assert mapping.get_source("unwanted") is None
+
+    def test_manual_github_repo_fetched_and_processed(self, tmp_path):
+        """A manual github source is fetched, processed and stored with ref fields."""
+        setup_sources_yaml(tmp_path, {
+            "external/cgw": {
+                "url": "https://github.com/otherorg/cgw",
+                "manual": True,
+                "docs_path": "docs",
+                "tag": "v1.2.3",
+            }
+        })
+        config = Config(
+            org_name="myorg",
+            mapping_file=tmp_path / ".opencrane" / "config.yaml",
+            target_dir=tmp_path / ".opencrane" / "sources",
+        )
+
+        manual_repo = make_repo("cgw")
+        repo_fetcher = MagicMock()
+        repo_fetcher.get_documentation_repos.return_value = []
+        repo_fetcher.get_manual_repo.return_value = manual_repo
+        repo_fetcher.get_repo_files.return_value = [MagicMock()]
+
+        run_main_github(tmp_path, config, repo_fetcher)
+
+        # get_manual_repo was called with parsed org/repo
+        repo_fetcher.get_manual_repo.assert_called_once_with("otherorg", "cgw")
+        # ref_config (tag) is forwarded to get_repo_files
+        _, kwargs = repo_fetcher.get_repo_files.call_args
+        assert kwargs["ref_config"] == {"tag": "v1.2.3"}
+
+        mapping = SourceMapping(tmp_path / ".opencrane" / "config.yaml")
+        entry = mapping.get_source("external/cgw")
+        assert entry is not None
+        assert entry.get("tag") == "v1.2.3"
+
+    def test_manual_github_skips_self_reference(self, tmp_path, caplog):
+        """A manual entry pointing at the current repo in our org is skipped."""
+        setup_sources_yaml(tmp_path, {
+            "self": {
+                "url": "https://github.com/myorg/opencrane",
+                "manual": True,
+            }
+        })
+        config = Config(
+            org_name="myorg",
+            mapping_file=tmp_path / ".opencrane" / "config.yaml",
+            target_dir=tmp_path / ".opencrane" / "sources",
+        )
+        repo_fetcher = MagicMock()
+        repo_fetcher.get_documentation_repos.return_value = []
+
+        import logging
+        with caplog.at_level(logging.INFO, logger="opencrane.rag.fetch_docs"):
+            run_main_github(tmp_path, config, repo_fetcher,
+                            current_repo_name="opencrane")
+
+        assert "Skipping self-reference" in caplog.text
+        repo_fetcher.get_manual_repo.assert_not_called()
+
+    def test_manual_github_skipped_by_source_filter(self, tmp_path, caplog):
+        """A manual github entry not in the --source filter is skipped."""
+        setup_sources_yaml(tmp_path, {
+            "external/wanted": {
+                "url": "https://github.com/otherorg/wanted",
+                "manual": True,
+            },
+            "external/other": {
+                "url": "https://github.com/otherorg/other",
+                "manual": True,
+            },
+        })
+        config = Config(
+            org_name="myorg",
+            mapping_file=tmp_path / ".opencrane" / "config.yaml",
+            target_dir=tmp_path / ".opencrane" / "sources",
+            fetch_repo="external/wanted",
+        )
+        repo_fetcher = MagicMock()
+        repo_fetcher.get_documentation_repos.return_value = []
+        repo_fetcher.get_manual_repo.return_value = make_repo("wanted")
+        repo_fetcher.get_repo_files.return_value = [MagicMock()]
+
+        import logging
+        with caplog.at_level(logging.DEBUG, logger="opencrane.rag.fetch_docs"):
+            run_main_github(tmp_path, config, repo_fetcher)
+
+        # Only the wanted repo was fetched
+        repo_fetcher.get_manual_repo.assert_called_once_with("otherorg", "wanted")
+        assert "Skipping external/other" in caplog.text
+        assert "--source filter active" in caplog.text
+
+    def test_manual_entry_no_url_skipped(self, tmp_path, caplog):
+        """A manual github entry with no url logs a warning and is skipped."""
+        setup_sources_yaml(tmp_path, {
+            "no-url": {"manual": True},
+        })
+        config = make_config(tmp_path)
+        repo_fetcher = MagicMock()
+        repo_fetcher.get_documentation_repos.return_value = []
+
+        import logging
+        with caplog.at_level(logging.WARNING, logger="opencrane.rag.fetch_docs"):
+            run_main_github(tmp_path, config, repo_fetcher)
+
+        assert "no-url" in caplog.text
+        assert "no url" in caplog.text.lower()
+
+    def test_manual_entry_unparseable_url_skipped(self, tmp_path, caplog):
+        """A manual entry whose url cannot be parsed is skipped with a warning."""
+        setup_sources_yaml(tmp_path, {
+            "bad-url": {"url": "not-a-github-url", "manual": True},
+        })
+        config = make_config(tmp_path)
+        repo_fetcher = MagicMock()
+        repo_fetcher.get_documentation_repos.return_value = []
+
+        import logging
+        with caplog.at_level(logging.WARNING, logger="opencrane.rag.fetch_docs"):
+            run_main_github(tmp_path, config, repo_fetcher)
+
+        assert "Could not parse GitHub URL" in caplog.text
+        repo_fetcher.get_manual_repo.assert_not_called()
+
+    def test_manual_fetch_error_logged(self, tmp_path, caplog):
+        """An exception while fetching a manual repo is logged, not raised."""
+        setup_sources_yaml(tmp_path, {
+            "external/boom": {"url": "https://github.com/otherorg/boom", "manual": True},
+        })
+        config = make_config(tmp_path)
+        repo_fetcher = MagicMock()
+        repo_fetcher.get_documentation_repos.return_value = []
+        repo_fetcher.get_manual_repo.side_effect = RuntimeError("api down")
+
+        import logging
+        with caplog.at_level(logging.ERROR, logger="opencrane.rag.fetch_docs"):
+            run_main_github(tmp_path, config, repo_fetcher)
+
+        assert "Failed to fetch manual repo otherorg/boom" in caplog.text
+
+    def test_process_repo_no_files_returns_none(self, tmp_path, caplog):
+        """When a repo yields no files, it is not added to the source mapping."""
+        setup_sources_yaml(tmp_path, {
+            "external/empty": {"url": "https://github.com/otherorg/empty", "manual": True},
+        })
+        config = Config(
+            org_name="myorg",
+            mapping_file=tmp_path / ".opencrane" / "config.yaml",
+            target_dir=tmp_path / ".opencrane" / "sources",
+        )
+        manual_repo = make_repo("empty")
+        repo_fetcher = MagicMock()
+        repo_fetcher.get_documentation_repos.return_value = []
+        repo_fetcher.get_manual_repo.return_value = manual_repo
+        repo_fetcher.get_repo_files.return_value = []  # no files
+
+        import logging
+        with caplog.at_level(logging.WARNING, logger="opencrane.rag.fetch_docs"):
+            run_main_github(tmp_path, config, repo_fetcher)
+
+        assert "No files found" in caplog.text
+        # process_repo returned None -> add_source was not called, so the only
+        # entry present is the original manual one from config.yaml (preserved
+        # because manual entries are never cleaned up). docs_path is unset
+        # because the processing path never reached add_source.
+        mapping = SourceMapping(tmp_path / ".opencrane" / "config.yaml")
+        entry = mapping.get_source("external/empty")
+        assert entry is not None
+        assert entry.get("docs_path") is None
+
+    def test_process_repo_exception_logged(self, tmp_path, caplog):
+        """An exception during repo processing is logged and yields no source."""
+        setup_sources_yaml(tmp_path, {
+            "external/err": {"url": "https://github.com/otherorg/err", "manual": True},
+        })
+        config = Config(
+            org_name="myorg",
+            mapping_file=tmp_path / ".opencrane" / "config.yaml",
+            target_dir=tmp_path / ".opencrane" / "sources",
+        )
+        manual_repo = make_repo("err")
+        repo_fetcher = MagicMock()
+        repo_fetcher.get_documentation_repos.return_value = []
+        repo_fetcher.get_manual_repo.return_value = manual_repo
+        repo_fetcher.get_repo_files.side_effect = RuntimeError("tree error")
+
+        import logging
+        with caplog.at_level(logging.ERROR, logger="opencrane.rag.fetch_docs"):
+            run_main_github(tmp_path, config, repo_fetcher)
+
+        assert "Failed to process repository otherorg/err" in caplog.text
+
+    def test_different_org_repo_protected_from_cleanup(self, tmp_path):
+        """A manual repo from a different org is marked active (not cleaned up)."""
+        setup_sources_yaml(tmp_path, {
+            "external/keep": {
+                "url": "https://github.com/otherorg/keep",
+                "manual": True,
+            },
+        })
+        config = Config(
+            org_name="myorg",
+            mapping_file=tmp_path / ".opencrane" / "config.yaml",
+            target_dir=tmp_path / ".opencrane" / "sources",
+        )
+        manual_repo = make_repo("keep")
+        repo_fetcher = MagicMock()
+        repo_fetcher.get_documentation_repos.return_value = []
+        repo_fetcher.get_manual_repo.return_value = manual_repo
+        repo_fetcher.get_repo_files.return_value = [MagicMock()]
+
+        run_main_github(tmp_path, config, repo_fetcher)
+
+        mapping = SourceMapping(tmp_path / ".opencrane" / "config.yaml")
+        # manual entries are preserved by cleanup regardless
+        assert mapping.get_source("external/keep") is not None
+
+    def test_stale_source_directories_removed(self, tmp_path):
+        """Stale (non-manual, inactive) sources have their dirs removed and entry dropped."""
+        # A non-manual github entry that will NOT be re-discovered -> stale
+        setup_sources_yaml(tmp_path, {
+            "stale-repo": {
+                "url": "https://github.com/myorg/stale-repo",
+                "manual": False,
+            },
+        })
+        config = Config(
+            org_name="myorg",
+            mapping_file=tmp_path / ".opencrane" / "config.yaml",
+            target_dir=tmp_path / ".opencrane" / "sources",
+        )
+        config.auto_discovery_orgs = ["myorg"]
+
+        # Create source + llmstxt dirs that should be removed
+        source_dir = config.target_dir / "stale-repo"
+        source_dir.mkdir(parents=True, exist_ok=True)
+        (source_dir / "old.md").write_text("old")
+        llmstxt_dir = tmp_path / ".opencrane" / "llmstxt" / "stale-repo"
+        llmstxt_dir.mkdir(parents=True, exist_ok=True)
+        (llmstxt_dir / "llms-full.txt").write_text("old")
+
+        repo_fetcher = MagicMock()
+        # Auto-discovery returns nothing -> stale-repo is not active
+        repo_fetcher.get_documentation_repos.return_value = []
+
+        run_main_github(tmp_path, config, repo_fetcher)
+
+        assert not source_dir.exists()
+        assert not llmstxt_dir.exists()
+        mapping = SourceMapping(tmp_path / ".opencrane" / "config.yaml")
+        assert mapping.get_source("stale-repo") is None
+
+    def test_outer_exception_exits(self, tmp_path):
+        """An unexpected failure in main() calls sys.exit(1)."""
+        config = make_config(tmp_path)
+        with patch("opencrane.rag.fetch_docs.setup_logging"), \
+             patch("opencrane.rag.fetch_docs.SourceMapping",
+                   side_effect=RuntimeError("boom")), \
+             patch("opencrane.rag.fetch_docs.Path.cwd", return_value=tmp_path):
+            from opencrane.rag import fetch_docs
+            with pytest.raises(SystemExit) as exc_info:
+                fetch_docs.main(config)
+            assert exc_info.value.code == 1

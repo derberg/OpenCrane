@@ -140,7 +140,7 @@ Config is auto-discovered from `.opencrane/extensions.py:Config` or set via `--c
 - **test-coverage.yml**: runs on PRs to main, enforces 100% coverage
 - **publish-pypi.yml**: publishes to PyPI on GitHub release (trusted publisher, OIDC)
 - Actions pinned by SHA with tag comments
-- If workflows use any CLI flags, those exact flags and code paths must be exercised by the smoke test at `tests/integration/test_setup_sh_smoke.py`
+- CI installs `requirements.txt` (which pulls in `requirements/viz.txt` so the visualize tests run) and gates on 100% coverage via `./pytest.sh --check-coverage`
 
 ## Default Paths
 

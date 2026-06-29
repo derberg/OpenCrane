@@ -91,5 +91,5 @@ def main():
     logger.info(f"Collection stats: {stats}")
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()

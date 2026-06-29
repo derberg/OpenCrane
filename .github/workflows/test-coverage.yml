@@ -29,8 +29,5 @@ jobs:
     - name: Install dependencies
       run: pip install -r requirements.txt
 
-    - name: Setup.sh smoke test
-      run: ./pytest.sh -q -s -o addopts= tests/integration/test_setup_sh_smoke.py
-
     - name: Run tests with coverage check
-      run: ./pytest.sh --check-coverage --cov-report=term-missing --ignore=tests/integration/test_setup_sh_smoke.py
+      run: ./pytest.sh --check-coverage --cov-report=term-missing

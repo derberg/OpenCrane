@@ -12,19 +12,22 @@ class TestGenerateEmbeddings:
     @patch('opencrane.rag.generate_embeddings.setup_logging')
     @patch('opencrane.rag.generate_embeddings.EmbeddingService')
     @patch('builtins.open', new_callable=mock_open, read_data='[{"content": "test"}]')
-    @patch('os.path.exists', return_value=True)
-    def test_main_success(self, mock_exists, mock_file, mock_service_class, mock_logging):
+    @patch('opencrane.rag.generate_embeddings._embeddings_up_to_date', return_value=False)
+    @patch('opencrane.rag.generate_embeddings.Path')
+    def test_main_success(self, mock_path, mock_up_to_date, mock_file, mock_service_class, mock_logging):
         """Test successful embedding generation."""
+        mock_path.return_value.exists.return_value = True
+
         mock_service = MagicMock()
         mock_service_class.return_value = mock_service
-        
+
         # Mock embeddings result
         mock_embeddings = MagicMock()
-        mock_embeddings.model_dump.return_value = {"embeddings": [{"vector": [0.1]}]}
+        mock_embeddings.embeddings = [{"vector": [0.1]}]
         mock_service.generate_embeddings.return_value = mock_embeddings
-        
+
         main()
-        
+
         mock_logging.assert_called_once()
         mock_service.generate_embeddings.assert_called_once()
         mock_service.save_embeddings.assert_called_once()
@@ -45,12 +48,15 @@ class TestGenerateEmbeddings:
     @patch('opencrane.rag.generate_embeddings.setup_logging')
     @patch('opencrane.rag.generate_embeddings.EmbeddingService')
     @patch('builtins.open', new_callable=mock_open, read_data='[{"content": "test"}]')
-    @patch('os.path.exists', return_value=True)
-    def test_main_service_error(self, mock_exists, mock_file, mock_service_class, mock_logging):
+    @patch('opencrane.rag.generate_embeddings._embeddings_up_to_date', return_value=False)
+    @patch('opencrane.rag.generate_embeddings.Path')
+    def test_main_service_error(self, mock_path, mock_up_to_date, mock_file, mock_service_class, mock_logging):
         """Test error handling when service fails."""
+        mock_path.return_value.exists.return_value = True
+
         mock_service = MagicMock()
         mock_service_class.return_value = mock_service
         mock_service.generate_embeddings.side_effect = Exception("Service error")
-        
+
         with pytest.raises(Exception, match="Service error"):
             main()

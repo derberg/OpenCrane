@@ -13,9 +13,10 @@ class TestInitVectorDb:
     @patch('opencrane.mcp.init_vector_db.MilvusService')
     @patch('opencrane.mcp.init_vector_db.EmbeddingService')
     @patch('builtins.open', new_callable=mock_open, read_data='[{"content": "test", "chunk_type": "prose", "source_file": "test.md", "token_count": 10, "line_start": 1, "metadata": {}}]')
-    @patch('os.path.exists', return_value=True)
-    def test_main_success(self, mock_exists, mock_file, mock_embedding_class, mock_milvus_class, mock_logging):
+    @patch('opencrane.mcp.init_vector_db.Path')
+    def test_main_success(self, mock_path, mock_file, mock_embedding_class, mock_milvus_class, mock_logging):
         """Test successful vector DB initialization."""
+        mock_path.return_value.exists.return_value = True
         # Mock embedding service
         mock_embedding_service = MagicMock()
         mock_embedding_class.return_value = mock_embedding_service
@@ -45,9 +46,10 @@ class TestInitVectorDb:
     @patch('opencrane.mcp.init_vector_db.MilvusService')
     @patch('opencrane.mcp.init_vector_db.EmbeddingService')
     @patch('builtins.open', new_callable=mock_open, read_data='[{"content": "test"}]')
-    @patch('os.path.exists', return_value=True)
-    def test_main_collection_already_populated(self, mock_exists, mock_file, mock_embedding_class, mock_milvus_class, mock_logging):
+    @patch('opencrane.mcp.init_vector_db.Path')
+    def test_main_collection_already_populated(self, mock_path, mock_file, mock_embedding_class, mock_milvus_class, mock_logging):
         """Test when collection already exists and is populated."""
+        mock_path.return_value.exists.return_value = True
         # Mock embedding service
         mock_embedding_service = MagicMock()
         mock_embedding_class.return_value = mock_embedding_service
@@ -68,9 +70,10 @@ class TestInitVectorDb:
     @patch('opencrane.mcp.init_vector_db.MilvusService')
     @patch('opencrane.mcp.init_vector_db.EmbeddingService')
     @patch('builtins.open', new_callable=mock_open, read_data='[{"content": "test", "chunk_type": "prose", "source_file": "test.md", "token_count": 10, "line_start": 1, "metadata": {}}]')
-    @patch('os.path.exists', return_value=True)
-    def test_main_collection_exists_empty(self, mock_exists, mock_file, mock_embedding_class, mock_milvus_class, mock_logging):
+    @patch('opencrane.mcp.init_vector_db.Path')
+    def test_main_collection_exists_empty(self, mock_path, mock_file, mock_embedding_class, mock_milvus_class, mock_logging):
         """Test when collection exists but is empty."""
+        mock_path.return_value.exists.return_value = True
         # Mock embedding service
         mock_embedding_service = MagicMock()
         mock_embedding_class.return_value = mock_embedding_service
@@ -138,9 +141,10 @@ class TestInitVectorDb:
     @patch('opencrane.mcp.init_vector_db.MilvusService')
     @patch('opencrane.mcp.init_vector_db.EmbeddingService')
     @patch('builtins.open', new_callable=mock_open, read_data='[{"content": "test", "chunk_type": "prose", "source_file": "test.md", "token_count": 10, "line_start": 1, "metadata": {}}]')
-    @patch('os.path.exists', return_value=True)
-    def test_main_milvus_error(self, mock_exists, mock_file, mock_embedding_class, mock_milvus_class, mock_logging):
+    @patch('opencrane.mcp.init_vector_db.Path')
+    def test_main_milvus_error(self, mock_path, mock_file, mock_embedding_class, mock_milvus_class, mock_logging):
         """Test error handling when Milvus fails."""
+        mock_path.return_value.exists.return_value = True
         # Mock embedding service
         mock_embedding_service = MagicMock()
         mock_embedding_class.return_value = mock_embedding_service

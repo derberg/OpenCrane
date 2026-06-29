@@ -530,6 +530,20 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
                 print("⊘ Skipping llms-full.txt generation: no source directories found from mapping file")
                 print(f"  Expected sources in: {sources_base}")
             return
+    # Resolved source dirs are used to detect overlapping roots: when one
+    # source_dir is nested inside another (e.g. .opencrane/sources lives under
+    # the workspace root for mixed remote + local: true projects), a mapped
+    # path must be owned by the most specific (deepest) source_dir only, so it
+    # is not processed — and combined — more than once.
+    resolved_source_dirs = [sd.resolve() for sd in source_dirs]
+
+    # Per-source contributions accumulated across all source_dirs. Each
+    # source_dir contributes its combined content exactly once; the top-level
+    # combined file is assembled from these at the end so overlapping roots
+    # cannot duplicate content.
+    loop_contributions: List[tuple[str, str]] = []
+    loop_covered: set[str] = set()
+
     for source_dir in sorted(source_dirs, key=lambda p: p.name):
         # Store workspace root for relative path computation
         workspace_root = Path.cwd()
@@ -584,7 +598,27 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
                 except ValueError:
                     # This mapped path is not under current source_dir, skip it
                     continue
-                
+
+                # If another, more specific (deeper) source_dir also contains
+                # this path, let that source_dir own it. Prevents the same files
+                # being emitted twice when source_dirs overlap (e.g. the nested
+                # .opencrane/sources vs the workspace root).
+                resolved_full = full_path.resolve()
+                current_resolved = source_dir.resolve()
+                owned_by_deeper = False
+                for other in resolved_source_dirs:
+                    if other == current_resolved:
+                        continue
+                    try:
+                        resolved_full.relative_to(other)
+                    except ValueError:
+                        continue
+                    if len(other.parts) > len(current_resolved.parts):
+                        owned_by_deeper = True
+                        break
+                if owned_by_deeper:
+                    continue
+
                 # Collect ALL markdown files recursively (excluding ignore pattern folders)
                 ignore_patterns = mapping.get_ignore_patterns(mapped_path)
                 md_files = filter_markdown_files(sorted(full_path.rglob("*.md")), ignore_patterns)
@@ -655,8 +689,17 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             if project_name.startswith(source_prefix):
                 output_name = project_name[len(source_prefix):]
             output_mapping[output_name] = content
-        
+            # Mark the top-level subdir this bundle lives under as covered so the
+            # pre-existing llmstxt sweep below does not re-append it.
+            loop_covered.add((source_rel / output_name).parts[0])
+
         write_outputs(output_mapping, output_root, root_projects)
+
+        # Record this source_dir's combined content (mirrors write_outputs'
+        # combined section) for the single authoritative top-level assembly.
+        loop_contributions.append(
+            (source_dir.as_posix(), "\n\n".join(output_mapping.values()))
+        )
 
     # Top-level combined output used by setup.sh (llmstxt/llms-full.txt)
     # When there's a single source_dir that maps to output_root == LLMSTXT_BASE,
@@ -685,23 +728,15 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
                 if sd.is_dir():
                     covered_subdirs.add(sd.name)
     else:
-        # Keep the format consistent with per-source outputs: a sequence of "# Project:" blocks.
-        combined_parts = []
-        covered_subdirs = set()
-        for source_dir in sorted(source_dirs, key=lambda p: p.as_posix()):
-            # Compute source_rel consistently with per-source output above
-            try:
-                source_rel = source_dir.relative_to(sources_base)
-            except ValueError:
-                try:
-                    source_rel = source_dir.relative_to(Path.cwd())
-                except ValueError:  # pragma: no cover
-                    source_rel = Path(source_dir.name)
-            source_llms = LLMSTXT_BASE / source_rel / "llms-full.txt"
-
-            if source_llms.exists():
-                combined_parts.append(source_llms.read_text(encoding="utf-8"))
-                covered_subdirs.add(source_rel.as_posix())
+        # Assemble the top-level combined from the per-source contributions
+        # captured during processing — each source_dir exactly once. Building
+        # from the in-memory contributions (rather than re-reading the top-level
+        # file) is what prevents overlapping roots, both of which resolve to a
+        # '.' source_rel and write the same llms-full.txt, from doubling content.
+        combined_parts = [
+            content for _, content in sorted(loop_contributions, key=lambda c: c[0])
+        ]
+        covered_subdirs = set(loop_covered)
 
     # Include pre-existing llmstxt sources (e.g., added via `opencrane add` with
     # type: llmstxt) that weren't already covered by source-dir processing above.

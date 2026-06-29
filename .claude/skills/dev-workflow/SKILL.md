@@ -113,8 +113,9 @@ Publishing happens when a **GitHub release** is created, which triggers
 
 - **Always pin actions to a full commit SHA**, with the version tag as a trailing
   comment: `uses: actions/checkout@de0fac…  # v6.0.2`. Never a bare tag/version.
-- If a workflow uses any CLI flags, those exact flags must be exercised by the
-  smoke test at `tests/integration/test_setup_sh_smoke.py`.
+- CI installs `requirements.txt` (which pulls in `requirements/viz.txt`, so the
+  visualize tests run) and gates on 100% coverage via
+  `./pytest.sh --check-coverage`.
 
 ## Red flags — stop
 

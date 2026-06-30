@@ -226,6 +226,22 @@ def test_can_process_rejects_non_text_nodes():
 
 
 from opencrane.rag.services.list_chunker import _Item  # noqa: E402
+from opencrane.rag.services.list_chunker import _is_table_separator  # noqa: E402
+
+
+def _is_table_separator_in(content: str) -> bool:
+    return any(_is_table_separator(line) for line in content.split("\n"))
+
+
+def test_is_table_separator_detects_separator_rows():
+    assert _is_table_separator("|---|---|") is True
+    assert _is_table_separator("| :--- | :----- |") is True
+    assert _is_table_separator("  | --- | --- |  ") is True
+    # Not separators:
+    assert _is_table_separator("| Name | Type |") is False   # header row, no dashes-only
+    assert _is_table_separator("Just prose.") is False
+    assert _is_table_separator("- a list item") is False
+    assert _is_table_separator("") is False
 
 
 def test_segment_consecutive_blank_lines_then_prose():

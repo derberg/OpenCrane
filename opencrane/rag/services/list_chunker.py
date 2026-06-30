@@ -20,6 +20,20 @@ from opencrane.shared.utils.token_counter import get_token_count
 _LIST_MARKER_RE = re.compile(r"^(?P<indent>\s*)(?:(?P<ordered>\d+)\.|[-*+])\s")
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 
+
+def _is_table_separator(line: str) -> bool:
+    """True when a line is a markdown table separator row (for example ``|---|---|``).
+
+    A separator row contains only pipes, dashes, colons and spaces, with at
+    least one pipe and one dash. This is the unambiguous signal that the
+    surrounding lines form a markdown table.
+    """
+    stripped = line.strip()
+    if "|" not in stripped or "-" not in stripped:
+        return False
+    return set(stripped) <= set("|-: ")
+
+
 TOTAL_CAP = 30       # preview display width (incl. prefix and ellipsis)
 PREVIEW_CAP = 15     # max number of sibling previews before overflow marker
 

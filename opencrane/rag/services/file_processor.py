@@ -9,12 +9,21 @@ from opencrane.rag.services.docling_adapter import DoclingAdapter
 from opencrane.rag.services.prose_chunker import ProseChunkingStrategy
 from opencrane.rag.services.yaml_chunker import YamlChunkingStrategy
 from opencrane.rag.services.code_chunker import CodeChunkingStrategy
+from opencrane.rag.services.list_chunker import _is_table_separator
 from opencrane.shared.models.chunk import Chunk
 
 logger = logging.getLogger(__name__)
 
 _HEADING_PREFIX_RE = re.compile(r'^#{1,6}\s+')
 _LEADING_URL_RE = re.compile(r'(https?://[^\s\]]+)(.*)$')
+
+
+def _section_has_table(text: str) -> bool:
+    return any(_is_table_separator(line) for line in text.split("\n"))
+
+
+def _section_has_heading(text: str) -> bool:
+    return any(_HEADING_PREFIX_RE.match(line.strip()) for line in text.split("\n"))
 
 
 def _bare_url_marker(heading_line: str) -> str | None:
@@ -331,7 +340,19 @@ class FileProcessor:
                 in_code_block = False
                 in_html_block = False
                 html_block_depth = 0
-                
+                current_heading = None
+
+                def _emit(section_text):
+                    # A table severed into a heading-less section gets its
+                    # nearest heading back so it stays retrievable.
+                    if (
+                        current_heading
+                        and _section_has_table(section_text)
+                        and not _section_has_heading(section_text)
+                    ):
+                        section_text = f"{current_heading}\n\n{section_text}"
+                    return FakeTextItem(section_text, current_source_url)
+
                 for line in content.split('\n'):
                     stripped = line.strip()
                     
@@ -355,7 +376,7 @@ class FileProcessor:
                                 section_text = '\n'.join(current_section).strip()
                                 if section_text:
                                     logger.debug(f"Saving section with URL={current_source_url[:60] if current_source_url else 'None'}... ({len(section_text)} chars)")
-                                    sections.append(FakeTextItem(section_text, current_source_url))
+                                    sections.append(_emit(section_text))
 
                             # Extract and update current source URL
                             if bracketed is not None:
@@ -366,8 +387,10 @@ class FileProcessor:
                                 hashes = stripped.split()[0]  # e.g. '#', '##', '###'
                                 if title:
                                     current_section = [f"{hashes} {title}"]
+                                    current_heading = f"{hashes} {title}"
                                 else:
                                     current_section = []
+                                    current_heading = None
                             else:
                                 marker_url = bare_marker
                                 if marker_url:
@@ -379,9 +402,11 @@ class FileProcessor:
                                     inline_title = line[url_end:].strip()
                                     if inline_title:
                                         current_section = [f"### {inline_title}"]
+                                        current_heading = f"### {inline_title}"
                                         logger.debug(f"Extracted inline title from marker: '{inline_title}'")
                                     else:
                                         current_section = []
+                                        current_heading = None
                                 else:
                                     current_section = []  # pragma: no cover
                             continue
@@ -395,7 +420,13 @@ class FileProcessor:
                         html_block_depth += line.count('<Tabs')
                     
                     current_section.append(line)
-                    
+                    if (
+                        not in_code_block
+                        and not in_html_block
+                        and _HEADING_PREFIX_RE.match(stripped)
+                    ):
+                        current_heading = line
+
                     if '</Tabs>' in line:
                         html_block_depth -= line.count('</Tabs>')
                         if html_block_depth <= 0:
@@ -405,7 +436,7 @@ class FileProcessor:
                             if current_section:
                                 section_text = '\n'.join(current_section).strip()
                                 if section_text:
-                                    sections.append(FakeTextItem(section_text, current_source_url))
+                                    sections.append(_emit(section_text))
                                 current_section = []
 
                     # Track code block state - but don't split if inside HTML block
@@ -415,7 +446,7 @@ class FileProcessor:
                             if len(current_section) > 1:  # More than just the ``` line
                                 section_text = '\n'.join(current_section[:-1]).strip()
                                 if section_text:
-                                    sections.append(FakeTextItem(section_text, current_source_url))
+                                    sections.append(_emit(section_text))
                                 current_section = [line]
                             in_code_block = True
                         else:
@@ -429,7 +460,7 @@ class FileProcessor:
                 if current_section:
                     section_text = '\n'.join(current_section).strip()
                     if section_text:
-                        sections.append(FakeTextItem(section_text, current_source_url))
+                        sections.append(_emit(section_text))
                 
                 logger.debug(f"_split_into_sections: Created {len(sections)} sections")
                 # Show sample of URLs for debugging

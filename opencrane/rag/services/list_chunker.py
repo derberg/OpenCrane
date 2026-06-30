@@ -63,7 +63,12 @@ class _Item:
 
 
 class ListChunkingStrategy(ProcessingStrategy):
-    """Strategy that emits prose chunks around lists and one chunk per list item."""
+    """Strategy that emits one chunk per list item and prose chunks around lists.
+
+    When a markdown table is cleaved into its own prose segment (for example a
+    table directly after a list), the table chunk is given back its section
+    heading and the line that introduces it, so it stays retrievable.
+    """
 
     def can_process(self, node) -> bool:
         if not hasattr(node, "text"):
@@ -85,6 +90,7 @@ class ListChunkingStrategy(ProcessingStrategy):
         heading_stack: List[Tuple[int, str]] = []     # (level, title) above current point
         section_breadcrumb = ""                       # breadcrumb at most recent heading change
         list_ordinal_in_section = 0                   # counts top-level lists per section
+        prev_tail = ""                                # last non-blank line of the previous segment
 
         for kind, payload in segments:
             if kind == "prose":
@@ -94,7 +100,12 @@ class ListChunkingStrategy(ProcessingStrategy):
                 if new_breadcrumb != section_breadcrumb:
                     section_breadcrumb = new_breadcrumb
                     list_ordinal_in_section = 0
-                chunk = self._make_prose_chunk(payload, source_file, source_url)
+                lines = payload
+                # A table cleaved into its own prose segment has lost its heading
+                # and description; restore them so the chunk is retrievable.
+                if self._contains_table(payload) and not self._contains_heading(payload):
+                    lines = self._with_table_context(payload, section_breadcrumb, prev_tail)
+                chunk = self._make_prose_chunk(lines, source_file, source_url)
                 if chunk is not None:
                     chunks.append(chunk)
             elif kind == "list":
@@ -107,6 +118,7 @@ class ListChunkingStrategy(ProcessingStrategy):
                     source_url=source_url,
                 )
                 chunks.extend(list_chunks)
+            prev_tail = self._last_nonblank(payload)
 
         return chunks
 
@@ -266,6 +278,42 @@ class ListChunkingStrategy(ProcessingStrategy):
                 heading_stack.pop()
             heading_stack.append((level, title))
         return " > ".join(title for _, title in heading_stack)
+
+    # --- table context helpers ----------------------------------------------
+
+    @staticmethod
+    def _contains_table(lines: List[str]) -> bool:
+        return any(_is_table_separator(line) for line in lines)
+
+    @staticmethod
+    def _contains_heading(lines: List[str]) -> bool:
+        return any(_HEADING_RE.match(line.strip()) for line in lines)
+
+    @staticmethod
+    def _last_nonblank(lines: List[str]) -> str:
+        for line in reversed(lines):
+            if line.strip():
+                return line.strip()
+        return ""
+
+    @staticmethod
+    def _with_table_context(lines: List[str], breadcrumb: str, prev_tail: str) -> List[str]:
+        """Prepend heading + description to a heading-less table segment.
+
+        ``breadcrumb`` becomes a single-``#`` heading line. ``prev_tail`` is the
+        last non-blank line of the previous segment (typically the list item
+        that introduces the table); its list marker is stripped so it reads as a
+        sentence.
+        """
+        prefix: List[str] = []
+        if breadcrumb:
+            prefix.append(f"# {breadcrumb}")
+        if prev_tail:
+            description = re.sub(r"^\s*(?:\d+\.|[-*+])\s+", "", prev_tail)
+            prefix.append(description)
+        if not prefix:
+            return list(lines)
+        return prefix + [""] + list(lines)
 
     # --- prose chunk builder -------------------------------------------------
 

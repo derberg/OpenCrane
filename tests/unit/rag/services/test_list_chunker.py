@@ -233,6 +233,58 @@ def _is_table_separator_in(content: str) -> bool:
     return any(_is_table_separator(line) for line in content.split("\n"))
 
 
+def test_table_after_list_carries_heading_and_description():
+    """A table directly after a list becomes a prose chunk that carries the
+    section heading and the introducing sentence (the last list item's tail)."""
+    strategy = ListChunkingStrategy()
+    text = "\n".join([
+        "## Runtime changes",
+        "",
+        "You can change settings at runtime:",
+        "",
+        "- GRX for access",
+        "- You can change interface settings at runtime. The table below outlines the effects:",
+        "",
+        "| Changed parameter | UPG reaction |",
+        "|---|---|",
+        "| IP | updated instantly |",
+        "| MAC | no restart |",
+    ])
+    node = _mk_node(text)
+    chunks = strategy.process(node, Path("doc.md"))
+
+    table_chunks = [c for c in chunks if _is_table_separator_in(c.content)]
+    assert len(table_chunks) == 1
+    content = table_chunks[0].content
+    assert content.startswith("# Runtime changes")
+    assert "The table below outlines the effects:" in content
+    assert "| Changed parameter | UPG reaction |" in content
+    # List items are still emitted as their own chunks, unchanged.
+    assert any(c.chunk_type == "list_item" for c in chunks)
+
+
+def test_table_with_no_heading_or_description_is_emitted_unchanged():
+    """A table with no heading ancestry and nothing before it stays as-is.
+
+    These are the tables the documentation fix (Jira) must address; the chunker
+    cannot invent context."""
+    strategy = ListChunkingStrategy()
+    # A list (so ListChunkingStrategy handles the node), then a separate
+    # table with no heading anywhere and no introducing sentence.
+    text = "\n".join([
+        "- only item",
+        "",
+        "| A | B |",
+        "|---|---|",
+        "| 1 | 2 |",
+    ])
+    chunks = strategy.process(_mk_node(text), Path("doc.md"))
+    table_chunks = [c for c in chunks if _is_table_separator_in(c.content)]
+    assert len(table_chunks) == 1
+    # Description is the list tail ("only item"); no heading, since no breadcrumb.
+    assert not table_chunks[0].content.lstrip().startswith("#")
+
+
 def test_is_table_separator_detects_separator_rows():
     assert _is_table_separator("|---|---|") is True
     assert _is_table_separator("| :--- | :----- |") is True

@@ -1,0 +1,134 @@
+[
+  {
+    "chunk_id": "e25a101787b98093f3adcfb001c9168e7fdfb4c689c6f0424f40ef935d40597b",
+    "chunk_type": "list_item",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nBase Diameter (RFC 6733)",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ",
+      "depth": 0,
+      "list_id": "3adc078257e1f6f5",
+      "list_style": "unordered",
+      "parent_item_id": null,
+      "position": 1,
+      "sibling_ids": [
+        "ce2141ae6b0d081cf35362c4a85fcaf57b014bec9d9e6e68288866e30bc1c4bf",
+        "a63601ef692e5ef527802c8af21f2dbe1eec99553e42458f6b446b7e01926494",
+        "2c193cc7991e63d65bce18a3e1cb066862a8014e3d0e609be642cf3b8ecac5dc"
+      ],
+      "sibling_previews": [
+        "NASREQ Application (RFC 4005)",
+        "Credit-Control Application (R…",
+        "Custom vendor AVPs (vendor 99…"
+      ],
+      "total_siblings": 4
+    },
+    "source_file": "tests/fixtures/markdown_with_table.md",
+    "source_name": null,
+    "token_count": 27
+  },
+  {
+    "chunk_id": "ce2141ae6b0d081cf35362c4a85fcaf57b014bec9d9e6e68288866e30bc1c4bf",
+    "chunk_type": "list_item",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nNASREQ Application (RFC 4005)",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ",
+      "depth": 0,
+      "list_id": "3adc078257e1f6f5",
+      "list_style": "unordered",
+      "parent_item_id": null,
+      "position": 2,
+      "sibling_ids": [
+        "e25a101787b98093f3adcfb001c9168e7fdfb4c689c6f0424f40ef935d40597b",
+        "a63601ef692e5ef527802c8af21f2dbe1eec99553e42458f6b446b7e01926494",
+        "2c193cc7991e63d65bce18a3e1cb066862a8014e3d0e609be642cf3b8ecac5dc"
+      ],
+      "sibling_previews": [
+        "Base Diameter (RFC 6733)",
+        "Credit-Control Application (R…",
+        "Custom vendor AVPs (vendor 99…"
+      ],
+      "total_siblings": 4
+    },
+    "source_file": "tests/fixtures/markdown_with_table.md",
+    "source_name": null,
+    "token_count": 28
+  },
+  {
+    "chunk_id": "a63601ef692e5ef527802c8af21f2dbe1eec99553e42458f6b446b7e01926494",
+    "chunk_type": "list_item",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nCredit-Control Application (RFC 4006)",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ",
+      "depth": 0,
+      "list_id": "3adc078257e1f6f5",
+      "list_style": "unordered",
+      "parent_item_id": null,
+      "position": 3,
+      "sibling_ids": [
+        "e25a101787b98093f3adcfb001c9168e7fdfb4c689c6f0424f40ef935d40597b",
+        "ce2141ae6b0d081cf35362c4a85fcaf57b014bec9d9e6e68288866e30bc1c4bf",
+        "2c193cc7991e63d65bce18a3e1cb066862a8014e3d0e609be642cf3b8ecac5dc"
+      ],
+      "sibling_previews": [
+        "Base Diameter (RFC 6733)",
+        "NASREQ Application (RFC 4005)",
+        "Custom vendor AVPs (vendor 99…"
+      ],
+      "total_siblings": 4
+    },
+    "source_file": "tests/fixtures/markdown_with_table.md",
+    "source_name": null,
+    "token_count": 28
+  },
+  {
+    "chunk_id": "2c193cc7991e63d65bce18a3e1cb066862a8014e3d0e609be642cf3b8ecac5dc",
+    "chunk_type": "list_item",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nCustom vendor AVPs (vendor 99999, id 1). The following AVP types are used:",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ",
+      "depth": 0,
+      "list_id": "3adc078257e1f6f5",
+      "list_style": "unordered",
+      "parent_item_id": null,
+      "position": 4,
+      "sibling_ids": [
+        "e25a101787b98093f3adcfb001c9168e7fdfb4c689c6f0424f40ef935d40597b",
+        "ce2141ae6b0d081cf35362c4a85fcaf57b014bec9d9e6e68288866e30bc1c4bf",
+        "a63601ef692e5ef527802c8af21f2dbe1eec99553e42458f6b446b7e01926494"
+      ],
+      "sibling_previews": [
+        "Base Diameter (RFC 6733)",
+        "NASREQ Application (RFC 4005)",
+        "Credit-Control Application (R…"
+      ],
+      "total_siblings": 4
+    },
+    "source_file": "tests/fixtures/markdown_with_table.md",
+    "source_name": null,
+    "token_count": 41
+  },
+  {
+    "chunk_id": "835bee6dd67c174328683061faf9d60177e007494237788e8325ea8893706367",
+    "chunk_type": "prose",
+    "content": "# DIAMETER Support with SMC\n\nThis document lists the AVPs used and not used by the Session Management Controller (SMC) when communicating to other Diameter peers, organized per Diameter application.\n\n> [!NOTE]\n> All mandatory AVPs, such as `Session-Id` or `Origin-Host`, are supported in the applications listed below.\n\n## DIAMETER Applications\n\nThe following AVP types from the base 3GPP Diameter dictionary are used:\n\n| AVP | Code | Type | Flags |\n| ------------------------------- | ---: | -----------: | :------: |\n| 3GPP-IMSI | 1 | UTF8String | V |\n| 3GPP-Charging-Id | 2 | Unsigned32 | V |\n| 3GPP-PDP-Type | 3 | Enumerated | V |\n| 3GPP-SGSN-Address | 6 | OctetString | V |\n| 3GPP-GGSN-Address | 7 | OctetString | V |\n| 3GPP-IMSI-MCC-MNC | 8 | UTF8String | V |\n| 3GPP-NSAPI | 10 | OctetString | V |\n| 3GPP-Selection-Mode | 12 | UTF8String | V |\n| 3GPP-SGSN-IPv6-Address | 15 | OctetString | V |\n| 3GPP-GGSN-IPv6-Address | 16 | OctetString | V |\n| 3GPP-SGSN-MCC-MNC | 18 | UTF8String | V |\n| 3GPP-IMEISV | 20 | OctetString | V |\n| 3GPP-RAT-Type | 21 | OctetString | V |\n| 3GPP-User-Location-Info | 22 | OctetString | V |\n| 3GPP-MS-TimeZone | 23 | OctetString | V |\n\nThe following AVP types from the base 3GPP Diameter dictionary are not used:\n\n| AVP | Code | Type | Flags |\n| ------------------------------- | ---: | -----------: | :------: |\n| 3GPP-CG-Address | 4 | OctetString | V |\n| 3GPP-Session-Stop-Indicator | 11 | OctetString | V |\n| 3GPP-CG-IPv6-Address | 14 | OctetString | V |\n| 3GPP-CAMEL-Charging-Info | 24 | OctetString | V |\n| 3GPP-Packet-Filter | 25 | OctetString | V |\n| 3GPP-Negotiated-DSCP | 26 | OctetString | V |\n| 3GPP-Allocate-IP-Type | 27 | OctetString | V |\n\n### Authentication via NASREQ\n\nThe following dictionaries are used in the NASREQ application:",
+    "line_start": null,
+    "metadata": {},
+    "source_file": "tests/fixtures/markdown_with_table.md",
+    "source_name": null,
+    "token_count": 619
+  },
+  {
+    "chunk_id": "e4e60273e51d04ba3886f2f317bfd11c5a82add1f8968dc0596cb4c3cf3e7020",
+    "chunk_type": "prose",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nCustom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\n\n| AVP | Vendor | Code | Type | Flags |\n| -------------------------------- | ------ | ---: | -----------: | :------: |\n| Accounting-Input-Octets | 0 | 363 | Unsigned64 | M |\n| Accounting-Input-Packets | 0 | 365 | Unsigned64 | M |\n| Accounting-Output-Octets | 0 | 364 | Unsigned64 | M |\n| Accounting-Output-Packets | 0 | 366 | Unsigned64 | M |\n| Accounting-Record-Number | 0 | 485 | Unsigned32 | M |",
+    "line_start": null,
+    "metadata": {},
+    "source_file": "tests/fixtures/markdown_with_table.md",
+    "source_name": null,
+    "token_count": 158
+  }
+]

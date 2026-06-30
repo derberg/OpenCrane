@@ -39,6 +39,19 @@ Output (rag-chunks.json):
 
 This design ensures that each chunk maintains full context through its header hierarchy while document boundaries remain clear for processing.
 
+## Tables
+
+Markdown tables stay embedded in `prose` chunks together with the context that makes them searchable: the nearest heading and the descriptive line that introduces the table. Without that context a table chunk is only column labels and cell values, which semantic search cannot match against a real question.
+
+Two cases need care, because the table can be separated from its context before it is chunked:
+
+- A table directly after a list. `ListChunkingStrategy` gives the table chunk back its section heading and the introducing line (the tail of the last list item).
+- A code fence between a heading and a table. The section splitter in `file_processor` gives the table chunk back the nearest heading.
+
+A table that has no heading and no description in the source is left as-is, because the chunker copies context, it does not invent it. Add a heading and a lead-in sentence in the source to make such a table retrievable.
+
+The fixture pair `tests/fixtures/markdown_with_table.md` and `tests/fixtures/expected_table_chunks.json` is a generated baseline that shows the chunks produced for a large table document. Regenerate the expected file with `ChunkSerializer.serialize_chunks` when chunking behavior changes on purpose.
+
 ## Architecture
 
 The chunker uses a **Strategy Pattern** for extensible format support. It allows adding new formats (JSON, XML, etc.) without modifying core logic, using `ProcessingStrategy` interface. See `CodeChunkingStrategy` for reference implementation.
@@ -47,7 +60,8 @@ Available Strategies:
 1. **YamlChunkingStrategy** - Detects and processes YAML content; delegates structured YAML specs (e.g., CRDs, OpenAPI) to tree walkers for structured chunking, falls back to generic yaml_content type for other YAML
 2. **TabsChunkingStrategy** - HTML tab components (`<Tabs>`/`<Tab>`) for parallel instructions; processes each tab separately as prose
 3. **CodeChunkingStrategy** - Fenced code blocks with language detection; auto-detects structured YAML specs in YAML code blocks and delegates to tree walkers
-4. **ProseChunkingStrategy** - Markdown/text with hierarchical headers (fallback strategy)
+4. **ListChunkingStrategy** - Markdown lists; emits one chunk per list item, and keeps a table that follows a list together with its heading and description (see Tables below)
+5. **ProseChunkingStrategy** - Markdown/text with hierarchical headers (fallback strategy)
 
 Strategies are evaluated in order; first match wins.
 

@@ -39,8 +39,8 @@ def _split_row(line: str) -> List[str]:
     return [c.strip() for c in s.split("|")]
 
 
-def _table_id(breadcrumb: str, caption: str, columns: List[str]) -> str:
-    key = f"{breadcrumb}|{caption}|{'|'.join(columns)}"
+def _table_id(breadcrumb: str, caption: str, columns: List[str], row_keys: List[str]) -> str:
+    key = f"{breadcrumb}|{caption}|{'|'.join(columns)}|{'|'.join(row_keys)}"
     return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
 
 
@@ -57,6 +57,10 @@ def _render_row(columns: List[str], cells: List[str], breadcrumb: str, caption: 
         lines.append(breadcrumb)
     if caption:
         lines.append(caption)
+    # A cell containing an unescaped pipe yields more cells than columns; merge
+    # the overflow into the last column so no source data is dropped.
+    if columns and len(cells) > len(columns):
+        cells = cells[:len(columns) - 1] + [" | ".join(cells[len(columns) - 1:])]
     for col, val in zip(columns, cells):
         if val:
             lines.append(f"{col}: {val}.")
@@ -91,7 +95,7 @@ def build_table_chunks(
     columns = _split_row(data_lines[0])
     rows = [_split_row(ln) for ln in data_lines[2:]]
     row_keys = [cells[0] for cells in rows]
-    table_id = _table_id(breadcrumb, caption, columns)
+    table_id = _table_id(breadcrumb, caption, columns, row_keys)
 
     chunks: List[Chunk] = []
 
@@ -222,9 +226,13 @@ class TableChunkingStrategy(ProcessingStrategy):
                 if other:
                     regions.append(("other", other))
                     other = []
+                header_cols = len(_split_row(lines[i]))
                 block = [lines[i], lines[i + 1]]
                 j = i + 2
-                while j < n and not mask[j] and self._is_row(lines[j]):
+                while (
+                    j < n and not mask[j] and self._is_row(lines[j])
+                    and len(_split_row(lines[j])) == header_cols
+                ):
                     block.append(lines[j])
                     j += 1
                 regions.append(("table", block))
@@ -256,7 +264,11 @@ class TableChunkingStrategy(ProcessingStrategy):
                 heading_stack.append((level, title))
         for line in reversed(lines):
             if line.strip():
-                caption = "" if _HEADING_RE.match(line.strip()) else line.strip()
+                stripped = line.strip()
+                if _HEADING_RE.match(stripped):
+                    caption = ""
+                else:
+                    caption = re.sub(r"^(?:\d+\.|[-*+])\s+", "", stripped)
                 break
         return caption
 

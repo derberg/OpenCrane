@@ -1,6 +1,6 @@
 from pathlib import Path
 from unittest.mock import Mock
-from opencrane.rag.services.table_chunker import build_table_chunks, _is_table_separator, TableChunkingStrategy
+from opencrane.rag.services.table_chunker import build_table_chunks, _is_table_separator, TableChunkingStrategy, _render_row
 
 
 def test_is_table_separator():
@@ -136,3 +136,41 @@ def test_process_two_tables_blank_between_delegates_empty():
     text = "\n".join(["| A |", "|---|", "| 1 |", "", "| B |", "|---|", "| 2 |"])
     chunks = TableChunkingStrategy().process(_node(text), Path("d.md"))
     assert [c.chunk_type for c in chunks].count("table") == 2   # blank middle region hits line 269
+
+
+def test_table_id_differs_for_different_rows_same_header():
+    from opencrane.rag.services.table_chunker import build_table_chunks
+    a = build_table_chunks(["| K |", "|---|", "| a |"], breadcrumb="H", caption="c",
+                           source_file=Path("d.md"), source_url=None)
+    b = build_table_chunks(["| K |", "|---|", "| b |"], breadcrumb="H", caption="c",
+                           source_file=Path("d.md"), source_url=None)
+    assert a[0].metadata["table_id"] != b[0].metadata["table_id"]
+
+
+def test_caption_strips_leading_list_marker():
+    text = "\n".join(["## H", "", "- see the table below:", "", "| A |", "|---|", "| 1 |"])
+    chunks = TableChunkingStrategy().process(_node(text), Path("d.md"))
+    row = [c for c in chunks if c.chunk_type == "table_row"][0]
+    assert row.metadata["table_caption"] == "see the table below:"
+    assert "- see the table below:" not in row.content
+
+
+def test_prose_with_pipe_and_different_cellcount_not_swallowed():
+    text = "\n".join(["| A | B |", "|---|---|", "| 1 | 2 |", "Summary: one | two | three."])
+    chunks = TableChunkingStrategy().process(_node(text), Path("d.md"))
+    rows = [c for c in chunks if c.chunk_type == "table_row"]
+    assert all(c.metadata["total_rows"] == 1 for c in rows)
+    assert all("Summary" not in c.content for c in rows)
+
+
+def test_render_row_merges_overflow_cells():
+    out = _render_row(["A", "B"], ["x", "y", "z"], "", "")
+    assert "z" in out  # overflow cell not dropped
+
+
+def test_caption_is_empty_when_last_line_before_table_is_heading():
+    # When the last non-blank line before the table is a heading, caption must be "".
+    text = "\n".join(["## H", "", "| A |", "|---|", "| 1 |"])
+    chunks = TableChunkingStrategy().process(_node(text), Path("d.md"))
+    row = [c for c in chunks if c.chunk_type == "table_row"][0]
+    assert row.metadata.get("table_caption", "") == ""

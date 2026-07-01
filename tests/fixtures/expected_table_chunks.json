@@ -165,7 +165,7 @@
         "Flags"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "e269b283662b1810",
+      "table_id": "5c4d3c0bdb48c1ee",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -186,7 +186,7 @@
         "Flags"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are not used:",
-      "table_id": "8630eb731c5758fb",
+      "table_id": "2cdd030822c1fd98",
       "total_rows": 7
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -194,9 +194,9 @@
     "token_count": 120
   },
   {
-    "chunk_id": "1d8b5dfb5797abac8e69fa8e87765a643a105264f9336a703a4cbc9d9c77b543",
+    "chunk_id": "552cccf5776e942e8cf5b31ffdc0e6466f11e4db51e7e9bcbb35b7d7e79f69d3",
     "chunk_type": "table",
-    "content": "# DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\n- Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\nColumns: AVP, Vendor, Code, Type, Flags. 5 rows: Accounting-Input-Octets, Accounting-Input-Packets, Accounting-Output-Octets, Accounting-Output-Packets, Accounting-Record-Number.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nCustom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\nColumns: AVP, Vendor, Code, Type, Flags. 5 rows: Accounting-Input-Octets, Accounting-Input-Packets, Accounting-Output-Octets, Accounting-Output-Packets, Accounting-Record-Number.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ",
@@ -207,13 +207,13 @@
         "Type",
         "Flags"
       ],
-      "table_caption": "- Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:",
-      "table_id": "c40806600896a6e9",
+      "table_caption": "Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:",
+      "table_id": "e96f0be7d64bee5e",
       "total_rows": 5
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 89
+    "token_count": 88
   },
   {
     "chunk_id": "3e1fed476715c1f5aaa8d25af6b5754b5e0e5288eebc8cd5250a3d22e0bed98e",
@@ -239,7 +239,7 @@
         "... +9 more"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "e269b283662b1810",
+      "table_id": "5c4d3c0bdb48c1ee",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -270,7 +270,7 @@
         "... +9 more"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "e269b283662b1810",
+      "table_id": "5c4d3c0bdb48c1ee",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -301,7 +301,7 @@
         "... +9 more"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "e269b283662b1810",
+      "table_id": "5c4d3c0bdb48c1ee",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -332,7 +332,7 @@
         "... +9 more"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "e269b283662b1810",
+      "table_id": "5c4d3c0bdb48c1ee",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -363,7 +363,7 @@
         "... +9 more"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "e269b283662b1810",
+      "table_id": "5c4d3c0bdb48c1ee",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -394,7 +394,7 @@
         "... +9 more"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "e269b283662b1810",
+      "table_id": "5c4d3c0bdb48c1ee",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -425,7 +425,7 @@
         "... +9 more"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "e269b283662b1810",
+      "table_id": "5c4d3c0bdb48c1ee",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -456,7 +456,7 @@
         "... +9 more"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "e269b283662b1810",
+      "table_id": "5c4d3c0bdb48c1ee",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -487,7 +487,7 @@
         "... +9 more"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "e269b283662b1810",
+      "table_id": "5c4d3c0bdb48c1ee",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -518,7 +518,7 @@
         "... +9 more"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "e269b283662b1810",
+      "table_id": "5c4d3c0bdb48c1ee",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -549,7 +549,7 @@
         "... +9 more"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "e269b283662b1810",
+      "table_id": "5c4d3c0bdb48c1ee",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -580,7 +580,7 @@
         "... +9 more"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "e269b283662b1810",
+      "table_id": "5c4d3c0bdb48c1ee",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -611,7 +611,7 @@
         "... +9 more"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "e269b283662b1810",
+      "table_id": "5c4d3c0bdb48c1ee",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -642,7 +642,7 @@
         "... +9 more"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "e269b283662b1810",
+      "table_id": "5c4d3c0bdb48c1ee",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -673,7 +673,7 @@
         "... +9 more"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "e269b283662b1810",
+      "table_id": "5c4d3c0bdb48c1ee",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -704,7 +704,7 @@
         "... +1 more"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are not used:",
-      "table_id": "8630eb731c5758fb",
+      "table_id": "2cdd030822c1fd98",
       "total_rows": 7
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -735,7 +735,7 @@
         "... +1 more"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are not used:",
-      "table_id": "8630eb731c5758fb",
+      "table_id": "2cdd030822c1fd98",
       "total_rows": 7
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -766,7 +766,7 @@
         "... +1 more"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are not used:",
-      "table_id": "8630eb731c5758fb",
+      "table_id": "2cdd030822c1fd98",
       "total_rows": 7
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -797,7 +797,7 @@
         "... +1 more"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are not used:",
-      "table_id": "8630eb731c5758fb",
+      "table_id": "2cdd030822c1fd98",
       "total_rows": 7
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -828,7 +828,7 @@
         "... +1 more"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are not used:",
-      "table_id": "8630eb731c5758fb",
+      "table_id": "2cdd030822c1fd98",
       "total_rows": 7
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -859,7 +859,7 @@
         "... +1 more"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are not used:",
-      "table_id": "8630eb731c5758fb",
+      "table_id": "2cdd030822c1fd98",
       "total_rows": 7
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -890,7 +890,7 @@
         "... +1 more"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are not used:",
-      "table_id": "8630eb731c5758fb",
+      "table_id": "2cdd030822c1fd98",
       "total_rows": 7
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -898,9 +898,9 @@
     "token_count": 59
   },
   {
-    "chunk_id": "eb4e13cf5a662103a947477e4fc02fd74084d042ba93212f71bb61501923b119",
+    "chunk_id": "bdd5d34aeda8bca2cf5b8659a11f460c0028e30604c9960ab30dbb908a340df8",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\n- Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\nAVP: Accounting-Input-Octets.\nVendor: 0.\nCode: 363.\nType: Unsigned64.\nFlags: M.",
+    "content": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nCustom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\nAVP: Accounting-Input-Octets.\nVendor: 0.\nCode: 363.\nType: Unsigned64.\nFlags: M.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ",
@@ -919,18 +919,18 @@
         "Accounting-Output-Packets",
         "Accounting-Record-Number"
       ],
-      "table_caption": "- Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:",
-      "table_id": "c40806600896a6e9",
+      "table_caption": "Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:",
+      "table_id": "e96f0be7d64bee5e",
       "total_rows": 5
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 69
+    "token_count": 68
   },
   {
-    "chunk_id": "8e83aec277148388381f0461e2fd38f363c423e86cbdeb6894ddbf49f5db273d",
+    "chunk_id": "60258bb59641dd36b396b03521634b812e9296906e1ccac05dadd81e6a4ca4a7",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\n- Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\nAVP: Accounting-Input-Packets.\nVendor: 0.\nCode: 365.\nType: Unsigned64.\nFlags: M.",
+    "content": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nCustom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\nAVP: Accounting-Input-Packets.\nVendor: 0.\nCode: 365.\nType: Unsigned64.\nFlags: M.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ",
@@ -949,18 +949,18 @@
         "Accounting-Output-Packets",
         "Accounting-Record-Number"
       ],
-      "table_caption": "- Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:",
-      "table_id": "c40806600896a6e9",
+      "table_caption": "Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:",
+      "table_id": "e96f0be7d64bee5e",
       "total_rows": 5
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 69
+    "token_count": 68
   },
   {
-    "chunk_id": "819a1fcaf14bd4f75f8adb82c07f83eeb145270242af0829060efa5f388acfa2",
+    "chunk_id": "b73a4c87f2a33e626e97cc36f048ee69ba6abc253c984470d39a4f35d9c8ee26",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\n- Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\nAVP: Accounting-Output-Octets.\nVendor: 0.\nCode: 364.\nType: Unsigned64.\nFlags: M.",
+    "content": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nCustom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\nAVP: Accounting-Output-Octets.\nVendor: 0.\nCode: 364.\nType: Unsigned64.\nFlags: M.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ",
@@ -979,18 +979,18 @@
         "Accounting-Output-Packets",
         "Accounting-Record-Number"
       ],
-      "table_caption": "- Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:",
-      "table_id": "c40806600896a6e9",
+      "table_caption": "Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:",
+      "table_id": "e96f0be7d64bee5e",
       "total_rows": 5
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 69
+    "token_count": 68
   },
   {
-    "chunk_id": "036aa28c551adc673cffc58d901e6b52da54c62338c59694f6f425d307607a72",
+    "chunk_id": "88abb1b1dc381bed8418a93037d81bc04615605a0c7f1640a5577e409a9398ba",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\n- Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\nAVP: Accounting-Output-Packets.\nVendor: 0.\nCode: 366.\nType: Unsigned64.\nFlags: M.",
+    "content": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nCustom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\nAVP: Accounting-Output-Packets.\nVendor: 0.\nCode: 366.\nType: Unsigned64.\nFlags: M.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ",
@@ -1009,18 +1009,18 @@
         "Accounting-Output-Octets",
         "Accounting-Record-Number"
       ],
-      "table_caption": "- Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:",
-      "table_id": "c40806600896a6e9",
+      "table_caption": "Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:",
+      "table_id": "e96f0be7d64bee5e",
       "total_rows": 5
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 69
+    "token_count": 68
   },
   {
-    "chunk_id": "b2a5c4e806a72899249a1bc2da110d331de445c14e512e22b98a80d374794b5b",
+    "chunk_id": "f698154d18a5b7ccf7fadac29d7d7025b3196fc363ee03b3e9181b048cd19eed",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\n- Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\nAVP: Accounting-Record-Number.\nVendor: 0.\nCode: 485.\nType: Unsigned32.\nFlags: M.",
+    "content": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nCustom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\nAVP: Accounting-Record-Number.\nVendor: 0.\nCode: 485.\nType: Unsigned32.\nFlags: M.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ",
@@ -1039,12 +1039,12 @@
         "Accounting-Output-Octets",
         "Accounting-Output-Packets"
       ],
-      "table_caption": "- Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:",
-      "table_id": "c40806600896a6e9",
+      "table_caption": "Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:",
+      "table_id": "e96f0be7d64bee5e",
       "total_rows": 5
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 69
+    "token_count": 68
   }
 ]

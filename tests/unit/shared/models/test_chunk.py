@@ -65,3 +65,27 @@ class TestChunk:
         )
         assert chunk.chunk_type == "yaml_content"
         assert "root_identity" not in chunk.metadata
+
+    def test_table_chunk_requires_metadata(self):
+        """Test table chunk metadata validation."""
+        # Valid table overview chunk.
+        ok = Chunk(chunk_id="x", content="Columns: A, B. 2 rows: a, b.",
+                   source_file="d.md", chunk_type="table",
+                   metadata={"table_id": "t1", "columns": ["A", "B"], "total_rows": 2},
+                   token_count=5)
+        assert ok.chunk_type == "table"
+        # Missing required metadata raises.
+        with pytest.raises(ValidationError):
+            Chunk(chunk_id="x", content="c", source_file="d.md", chunk_type="table",
+                  metadata={"table_id": "t1"}, token_count=1)
+
+    def test_table_row_chunk_requires_metadata(self):
+        """Test table_row chunk metadata validation."""
+        ok = Chunk(chunk_id="x", content="A: a. B: b.", source_file="d.md", chunk_type="table_row",
+                   metadata={"table_id": "t1", "columns": ["A", "B"], "row_index": 1,
+                             "total_rows": 2, "row_key": "a", "sibling_previews": ["b"]},
+                   token_count=5)
+        assert ok.chunk_type == "table_row"
+        with pytest.raises(ValidationError):
+            Chunk(chunk_id="x", content="c", source_file="d.md", chunk_type="table_row",
+                  metadata={"table_id": "t1"}, token_count=1)

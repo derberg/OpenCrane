@@ -99,3 +99,19 @@ def test_strategy_ignores_table_inside_fence():
     text = "## T\n\n```\n| A | B |\n|---|---|\n| 1 | 2 |\n```\n"
     strat = TableChunkingStrategy()
     assert strat.can_process(_node(text)) is False
+
+
+def test_build_table_chunks_overview_ellipsis_past_eight_rows():
+    lines = ["| K |", "|---|"] + [f"| k{i} |" for i in range(9)]  # 9 data rows
+    chunks = build_table_chunks(lines, breadcrumb="", caption="",
+                                source_file=Path("d.md"), source_url=None)
+    overview = [c for c in chunks if c.chunk_type == "table"][0]
+    assert overview.metadata["total_rows"] == 9
+    assert overview.content.rstrip().endswith(", ...")
+
+
+def test_build_table_chunks_second_line_not_separator_returns_empty():
+    # Header, then a NON-separator second line, then data: not a valid table.
+    assert build_table_chunks(["| A | B |", "| x | y |", "| 1 | 2 |"],
+                              breadcrumb="", caption="",
+                              source_file=Path("d.md"), source_url=None) == []

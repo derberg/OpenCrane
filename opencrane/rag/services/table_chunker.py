@@ -13,6 +13,9 @@ from typing import List, Optional
 from opencrane.rag.services.utils.chunk_id_generator import generate_unique_chunk_id
 from opencrane.shared.models.chunk import Chunk
 from opencrane.shared.utils.token_counter import get_token_count
+from opencrane.rag.services.base_strategy import ProcessingStrategy
+from opencrane.rag.services.list_chunker import ListChunkingStrategy
+from opencrane.rag.services.prose_chunker import ProseChunkingStrategy
 
 _PREVIEW_CAP = 5
 _OVERVIEW_KEYS = 8
@@ -87,7 +90,7 @@ def build_table_chunks(
         return []
     columns = _split_row(data_lines[0])
     rows = [_split_row(ln) for ln in data_lines[2:]]
-    row_keys = [cells[0] if cells else "" for cells in rows]
+    row_keys = [cells[0] for cells in rows]
     table_id = _table_id(breadcrumb, caption, columns)
 
     chunks: List[Chunk] = []
@@ -128,10 +131,6 @@ def build_table_chunks(
     return chunks
 
 
-from opencrane.rag.services.base_strategy import ProcessingStrategy
-from opencrane.rag.services.list_chunker import ListChunkingStrategy
-from opencrane.rag.services.prose_chunker import ProseChunkingStrategy
-
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 
 
@@ -156,7 +155,7 @@ class TableChunkingStrategy(ProcessingStrategy):
             return False
         if getattr(node, "node_type", "text") == "code":
             return False
-        text = node.text if hasattr(node, "text") else str(node)
+        text = node.text
         if not text or not text.strip():
             return False
         return self._has_table_outside_fences(text)

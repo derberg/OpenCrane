@@ -578,6 +578,17 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
     limit = arguments.get("limit", 5)
     chunk_types = arguments.get("chunk_types")
     source_names = arguments.get("source_names")
+    # --- Layer 2: content authorization ---
+    from opencrane.mcp.auth.runtime import current_scopes, get_access_policy
+    decision = get_access_policy().authorize(current_scopes(), source_names)
+    # SECURITY: an empty allowlist means zero permitted sources — short-circuit,
+    # because passing [] to the search backends is falsy and would DISABLE the
+    # source filter (leaking all sources). None = no restriction (AllowAll).
+    if decision is not None and len(decision) == 0:
+        logger.info("   🔒 search: no sources permitted for this caller")
+        return [TextContent(type="text", text="No results found.")]
+    source_names = decision
+    # --------------------------------------
     metadata_contains = arguments.get("metadata_contains")
     search_mode = arguments.get("search_mode", "hybrid")
     alpha = max(0.0, min(1.0, float(arguments.get("alpha", get_config().hybrid_alpha))))

@@ -202,11 +202,34 @@ _CHUNK_TYPE_LABELS = {
     "openapi_spec": "openapi_spec (OpenAPI specification endpoints/schemas)",
     "json_schema": "json_schema (JSON Schema definitions)",
     "list_item": "list_item (individual markdown list items)",
+    "table": "table (markdown table overview)",
+    "table_row": "table_row (individual markdown table rows)",
 }
 
 
 def _has_list_item_chunks() -> bool:
     return "list_item" in _get_indexed_chunk_types()
+
+
+def _has_table_row_chunks() -> bool:
+    return "table_row" in _get_indexed_chunk_types()
+
+
+def _get_table_members(table_id: str) -> list[dict]:
+    """Return the overview chunk then all rows for a table_id, rows by row_index."""
+    chunk_index = _build_chunk_index()
+    overview = []
+    rows = []
+    for chunk in chunk_index.values():
+        metadata = chunk.get("metadata", {}) or {}
+        if metadata.get("table_id") != table_id:
+            continue
+        if chunk.get("chunk_type") == "table":
+            overview.append(chunk)
+        elif chunk.get("chunk_type") == "table_row":
+            rows.append(chunk)
+    rows.sort(key=lambda c: c.get("metadata", {}).get("row_index", 0))
+    return overview + rows
 
 
 def _get_list_members(list_id: str) -> list[dict]:
@@ -484,6 +507,22 @@ async def list_tools() -> list[Tool]:
             },
         ))
 
+    if _has_table_row_chunks():
+        tools.append(Tool(
+            name="get_table_members",
+            description="Fetch a full markdown table: its overview chunk and every row chunk sharing a table_id, ordered by row_index. Use when a search returned one or more table_row chunks and you need the whole table.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "table_id": {
+                        "type": "string",
+                        "description": "The table_id from a table_row chunk's metadata."
+                    }
+                },
+                "required": ["table_id"],
+            },
+        ))
+
     if _has_yaml_chunks():
         tools.append(Tool(
             name="get_yaml_definition",
@@ -500,10 +539,10 @@ async def list_tools() -> list[Tool]:
             }
         ))
 
-    if _has_yaml_chunks() or _has_list_item_chunks():
+    if _has_yaml_chunks() or _has_list_item_chunks() or _has_table_row_chunks():
         tools.append(Tool(
             name="get_metadata_schema",
-            description="Retrieve comprehensive documentation of all metadata fields available in chunks. Use this when you need to understand what metadata fields mean (breadcrumb_path, logical_parent, neighbor_chunks, list_id, sibling_ids, etc.) and how to use them programmatically for navigation, context expansion, and re-hydration. Pass chunk_type to get only the section for a specific type (e.g., 'list_item' returns the list_item metadata fields plus the universal fields).",
+            description="Retrieve comprehensive documentation of all metadata fields available in chunks. Use this when you need to understand what metadata fields mean (breadcrumb_path, logical_parent, neighbor_chunks, list_id, sibling_ids, table_id, row_index, etc.) and how to use them programmatically for navigation, context expansion, and re-hydration. Pass chunk_type to get only the section for a specific type (e.g., 'list_item' returns the list_item metadata fields plus the universal fields; 'table_row' returns the table_row metadata fields).",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -533,6 +572,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         "get_yaml_definition": get_yaml_definition,
         "get_metadata_schema": get_metadata_schema,
         "get_list_members": get_list_members,
+        "get_table_members": get_table_members,
     }
 
     handler = _TOOL_HANDLERS.get(name)
@@ -649,6 +689,10 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
                     result_text += f"💡 Tip: Use get_yaml_definition tool with chunk_id='{chunk_id}' to retrieve the complete definition with breadcrumb comments.\n"
                 elif chunk_type in ("crd_definition", "openapi_spec", "json_schema"):
                     result_text += f"💡 Tip: Use get_yaml_definition(chunk_id='{chunk_id}') to see this with breadcrumb comments showing its location in the YAML tree and neighbor chunks.\n"
+                if chunk_type == "table_row":
+                    table_id = (metadata or {}).get("table_id")
+                    if table_id:
+                        result_text += f"\n💡 Tip: Use get_table_members(table_id='{table_id}') for the full table.\n"
                 result_text += f"Score: {score}\n\n"
 
                 formatted.append(TextContent(type="text", text=result_text))
@@ -827,6 +871,8 @@ async def get_yaml_definition(arguments: dict) -> list[TextContent]:
 
 _CHUNK_TYPE_SECTION_HEADINGS = {
     "list_item": "List Item Metadata",
+    "table": "Table Metadata",
+    "table_row": "Table Row Metadata",
     "crd_definition": "CRD-Specific Metadata",
     "openapi_spec": "OpenAPI-Specific Metadata",
     "json_schema": "JSON Schema-Specific Metadata",
@@ -924,6 +970,23 @@ async def get_list_members(arguments: dict) -> list[TextContent]:
         lines.append(f"{indent}[{pos}] {content}")
 
     return [TextContent(type="text", text="\n".join(lines) + "\n")]
+
+
+async def get_table_members(arguments: dict) -> list[TextContent]:
+    """Return the overview chunk and all rows for the given table_id."""
+    table_id = arguments.get("table_id")
+    logger.info(f"   📊 get_table_members: table_id={table_id!r}")
+    if not table_id:
+        return [TextContent(type="text", text="Error: table_id must be a non-empty string.")]
+    members = _get_table_members(table_id)
+    if not members:
+        return [TextContent(type="text", text=f"No table found for table_id={table_id!r}.")]
+    lines = []
+    for m in members:
+        lines.append(m.get("content", ""))
+        lines.append("")
+    return [TextContent(type="text", text="\n".join(lines).strip() + "\n")]
+
 
 async def main():
     """Main entry point for the MCP server."""

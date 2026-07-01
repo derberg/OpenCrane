@@ -166,6 +166,91 @@ These fields enable tree traversal and context reconstruction:
 - **Example**: `"address"`, `"phoneNumber"`
 - **Usage**: Reference schema definitions
 
+## Table Metadata (`chunk_type: "table"`)
+
+A `table` chunk represents the overview of a markdown table. It captures the
+table structure so agents can understand the shape of the data before fetching
+individual rows.
+
+### `table_id` (string)
+
+- **Purpose**: Stable identifier grouping the overview and all row chunks that
+  belong to the same table
+- **Format**: Deterministic hash derived from the table's source location
+- **Usage**:
+  - Pass to `get_table_members(table_id=...)` to fetch the complete table
+  - Correlate with `table_row` chunks that share the same `table_id`
+
+### `columns` (array of strings)
+
+- **Purpose**: Ordered list of column header names
+- **Example**: `["Name", "Type", "Default"]`
+- **Usage**: Understand table structure; display column names as context
+
+### `total_rows` (integer)
+
+- **Purpose**: Total number of data rows in the table (excluding the header)
+- **Example**: `12`
+- **Usage**: Decide whether to fetch all rows or summarize
+
+### `table_caption` (string, optional)
+
+- **Purpose**: Caption or title text associated with the table, if present
+- **Example**: `"Table 1: Configuration options"`
+- **Usage**: Identify the table's subject at a glance
+
+## Table Row Metadata (`chunk_type: "table_row"`)
+
+A `table_row` chunk represents a single data row of a markdown table. Each row
+is indexed as its own chunk so semantic search can match individual rows
+precisely. Metadata links each row back to its table so the full table can be
+reconstructed when needed.
+
+### `table_id` (string)
+
+- **Purpose**: Stable identifier matching the parent `table` chunk and all
+  sibling `table_row` chunks
+- **Usage**:
+  - Pass to `get_table_members(table_id=...)` to fetch the whole table
+  - Detect when multiple search hits belong to the same table
+
+### `columns` (array of strings)
+
+- **Purpose**: Ordered list of column header names (repeated from the overview)
+- **Usage**: Interpret the row's field values without fetching the overview chunk
+
+### `row_index` (integer, 1-indexed)
+
+- **Purpose**: Position of this row within the table
+- **Example**: `1` for the first data row
+- **Usage**: Reconstruct the table in order; render "row N of M" displays
+
+### `total_rows` (integer)
+
+- **Purpose**: Total number of data rows in the table
+- **Usage**: Show "row 3 of 12" context; decide whether to fetch the full table
+
+### `row_key` (string, optional)
+
+- **Purpose**: Value of the first column for this row, used as a concise label
+- **Example**: `"replicas"` (if the first column is "Field")
+- **Usage**: Quick identification without parsing the full row content
+
+### `sibling_previews` (array of strings, optional)
+
+- **Purpose**: Short text previews of other rows in the same table
+- **Format**: One preview per sibling row, capped at ~30 characters; `...`
+  appended when truncated
+- **Usage**: Give the agent an at-a-glance summary of other rows so it can
+  decide whether to call `get_table_members` without a follow-up tool call
+
+### Rehydration Tool
+
+Use `get_table_members(table_id=...)` to fetch the `table` overview chunk plus
+all `table_row` chunks for a given `table_id`, returned in `row_index` order.
+The MCP `search_docs` tool appends a tip automatically when a result is a
+`table_row` chunk.
+
 ## Programmatic Usage Examples
 
 ### Context Expansion (Python)

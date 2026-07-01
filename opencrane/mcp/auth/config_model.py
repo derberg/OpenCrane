@@ -53,16 +53,17 @@ def parse_auth_config(data: dict, known_sources: set[str]) -> AuthConfig:
             f"scope_sources must be a dict[str, list], got {type(raw_scope_sources).__name__}"
         )
     scope_sources: dict[str, tuple[str, ...]] = {}
-    for src_name, scopes in raw_scope_sources.items():
-        if not isinstance(scopes, list):
+    for scope, sources in raw_scope_sources.items():
+        if not isinstance(sources, list):
             raise AuthConfigError(
-                f"scope_sources[{src_name!r}] must be a list of strings, got {type(scopes).__name__}"
+                f"scope_sources[{scope!r}] must be a list of strings, got {type(sources).__name__}"
             )
-        if known_sources and src_name not in known_sources:
-            raise AuthConfigError(
-                f"unknown source {src_name!r} in scope_sources (known: {sorted(known_sources)})"
-            )
-        scope_sources[src_name] = tuple(scopes)
+        for src_name in sources:
+            if known_sources and src_name not in known_sources:
+                raise AuthConfigError(
+                    f"unknown source {src_name!r} in scope_sources (known: {sorted(known_sources)})"
+                )
+        scope_sources[scope] = tuple(sources)
 
     # --- default_sources ---
     raw_default_sources = auth.get("default_sources", [])
@@ -83,9 +84,10 @@ def parse_auth_config(data: dict, known_sources: set[str]) -> AuthConfig:
     scope_claim = "scope"
 
     if auth_type == "oauth":
-        oidc_block = auth.get("oidc") or {}
-        if not isinstance(oidc_block, dict):
-            oidc_block = {}
+        oidc_raw = auth.get("oidc")
+        if oidc_raw is not None and not isinstance(oidc_raw, dict):
+            raise AuthConfigError("oauth requires oidc to be a mapping")
+        oidc_block = oidc_raw or {}
         oidc_issuer = oidc_block.get("issuer")
         oidc_audience = oidc_block.get("audience")
         if not oidc_issuer:

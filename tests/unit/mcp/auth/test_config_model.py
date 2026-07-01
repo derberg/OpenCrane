@@ -73,7 +73,12 @@ class TestOAuthParsing:
             parse_auth_config(data, known_sources=set())
 
     def test_oauth_full_parse(self):
-        """Full oauth config parses correctly with all fields."""
+        """Full oauth config parses correctly with all fields.
+
+        scope_sources maps scope strings (keys) to lists of source names (values).
+        Keys are free-form OAuth scopes and are NOT validated against known_sources.
+        Values are source names and ARE validated against known_sources.
+        """
         data = {
             "auth": {
                 "type": "oauth",
@@ -83,8 +88,8 @@ class TestOAuthParsing:
                     "scope_claim": "permissions",
                 },
                 "scope_sources": {
-                    "docs": ["read:docs"],
-                    "api": ["read:api", "write:api"],
+                    "docs:read": ["docs", "api"],
+                    "docs:write": ["api"],
                 },
                 "default_sources": ["docs"],
             }
@@ -94,7 +99,7 @@ class TestOAuthParsing:
         assert result.oidc_issuer == "https://auth.example.com"
         assert result.oidc_audience == "myapp"
         assert result.scope_claim == "permissions"
-        assert result.scope_sources == {"docs": ("read:docs",), "api": ("read:api", "write:api")}
+        assert result.scope_sources == {"docs:read": ("docs", "api"), "docs:write": ("api",)}
         assert result.default_sources == ("docs",)
 
     def test_oauth_scope_claim_defaults_to_scope(self):
@@ -111,10 +116,16 @@ class TestOAuthParsing:
         result = parse_auth_config(data, known_sources=set())
         assert result.scope_claim == "scope"
 
-    def test_oauth_oidc_none_raises(self):
-        """oauth with oidc: null raises AuthConfigError."""
+    def test_oauth_oidc_none_falls_through_to_issuer_error(self):
+        """oauth with oidc: null coerces to empty dict and raises for missing issuer."""
         data = {"auth": {"type": "oauth", "oidc": None}}
-        with pytest.raises(AuthConfigError):
+        with pytest.raises(AuthConfigError, match="oidc.issuer"):
+            parse_auth_config(data, known_sources=set())
+
+    def test_oauth_oidc_non_dict_raises(self):
+        """oauth with oidc: <non-mapping string> raises AuthConfigError (fail-closed)."""
+        data = {"auth": {"type": "oauth", "oidc": "notadict"}}
+        with pytest.raises(AuthConfigError, match="oidc to be a mapping"):
             parse_auth_config(data, known_sources=set())
 
 
@@ -173,28 +184,47 @@ class TestScopeSourcesValidation:
     """Tests for scope_sources and default_sources validation."""
 
     def test_scope_sources_happy_path(self):
-        """scope_sources with valid sources is accepted."""
+        """scope_sources maps scope strings (keys) to source name lists (values).
+
+        Keys are free-form OAuth scope strings — NOT validated against known_sources.
+        Values are source names — validated against known_sources when non-empty.
+        """
         data = {
             "auth": {
                 "type": "none",
-                "scope_sources": {"docs": ["read:docs"]},
-                "default_sources": ["docs"],
+                "scope_sources": {"docs:public": ["cennso-glossary"], "docs:internal": ["cgw", "tsr"]},
+                "default_sources": ["cennso-glossary"],
             }
         }
-        result = parse_auth_config(data, known_sources={"docs"})
-        assert result.scope_sources == {"docs": ("read:docs",)}
-        assert result.default_sources == ("docs",)
+        result = parse_auth_config(data, known_sources={"cennso-glossary", "cgw", "tsr"})
+        assert result.scope_sources == {
+            "docs:public": ("cennso-glossary",),
+            "docs:internal": ("cgw", "tsr"),
+        }
+        assert result.default_sources == ("cennso-glossary",)
 
-    def test_scope_sources_unknown_source_raises_when_known_nonempty(self):
-        """Unknown source in scope_sources raises when known_sources is non-empty."""
+    def test_scope_key_not_validated_against_known_sources(self):
+        """Scope KEY strings (e.g. 'docs:public') are NOT validated against known_sources."""
         data = {
             "auth": {
                 "type": "none",
-                "scope_sources": {"unknown_src": ["read:docs"]},
+                "scope_sources": {"docs:public": ["cgw"]},
+            }
+        }
+        # 'docs:public' is NOT in known_sources — that's fine, keys are scopes not sources
+        result = parse_auth_config(data, known_sources={"cgw"})
+        assert result.scope_sources == {"docs:public": ("cgw",)}
+
+    def test_scope_sources_unknown_source_in_value_raises_when_known_nonempty(self):
+        """Unknown source in scope_sources VALUE list raises when known_sources is non-empty."""
+        data = {
+            "auth": {
+                "type": "none",
+                "scope_sources": {"docs:x": ["nope"]},
             }
         }
         with pytest.raises(AuthConfigError, match="unknown source"):
-            parse_auth_config(data, known_sources={"docs"})
+            parse_auth_config(data, known_sources={"cgw"})
 
     def test_default_sources_unknown_source_raises_when_known_nonempty(self):
         """Unknown source in default_sources raises when known_sources is non-empty."""

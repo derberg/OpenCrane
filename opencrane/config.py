@@ -54,3 +54,10 @@ class OpenCraneConfig:
         OpenAPITreeWalker,
         JsonSchemaTreeWalker,
     ]
+
+    # Auth escape-hatch hooks for ``auth.type: custom`` (Layer-1 authentication).
+    # Set ``token_verifier`` to a ``TokenVerifier`` instance (resource-server mode) or
+    # ``auth_provider`` to an ``OAuthAuthorizationServerProvider`` instance (self-hosted
+    # authorization-server mode).  Both default to ``None`` (open — no auth).
+    token_verifier = None
+    auth_provider = None

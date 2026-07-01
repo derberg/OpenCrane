@@ -4,8 +4,12 @@ This is the single seam between OpenCrane's auth configuration and FastMCP's
 constructor: :func:`build_fastmcp_auth` maps an :class:`AuthConfig` to the keyword
 arguments that get splatted into ``FastMCP(...)``.
 
-* ``type == "none"`` (and, for now, ``type == "custom"``): return ``{}`` — the app
-  is open, no auth routes are mounted.
+* ``type == "none"``: return ``{}`` — the app is open, no auth routes are mounted.
+* ``type == "custom"``: load ``OpenCraneConfig`` via ``load_config(None)`` and read
+  ``auth_provider`` / ``token_verifier``.  If ``auth_provider`` is set, wire a
+  self-hosted authorization server (requires ``PUBLIC_URL``).  If ``token_verifier``
+  is set, wire a resource server (requires ``PUBLIC_URL``).  If neither is set,
+  return ``{}`` (open — the operator has not wired a custom provider).
 * ``type == "local"``: build the self-hosted :class:`OpenCraneAuthProvider` and the
   matching :class:`AuthSettings`. Requires ``PUBLIC_URL`` (fail-closed).
 * ``type == "oauth"``: OpenCrane is an OAuth 2.0 resource server delegating token
@@ -43,7 +47,42 @@ def build_fastmcp_auth(auth_config: AuthConfig) -> dict:
             unset, or for ``oauth`` mode when the ``opencrane[auth]`` extra is
             not installed.
     """
-    if auth_config.type in ("none", "custom"):
+    if auth_config.type == "none":
+        return {}
+
+    if auth_config.type == "custom":
+        from opencrane.cli import load_config
+        oc = load_config(None)
+        if oc.auth_provider is not None:
+            public_url = (os.environ.get("PUBLIC_URL") or "").strip()
+            if not public_url:
+                raise AuthConfigError(
+                    "custom auth with auth_provider requires PUBLIC_URL to be set to "
+                    "this server's public base URL (used as the OAuth issuer)"
+                )
+            return {
+                "auth_server_provider": oc.auth_provider,
+                "auth": AuthSettings(
+                    issuer_url=public_url,
+                    resource_server_url=public_url,
+                    client_registration_options=ClientRegistrationOptions(enabled=True),
+                ),
+            }
+        if oc.token_verifier is not None:
+            public_url = (os.environ.get("PUBLIC_URL") or "").strip()
+            if not public_url:
+                raise AuthConfigError(
+                    "custom auth with token_verifier requires PUBLIC_URL to be set to "
+                    "this server's public base URL (used as the OAuth resource-server identifier)"
+                )
+            return {
+                "token_verifier": oc.token_verifier,
+                "auth": AuthSettings(
+                    issuer_url=public_url,
+                    resource_server_url=public_url,
+                ),
+            }
+        # Neither hook set — custom type with no wiring means open.
         return {}
 
     if auth_config.type == "local":

@@ -92,7 +92,7 @@ def parse_auth_config(data: dict, known_sources: set[str]) -> AuthConfig:
             raise AuthConfigError("oauth requires oidc.issuer to be set")
         if not oidc_audience:
             raise AuthConfigError("oauth requires oidc.audience to be set")
-        scope_claim = oidc_block.get("scope_claim", "scope")
+        scope_claim = oidc_block.get("scope_claim", "scope")  # OIDC-only: read from oidc: block
 
     # --- local-specific ---
     local_method = "token"
@@ -100,14 +100,15 @@ def parse_auth_config(data: dict, known_sources: set[str]) -> AuthConfig:
 
     if auth_type == "local":
         local_block = auth.get("local") or {}
-        if isinstance(local_block, dict):
-            local_method = local_block.get("method", "token")
-            if local_method not in ALLOWED_LOCAL_METHODS:
-                raise AuthConfigError(
-                    f"local.method must be one of {sorted(ALLOWED_LOCAL_METHODS)}, got {local_method!r}"
-                )
-            raw_scopes = local_block.get("scopes", [])
-            local_scopes = tuple(raw_scopes)
+        if not isinstance(local_block, dict):
+            raise AuthConfigError(f"auth.local must be a mapping, got {type(local_block).__name__}")
+        local_method = local_block.get("method", "token")
+        if local_method not in ALLOWED_LOCAL_METHODS:
+            raise AuthConfigError(
+                f"local.method must be one of {sorted(ALLOWED_LOCAL_METHODS)}, got {local_method!r}"
+            )
+        raw_scopes = local_block.get("scopes", [])
+        local_scopes = tuple(raw_scopes)
 
     return AuthConfig(
         type=auth_type,

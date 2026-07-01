@@ -1,5 +1,7 @@
 """Unit tests for MCP auth config model parsing."""
 
+from dataclasses import FrozenInstanceError
+
 import pytest
 from opencrane.mcp.auth import AuthConfig, AuthConfigError, parse_auth_config
 
@@ -144,6 +146,17 @@ class TestLocalParsing:
         result = parse_auth_config(data, known_sources=set())
         assert result.local_method == "token"
 
+    def test_local_null_block_defaults_to_token(self):
+        """local: null coerces to empty dict and defaults to token method."""
+        data = {"auth": {"type": "local", "local": None}}
+        result = parse_auth_config(data, known_sources=set())
+        assert result.local_method == "token"
+
+    def test_local_non_dict_raises(self):
+        """local: <non-mapping> raises AuthConfigError (fail-closed)."""
+        with pytest.raises(AuthConfigError, match="auth.local must be a mapping"):
+            parse_auth_config({"auth": {"type": "local", "local": "bad"}}, set())
+
     def test_local_scopes_parsed(self):
         """local_scopes are parsed correctly."""
         data = {
@@ -244,5 +257,5 @@ class TestAuthConfigDefaults:
     def test_authconfig_is_frozen(self):
         """AuthConfig is immutable (frozen dataclass)."""
         cfg = AuthConfig()
-        with pytest.raises(Exception):
+        with pytest.raises(FrozenInstanceError):
             cfg.type = "oauth"  # type: ignore[misc]

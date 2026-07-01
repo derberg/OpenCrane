@@ -9,7 +9,7 @@ from opencrane.rag.services.docling_adapter import DoclingAdapter
 from opencrane.rag.services.prose_chunker import ProseChunkingStrategy
 from opencrane.rag.services.yaml_chunker import YamlChunkingStrategy
 from opencrane.rag.services.code_chunker import CodeChunkingStrategy
-from opencrane.rag.services.list_chunker import _is_table_separator
+from opencrane.rag.services.table_chunker import _is_table_separator
 from opencrane.shared.models.chunk import Chunk
 
 logger = logging.getLogger(__name__)

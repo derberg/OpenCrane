@@ -1,6 +1,12 @@
 """MCP auth package — config model, parser, access policies, and runtime helpers."""
 
 from opencrane.mcp.auth.config_model import AuthConfig, AuthConfigError, parse_auth_config
+from opencrane.mcp.auth.local_provider import (
+    OpenCraneAuthProvider,
+    load_local_credentials,
+    render_login_form,
+    verify_credentials,
+)
 from opencrane.mcp.auth.policies import AllowAllPolicy, ScopeSourcesPolicy, build_access_policy
 from opencrane.mcp.auth.runtime import current_scopes, get_access_policy, reset_auth_runtime
 
@@ -8,10 +14,14 @@ __all__ = [
     "AllowAllPolicy",
     "AuthConfig",
     "AuthConfigError",
+    "OpenCraneAuthProvider",
     "ScopeSourcesPolicy",
     "build_access_policy",
     "current_scopes",
     "get_access_policy",
+    "load_local_credentials",
     "parse_auth_config",
+    "render_login_form",
     "reset_auth_runtime",
+    "verify_credentials",
 ]

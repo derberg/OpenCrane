@@ -274,4 +274,4 @@ class TableChunkingStrategy(ProcessingStrategy):
         prose_strategy = ProseChunkingStrategy()
         if prose_strategy.can_process(node):
             return prose_strategy.process(node, source_file)
-        return []
+        return []  # pragma: no cover

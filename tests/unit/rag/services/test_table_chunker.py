@@ -115,3 +115,24 @@ def test_build_table_chunks_second_line_not_separator_returns_empty():
     assert build_table_chunks(["| A | B |", "| x | y |", "| 1 | 2 |"],
                               breadcrumb="", caption="",
                               source_file=Path("d.md"), source_url=None) == []
+
+
+def test_can_process_declines_code_blank_and_missing_text():
+    strat = TableChunkingStrategy()
+    code = Mock(spec=[]); code.text = "| A |\n|---|\n| 1 |"; code.node_type = "code"; code.source_url = None
+    assert strat.can_process(code) is False          # line 157
+    assert strat.can_process(_node("   \n  ")) is False   # line 160 (blank text)
+    assert strat.can_process(Mock(spec=[])) is False      # no .text attribute
+
+
+def test_process_pops_same_level_heading_for_breadcrumb():
+    text = "\n".join(["## First", "## Second", "lead-in:", "", "| A |", "|---|", "| 1 |"])
+    chunks = TableChunkingStrategy().process(_node(text), Path("d.md"))
+    row = [c for c in chunks if c.chunk_type == "table_row"][0]
+    assert row.metadata["breadcrumb_path"] == "Second"    # First popped at line 255
+
+
+def test_process_two_tables_blank_between_delegates_empty():
+    text = "\n".join(["| A |", "|---|", "| 1 |", "", "| B |", "|---|", "| 2 |"])
+    chunks = TableChunkingStrategy().process(_node(text), Path("d.md"))
+    assert [c.chunk_type for c in chunks].count("table") == 2   # blank middle region hits line 269

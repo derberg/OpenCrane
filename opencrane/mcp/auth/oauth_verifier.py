@@ -40,7 +40,9 @@ def _extract_scopes(claims: dict, claim: str) -> tuple[str, ...]:
         return ()
     if isinstance(value, str):
         return tuple(value.split())
-    return tuple(value)
+    if isinstance(value, (list, tuple)):
+        return tuple(str(v) for v in value)
+    return ()  # scalar / unexpected claim type → no scopes (fail safe, no raise)
 
 
 class JwtTokenVerifier(TokenVerifier):

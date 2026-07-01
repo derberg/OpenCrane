@@ -71,8 +71,26 @@ class TestExtractScopes:
     def test_missing_claim(self):
         assert _extract_scopes({}, "scope") == ()
 
+    def test_scalar_int_claim_returns_empty(self):
+        assert _extract_scopes({"scope": 42}, "scope") == ()
+
+    def test_scalar_bool_claim_returns_empty(self):
+        assert _extract_scopes({"scope": True}, "scope") == ()
+
 
 class TestJwtTokenVerifier:
+    def test_scalar_scope_claim_returns_access_token_no_scopes(self, public_key, private_key):
+        v = JwtTokenVerifier(
+            issuer=ISSUER,
+            audience=AUDIENCE,
+            scope_claim="scope",
+            signing_key_resolver=lambda token: public_key,
+        )
+        token = _mint(private_key, scope=42)
+        result = asyncio.run(v.verify_token(token))
+        assert result is not None
+        assert result.scopes == []
+
     def test_valid_token_string_scope(self, verifier, private_key):
         token = _mint(private_key, scope="read write")
         result = asyncio.run(verifier.verify_token(token))

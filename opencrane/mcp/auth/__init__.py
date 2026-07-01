@@ -9,6 +9,7 @@ from opencrane.mcp.auth.local_provider import (
 )
 from opencrane.mcp.auth.policies import AllowAllPolicy, ScopeSourcesPolicy, build_access_policy
 from opencrane.mcp.auth.runtime import current_scopes, get_access_policy, reset_auth_runtime
+from opencrane.mcp.auth.wiring import build_fastmcp_auth
 
 __all__ = [
     "AllowAllPolicy",
@@ -17,6 +18,7 @@ __all__ = [
     "OpenCraneAuthProvider",
     "ScopeSourcesPolicy",
     "build_access_policy",
+    "build_fastmcp_auth",
     "current_scopes",
     "get_access_policy",
     "load_local_credentials",

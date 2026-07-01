@@ -1,0 +1,222 @@
+"""Unit tests for wiring the local-mode OAuth provider into the FastMCP HTTP app."""
+
+import pytest
+from unittest.mock import patch, AsyncMock
+
+from starlette.testclient import TestClient
+
+import opencrane.mcp.http_server as http_server
+from opencrane.mcp.http_server import build_app
+from opencrane.mcp.auth import build_fastmcp_auth
+from opencrane.mcp.auth.config_model import AuthConfig, AuthConfigError, parse_auth_config
+
+
+@pytest.fixture(autouse=True)
+def reset_module_globals():
+    """Reset module-level state before and after each test for isolation."""
+    http_server._services_ready = False
+    http_server._milvus_stats = None
+    yield
+    http_server._services_ready = False
+    http_server._milvus_stats = None
+
+
+@pytest.fixture
+def local_config(tmp_path, monkeypatch):
+    """Write a local-token config.yaml and point MAPPING_FILE at it, with env set."""
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("auth:\n  type: local\n  local:\n    method: token\n", encoding="utf-8")
+    monkeypatch.setenv("MAPPING_FILE", str(cfg))
+    monkeypatch.setenv("PUBLIC_URL", "https://docs.example.com")
+    monkeypatch.setenv("OPENCRANE_ACCESS_TOKEN", "s3cret-token")
+    return cfg
+
+
+class TestBuildFastmcpAuth:
+    def test_none_returns_empty(self):
+        assert build_fastmcp_auth(AuthConfig(type="none")) == {}
+
+    def test_custom_returns_empty(self):
+        assert build_fastmcp_auth(AuthConfig(type="custom")) == {}
+
+    def test_local_returns_provider_and_settings(self, monkeypatch):
+        monkeypatch.setenv("PUBLIC_URL", "https://docs.example.com")
+        monkeypatch.setenv("OPENCRANE_ACCESS_TOKEN", "s3cret-token")
+        kwargs = build_fastmcp_auth(AuthConfig(type="local", local_method="token"))
+        assert "auth_server_provider" in kwargs
+        assert "auth" in kwargs
+        from opencrane.mcp.auth.local_provider import OpenCraneAuthProvider
+        assert isinstance(kwargs["auth_server_provider"], OpenCraneAuthProvider)
+
+    def test_local_missing_public_url_raises(self, monkeypatch):
+        monkeypatch.delenv("PUBLIC_URL", raising=False)
+        monkeypatch.setenv("OPENCRANE_ACCESS_TOKEN", "s3cret-token")
+        with pytest.raises(AuthConfigError):
+            build_fastmcp_auth(AuthConfig(type="local", local_method="token"))
+
+    def test_oauth_not_yet_available(self):
+        with pytest.raises(AuthConfigError):
+            build_fastmcp_auth(AuthConfig(type="oauth"))
+
+
+class TestNoneModeApp:
+    def test_mcp_endpoint_open_no_auth_routes(self, tmp_path, monkeypatch):
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text("", encoding="utf-8")
+        monkeypatch.setenv("MAPPING_FILE", str(cfg))
+        app = build_app().streamable_http_app()
+        paths = {getattr(r, "path", None) for r in app.routes}
+        assert "/.well-known/oauth-authorization-server" not in paths
+        assert "/login" not in paths
+        # Open app: the MCP endpoint is reachable (lifespan runs it), not a 401 challenge.
+        with patch("opencrane.mcp.http_server.init_services", new=AsyncMock()):
+            with TestClient(app) as client:
+                resp = client.post(
+                    "/mcp",
+                    json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+                    headers={"Accept": "application/json, text/event-stream"},
+                )
+        assert resp.status_code != 401
+
+
+class TestLocalModeApp:
+    def test_unauthorized_mcp_request_401(self, local_config):
+        client = TestClient(build_app().streamable_http_app())
+        resp = client.post(
+            "/mcp",
+            json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+            headers={"Accept": "application/json, text/event-stream"},
+        )
+        assert resp.status_code == 401
+
+    def test_as_metadata_served(self, local_config):
+        client = TestClient(build_app().streamable_http_app())
+        resp = client.get("/.well-known/oauth-authorization-server")
+        assert resp.status_code == 200
+
+    def test_login_get_renders_form(self, local_config):
+        client = TestClient(build_app().streamable_http_app())
+        resp = client.get("/login?request_id=abc123")
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+        assert 'name="token"' in resp.text
+        assert 'name="request_id"' in resp.text
+
+    def test_login_post_wrong_token_re_renders_error(self, local_config):
+        # Seed a pending authorize request so the request_id is known.
+        app_mcp = build_app()
+        client = TestClient(app_mcp.streamable_http_app())
+        provider = app_mcp._auth_server_provider
+        import asyncio
+        from mcp.server.auth.provider import AuthorizationParams
+        from mcp.shared.auth import OAuthClientInformationFull
+        clinfo = OAuthClientInformationFull(
+            client_id="c1", redirect_uris=["https://client.example.com/cb"]
+        )
+        params = AuthorizationParams(
+            state="st",
+            scopes=[],
+            code_challenge="challenge",
+            redirect_uri="https://client.example.com/cb",
+            redirect_uri_provided_explicitly=True,
+            resource=None,
+        )
+        redirect = asyncio.run(
+            provider.authorize(clinfo, params)
+        )
+        request_id = redirect.split("request_id=")[1]
+
+        resp = client.post(
+            "/login",
+            data={"request_id": request_id, "token": "wrong-token"},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 401
+        assert "Invalid credentials" in resp.text
+        assert 'name="token"' in resp.text
+
+    def test_login_post_correct_token_redirects_with_code(self, local_config):
+        app_mcp = build_app()
+        client = TestClient(app_mcp.streamable_http_app())
+        provider = app_mcp._auth_server_provider
+        import asyncio
+        from mcp.server.auth.provider import AuthorizationParams
+        from mcp.shared.auth import OAuthClientInformationFull
+        clinfo = OAuthClientInformationFull(
+            client_id="c1", redirect_uris=["https://client.example.com/cb"]
+        )
+        params = AuthorizationParams(
+            state="st",
+            scopes=[],
+            code_challenge="challenge",
+            redirect_uri="https://client.example.com/cb",
+            redirect_uri_provided_explicitly=True,
+            resource=None,
+        )
+        redirect = asyncio.run(
+            provider.authorize(clinfo, params)
+        )
+        request_id = redirect.split("request_id=")[1]
+
+        resp = client.post(
+            "/login",
+            data={"request_id": request_id, "token": "s3cret-token"},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 302
+        assert "?code=" in resp.headers["location"] or "&code=" in resp.headers["location"]
+
+
+class TestLocalPasswordModeApp:
+    def test_login_post_password_fields_read(self, tmp_path, monkeypatch):
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text(
+            "auth:\n  type: local\n  local:\n    method: password\n", encoding="utf-8"
+        )
+        monkeypatch.setenv("MAPPING_FILE", str(cfg))
+        monkeypatch.setenv("PUBLIC_URL", "https://docs.example.com")
+        monkeypatch.setenv("OPENCRANE_LOGIN_USER", "admin")
+        monkeypatch.setenv("OPENCRANE_LOGIN_PASS", "hunter2")
+
+        app_mcp = build_app()
+        client = TestClient(app_mcp.streamable_http_app())
+        provider = app_mcp._auth_server_provider
+        import asyncio
+        from mcp.server.auth.provider import AuthorizationParams
+        from mcp.shared.auth import OAuthClientInformationFull
+        clinfo = OAuthClientInformationFull(
+            client_id="c1", redirect_uris=["https://client.example.com/cb"]
+        )
+        params = AuthorizationParams(
+            state="st",
+            scopes=[],
+            code_challenge="challenge",
+            redirect_uri="https://client.example.com/cb",
+            redirect_uri_provided_explicitly=True,
+            resource=None,
+        )
+        redirect = asyncio.run(
+            provider.authorize(clinfo, params)
+        )
+        request_id = redirect.split("request_id=")[1]
+
+        resp = client.post(
+            "/login",
+            data={"request_id": request_id, "username": "admin", "password": "hunter2"},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 302
+        assert "code=" in resp.headers["location"]
+
+
+class TestBuildAppMissingPublicUrl:
+    def test_local_without_public_url_raises(self, tmp_path, monkeypatch):
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text(
+            "auth:\n  type: local\n  local:\n    method: token\n", encoding="utf-8"
+        )
+        monkeypatch.setenv("MAPPING_FILE", str(cfg))
+        monkeypatch.delenv("PUBLIC_URL", raising=False)
+        monkeypatch.setenv("OPENCRANE_ACCESS_TOKEN", "s3cret-token")
+        with pytest.raises(AuthConfigError):
+            build_app()

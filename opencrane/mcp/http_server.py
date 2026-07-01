@@ -8,14 +8,17 @@ verbatim via a thin bridge that registers ``Tool`` objects directly into the
 FastMCP tool manager (preserving ``inputSchema`` and the
 ``(arguments: dict) -> list[TextContent]`` handler signature).
 
-No authentication is wired here — the app is open. Auth is added in later tasks.
+Authentication is selected from the ``auth`` block in config.yaml: ``none`` leaves
+the app open, ``local`` mounts a self-hosted OAuth authorization server (with a
+``/login`` form) and wraps the MCP endpoint in a 401 challenge.
 """
 import contextlib
 import os
 import logging
+from pathlib import Path
 from collections.abc import AsyncIterator
 
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, HTMLResponse, RedirectResponse
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.tools.base import Tool
 from mcp.server.fastmcp.utilities.func_metadata import FuncMetadata, ArgModelBase
@@ -109,6 +112,55 @@ def _register_tools(mcp):
                   s.GET_METADATA_SCHEMA_TOOL_SCHEMA, s.get_metadata_schema)
 
 
+def _load_auth_config():
+    """Read the ``auth`` block from config.yaml the same way runtime.py does.
+
+    Reads the path in ``MAPPING_FILE`` (default ``.opencrane/config.yaml``); a
+    missing or unparseable file is treated as empty config (open app).
+    """
+    from opencrane.mcp.auth.config_model import parse_auth_config
+    from opencrane.mcp.server import _get_source_keys
+
+    mapping_file = Path(os.environ.get("MAPPING_FILE", ".opencrane/config.yaml"))
+    data: dict = {}
+    if mapping_file.exists():
+        try:
+            import yaml as _yaml
+
+            data = _yaml.safe_load(mapping_file.read_text(encoding="utf-8")) or {}
+        except Exception as exc:  # pragma: no cover - defensive parity with runtime.py
+            logger.warning(f"Failed to parse {mapping_file}: {exc} — treating auth as none")
+            data = {}
+
+    return parse_auth_config(data, set(_get_source_keys()))
+
+
+def _register_login_route(mcp, provider, method):
+    """Mount the ``/login`` GET (form) + POST (credential submit) custom route."""
+    from opencrane.mcp.auth.local_provider import render_login_form
+
+    @mcp.custom_route("/login", methods=["GET", "POST"])
+    async def _login(request):
+        if request.method == "GET":
+            request_id = request.query_params.get("request_id", "")
+            return HTMLResponse(render_login_form(request_id, method))
+
+        form = await request.form()
+        request_id = form.get("request_id", "")
+        if method == "token":
+            submitted = form.get("token", "")
+        else:
+            submitted = (form.get("username", ""), form.get("password", ""))
+        try:
+            redirect_url = provider.complete_login(request_id, submitted)
+        except ValueError as exc:
+            return HTMLResponse(
+                render_login_form(request_id, method, error=str(exc)),
+                status_code=401,
+            )
+        return RedirectResponse(redirect_url, status_code=302)
+
+
 @contextlib.asynccontextmanager
 async def lifespan(_mcp: FastMCP) -> AsyncIterator[None]:
     """FastMCP lifespan: initialize services on startup."""
@@ -117,14 +169,31 @@ async def lifespan(_mcp: FastMCP) -> AsyncIterator[None]:
 
 
 def build_app() -> FastMCP:
-    """Build a FastMCP app with the OpenCrane tools registered and a /health route."""
+    """Build a FastMCP app with the OpenCrane tools registered and a /health route.
+
+    The auth mode is read from config.yaml and merged into the FastMCP constructor.
+    In ``local`` mode a self-hosted OAuth authorization server plus a ``/login`` form
+    are mounted and the MCP endpoint is wrapped in a 401 challenge.
+    """
+    from opencrane.mcp.auth.wiring import build_fastmcp_auth
+
+    auth_config = _load_auth_config()
+    auth_kwargs = build_fastmcp_auth(auth_config)
+    logger.info(f"MCP HTTP auth mode: {auth_config.type}")
+
     mcp = FastMCP(
         "opencrane",
         stateless_http=True,
         json_response=False,
         lifespan=lifespan,
+        **auth_kwargs,
     )
     _register_tools(mcp)
+
+    if "auth_server_provider" in auth_kwargs:
+        _register_login_route(
+            mcp, auth_kwargs["auth_server_provider"], auth_config.local_method
+        )
 
     @mcp.custom_route("/health", methods=["GET"])
     async def _health(_request):

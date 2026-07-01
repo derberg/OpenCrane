@@ -306,6 +306,8 @@ class OpenCraneAuthProvider(
             redirect_uri=pending.redirect_uri,
             redirect_uri_provided_explicitly=pending.redirect_uri_provided_explicitly,
             code_challenge=pending.code_challenge,
+            # Client-requested scopes are intentionally ignored: the operator-configured
+            # scopes are granted so the client cannot self-elevate its own permissions.
             scopes=list(self._scopes),
             expires_at=self._now() + CODE_TTL_SECONDS,
             resource=pending.resource,

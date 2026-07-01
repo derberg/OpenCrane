@@ -23,6 +23,7 @@ the ``/login`` route.
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 
@@ -31,6 +32,8 @@ from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from opencrane.mcp.auth.config_model import AuthConfig, AuthConfigError
 from opencrane.mcp.auth.local_provider import OpenCraneAuthProvider
 from opencrane.mcp.auth.oauth_verifier import build_token_verifier
+
+logger = logging.getLogger(__name__)
 
 
 def build_fastmcp_auth(auth_config: AuthConfig) -> dict:
@@ -83,6 +86,10 @@ def build_fastmcp_auth(auth_config: AuthConfig) -> dict:
                 ),
             }
         # Neither hook set — custom type with no wiring means open.
+        logger.warning(
+            "auth.type is 'custom' but neither token_verifier nor auth_provider is "
+            "configured — the MCP server is running UNAUTHENTICATED"
+        )
         return {}
 
     if auth_config.type == "local":

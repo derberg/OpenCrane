@@ -151,6 +151,12 @@ class TestJwtTokenVerifier:
     def test_malformed_token_returns_none(self, verifier):
         assert asyncio.run(verifier.verify_token("not-a-jwt")) is None
 
+    def test_missing_exp_claim_returns_none(self, verifier, private_key):
+        """A token with no exp claim must be rejected (exp is required)."""
+        claims = {"iss": ISSUER, "aud": AUDIENCE, "azp": "client-abc"}
+        token = jwt.encode(claims, private_key, algorithm="RS256")
+        assert asyncio.run(verifier.verify_token(token)) is None
+
 
 class TestBuildTokenVerifier:
     def _config(self):

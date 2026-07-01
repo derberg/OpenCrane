@@ -91,6 +91,7 @@ class JwtTokenVerifier(TokenVerifier):
                 algorithms=["RS256", "ES256"],
                 audience=self._audience,
                 issuer=self._issuer,
+                options={"require": ["exp", "aud", "iss"]},
             )
         except jwt.PyJWTError:
             return None

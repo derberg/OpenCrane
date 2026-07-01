@@ -40,7 +40,7 @@ class ScopeSourcesPolicy:
 
         For each scope the caller holds, union the sources mapped to that scope.
         If no caller scope matches any key in scope_sources, fall back to
-        default_sources.  When ``requested`` is truthy, return the sorted
+        default_sources.  When ``requested`` is not None, return the sorted
         intersection of requested and allowed; otherwise return sorted(allowed).
         Always returns a concrete list (never None).
         """

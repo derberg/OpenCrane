@@ -87,11 +87,15 @@ class Chunk(BaseModel):
             missing = [f for f in required if f not in self.metadata]
             if missing:
                 raise ValueError(f"table chunks must have {', '.join(missing)} in metadata")
+            if not isinstance(self.content, str):
+                raise ValueError("table chunks must have string content")
         elif self.chunk_type == "table_row":
             required = ["table_id", "columns", "row_index", "total_rows", "row_key", "sibling_previews"]
             missing = [f for f in required if f not in self.metadata]
             if missing:
                 raise ValueError(f"table_row chunks must have {', '.join(missing)} in metadata")
+            if not isinstance(self.content, str):
+                raise ValueError("table_row chunks must have string content")
 
         return self
 

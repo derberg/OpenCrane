@@ -58,6 +58,68 @@ class TestBuildFastmcpAuth:
         with pytest.raises(AuthConfigError):
             build_fastmcp_auth(AuthConfig(type="oauth"))
 
+    def test_oauth_returns_token_verifier_and_settings(self, monkeypatch):
+        monkeypatch.setenv("PUBLIC_URL", "https://docs.example.com")
+        stub_verifier = object()
+        monkeypatch.setattr(
+            "opencrane.mcp.auth.wiring.build_token_verifier",
+            lambda cfg: stub_verifier,
+        )
+        cfg = AuthConfig(
+            type="oauth",
+            oidc_issuer="https://idp.example.com",
+            oidc_audience="https://docs.example.com",
+        )
+        kwargs = build_fastmcp_auth(cfg)
+        assert kwargs["token_verifier"] is stub_verifier
+        assert kwargs["auth"].issuer_url is not None
+        assert kwargs["auth"].resource_server_url is not None
+
+    def test_oauth_missing_public_url_raises(self, monkeypatch):
+        monkeypatch.delenv("PUBLIC_URL", raising=False)
+        cfg = AuthConfig(
+            type="oauth",
+            oidc_issuer="https://idp.example.com",
+            oidc_audience="https://docs.example.com",
+        )
+        with pytest.raises(AuthConfigError):
+            build_fastmcp_auth(cfg)
+
+
+class TestOauthModeApp:
+    def test_serves_protected_resource_metadata_and_401s(self, tmp_path, monkeypatch):
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text(
+            "auth:\n"
+            "  type: oauth\n"
+            "  oidc:\n"
+            "    issuer: https://idp.example.com\n"
+            "    audience: https://docs.example.com\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("MAPPING_FILE", str(cfg))
+        monkeypatch.setenv("PUBLIC_URL", "https://docs.example.com")
+
+        class StubVerifier:
+            async def verify_token(self, token):
+                return None
+
+        # Inject a stub verifier so no network/JWKS lookup happens.
+        monkeypatch.setattr(
+            "opencrane.mcp.auth.wiring.build_token_verifier",
+            lambda c: StubVerifier(),
+        )
+        app = build_app().streamable_http_app()
+        client = TestClient(app)
+        meta = client.get("/.well-known/oauth-protected-resource")
+        assert meta.status_code == 200
+        resp = client.post(
+            "/mcp",
+            json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+            headers={"Accept": "application/json, text/event-stream"},
+        )
+        assert resp.status_code == 401
+
 
 class TestNoneModeApp:
     def test_mcp_endpoint_open_no_auth_routes(self, tmp_path, monkeypatch):

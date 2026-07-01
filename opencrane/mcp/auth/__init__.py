@@ -7,6 +7,7 @@ from opencrane.mcp.auth.local_provider import (
     render_login_form,
     verify_credentials,
 )
+from opencrane.mcp.auth.oauth_verifier import JwtTokenVerifier, build_token_verifier
 from opencrane.mcp.auth.policies import AllowAllPolicy, ScopeSourcesPolicy, build_access_policy
 from opencrane.mcp.auth.runtime import current_scopes, get_access_policy, reset_auth_runtime
 from opencrane.mcp.auth.wiring import build_fastmcp_auth
@@ -15,10 +16,12 @@ __all__ = [
     "AllowAllPolicy",
     "AuthConfig",
     "AuthConfigError",
+    "JwtTokenVerifier",
     "OpenCraneAuthProvider",
     "ScopeSourcesPolicy",
     "build_access_policy",
     "build_fastmcp_auth",
+    "build_token_verifier",
     "current_scopes",
     "get_access_policy",
     "load_local_credentials",

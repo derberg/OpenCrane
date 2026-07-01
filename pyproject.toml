@@ -41,6 +41,12 @@ dev = [
     "plotly>=5.20",
     "scikit-learn>=1.3",
     "umap-learn>=0.5",
+    # auth extra included in dev so the oauth-mode JWT verifier tests can run.
+    "pyjwt[crypto]>=2.8",
+]
+auth = [
+    # auth.type: oauth — OIDC/JWT resource-server validation.
+    "pyjwt[crypto]>=2.8",
 ]
 pack = [
     "build>=1.0",

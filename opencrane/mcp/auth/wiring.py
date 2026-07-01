@@ -8,7 +8,10 @@ arguments that get splatted into ``FastMCP(...)``.
   is open, no auth routes are mounted.
 * ``type == "local"``: build the self-hosted :class:`OpenCraneAuthProvider` and the
   matching :class:`AuthSettings`. Requires ``PUBLIC_URL`` (fail-closed).
-* ``type == "oauth"``: not wired yet (Task 7) — raises :class:`AuthConfigError`.
+* ``type == "oauth"``: OpenCrane is an OAuth 2.0 resource server delegating token
+  issuance to an external IdP. Build a :class:`JwtTokenVerifier` and the matching
+  :class:`AuthSettings` (``issuer_url`` = the external IdP, ``resource_server_url`` =
+  this server's ``PUBLIC_URL``). Requires ``PUBLIC_URL`` (fail-closed).
 
 ``build_app`` checks ``"auth_server_provider" in kwargs`` to decide whether to mount
 the ``/login`` route.
@@ -23,6 +26,7 @@ from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 
 from opencrane.mcp.auth.config_model import AuthConfig, AuthConfigError
 from opencrane.mcp.auth.local_provider import OpenCraneAuthProvider
+from opencrane.mcp.auth.oauth_verifier import build_token_verifier
 
 
 def build_fastmcp_auth(auth_config: AuthConfig) -> dict:
@@ -35,8 +39,9 @@ def build_fastmcp_auth(auth_config: AuthConfig) -> dict:
         A dict of kwargs to splat into ``FastMCP(...)``. Empty for open modes.
 
     Raises:
-        AuthConfigError: For ``local`` mode when ``PUBLIC_URL`` is unset, and for
-            ``oauth`` mode (not yet implemented — Task 7).
+        AuthConfigError: For ``local`` or ``oauth`` mode when ``PUBLIC_URL`` is
+            unset, or for ``oauth`` mode when the ``opencrane[auth]`` extra is
+            not installed.
     """
     if auth_config.type in ("none", "custom"):
         return {}
@@ -62,5 +67,21 @@ def build_fastmcp_auth(auth_config: AuthConfig) -> dict:
             ),
         }
 
-    # type == "oauth": filled in by Task 7.
-    raise AuthConfigError("oauth wiring not yet available")
+    # type == "oauth": resource-server mode — validate external-IdP JWTs.
+    public_url = (os.environ.get("PUBLIC_URL") or "").strip()
+    if not public_url:
+        raise AuthConfigError(
+            "oauth auth requires PUBLIC_URL to be set to this server's public "
+            "base URL (used as the OAuth resource-server identifier)"
+        )
+    return {
+        "token_verifier": build_token_verifier(auth_config),
+        "auth": AuthSettings(
+            # issuer_url is the external IdP; resource_server_url is THIS server.
+            issuer_url=auth_config.oidc_issuer,
+            resource_server_url=public_url,
+            # No transport-level required_scopes: Layer-2 scope->sources handles
+            # content authorization; requiring scopes here would over-restrict.
+            required_scopes=None,
+        ),
+    }

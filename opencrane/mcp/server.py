@@ -450,6 +450,53 @@ def _build_search_tool() -> Tool:
     )
 
 
+# Static tool definitions shared by both the stdio transport (list_tools below)
+# and the FastMCP HTTP transport (http_server._register_tools). Kept as a single
+# source of truth so the two transports advertise identical descriptions/schemas.
+HEALTH_TOOL_DESCRIPTION = "Check the health of the documentation search service"
+HEALTH_TOOL_SCHEMA = {
+    "type": "object",
+    "properties": {},
+    "required": [],
+}
+
+GET_LIST_MEMBERS_TOOL_DESCRIPTION = "Fetch every chunk that belongs to the same markdown list, ordered by position. Use when a search returned one or more list_item chunks sharing a list_id and you need the full list for reconstructing a procedure, enumeration, or step-by-step instruction."
+GET_LIST_MEMBERS_TOOL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "list_id": {
+            "type": "string",
+            "description": "The list_id from a list_item chunk's metadata (see sibling grouping in search_docs output)."
+        }
+    },
+    "required": ["list_id"],
+}
+
+GET_YAML_DEFINITION_TOOL_DESCRIPTION = "Retrieve complete YAML definition for CRD, OpenAPI, or JSON Schema chunks with breadcrumb comments. Use this when: 1) You need full YAML context with location breadcrumbs (e.g., 'spec.replicas is at spec.versions[0].schema.properties.spec.replicas in SMC CRD'), 2) Search results show truncated content and suggest using this tool, 3) You want to see neighbor chunks at the same tree level, 4) You need the documentation URL for a YAML chunk. Returns YAML with comment headers showing: location in tree, parent path, schema type/version information, and up to 5 sibling chunks."
+GET_YAML_DEFINITION_TOOL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "chunk_id": {
+            "type": "string",
+            "description": "The chunk ID from search results (look for 'Chunk ID:' field)"
+        }
+    },
+    "required": ["chunk_id"]
+}
+
+GET_METADATA_SCHEMA_TOOL_DESCRIPTION = "Retrieve comprehensive documentation of all metadata fields available in chunks. Use this when you need to understand what metadata fields mean (breadcrumb_path, logical_parent, neighbor_chunks, list_id, sibling_ids, etc.) and how to use them programmatically for navigation, context expansion, and re-hydration. Pass chunk_type to get only the section for a specific type (e.g., 'list_item' returns the list_item metadata fields plus the universal fields)."
+GET_METADATA_SCHEMA_TOOL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "chunk_type": {
+            "type": "string",
+            "description": "Optional: filter the schema to a specific chunk type (e.g., 'list_item', 'crd_definition', 'openapi_spec', 'json_schema'). When omitted, the full schema is returned."
+        }
+    },
+    "required": []
+}
+
+
 app = Server("opencrane")
 
 @app.list_tools()
@@ -459,61 +506,30 @@ async def list_tools() -> list[Tool]:
         _build_search_tool(),
         Tool(
             name="health",
-            description="Check the health of the documentation search service",
-            inputSchema={
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
+            description=HEALTH_TOOL_DESCRIPTION,
+            inputSchema=HEALTH_TOOL_SCHEMA,
         ),
     ]
 
     if _has_list_item_chunks():
         tools.append(Tool(
             name="get_list_members",
-            description="Fetch every chunk that belongs to the same markdown list, ordered by position. Use when a search returned one or more list_item chunks sharing a list_id and you need the full list for reconstructing a procedure, enumeration, or step-by-step instruction.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "list_id": {
-                        "type": "string",
-                        "description": "The list_id from a list_item chunk's metadata (see sibling grouping in search_docs output)."
-                    }
-                },
-                "required": ["list_id"],
-            },
+            description=GET_LIST_MEMBERS_TOOL_DESCRIPTION,
+            inputSchema=GET_LIST_MEMBERS_TOOL_SCHEMA,
         ))
 
     if _has_yaml_chunks():
         tools.append(Tool(
             name="get_yaml_definition",
-            description="Retrieve complete YAML definition for CRD, OpenAPI, or JSON Schema chunks with breadcrumb comments. Use this when: 1) You need full YAML context with location breadcrumbs (e.g., 'spec.replicas is at spec.versions[0].schema.properties.spec.replicas in SMC CRD'), 2) Search results show truncated content and suggest using this tool, 3) You want to see neighbor chunks at the same tree level, 4) You need the documentation URL for a YAML chunk. Returns YAML with comment headers showing: location in tree, parent path, schema type/version information, and up to 5 sibling chunks.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "chunk_id": {
-                        "type": "string",
-                        "description": "The chunk ID from search results (look for 'Chunk ID:' field)"
-                    }
-                },
-                "required": ["chunk_id"]
-            }
+            description=GET_YAML_DEFINITION_TOOL_DESCRIPTION,
+            inputSchema=GET_YAML_DEFINITION_TOOL_SCHEMA,
         ))
 
     if _has_yaml_chunks() or _has_list_item_chunks():
         tools.append(Tool(
             name="get_metadata_schema",
-            description="Retrieve comprehensive documentation of all metadata fields available in chunks. Use this when you need to understand what metadata fields mean (breadcrumb_path, logical_parent, neighbor_chunks, list_id, sibling_ids, etc.) and how to use them programmatically for navigation, context expansion, and re-hydration. Pass chunk_type to get only the section for a specific type (e.g., 'list_item' returns the list_item metadata fields plus the universal fields).",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "chunk_type": {
-                        "type": "string",
-                        "description": "Optional: filter the schema to a specific chunk type (e.g., 'list_item', 'crd_definition', 'openapi_spec', 'json_schema'). When omitted, the full schema is returned."
-                    }
-                },
-                "required": []
-            }
+            description=GET_METADATA_SCHEMA_TOOL_DESCRIPTION,
+            inputSchema=GET_METADATA_SCHEMA_TOOL_SCHEMA,
         ))
 
     return tools

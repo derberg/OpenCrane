@@ -1,0 +1,186 @@
+# Authentication & Authorization
+
+OpenCrane's HTTP transport supports two independent layers of access control:
+
+- **Layer 1 — Authentication** (who may connect): implemented via OAuth 2.1 using the MCP Python SDK. The `auth.type` config key selects the mode. stdio transport is always unauthenticated (per the MCP spec — stdio uses environment credentials).
+- **Layer 2 — Authorization** (which sources a caller may retrieve): declarative `scope → [source_name,…]` mapping enforced server-side by constraining every search against the Milvus and BM25 backends.
+
+## The `auth:` configuration block
+
+```yaml
+# .opencrane/config.yaml
+auth:
+  type: none          # none | local | oauth | custom  (default: none)
+```
+
+Place the `auth:` block at the top level of `.opencrane/config.yaml`.
+
+| `type` | Authentication mode |
+|--------|---------------------|
+| `none` | No auth — server is open (current default) |
+| `local` | Self-hosted OAuth 2.1 AS with a browser login form |
+| `oauth` | External IdP — OpenCrane acts as an OAuth resource server |
+| `custom` | Operator-supplied `token_verifier` or `auth_provider` hook in `OpenCraneConfig` |
+
+---
+
+## `local` mode — self-hosted OAuth with browser login
+
+OpenCrane runs its own OAuth 2.1 authorization server. When an MCP client connects, it is redirected to OpenCrane's browser login form. The consumer authenticates once; the resulting access token is stored by the client for subsequent requests. No external identity provider is needed.
+
+### Configuration
+
+```yaml
+auth:
+  type: local
+  local:
+    method: token     # token (default) | password
+```
+
+### Environment variables
+
+| Variable | Required for | Description |
+|----------|-------------|-------------|
+| `PUBLIC_URL` | Always | The server's public base URL (e.g. `https://docs-mcp.example.com`). Used as the OAuth issuer URL. **Must be HTTPS in production** (OAuth 2.1 requirement; `http://localhost` is allowed for development). |
+| `OPENCRANE_ACCESS_TOKEN` | `method: token` | One or more accepted tokens, comma-separated. The login form presents a token-paste field. |
+| `OPENCRANE_LOGIN_USER` | `method: password` | Accepted username. |
+| `OPENCRANE_LOGIN_PASS` | `method: password` | Accepted password. |
+
+Credentials are read from environment only; never from the config file.
+
+### Docker Compose example
+
+```yaml
+# docker-compose.yml
+services:
+  docs-mcp:
+    image: my-opencrane-image
+    environment:
+      PUBLIC_URL: https://docs-mcp.example.com
+      OPENCRANE_ACCESS_TOKEN: ${OPENCRANE_ACCESS_TOKEN:?set me}
+      # OR, for method: password —
+      # OPENCRANE_LOGIN_USER: admin
+      # OPENCRANE_LOGIN_PASS: ${OPENCRANE_LOGIN_PASS:?set me}
+```
+
+### Consumer experience
+
+```bash
+claude mcp add --transport http docs https://docs-mcp.example.com/mcp
+```
+
+The client detects it is unauthorized → prompts the consumer to authorize → browser opens OpenCrane's login form → consumer pastes the token (or enters user/pass) → done. The client stores the access token for future sessions.
+
+---
+
+## `oauth` mode — external IdP (Keycloak, Auth0, Entra, …)
+
+OpenCrane acts as an OAuth 2.1 resource server. Token issuance is delegated to an external identity provider. Bearer tokens are validated by checking the IdP's JWKS, the audience binding, and expiry.
+
+### Additional dependency
+
+```bash
+pip install 'opencrane[auth]'
+```
+
+The `[auth]` extra adds `pyjwt[crypto]` for JWT validation. Without it, `oauth` mode raises an error at startup.
+
+### Configuration
+
+```yaml
+auth:
+  type: oauth
+  oidc:
+    issuer: https://login.example.com/realms/docs   # IdP issuer URL (JWKS discovered from here)
+    audience: opencrane-docs                         # Expected `aud` claim; reject tokens not for this resource
+    scope_claim: scope                               # JWT claim to read scopes from (default: scope)
+  scope_sources:
+    "docs:public":   [cennso-glossary]
+    "docs:internal": [cgw, tsr, tposs]
+  default_sources: [cennso-glossary]
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `oidc.issuer` | Yes | External IdP issuer URL |
+| `oidc.audience` | Yes | Resource identifier — the `aud` claim in tokens must include this value |
+| `oidc.scope_claim` | No | JWT claim name to read scopes from (default: `scope`) |
+
+`PUBLIC_URL` must be set (as with `local` mode).
+
+---
+
+## Layer 2 — Authorization: `scope_sources` and `default_sources`
+
+`scope_sources` maps an OAuth scope name to the list of source names that scope grants access to. It is optional and works with both `local` and `oauth` modes.
+
+```yaml
+auth:
+  type: oauth   # or local
+  oidc: { issuer: ..., audience: ... }
+  scope_sources:
+    "docs:public":   [cennso-glossary]
+    "docs:internal": [cgw, tsr, tposs]
+  default_sources: [cennso-glossary]
+```
+
+### Semantics
+
+1. Read the caller's scopes from the access token at search time.
+2. `allowed = union(scope_sources[s] for s in caller_scopes)` — callers with multiple scopes see the union of their permitted sources.
+3. If no scope matches any key in `scope_sources`, fall back to `default_sources`. If `default_sources` is also absent, the caller sees no results.
+4. Intersect `allowed` with any `source_names` parameter supplied by the client (narrow-only — the client can restrict, never expand).
+5. If the resulting set is empty, **short-circuit to zero results** — an empty list is never forwarded to the backend (which would disable the filter and return all sources).
+6. If `scope_sources` is not configured at all, authenticated callers may access all sources (useful for a simple "authenticated = full access" gate with `local` mode).
+
+Source names in `scope_sources` and `default_sources` must match names in `sources:` in the same config file; unknown names are rejected at startup.
+
+---
+
+## `custom` mode — escape-hatch for operator-supplied auth
+
+Set `auth.type: custom` in config and provide either `token_verifier` or `auth_provider` on your `OpenCraneConfig` subclass in `.opencrane/extensions.py`.
+
+### `token_verifier` (resource-server mode)
+
+Supply a `TokenVerifier` (the MCP SDK's `mcp.server.auth.provider.TokenVerifier`). OpenCrane wires it as a resource server. `PUBLIC_URL` is required.
+
+```python
+# .opencrane/extensions.py
+from opencrane import OpenCraneConfig
+from my_package.auth import MyTokenVerifier
+
+class Config(OpenCraneConfig):
+    token_verifier = MyTokenVerifier()
+```
+
+### `auth_provider` (self-hosted authorization-server mode)
+
+Supply an `OAuthAuthorizationServerProvider` subclass instance. OpenCrane mounts the full OAuth AS routes and wires your provider. `PUBLIC_URL` is required.
+
+```python
+# .opencrane/extensions.py
+from opencrane import OpenCraneConfig
+from my_package.auth import MyAuthProvider
+
+class Config(OpenCraneConfig):
+    auth_provider = MyAuthProvider()
+```
+
+If neither hook is set, `custom` type is treated as open (no auth) — this lets you set `auth.type: custom` without wiring a provider yet.
+
+---
+
+## stdio transport
+
+The stdio transport is always unauthenticated. OAuth applies to the HTTP transport only. When running `opencrane serve --transport stdio`, the server trusts the process's environment for credentials (per the MCP specification) and Layer-2 scope enforcement is bypassed (all sources are accessible).
+
+---
+
+## Security notes
+
+- `PUBLIC_URL` must be HTTPS in production. The SDK permits `http://localhost` for local development only.
+- `oauth` mode enforces **audience binding** — tokens not explicitly minted for `oidc.audience` are rejected (prevents confused-deputy attacks).
+- `local` mode credentials come from environment variables only — never the config file. Constant-time comparison is used for token matching.
+- Layer-2 enforcement is **server-side only** — the client-supplied `source_names` parameter can only narrow, never expand, the set of accessible sources.
+- Fail-closed: misconfigured auth (missing `PUBLIC_URL`, unknown source names, missing `opencrane[auth]` extra) raises an error at startup and refuses to serve.

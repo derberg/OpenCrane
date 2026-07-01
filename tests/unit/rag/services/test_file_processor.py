@@ -40,10 +40,7 @@ class TestFileProcessor:
             mock_convert.side_effect = ConversionError("test")
             chunks = processor.process_file(test_file)
 
-        table_chunks = [
-            c for c in chunks
-            if any(set(l.strip()) <= set("|-: ") and "-" in l for l in c.content.split("\n"))
-        ]
+        table_chunks = [c for c in chunks if c.chunk_type in ("table", "table_row")]
         assert table_chunks, "expected a chunk containing the table"
         assert any("Performance tuning" in c.content for c in table_chunks), \
             "table chunk must carry its section heading"
@@ -79,10 +76,7 @@ class TestFileProcessor:
             mock_convert.side_effect = ConversionError("test")
             chunks = processor.process_file(test_file)
 
-        table_chunks = [
-            c for c in chunks
-            if any(set(l.strip()) <= set("|-: ") and "-" in l for l in c.content.split("\n"))
-        ]
+        table_chunks = [c for c in chunks if c.chunk_type in ("table", "table_row")]
         assert table_chunks
         # The table's own section heading is "Inner heading"; "Outer" must not be
         # prepended on top of it.

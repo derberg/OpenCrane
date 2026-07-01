@@ -1,5 +1,6 @@
 from pathlib import Path
-from opencrane.rag.services.table_chunker import build_table_chunks, _is_table_separator
+from unittest.mock import Mock
+from opencrane.rag.services.table_chunker import build_table_chunks, _is_table_separator, TableChunkingStrategy
 
 
 def test_is_table_separator():
@@ -57,3 +58,44 @@ def test_build_table_chunks_preview_cap():
     previews = row.metadata["sibling_previews"]
     assert previews[-1].startswith("... +")
     assert len([p for p in previews if not p.startswith("... +")]) == 5
+
+
+def _node(text):
+    n = Mock(spec=[]); n.text = text; n.node_type = "text"; n.source_url = None; return n
+
+
+def test_strategy_table_after_list_delegates_and_builds_rows():
+    text = "\n".join([
+        "## Load classes",
+        "",
+        "The classes are:",
+        "",
+        "- delete for teardown",
+        "- create for new sessions. The table maps class to tier:",
+        "",
+        "| Class | Tier |",
+        "|-------|------|",
+        "| delete | 0 |",
+        "| create | 3 |",
+    ])
+    strat = TableChunkingStrategy()
+    assert strat.can_process(_node(text)) is True
+    chunks = strat.process(_node(text), Path("d.md"))
+    types = [c.chunk_type for c in chunks]
+    # List items still produced (delegation), plus table + table_row chunks.
+    assert "list_item" in types
+    assert types.count("table") == 1
+    assert types.count("table_row") == 2
+    row = [c for c in chunks if c.chunk_type == "table_row"][0]
+    assert row.metadata["breadcrumb_path"] == "Load classes"
+
+
+def test_strategy_declines_without_table():
+    strat = TableChunkingStrategy()
+    assert strat.can_process(_node("## Title\n\nJust prose.\n")) is False
+
+
+def test_strategy_ignores_table_inside_fence():
+    text = "## T\n\n```\n| A | B |\n|---|---|\n| 1 | 2 |\n```\n"
+    strat = TableChunkingStrategy()
+    assert strat.can_process(_node(text)) is False

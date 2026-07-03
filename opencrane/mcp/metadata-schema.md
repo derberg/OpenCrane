@@ -247,35 +247,6 @@ all matched items inline. Unmatched items appear as `sibling_previews` in the
 grouped output. This prevents duplicate content from consuming multiple result
 slots. No agent action needed — the grouping is automatic.
 
-## Table Metadata (`chunk_type: "table"`)
-
-A `table` chunk represents the overview of a markdown table. It captures the
-table structure so agents can understand the shape of the data before fetching
-individual rows.
-
-### `table_id` (string)
-- **Purpose**: Stable identifier grouping the overview and all row chunks that
-  belong to the same table
-- **Format**: Deterministic hash derived from the table's source location
-- **Usage**:
-  - Pass to `get_table_members(table_id=...)` to fetch the complete table
-  - Correlate with `table_row` chunks that share the same `table_id`
-
-### `columns` (array of strings)
-- **Purpose**: Ordered list of column header names
-- **Example**: `["Name", "Type", "Default"]`
-- **Usage**: Understand table structure; display column names as context
-
-### `total_rows` (integer)
-- **Purpose**: Total number of data rows in the table (excluding the header)
-- **Example**: `12`
-- **Usage**: Decide whether to fetch all rows or summarize
-
-### `table_caption` (string, optional)
-- **Purpose**: Caption or title text associated with the table, if present
-- **Example**: `"Table 1: Configuration options"`
-- **Usage**: Identify the table's subject at a glance
-
 ## Table Row Metadata (`chunk_type: "table_row"`)
 
 A `table_row` chunk represents a single data row of a markdown table. Each row
@@ -323,8 +294,8 @@ reconstructed when needed.
 
 ### Rehydration Tool
 
-Use `get_table_members(table_id=...)` to fetch the `table` overview chunk plus
-all `table_row` chunks for a given `table_id`, returned in `row_index` order.
+Use `get_table_members(table_id=...)` to fetch all `table_row` chunks for a
+given `table_id`, returned in `row_index` order.
 The MCP `search_docs` tool appends a tip automatically when a result is a
 `table_row` chunk.
 

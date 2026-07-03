@@ -41,14 +41,11 @@ This design ensures that each chunk maintains full context through its header hi
 
 ## Tables
 
-Every Markdown table becomes two types of chunks:
+Every Markdown table becomes one `table_row` chunk per data row, rendered as natural-language `Column: value.` lines. Each row chunk carries the section heading and lead-in sentence from the source so it is independently retrievable. Rows self-organize via a shared `table_id` field and `sibling_ids` (full list_item parity) — no separate overview chunk is produced.
 
-- One `table` overview chunk that carries the table's column headers and the section heading and lead-in sentence from the source. This chunk represents the table as a whole and is the anchor for rehydration.
-- One `table_row` chunk per data row, rendered as natural-language `Column: value.` lines. Each row chunk carries the same section heading and lead-in sentence so it is independently retrievable without the overview chunk.
+To fetch the full table from a row chunk, call `get_table_members(table_id=...)` using the `table_id` field in the row chunk's metadata. This returns all sibling row chunks ordered by `row_index`.
 
-To rehydrate the full table from a row chunk, call `get_table_members(table_id=...)` using the `table_id` field in the row chunk's metadata. This returns the overview chunk and all sibling row chunks.
-
-A table with no heading or lead-in sentence in the source still produces `table` and `table_row` chunks, but the heading and description fields will be empty. Add a heading and a lead-in sentence in the source to make those chunks retrievable by semantic search.
+A table with no heading or lead-in sentence in the source still produces `table_row` chunks, but the heading and description fields will be empty. Add a heading and a lead-in sentence in the source to make those chunks retrievable by semantic search.
 
 The fixture pair `tests/fixtures/markdown_with_table.md` and `tests/fixtures/expected_table_chunks.json` is a generated baseline that shows the chunks produced for a representative table document. Regenerate `expected_table_chunks.json` with `ChunkSerializer.serialize_chunks` when chunking behavior changes intentionally.
 
@@ -60,7 +57,7 @@ Available Strategies:
 1. **YamlChunkingStrategy** - Detects and processes YAML content; delegates structured YAML specs (e.g., CRDs, OpenAPI) to tree walkers for structured chunking, falls back to generic yaml_content type for other YAML
 2. **TabsChunkingStrategy** - HTML tab components (`<Tabs>`/`<Tab>`) for parallel instructions; processes each tab separately as prose
 3. **CodeChunkingStrategy** - Fenced code blocks with language detection; auto-detects structured YAML specs in YAML code blocks and delegates to tree walkers
-4. **TableChunkingStrategy** - Markdown tables; emits one `table` overview chunk and one `table_row` chunk per row (natural-language rendered), and delegates non-table regions to the list and prose strategies
+4. **TableChunkingStrategy** - Markdown tables; emits one `table_row` chunk per data row (natural-language rendered, self-linked via `table_id` + `sibling_ids`), and delegates non-table regions to the list and prose strategies
 5. **ListChunkingStrategy** - Markdown lists; emits one chunk per list item
 6. **ProseChunkingStrategy** - Markdown/text with hierarchical headers (fallback strategy)
 

@@ -202,7 +202,6 @@ _CHUNK_TYPE_LABELS = {
     "openapi_spec": "openapi_spec (OpenAPI specification endpoints/schemas)",
     "json_schema": "json_schema (JSON Schema definitions)",
     "list_item": "list_item (individual markdown list items)",
-    "table": "table (markdown table overview)",
     "table_row": "table_row (individual markdown table rows)",
 }
 
@@ -216,20 +215,17 @@ def _has_table_row_chunks() -> bool:
 
 
 def _get_table_members(table_id: str) -> list[dict]:
-    """Return the overview chunk then all rows for a table_id, rows by row_index."""
+    """Return all ``table_row`` chunks for a table_id, sorted by row_index."""
     chunk_index = _build_chunk_index()
-    overview = []
     rows = []
     for chunk in chunk_index.values():
         metadata = chunk.get("metadata", {}) or {}
         if metadata.get("table_id") != table_id:
             continue
-        if chunk.get("chunk_type") == "table":
-            overview.append(chunk)
-        elif chunk.get("chunk_type") == "table_row":
+        if chunk.get("chunk_type") == "table_row":
             rows.append(chunk)
     rows.sort(key=lambda c: c.get("metadata", {}).get("row_index", 0))
-    return overview + rows
+    return rows
 
 
 def _get_list_members(list_id: str) -> list[dict]:
@@ -510,7 +506,7 @@ async def list_tools() -> list[Tool]:
     if _has_table_row_chunks():
         tools.append(Tool(
             name="get_table_members",
-            description="Fetch a full markdown table: its overview chunk and every row chunk sharing a table_id, ordered by row_index. Use when a search returned one or more table_row chunks and you need the whole table.",
+            description="Fetch all row chunks for a markdown table sharing a table_id, ordered by row_index. Use when a search returned one or more table_row chunks and you need the whole table.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -871,7 +867,6 @@ async def get_yaml_definition(arguments: dict) -> list[TextContent]:
 
 _CHUNK_TYPE_SECTION_HEADINGS = {
     "list_item": "List Item Metadata",
-    "table": "Table Metadata",
     "table_row": "Table Row Metadata",
     "crd_definition": "CRD-Specific Metadata",
     "openapi_spec": "OpenAPI-Specific Metadata",
@@ -973,7 +968,7 @@ async def get_list_members(arguments: dict) -> list[TextContent]:
 
 
 async def get_table_members(arguments: dict) -> list[TextContent]:
-    """Return the overview chunk and all rows for the given table_id."""
+    """Return all row chunks for the given table_id, ordered by row_index."""
     table_id = arguments.get("table_id")
     logger.info(f"   📊 get_table_members: table_id={table_id!r}")
     if not table_id:

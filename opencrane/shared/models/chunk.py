@@ -14,7 +14,7 @@ class Chunk(BaseModel):
         None,
         description="Human-readable source identifier (matches a key in .opencrane/config.yaml sources). Resolved from source_url at chunking time; None when no mapping matches."
     )
-    chunk_type: Literal["prose", "code_snippet", "crd_definition", "openapi_spec", "yaml_content", "json_schema", "list_item", "table", "table_row"] = Field(
+    chunk_type: Literal["prose", "code_snippet", "crd_definition", "openapi_spec", "yaml_content", "json_schema", "list_item", "table_row"] = Field(
         ..., description="Categorizes processing strategy"
     )
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Contextual data")
@@ -82,13 +82,6 @@ class Chunk(BaseModel):
                 raise ValueError("list_item list_style must be 'ordered' or 'unordered'")
             if not isinstance(self.content, str):
                 raise ValueError("list_item chunks must have string content")
-        elif self.chunk_type == "table":
-            required = ["table_id", "columns", "total_rows"]
-            missing = [f for f in required if f not in self.metadata]
-            if missing:
-                raise ValueError(f"table chunks must have {', '.join(missing)} in metadata")
-            if not isinstance(self.content, str):
-                raise ValueError("table chunks must have string content")
         elif self.chunk_type == "table_row":
             required = ["table_id", "columns", "row_index", "total_rows", "row_key", "sibling_ids", "sibling_previews"]
             missing = [f for f in required if f not in self.metadata]

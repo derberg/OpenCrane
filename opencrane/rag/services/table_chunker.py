@@ -1,8 +1,9 @@
-"""Table chunking: one overview chunk per table plus one chunk per row.
+"""Table chunking: one chunk per data row.
 
 Each row is rendered as natural-language ``Column: value.`` lines, prefixed with
 the section breadcrumb and the table caption, so a row is self-describing and
-embeds like a sentence rather than a wall of pipes.
+embeds like a sentence rather than a wall of pipes. Rows self-organize via
+``table_id`` and ``sibling_ids`` (full list_item parity).
 """
 
 import hashlib
@@ -18,7 +19,6 @@ from opencrane.rag.services.list_chunker import ListChunkingStrategy
 from opencrane.rag.services.prose_chunker import ProseChunkingStrategy
 
 _PREVIEW_CAP = 5
-_OVERVIEW_KEYS = 8
 
 
 def _is_table_separator(line: str) -> bool:
@@ -67,18 +67,6 @@ def _render_row(columns: List[str], cells: List[str], breadcrumb: str, caption: 
     return "\n".join(lines)
 
 
-def _render_overview(columns: List[str], row_keys: List[str], breadcrumb: str, caption: str) -> str:
-    lines: List[str] = []
-    if breadcrumb:
-        lines.append(f"# {breadcrumb}")
-    if caption:
-        lines.append(caption)
-    shown = ", ".join(row_keys[:_OVERVIEW_KEYS])
-    tail = ", ..." if len(row_keys) > _OVERVIEW_KEYS else "."
-    lines.append(f"Columns: {', '.join(columns)}. {len(row_keys)} rows: {shown}{tail}")
-    return "\n".join(lines)
-
-
 def build_table_chunks(
     table_lines: List[str],
     *,
@@ -87,7 +75,12 @@ def build_table_chunks(
     source_file: Path,
     source_url: Optional[str],
 ) -> List[Chunk]:
-    """Build the overview chunk and one chunk per data row for a markdown table."""
+    """Build one ``table_row`` chunk per data row for a markdown table.
+
+    Returns an empty list when the input is not a valid table (fewer than three
+    lines, or the second line is not a separator row).  No overview chunk is
+    produced; rows self-organize via ``table_id`` and ``sibling_ids``.
+    """
     data_lines = [ln for ln in table_lines if ln.strip()]
     # Need at least a header, a separator, and one data row.
     if len(data_lines) < 3 or not _is_table_separator(data_lines[1]):
@@ -98,20 +91,6 @@ def build_table_chunks(
     table_id = _table_id(breadcrumb, caption, columns, row_keys)
 
     chunks: List[Chunk] = []
-
-    overview_content = _render_overview(columns, row_keys, breadcrumb, caption)
-    overview_meta = {"table_id": table_id, "columns": columns, "total_rows": len(rows)}
-    if breadcrumb:
-        overview_meta["breadcrumb_path"] = breadcrumb
-    if caption:
-        overview_meta["table_caption"] = caption
-    if source_url:
-        overview_meta["source_url"] = source_url
-    chunks.append(Chunk(
-        chunk_id=generate_unique_chunk_id(overview_content, str(source_file), "table", overview_meta),
-        content=overview_content, source_file=str(source_file), chunk_type="table",
-        metadata=overview_meta, token_count=get_token_count(overview_content),
-    ))
 
     # Pass 1: render each row and compute a stable chunk_id from a reduced
     # metadata subset (excluding sibling_ids, which depend on other rows' ids).

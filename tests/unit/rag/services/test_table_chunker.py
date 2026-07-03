@@ -21,11 +21,10 @@ def test_build_table_chunks_overview_and_rows():
         lines, breadcrumb="DIAMETER > Applications",
         caption="The following AVP types are used:",
         source_file=Path("d.md"), source_url="http://x")
-    assert [c.chunk_type for c in chunks] == ["table", "table_row", "table_row"]
-    overview = chunks[0]
-    assert overview.metadata["columns"] == ["AVP", "Code", "Type"]
-    assert overview.metadata["total_rows"] == 2
-    row = chunks[1]
+    # Every returned chunk must be table_row; count equals number of data rows.
+    assert all(c.chunk_type == "table_row" for c in chunks)
+    assert len(chunks) == 2
+    row = chunks[0]
     assert "AVP: 3GPP-IMSI." in row.content
     assert "Code: 1." in row.content
     assert row.content.startswith("DIAMETER > Applications")
@@ -36,10 +35,10 @@ def test_build_table_chunks_overview_and_rows():
     # sibling_previews lists the other row keys
     assert "3GPP-Charging-Id" in row.metadata["sibling_previews"]
     # sibling_ids contains chunk_ids of all other rows
-    assert len(row.metadata["sibling_ids"]) == overview.metadata["total_rows"] - 1
-    assert chunks[2].chunk_id in row.metadata["sibling_ids"]
+    assert len(row.metadata["sibling_ids"]) == row.metadata["total_rows"] - 1
+    assert chunks[1].chunk_id in row.metadata["sibling_ids"]
     # all rows share one table_id
-    assert chunks[1].metadata["table_id"] == chunks[2].metadata["table_id"] == overview.metadata["table_id"]
+    assert chunks[0].metadata["table_id"] == chunks[1].metadata["table_id"]
 
 
 def test_build_table_chunks_empty_cells_dropped_and_no_data_returns_empty():
@@ -85,9 +84,9 @@ def test_strategy_table_after_list_delegates_and_builds_rows():
     assert strat.can_process(_node(text)) is True
     chunks = strat.process(_node(text), Path("d.md"))
     types = [c.chunk_type for c in chunks]
-    # List items still produced (delegation), plus table + table_row chunks.
+    # List items still produced (delegation), plus table_row chunks only (no overview).
     assert "list_item" in types
-    assert types.count("table") == 1
+    assert types.count("table") == 0
     assert types.count("table_row") == 2
     row = [c for c in chunks if c.chunk_type == "table_row"][0]
     assert row.metadata["breadcrumb_path"] == "Load classes"
@@ -102,15 +101,6 @@ def test_strategy_ignores_table_inside_fence():
     text = "## T\n\n```\n| A | B |\n|---|---|\n| 1 | 2 |\n```\n"
     strat = TableChunkingStrategy()
     assert strat.can_process(_node(text)) is False
-
-
-def test_build_table_chunks_overview_ellipsis_past_eight_rows():
-    lines = ["| K |", "|---|"] + [f"| k{i} |" for i in range(9)]  # 9 data rows
-    chunks = build_table_chunks(lines, breadcrumb="", caption="",
-                                source_file=Path("d.md"), source_url=None)
-    overview = [c for c in chunks if c.chunk_type == "table"][0]
-    assert overview.metadata["total_rows"] == 9
-    assert overview.content.rstrip().endswith(", ...")
 
 
 def test_build_table_chunks_second_line_not_separator_returns_empty():
@@ -138,7 +128,9 @@ def test_process_pops_same_level_heading_for_breadcrumb():
 def test_process_two_tables_blank_between_delegates_empty():
     text = "\n".join(["| A |", "|---|", "| 1 |", "", "| B |", "|---|", "| 2 |"])
     chunks = TableChunkingStrategy().process(_node(text), Path("d.md"))
-    assert [c.chunk_type for c in chunks].count("table") == 2   # blank middle region hits line 269
+    # Two separate tables each produce one table_row chunk; no overview chunks.
+    assert [c.chunk_type for c in chunks].count("table") == 0
+    assert [c.chunk_type for c in chunks].count("table_row") == 2
 
 
 def test_table_id_differs_for_different_rows_same_header():

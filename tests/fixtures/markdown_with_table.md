@@ -55,3 +55,14 @@ The following dictionaries are used in the NASREQ application:
 | Accounting-Output-Octets | 0 | 364 | Unsigned64 | M |
 | Accounting-Output-Packets | 0 | 366 | Unsigned64 | M |
 | Accounting-Record-Number | 0 | 485 | Unsigned32 | M |
+
+## Chart configuration
+
+The following table lists the main configuration parameters and their default values:
+
+| Parameter | Description | Default |
+| --- | --- | --- |
+| replicaCount | Number of Session Management Controller replicas to run. | 1 |
+| image.tag | Container image tag to deploy. | latest |
+| resources.limits.cpu | CPU limit applied to each pod. | 500m |
+| logging.level | Log verbosity for the service. | info |

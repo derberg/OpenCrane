@@ -8,10 +8,8 @@ import pytest
 from opencrane.mcp import server
 
 
-def test_get_table_members_orders_overview_then_rows(monkeypatch):
+def test_get_table_members_returns_rows_by_index(monkeypatch):
     index = {
-        "o": {"chunk_id": "o", "chunk_type": "table", "content": "overview",
-              "metadata": {"table_id": "t1", "columns": ["A"], "total_rows": 2}},
         "r2": {"chunk_id": "r2", "chunk_type": "table_row", "content": "A: b.",
                "metadata": {"table_id": "t1", "row_index": 2}},
         "r1": {"chunk_id": "r1", "chunk_type": "table_row", "content": "A: a.",
@@ -20,7 +18,7 @@ def test_get_table_members_orders_overview_then_rows(monkeypatch):
     }
     monkeypatch.setattr(server, "_build_chunk_index", lambda: index)
     members = server._get_table_members("t1")
-    assert [m["chunk_id"] for m in members] == ["o", "r1", "r2"]
+    assert [m["chunk_id"] for m in members] == ["r1", "r2"]
 
 
 def test_has_table_row_chunks(monkeypatch):
@@ -32,17 +30,14 @@ def test_has_table_row_chunks(monkeypatch):
 
 @pytest.mark.anyio
 async def test_get_table_members_tool_formats_output(monkeypatch):
-    """get_table_members tool returns overview then rows formatted as text."""
+    """get_table_members tool returns rows formatted as text."""
     index = {
-        "o": {"chunk_id": "o", "chunk_type": "table", "content": "| A | B |\n|---|---|\n",
-              "metadata": {"table_id": "t1", "columns": ["A", "B"], "total_rows": 1}},
         "r1": {"chunk_id": "r1", "chunk_type": "table_row", "content": "A: x. B: y.",
                "metadata": {"table_id": "t1", "row_index": 1}},
     }
     monkeypatch.setattr(server, "_build_chunk_index", lambda: index)
     result = await server.get_table_members({"table_id": "t1"})
     text = result[0].text
-    assert "| A | B |" in text
     assert "A: x. B: y." in text
 
 
@@ -62,7 +57,7 @@ async def test_get_table_members_unknown_id(monkeypatch):
 @patch('opencrane.mcp.server._has_table_row_chunks', return_value=True)
 @patch('opencrane.mcp.server._has_list_item_chunks', return_value=False)
 @patch('opencrane.mcp.server._has_yaml_chunks', return_value=False)
-@patch('opencrane.mcp.server._get_indexed_chunk_types', return_value={"prose", "table", "table_row"})
+@patch('opencrane.mcp.server._get_indexed_chunk_types', return_value={"prose", "table_row"})
 @patch('opencrane.mcp.server._get_source_topics', return_value=[])
 @pytest.mark.anyio
 async def test_list_tools_registers_table_tools(topics, types, has_yaml, has_list, has_table):

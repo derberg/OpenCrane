@@ -139,11 +139,7 @@ class _SyntheticNode:
 
 
 class TableChunkingStrategy(ProcessingStrategy):
-    """Chunk markdown tables into a table overview chunk plus one chunk per row.
-
-    Non-table regions of the node are delegated to the list and prose strategies,
-    so their behavior is unchanged.
-    """
+    """Chunk markdown tables into one `table_row` chunk per data row, and delegate non-table regions to the list and prose strategies."""
 
     def can_process(self, node) -> bool:
         if not hasattr(node, "text"):

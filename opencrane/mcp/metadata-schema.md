@@ -255,15 +255,14 @@ precisely. Metadata links each row back to its table so the full table can be
 reconstructed when needed.
 
 ### `table_id` (string)
-- **Purpose**: Stable identifier matching the parent `table` chunk and all
-  sibling `table_row` chunks
+- **Purpose**: Stable identifier shared by all `table_row` chunks of the same table (used by `get_table_members`)
 - **Usage**:
   - Pass to `get_table_members(table_id=...)` to fetch the whole table
   - Detect when multiple search hits belong to the same table
 
 ### `columns` (array of strings)
-- **Purpose**: Ordered list of column header names (repeated from the overview)
-- **Usage**: Interpret the row's field values without fetching the overview chunk
+- **Purpose**: Ordered list of column header names, repeated on every row chunk
+- **Usage**: Interpret the row's field values so a row's values can be interpreted without fetching sibling rows
 
 ### `row_index` (integer, 1-indexed)
 - **Purpose**: Position of this row within the table

@@ -10,7 +10,7 @@ def test_is_table_separator():
     assert _is_table_separator("plain") is False
 
 
-def test_build_table_chunks_overview_and_rows():
+def test_build_table_chunks_rows_only():
     lines = [
         "| AVP | Code | Type |",
         "|-----|------|------|",

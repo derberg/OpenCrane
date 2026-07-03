@@ -50,5 +50,9 @@
   {
     "content_prefix": "# External Reference\n\nThis is the API reference section of t",
     "source_url": "https://external.example.com/docs/reference"
+  },
+  {
+    "content_prefix": "# Standalone Page\n\nThis external bundle has no companion llm",
+    "source_url": "https://nocompanion.example.com/docs"
   }
 ]

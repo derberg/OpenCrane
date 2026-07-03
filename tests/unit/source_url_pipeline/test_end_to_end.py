@@ -30,35 +30,36 @@ Fixture cases covered
                                  verifies ordered/scoped join, no URL collision
 
   external-with-companion      — pre-existing llmstxt dir whose companion llms.txt is
-                                 merged into the top-level index; verifies that the
-                                 chunker assigns per-page URLs from the merged companion
+                                 merged into the top-level index BY ``generate_outputs``;
+                                 verifies the chunker assigns per-page URLs from the
+                                 companion (real per-page URLs, not a repeated base).
+
+  external-no-companion        — pre-existing llmstxt dir with NO companion llms.txt but
+                                 a ``docs_url`` in the mapping; ``generate_outputs``
+                                 synthesizes one index entry per H1 page carrying that
+                                 base docs_url, so every chunk from the block gets the
+                                 base URL (same URL repeated per page).
 
   test_no_companion_chunks_have_no_source_url (separate standalone test)
                                — llms-full.txt with one source block and llms.txt with
                                  NO matching section; verifies that chunks from a source
-                                 without a companion index entry carry source_url=None.
-                                 (Tests external-without-companion in isolation to avoid
-                                 the block-count mismatch that would cause the combined
-                                 pipeline to fall back to legacy-marker mode.)
+                                 without any index entry carry source_url=None.
 
 Pipeline note for external sources
 -----------------------------------
-``generate_outputs`` assembles the combined llms-full.txt (appending external
-content) but does NOT merge companion llms.txt entries into the top-level
-llms.txt — that merge happens in a separate step once the external companion
-llms.txt has been fetched (Task 5).  The main fixture simulates the post-merge
-state by manually appending the companion entries to the generated llms.txt
-before running the chunker, matching the expected production pipeline behaviour.
+``generate_outputs`` now builds the combined llms.txt with exactly ONE
+``## {source}`` section per ``======`` block in the combined llms-full.txt, in
+the same order.  For each appended external bundle it either parses the fetched
+companion ``{subdir}/llms.txt`` (real per-page URLs) or synthesizes one entry
+per H1 page from the bundle's own llms-full.txt (base ``docs_url`` repeated).
+No manual post-merge simulation is needed — the test runs the real pipeline.
 
 Block-count alignment note
 ---------------------------
 ``_split_into_pages`` in the file processor requires the number of ``======``
 content blocks to match the number of source sections in the llms.txt index.
-Sources with no companion entries are skipped by ``render_llms_txt``, so a
-no-companion external bundle CANNOT be safely included in the same combined
-file without causing a block-count mismatch and triggering legacy-marker
-fallback.  The no-companion case is therefore tested in isolation in
-``test_no_companion_chunks_have_no_source_url``.
+Because generation now emits a section for every block, the counts always
+match and the positional join succeeds for external sources too.
 """
 
 from __future__ import annotations
@@ -72,7 +73,6 @@ import pytest
 
 import opencrane.rag.generate_llms_txt as gen_mod
 from opencrane.rag.chunker import main as chunker_main
-from opencrane.rag.services.llms_index import LlmsIndex, render_llms_txt
 
 # Paths to committed fixture files
 _FIXTURE_ROOT = Path(__file__).parent.parent.parent / "fixtures" / "source_url_pipeline"
@@ -136,6 +136,7 @@ def pipeline_outputs(tmp_path_factory, monkeypatch_module):
             source-beta/           ← markdown files for source-beta
           llmstxt/
             external-with-companion/  ← pre-placed external bundle + companion
+            external-no-companion/    ← pre-placed external bundle, no companion
     """
     workspace = tmp_path_factory.mktemp("e2e_workspace")
 
@@ -159,7 +160,14 @@ def pipeline_outputs(tmp_path_factory, monkeypatch_module):
     shutil.copy(_INPUT_ROOT / "external-with-companion" / "llms-full.txt", ext_with / "llms-full.txt")
     shutil.copy(_INPUT_ROOT / "external-with-companion" / "llms.txt", ext_with / "llms.txt")
 
-    # Source mapping — flat keys (no docs/ subdir) with docs_url for per-page URLs
+    # Pre-place external llmstxt bundle WITHOUT companion (docs_url from mapping)
+    ext_without = llmstxt_base / "external-no-companion"
+    ext_without.mkdir(parents=True)
+    shutil.copy(_INPUT_ROOT / "external-without-companion" / "llms-full.txt", ext_without / "llms-full.txt")
+
+    # Source mapping — flat keys (no docs/ subdir) with docs_url for per-page URLs.
+    # external-no-companion carries a docs_url so generation synthesizes base-URL
+    # entries for it (no companion llms.txt to supply real per-page URLs).
     config_yaml = (
         "sources:\n"
         "  source-alpha:\n"
@@ -169,6 +177,11 @@ def pipeline_outputs(tmp_path_factory, monkeypatch_module):
         "  source-beta:\n"
         "    url: https://github.com/example/source-beta\n"
         "    docs_url: https://beta.example.com/docs\n"
+        "    manual: true\n"
+        "  external-no-companion:\n"
+        "    url: https://github.com/example/external-no-companion\n"
+        "    docs_url: https://nocompanion.example.com/docs\n"
+        "    type: llmstxt\n"
         "    manual: true\n"
     )
     opencrane_dir = workspace / ".opencrane"
@@ -192,26 +205,9 @@ def pipeline_outputs(tmp_path_factory, monkeypatch_module):
         os.chdir(orig_cwd)
         gen_mod._source_mapping = orig_source_mapping
 
-    # --- Merge companion llms.txt into the top-level index ---
-    # generate_outputs writes llms.txt covering the markdown sources (source-alpha,
-    # source-beta).  The external companion llms.txt (placed by the fetch step /
-    # Task 5) carries per-page URLs for the external bundle; merge it in before
-    # the chunker runs so the combined index covers all three source blocks.
+    # generate_outputs now produces the combined llms.txt covering ALL source
+    # blocks (markdown sources + external bundles) for real — no manual merge.
     top_llms_path = llmstxt_base / "llms.txt"
-    companion_llms_path = ext_with / "llms.txt"
-    if companion_llms_path.exists() and top_llms_path.exists():
-        companion_index = LlmsIndex.parse(companion_llms_path.read_text())
-        top_index = LlmsIndex.parse(top_llms_path.read_text())
-
-        merged_sections: list[tuple[str, list]] = []
-        for src in top_index.sources():
-            merged_sections.append((src, top_index.entries_for(src)))
-        for src in companion_index.sources():
-            if src:
-                merged_sections.append((src, companion_index.entries_for(src)))
-
-        merged_text = render_llms_txt("Documentation", merged_sections)
-        top_llms_path.write_text(merged_text)
 
     # Run the chunker
     chunks_file = workspace / ".opencrane" / "chunks.json"
@@ -382,6 +378,28 @@ def test_chunks_from_external_companion_carry_per_page_source_urls(pipeline_outp
     ext_urls = {c.metadata["source_url"] for c in ext_chunks}
     assert "https://external.example.com/docs/home" in ext_urls
     assert "https://external.example.com/docs/reference" in ext_urls
+
+
+@pytest.mark.unit
+def test_llms_txt_synthesizes_base_url_for_no_companion_source(pipeline_outputs):
+    """external-no-companion (no companion llms.txt) gets synthesized base-URL entries."""
+    llms_txt = pipeline_outputs["llms_txt"]
+    assert "## external-no-companion" in llms_txt, "no-companion section missing from llms.txt"
+    assert "https://nocompanion.example.com/docs" in llms_txt, "base docs_url missing"
+
+
+@pytest.mark.unit
+def test_chunks_from_no_companion_external_carry_base_source_url(pipeline_outputs):
+    """Chunks from external-no-companion get the base docs_url (repeated per page)."""
+    nc_chunks = [
+        c for c in pipeline_outputs["chunks"]
+        if (c.metadata.get("source_url") or "").startswith("https://nocompanion.example.com/")
+    ]
+    assert len(nc_chunks) > 0, "No chunks with nocompanion.example.com source_url"
+    nc_urls = {c.metadata["source_url"] for c in nc_chunks}
+    assert nc_urls == {"https://nocompanion.example.com/docs"}, (
+        f"Expected only the base docs_url, got {nc_urls}"
+    )
 
 
 # ---------------------------------------------------------------------------

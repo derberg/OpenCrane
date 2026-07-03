@@ -59,7 +59,7 @@ def _previews(row_keys: List[str], exclude_index: int) -> List[str]:
 def _render_row(columns: List[str], cells: List[str], breadcrumb: str, caption: str) -> str:
     lines: List[str] = []
     if breadcrumb:
-        lines.append(breadcrumb)
+        lines.append(f"# {breadcrumb}")
     if caption:
         lines.append(caption)
     # A cell containing an unescaped pipe yields more cells than columns; merge

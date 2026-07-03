@@ -369,3 +369,84 @@ async def test_search_docs_grouped_table_rows_show_unmatched(mock_milvus_get, mo
     assert "Matched Table (2 of 3 rows)" in text
     assert "Other rows in table (not matched):" in text
     assert "  - Row C" in text
+
+
+# ---------------------------------------------------------------------------
+# get_table_members: breadcrumb prefix stripping
+# ---------------------------------------------------------------------------
+
+@pytest.mark.anyio
+async def test_get_table_members_strips_breadcrumb_prefix(monkeypatch):
+    """get_table_members strips the leading '# {breadcrumb}\\n' for readable display."""
+    breadcrumb = "Section > Subsection"
+    index = {
+        "r1": {
+            "chunk_id": "r1", "chunk_type": "table_row",
+            "content": f"# {breadcrumb}\nA: x. B: y.",
+            "metadata": {"table_id": "t2", "row_index": 1, "breadcrumb_path": breadcrumb},
+        },
+    }
+    monkeypatch.setattr(server, "_build_chunk_index", lambda: index)
+    result = await server.get_table_members({"table_id": "t2"})
+    text = result[0].text
+    # Prefix must be stripped — the raw "# Section > Subsection" header must not appear
+    assert f"# {breadcrumb}" not in text
+    # The row body must still be present
+    assert "A: x. B: y." in text
+
+
+@pytest.mark.anyio
+async def test_get_table_members_no_strip_when_no_breadcrumb(monkeypatch):
+    """When content has no breadcrumb prefix, get_table_members emits content as-is (false branch)."""
+    index = {
+        "r1": {
+            "chunk_id": "r1", "chunk_type": "table_row",
+            "content": "A: x. B: y.",
+            "metadata": {"table_id": "t3", "row_index": 1},
+        },
+    }
+    monkeypatch.setattr(server, "_build_chunk_index", lambda: index)
+    result = await server.get_table_members({"table_id": "t3"})
+    text = result[0].text
+    assert "A: x. B: y." in text
+
+
+# ---------------------------------------------------------------------------
+# _format_grouped_table_row: breadcrumb prefix stripping
+# ---------------------------------------------------------------------------
+
+def test_format_grouped_table_row_strips_breadcrumb_prefix():
+    """_format_grouped_table_row strips the leading '# {breadcrumb}\\n' from each row content."""
+    breadcrumb = "Features > Details"
+    content_with_prefix = f"# {breadcrumb}\nCol: value."
+    meta1 = {"chunk_id": "r1", "table_id": "tbl3", "row_index": 1, "total_rows": 2,
+              "breadcrumb_path": breadcrumb, "sibling_ids": ["r2"], "sibling_previews": ["Row B"]}
+    meta2 = {"chunk_id": "r2", "table_id": "tbl3", "row_index": 2, "total_rows": 2,
+              "breadcrumb_path": breadcrumb, "sibling_ids": ["r1"], "sibling_previews": ["Row A"]}
+    result = _make_grouped_table_result(
+        [meta1, meta2],
+        [content_with_prefix, "Col: other."],
+        [0.8, 0.85],
+    )
+    text = _format_grouped_table_row(result, {})
+    # Breadcrumb prefix must be stripped from the matched row display
+    assert f"# {breadcrumb}" not in text
+    # Row body must remain
+    assert "Col: value." in text
+    assert "Col: other." in text
+
+
+def test_format_grouped_table_row_no_strip_when_content_has_no_prefix():
+    """When content does not start with '# {breadcrumb}\\n', it is shown as-is (false branch)."""
+    breadcrumb = "Features > Details"
+    meta1 = {"chunk_id": "r1", "table_id": "tbl4", "row_index": 1, "total_rows": 1,
+              "breadcrumb_path": breadcrumb, "sibling_ids": [], "sibling_previews": []}
+    result = _make_grouped_table_result([meta1], ["Plain content, no prefix."], [0.7])
+    result["_grouped_table"] = True
+    result["_grouped_items"] = [
+        {"chunk_id": "r1", "chunk_type": "table_row",
+         "content": "Plain content, no prefix.", "distance": 0.7,
+         "metadata_json": json.dumps(meta1)}
+    ]
+    text = _format_grouped_table_row(result, {})
+    assert "Plain content, no prefix." in text

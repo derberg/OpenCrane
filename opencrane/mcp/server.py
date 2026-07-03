@@ -430,6 +430,9 @@ def _format_grouped_table_row(result: dict, chunk_index: dict) -> str:
             mm = {}
         row_index = mm.get("row_index")
         content = m.get("content", "")
+        # Drop breadcrumb header prefix when displaying inline for readability
+        if breadcrumb and content.startswith(f"# {breadcrumb}\n"):
+            content = content[len(breadcrumb) + 3:].lstrip("\n")
         lines.append(f"  [{row_index}] {content}")
 
     unmatched_previews = head_meta.get("sibling_previews") or []
@@ -1081,9 +1084,15 @@ async def get_table_members(arguments: dict) -> list[TextContent]:
     members = _get_table_members(table_id)
     if not members:
         return [TextContent(type="text", text=f"No table found for table_id={table_id!r}.")]
+    first_meta = members[0].get("metadata", {}) or {}
+    breadcrumb = first_meta.get("breadcrumb_path", "")
     lines = []
     for m in members:
-        lines.append(m.get("content", ""))
+        content = m.get("content", "")
+        # Strip breadcrumb header for readable inline display
+        if breadcrumb and content.startswith(f"# {breadcrumb}\n"):
+            content = content[len(breadcrumb) + 3:].lstrip("\n")
+        lines.append(content)
         lines.append("")
     return [TextContent(type="text", text="\n".join(lines).strip() + "\n")]
 

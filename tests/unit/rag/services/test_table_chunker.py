@@ -27,7 +27,7 @@ def test_build_table_chunks_rows_only():
     row = chunks[0]
     assert "AVP: 3GPP-IMSI." in row.content
     assert "Code: 1." in row.content
-    assert row.content.startswith("DIAMETER > Applications")
+    assert row.content.startswith("# DIAMETER > Applications")
     assert "The following AVP types are used:" in row.content
     assert row.metadata["row_key"] == "3GPP-IMSI"
     assert row.metadata["row_index"] == 1

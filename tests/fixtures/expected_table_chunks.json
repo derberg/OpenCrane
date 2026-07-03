@@ -162,9 +162,9 @@
     "token_count": 17
   },
   {
-    "chunk_id": "3e1fed476715c1f5aaa8d25af6b5754b5e0e5288eebc8cd5250a3d22e0bed98e",
+    "chunk_id": "72992f6cef139e4ae2287dda4de41328153c8fc4e1ebaa1ef204b636af642628",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-IMSI.\nCode: 1.\nType: UTF8String.\nFlags: V.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-IMSI.\nCode: 1.\nType: UTF8String.\nFlags: V.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
@@ -177,20 +177,20 @@
       "row_index": 1,
       "row_key": "3GPP-IMSI",
       "sibling_ids": [
-        "ab9947f73a38435f53b96acba4d7dd8d8c319d17d6da55c86f316d2823969a2c",
-        "2179a5280bb3d53bf8bfdab39a43dd63f8f6b8cfc1fd86c9d550ff25a3d70b95",
-        "d7c8fcceef9b7db9f0f727116d4937d92384d51ecfa3d49b062486368d914800",
-        "ee70138ca6c847586741f3d328b6d8faaeac1123fabd3a6992c4a7e6e9818060",
-        "96cb4b8e3f90e7228ac8fc4e4de8a147f2243b274774b5a677c326b3a51c6549",
-        "d3fff648402c6d089b707b51e036798228c4284ca20a0fc2375b9566a8cf1d26",
-        "bd7425e9161ff1bcc79b669e8bd37aa26745303f56cb504a1bbf8bd4453e55ae",
-        "76ae6752a795199a51b2991b9be5ed4008c9ab8edf8e3b86c3d88f7d6690a4cd",
-        "5c4d353bba2550b3d78ca9f66032bf29c7ccd60f00486e7a1340ee35e63084f5",
-        "bf1b006a411b3bceb3e4ba5333f0b93826ba069b18d4c535770aceba70f16fb5",
-        "10dc11a5309794ed48fa4f7f2a6b41ce49591849b85afb09f09c1449690d6939",
-        "9537c43ed721e7c927d8b8bb1fbece23c8ef055d6ab513eded432f201bb622cc",
-        "3c1806091c118f5fe54dc34581ff0b02f7b2ff8aaef2b39c40df2368540ddaa9",
-        "832f796c926b872de4be131cffaf85789dc9dd7cc1b639940b59f46a7946aed6"
+        "3c17754fc1815d78d5e779e8618d2026a4aaef859d32ce315620c9b6e7d5d7c3",
+        "8c24a757c85a92ca7ed2276f49263e42c0386ffe0c7fc7af9107d1b20cb4b4ce",
+        "8c3c17b2ea73827f8e234d9bd33db59c34ee0258a134e01bfa5bf176d2184019",
+        "b9946806cfbc08b92ab093db32dc93d8e577bfe98866e6795f1fa30a26bfd9bf",
+        "4760c153665fea5a99a1c2883a0bd9c819f261e773a0a048d660a37c5c94ccff",
+        "7bbd6b80f35fbdfce98f91ac3c918d09ed0042ecd9f4ecace5e162d69b017e58",
+        "066e630381d3aa2f5044bf58c213ad224bde528c4ee768ae045d2d1f21503c64",
+        "bf21d1fb106073aae9309f5f5e3e79eb6c415e620f0555baf7ceeb9ae8cfdeeb",
+        "d7983cf6089050a984a32e2e43d6a2639fe3876a7f4b7f4b66e325e55b7a3e07",
+        "a5da1ea6674a391d4331d7b2d1805dddeeafd8a73553f6a37f269dd102b7ca12",
+        "924fada26f59132a0785addb7a789104b5525d0d0f96c4e7a0b3aacca9b60dd9",
+        "9d4e687ba08003899af23c00909ce6b7de677ec79c3b3a7aaa3dc611b1505e75",
+        "0da702c671ecc63fe52f48cbee0025aba1ccb49541f3cd5aa8541172cf2e8245",
+        "aee92b4eb0d620dd49ac3e877175bd4fb3e23715904560e9a51df676818c7552"
       ],
       "sibling_previews": [
         "3GPP-Charging-Id",
@@ -214,12 +214,12 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 56
+    "token_count": 57
   },
   {
-    "chunk_id": "ab9947f73a38435f53b96acba4d7dd8d8c319d17d6da55c86f316d2823969a2c",
+    "chunk_id": "3c17754fc1815d78d5e779e8618d2026a4aaef859d32ce315620c9b6e7d5d7c3",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-Charging-Id.\nCode: 2.\nType: Unsigned32.\nFlags: V.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-Charging-Id.\nCode: 2.\nType: Unsigned32.\nFlags: V.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
@@ -232,20 +232,20 @@
       "row_index": 2,
       "row_key": "3GPP-Charging-Id",
       "sibling_ids": [
-        "3e1fed476715c1f5aaa8d25af6b5754b5e0e5288eebc8cd5250a3d22e0bed98e",
-        "2179a5280bb3d53bf8bfdab39a43dd63f8f6b8cfc1fd86c9d550ff25a3d70b95",
-        "d7c8fcceef9b7db9f0f727116d4937d92384d51ecfa3d49b062486368d914800",
-        "ee70138ca6c847586741f3d328b6d8faaeac1123fabd3a6992c4a7e6e9818060",
-        "96cb4b8e3f90e7228ac8fc4e4de8a147f2243b274774b5a677c326b3a51c6549",
-        "d3fff648402c6d089b707b51e036798228c4284ca20a0fc2375b9566a8cf1d26",
-        "bd7425e9161ff1bcc79b669e8bd37aa26745303f56cb504a1bbf8bd4453e55ae",
-        "76ae6752a795199a51b2991b9be5ed4008c9ab8edf8e3b86c3d88f7d6690a4cd",
-        "5c4d353bba2550b3d78ca9f66032bf29c7ccd60f00486e7a1340ee35e63084f5",
-        "bf1b006a411b3bceb3e4ba5333f0b93826ba069b18d4c535770aceba70f16fb5",
-        "10dc11a5309794ed48fa4f7f2a6b41ce49591849b85afb09f09c1449690d6939",
-        "9537c43ed721e7c927d8b8bb1fbece23c8ef055d6ab513eded432f201bb622cc",
-        "3c1806091c118f5fe54dc34581ff0b02f7b2ff8aaef2b39c40df2368540ddaa9",
-        "832f796c926b872de4be131cffaf85789dc9dd7cc1b639940b59f46a7946aed6"
+        "72992f6cef139e4ae2287dda4de41328153c8fc4e1ebaa1ef204b636af642628",
+        "8c24a757c85a92ca7ed2276f49263e42c0386ffe0c7fc7af9107d1b20cb4b4ce",
+        "8c3c17b2ea73827f8e234d9bd33db59c34ee0258a134e01bfa5bf176d2184019",
+        "b9946806cfbc08b92ab093db32dc93d8e577bfe98866e6795f1fa30a26bfd9bf",
+        "4760c153665fea5a99a1c2883a0bd9c819f261e773a0a048d660a37c5c94ccff",
+        "7bbd6b80f35fbdfce98f91ac3c918d09ed0042ecd9f4ecace5e162d69b017e58",
+        "066e630381d3aa2f5044bf58c213ad224bde528c4ee768ae045d2d1f21503c64",
+        "bf21d1fb106073aae9309f5f5e3e79eb6c415e620f0555baf7ceeb9ae8cfdeeb",
+        "d7983cf6089050a984a32e2e43d6a2639fe3876a7f4b7f4b66e325e55b7a3e07",
+        "a5da1ea6674a391d4331d7b2d1805dddeeafd8a73553f6a37f269dd102b7ca12",
+        "924fada26f59132a0785addb7a789104b5525d0d0f96c4e7a0b3aacca9b60dd9",
+        "9d4e687ba08003899af23c00909ce6b7de677ec79c3b3a7aaa3dc611b1505e75",
+        "0da702c671ecc63fe52f48cbee0025aba1ccb49541f3cd5aa8541172cf2e8245",
+        "aee92b4eb0d620dd49ac3e877175bd4fb3e23715904560e9a51df676818c7552"
       ],
       "sibling_previews": [
         "3GPP-IMSI",
@@ -269,12 +269,12 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 56
+    "token_count": 57
   },
   {
-    "chunk_id": "2179a5280bb3d53bf8bfdab39a43dd63f8f6b8cfc1fd86c9d550ff25a3d70b95",
+    "chunk_id": "8c24a757c85a92ca7ed2276f49263e42c0386ffe0c7fc7af9107d1b20cb4b4ce",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-PDP-Type.\nCode: 3.\nType: Enumerated.\nFlags: V.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-PDP-Type.\nCode: 3.\nType: Enumerated.\nFlags: V.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
@@ -287,20 +287,20 @@
       "row_index": 3,
       "row_key": "3GPP-PDP-Type",
       "sibling_ids": [
-        "3e1fed476715c1f5aaa8d25af6b5754b5e0e5288eebc8cd5250a3d22e0bed98e",
-        "ab9947f73a38435f53b96acba4d7dd8d8c319d17d6da55c86f316d2823969a2c",
-        "d7c8fcceef9b7db9f0f727116d4937d92384d51ecfa3d49b062486368d914800",
-        "ee70138ca6c847586741f3d328b6d8faaeac1123fabd3a6992c4a7e6e9818060",
-        "96cb4b8e3f90e7228ac8fc4e4de8a147f2243b274774b5a677c326b3a51c6549",
-        "d3fff648402c6d089b707b51e036798228c4284ca20a0fc2375b9566a8cf1d26",
-        "bd7425e9161ff1bcc79b669e8bd37aa26745303f56cb504a1bbf8bd4453e55ae",
-        "76ae6752a795199a51b2991b9be5ed4008c9ab8edf8e3b86c3d88f7d6690a4cd",
-        "5c4d353bba2550b3d78ca9f66032bf29c7ccd60f00486e7a1340ee35e63084f5",
-        "bf1b006a411b3bceb3e4ba5333f0b93826ba069b18d4c535770aceba70f16fb5",
-        "10dc11a5309794ed48fa4f7f2a6b41ce49591849b85afb09f09c1449690d6939",
-        "9537c43ed721e7c927d8b8bb1fbece23c8ef055d6ab513eded432f201bb622cc",
-        "3c1806091c118f5fe54dc34581ff0b02f7b2ff8aaef2b39c40df2368540ddaa9",
-        "832f796c926b872de4be131cffaf85789dc9dd7cc1b639940b59f46a7946aed6"
+        "72992f6cef139e4ae2287dda4de41328153c8fc4e1ebaa1ef204b636af642628",
+        "3c17754fc1815d78d5e779e8618d2026a4aaef859d32ce315620c9b6e7d5d7c3",
+        "8c3c17b2ea73827f8e234d9bd33db59c34ee0258a134e01bfa5bf176d2184019",
+        "b9946806cfbc08b92ab093db32dc93d8e577bfe98866e6795f1fa30a26bfd9bf",
+        "4760c153665fea5a99a1c2883a0bd9c819f261e773a0a048d660a37c5c94ccff",
+        "7bbd6b80f35fbdfce98f91ac3c918d09ed0042ecd9f4ecace5e162d69b017e58",
+        "066e630381d3aa2f5044bf58c213ad224bde528c4ee768ae045d2d1f21503c64",
+        "bf21d1fb106073aae9309f5f5e3e79eb6c415e620f0555baf7ceeb9ae8cfdeeb",
+        "d7983cf6089050a984a32e2e43d6a2639fe3876a7f4b7f4b66e325e55b7a3e07",
+        "a5da1ea6674a391d4331d7b2d1805dddeeafd8a73553f6a37f269dd102b7ca12",
+        "924fada26f59132a0785addb7a789104b5525d0d0f96c4e7a0b3aacca9b60dd9",
+        "9d4e687ba08003899af23c00909ce6b7de677ec79c3b3a7aaa3dc611b1505e75",
+        "0da702c671ecc63fe52f48cbee0025aba1ccb49541f3cd5aa8541172cf2e8245",
+        "aee92b4eb0d620dd49ac3e877175bd4fb3e23715904560e9a51df676818c7552"
       ],
       "sibling_previews": [
         "3GPP-IMSI",
@@ -324,12 +324,12 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 56
+    "token_count": 57
   },
   {
-    "chunk_id": "d7c8fcceef9b7db9f0f727116d4937d92384d51ecfa3d49b062486368d914800",
+    "chunk_id": "8c3c17b2ea73827f8e234d9bd33db59c34ee0258a134e01bfa5bf176d2184019",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-SGSN-Address.\nCode: 6.\nType: OctetString.\nFlags: V.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-SGSN-Address.\nCode: 6.\nType: OctetString.\nFlags: V.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
@@ -342,20 +342,20 @@
       "row_index": 4,
       "row_key": "3GPP-SGSN-Address",
       "sibling_ids": [
-        "3e1fed476715c1f5aaa8d25af6b5754b5e0e5288eebc8cd5250a3d22e0bed98e",
-        "ab9947f73a38435f53b96acba4d7dd8d8c319d17d6da55c86f316d2823969a2c",
-        "2179a5280bb3d53bf8bfdab39a43dd63f8f6b8cfc1fd86c9d550ff25a3d70b95",
-        "ee70138ca6c847586741f3d328b6d8faaeac1123fabd3a6992c4a7e6e9818060",
-        "96cb4b8e3f90e7228ac8fc4e4de8a147f2243b274774b5a677c326b3a51c6549",
-        "d3fff648402c6d089b707b51e036798228c4284ca20a0fc2375b9566a8cf1d26",
-        "bd7425e9161ff1bcc79b669e8bd37aa26745303f56cb504a1bbf8bd4453e55ae",
-        "76ae6752a795199a51b2991b9be5ed4008c9ab8edf8e3b86c3d88f7d6690a4cd",
-        "5c4d353bba2550b3d78ca9f66032bf29c7ccd60f00486e7a1340ee35e63084f5",
-        "bf1b006a411b3bceb3e4ba5333f0b93826ba069b18d4c535770aceba70f16fb5",
-        "10dc11a5309794ed48fa4f7f2a6b41ce49591849b85afb09f09c1449690d6939",
-        "9537c43ed721e7c927d8b8bb1fbece23c8ef055d6ab513eded432f201bb622cc",
-        "3c1806091c118f5fe54dc34581ff0b02f7b2ff8aaef2b39c40df2368540ddaa9",
-        "832f796c926b872de4be131cffaf85789dc9dd7cc1b639940b59f46a7946aed6"
+        "72992f6cef139e4ae2287dda4de41328153c8fc4e1ebaa1ef204b636af642628",
+        "3c17754fc1815d78d5e779e8618d2026a4aaef859d32ce315620c9b6e7d5d7c3",
+        "8c24a757c85a92ca7ed2276f49263e42c0386ffe0c7fc7af9107d1b20cb4b4ce",
+        "b9946806cfbc08b92ab093db32dc93d8e577bfe98866e6795f1fa30a26bfd9bf",
+        "4760c153665fea5a99a1c2883a0bd9c819f261e773a0a048d660a37c5c94ccff",
+        "7bbd6b80f35fbdfce98f91ac3c918d09ed0042ecd9f4ecace5e162d69b017e58",
+        "066e630381d3aa2f5044bf58c213ad224bde528c4ee768ae045d2d1f21503c64",
+        "bf21d1fb106073aae9309f5f5e3e79eb6c415e620f0555baf7ceeb9ae8cfdeeb",
+        "d7983cf6089050a984a32e2e43d6a2639fe3876a7f4b7f4b66e325e55b7a3e07",
+        "a5da1ea6674a391d4331d7b2d1805dddeeafd8a73553f6a37f269dd102b7ca12",
+        "924fada26f59132a0785addb7a789104b5525d0d0f96c4e7a0b3aacca9b60dd9",
+        "9d4e687ba08003899af23c00909ce6b7de677ec79c3b3a7aaa3dc611b1505e75",
+        "0da702c671ecc63fe52f48cbee0025aba1ccb49541f3cd5aa8541172cf2e8245",
+        "aee92b4eb0d620dd49ac3e877175bd4fb3e23715904560e9a51df676818c7552"
       ],
       "sibling_previews": [
         "3GPP-IMSI",
@@ -379,12 +379,12 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 58
+    "token_count": 59
   },
   {
-    "chunk_id": "ee70138ca6c847586741f3d328b6d8faaeac1123fabd3a6992c4a7e6e9818060",
+    "chunk_id": "b9946806cfbc08b92ab093db32dc93d8e577bfe98866e6795f1fa30a26bfd9bf",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-GGSN-Address.\nCode: 7.\nType: OctetString.\nFlags: V.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-GGSN-Address.\nCode: 7.\nType: OctetString.\nFlags: V.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
@@ -397,20 +397,20 @@
       "row_index": 5,
       "row_key": "3GPP-GGSN-Address",
       "sibling_ids": [
-        "3e1fed476715c1f5aaa8d25af6b5754b5e0e5288eebc8cd5250a3d22e0bed98e",
-        "ab9947f73a38435f53b96acba4d7dd8d8c319d17d6da55c86f316d2823969a2c",
-        "2179a5280bb3d53bf8bfdab39a43dd63f8f6b8cfc1fd86c9d550ff25a3d70b95",
-        "d7c8fcceef9b7db9f0f727116d4937d92384d51ecfa3d49b062486368d914800",
-        "96cb4b8e3f90e7228ac8fc4e4de8a147f2243b274774b5a677c326b3a51c6549",
-        "d3fff648402c6d089b707b51e036798228c4284ca20a0fc2375b9566a8cf1d26",
-        "bd7425e9161ff1bcc79b669e8bd37aa26745303f56cb504a1bbf8bd4453e55ae",
-        "76ae6752a795199a51b2991b9be5ed4008c9ab8edf8e3b86c3d88f7d6690a4cd",
-        "5c4d353bba2550b3d78ca9f66032bf29c7ccd60f00486e7a1340ee35e63084f5",
-        "bf1b006a411b3bceb3e4ba5333f0b93826ba069b18d4c535770aceba70f16fb5",
-        "10dc11a5309794ed48fa4f7f2a6b41ce49591849b85afb09f09c1449690d6939",
-        "9537c43ed721e7c927d8b8bb1fbece23c8ef055d6ab513eded432f201bb622cc",
-        "3c1806091c118f5fe54dc34581ff0b02f7b2ff8aaef2b39c40df2368540ddaa9",
-        "832f796c926b872de4be131cffaf85789dc9dd7cc1b639940b59f46a7946aed6"
+        "72992f6cef139e4ae2287dda4de41328153c8fc4e1ebaa1ef204b636af642628",
+        "3c17754fc1815d78d5e779e8618d2026a4aaef859d32ce315620c9b6e7d5d7c3",
+        "8c24a757c85a92ca7ed2276f49263e42c0386ffe0c7fc7af9107d1b20cb4b4ce",
+        "8c3c17b2ea73827f8e234d9bd33db59c34ee0258a134e01bfa5bf176d2184019",
+        "4760c153665fea5a99a1c2883a0bd9c819f261e773a0a048d660a37c5c94ccff",
+        "7bbd6b80f35fbdfce98f91ac3c918d09ed0042ecd9f4ecace5e162d69b017e58",
+        "066e630381d3aa2f5044bf58c213ad224bde528c4ee768ae045d2d1f21503c64",
+        "bf21d1fb106073aae9309f5f5e3e79eb6c415e620f0555baf7ceeb9ae8cfdeeb",
+        "d7983cf6089050a984a32e2e43d6a2639fe3876a7f4b7f4b66e325e55b7a3e07",
+        "a5da1ea6674a391d4331d7b2d1805dddeeafd8a73553f6a37f269dd102b7ca12",
+        "924fada26f59132a0785addb7a789104b5525d0d0f96c4e7a0b3aacca9b60dd9",
+        "9d4e687ba08003899af23c00909ce6b7de677ec79c3b3a7aaa3dc611b1505e75",
+        "0da702c671ecc63fe52f48cbee0025aba1ccb49541f3cd5aa8541172cf2e8245",
+        "aee92b4eb0d620dd49ac3e877175bd4fb3e23715904560e9a51df676818c7552"
       ],
       "sibling_previews": [
         "3GPP-IMSI",
@@ -420,6 +420,171 @@
         "3GPP-IMSI-MCC-MNC",
         "3GPP-NSAPI",
         "3GPP-Selection-Mode",
+        "3GPP-SGSN-IPv6-Address",
+        "3GPP-GGSN-IPv6-Address",
+        "3GPP-SGSN-MCC-MNC",
+        "3GPP-IMEISV",
+        "3GPP-RAT-Type",
+        "3GPP-User-Location-Info",
+        "3GPP-MS-TimeZone"
+      ],
+      "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
+      "table_id": "5c4d3c0bdb48c1ee",
+      "total_rows": 15
+    },
+    "source_file": "tests/fixtures/markdown_with_table.md",
+    "source_name": null,
+    "token_count": 59
+  },
+  {
+    "chunk_id": "4760c153665fea5a99a1c2883a0bd9c819f261e773a0a048d660a37c5c94ccff",
+    "chunk_type": "table_row",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-IMSI-MCC-MNC.\nCode: 8.\nType: UTF8String.\nFlags: V.",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
+      "columns": [
+        "AVP",
+        "Code",
+        "Type",
+        "Flags"
+      ],
+      "row_index": 6,
+      "row_key": "3GPP-IMSI-MCC-MNC",
+      "sibling_ids": [
+        "72992f6cef139e4ae2287dda4de41328153c8fc4e1ebaa1ef204b636af642628",
+        "3c17754fc1815d78d5e779e8618d2026a4aaef859d32ce315620c9b6e7d5d7c3",
+        "8c24a757c85a92ca7ed2276f49263e42c0386ffe0c7fc7af9107d1b20cb4b4ce",
+        "8c3c17b2ea73827f8e234d9bd33db59c34ee0258a134e01bfa5bf176d2184019",
+        "b9946806cfbc08b92ab093db32dc93d8e577bfe98866e6795f1fa30a26bfd9bf",
+        "7bbd6b80f35fbdfce98f91ac3c918d09ed0042ecd9f4ecace5e162d69b017e58",
+        "066e630381d3aa2f5044bf58c213ad224bde528c4ee768ae045d2d1f21503c64",
+        "bf21d1fb106073aae9309f5f5e3e79eb6c415e620f0555baf7ceeb9ae8cfdeeb",
+        "d7983cf6089050a984a32e2e43d6a2639fe3876a7f4b7f4b66e325e55b7a3e07",
+        "a5da1ea6674a391d4331d7b2d1805dddeeafd8a73553f6a37f269dd102b7ca12",
+        "924fada26f59132a0785addb7a789104b5525d0d0f96c4e7a0b3aacca9b60dd9",
+        "9d4e687ba08003899af23c00909ce6b7de677ec79c3b3a7aaa3dc611b1505e75",
+        "0da702c671ecc63fe52f48cbee0025aba1ccb49541f3cd5aa8541172cf2e8245",
+        "aee92b4eb0d620dd49ac3e877175bd4fb3e23715904560e9a51df676818c7552"
+      ],
+      "sibling_previews": [
+        "3GPP-IMSI",
+        "3GPP-Charging-Id",
+        "3GPP-PDP-Type",
+        "3GPP-SGSN-Address",
+        "3GPP-GGSN-Address",
+        "3GPP-NSAPI",
+        "3GPP-Selection-Mode",
+        "3GPP-SGSN-IPv6-Address",
+        "3GPP-GGSN-IPv6-Address",
+        "3GPP-SGSN-MCC-MNC",
+        "3GPP-IMEISV",
+        "3GPP-RAT-Type",
+        "3GPP-User-Location-Info",
+        "3GPP-MS-TimeZone"
+      ],
+      "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
+      "table_id": "5c4d3c0bdb48c1ee",
+      "total_rows": 15
+    },
+    "source_file": "tests/fixtures/markdown_with_table.md",
+    "source_name": null,
+    "token_count": 61
+  },
+  {
+    "chunk_id": "7bbd6b80f35fbdfce98f91ac3c918d09ed0042ecd9f4ecace5e162d69b017e58",
+    "chunk_type": "table_row",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-NSAPI.\nCode: 10.\nType: OctetString.\nFlags: V.",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
+      "columns": [
+        "AVP",
+        "Code",
+        "Type",
+        "Flags"
+      ],
+      "row_index": 7,
+      "row_key": "3GPP-NSAPI",
+      "sibling_ids": [
+        "72992f6cef139e4ae2287dda4de41328153c8fc4e1ebaa1ef204b636af642628",
+        "3c17754fc1815d78d5e779e8618d2026a4aaef859d32ce315620c9b6e7d5d7c3",
+        "8c24a757c85a92ca7ed2276f49263e42c0386ffe0c7fc7af9107d1b20cb4b4ce",
+        "8c3c17b2ea73827f8e234d9bd33db59c34ee0258a134e01bfa5bf176d2184019",
+        "b9946806cfbc08b92ab093db32dc93d8e577bfe98866e6795f1fa30a26bfd9bf",
+        "4760c153665fea5a99a1c2883a0bd9c819f261e773a0a048d660a37c5c94ccff",
+        "066e630381d3aa2f5044bf58c213ad224bde528c4ee768ae045d2d1f21503c64",
+        "bf21d1fb106073aae9309f5f5e3e79eb6c415e620f0555baf7ceeb9ae8cfdeeb",
+        "d7983cf6089050a984a32e2e43d6a2639fe3876a7f4b7f4b66e325e55b7a3e07",
+        "a5da1ea6674a391d4331d7b2d1805dddeeafd8a73553f6a37f269dd102b7ca12",
+        "924fada26f59132a0785addb7a789104b5525d0d0f96c4e7a0b3aacca9b60dd9",
+        "9d4e687ba08003899af23c00909ce6b7de677ec79c3b3a7aaa3dc611b1505e75",
+        "0da702c671ecc63fe52f48cbee0025aba1ccb49541f3cd5aa8541172cf2e8245",
+        "aee92b4eb0d620dd49ac3e877175bd4fb3e23715904560e9a51df676818c7552"
+      ],
+      "sibling_previews": [
+        "3GPP-IMSI",
+        "3GPP-Charging-Id",
+        "3GPP-PDP-Type",
+        "3GPP-SGSN-Address",
+        "3GPP-GGSN-Address",
+        "3GPP-IMSI-MCC-MNC",
+        "3GPP-Selection-Mode",
+        "3GPP-SGSN-IPv6-Address",
+        "3GPP-GGSN-IPv6-Address",
+        "3GPP-SGSN-MCC-MNC",
+        "3GPP-IMEISV",
+        "3GPP-RAT-Type",
+        "3GPP-User-Location-Info",
+        "3GPP-MS-TimeZone"
+      ],
+      "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
+      "table_id": "5c4d3c0bdb48c1ee",
+      "total_rows": 15
+    },
+    "source_file": "tests/fixtures/markdown_with_table.md",
+    "source_name": null,
+    "token_count": 57
+  },
+  {
+    "chunk_id": "066e630381d3aa2f5044bf58c213ad224bde528c4ee768ae045d2d1f21503c64",
+    "chunk_type": "table_row",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-Selection-Mode.\nCode: 12.\nType: UTF8String.\nFlags: V.",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
+      "columns": [
+        "AVP",
+        "Code",
+        "Type",
+        "Flags"
+      ],
+      "row_index": 8,
+      "row_key": "3GPP-Selection-Mode",
+      "sibling_ids": [
+        "72992f6cef139e4ae2287dda4de41328153c8fc4e1ebaa1ef204b636af642628",
+        "3c17754fc1815d78d5e779e8618d2026a4aaef859d32ce315620c9b6e7d5d7c3",
+        "8c24a757c85a92ca7ed2276f49263e42c0386ffe0c7fc7af9107d1b20cb4b4ce",
+        "8c3c17b2ea73827f8e234d9bd33db59c34ee0258a134e01bfa5bf176d2184019",
+        "b9946806cfbc08b92ab093db32dc93d8e577bfe98866e6795f1fa30a26bfd9bf",
+        "4760c153665fea5a99a1c2883a0bd9c819f261e773a0a048d660a37c5c94ccff",
+        "7bbd6b80f35fbdfce98f91ac3c918d09ed0042ecd9f4ecace5e162d69b017e58",
+        "bf21d1fb106073aae9309f5f5e3e79eb6c415e620f0555baf7ceeb9ae8cfdeeb",
+        "d7983cf6089050a984a32e2e43d6a2639fe3876a7f4b7f4b66e325e55b7a3e07",
+        "a5da1ea6674a391d4331d7b2d1805dddeeafd8a73553f6a37f269dd102b7ca12",
+        "924fada26f59132a0785addb7a789104b5525d0d0f96c4e7a0b3aacca9b60dd9",
+        "9d4e687ba08003899af23c00909ce6b7de677ec79c3b3a7aaa3dc611b1505e75",
+        "0da702c671ecc63fe52f48cbee0025aba1ccb49541f3cd5aa8541172cf2e8245",
+        "aee92b4eb0d620dd49ac3e877175bd4fb3e23715904560e9a51df676818c7552"
+      ],
+      "sibling_previews": [
+        "3GPP-IMSI",
+        "3GPP-Charging-Id",
+        "3GPP-PDP-Type",
+        "3GPP-SGSN-Address",
+        "3GPP-GGSN-Address",
+        "3GPP-IMSI-MCC-MNC",
+        "3GPP-NSAPI",
         "3GPP-SGSN-IPv6-Address",
         "3GPP-GGSN-IPv6-Address",
         "3GPP-SGSN-MCC-MNC",
@@ -437,174 +602,9 @@
     "token_count": 58
   },
   {
-    "chunk_id": "96cb4b8e3f90e7228ac8fc4e4de8a147f2243b274774b5a677c326b3a51c6549",
+    "chunk_id": "bf21d1fb106073aae9309f5f5e3e79eb6c415e620f0555baf7ceeb9ae8cfdeeb",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-IMSI-MCC-MNC.\nCode: 8.\nType: UTF8String.\nFlags: V.",
-    "line_start": null,
-    "metadata": {
-      "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
-      "columns": [
-        "AVP",
-        "Code",
-        "Type",
-        "Flags"
-      ],
-      "row_index": 6,
-      "row_key": "3GPP-IMSI-MCC-MNC",
-      "sibling_ids": [
-        "3e1fed476715c1f5aaa8d25af6b5754b5e0e5288eebc8cd5250a3d22e0bed98e",
-        "ab9947f73a38435f53b96acba4d7dd8d8c319d17d6da55c86f316d2823969a2c",
-        "2179a5280bb3d53bf8bfdab39a43dd63f8f6b8cfc1fd86c9d550ff25a3d70b95",
-        "d7c8fcceef9b7db9f0f727116d4937d92384d51ecfa3d49b062486368d914800",
-        "ee70138ca6c847586741f3d328b6d8faaeac1123fabd3a6992c4a7e6e9818060",
-        "d3fff648402c6d089b707b51e036798228c4284ca20a0fc2375b9566a8cf1d26",
-        "bd7425e9161ff1bcc79b669e8bd37aa26745303f56cb504a1bbf8bd4453e55ae",
-        "76ae6752a795199a51b2991b9be5ed4008c9ab8edf8e3b86c3d88f7d6690a4cd",
-        "5c4d353bba2550b3d78ca9f66032bf29c7ccd60f00486e7a1340ee35e63084f5",
-        "bf1b006a411b3bceb3e4ba5333f0b93826ba069b18d4c535770aceba70f16fb5",
-        "10dc11a5309794ed48fa4f7f2a6b41ce49591849b85afb09f09c1449690d6939",
-        "9537c43ed721e7c927d8b8bb1fbece23c8ef055d6ab513eded432f201bb622cc",
-        "3c1806091c118f5fe54dc34581ff0b02f7b2ff8aaef2b39c40df2368540ddaa9",
-        "832f796c926b872de4be131cffaf85789dc9dd7cc1b639940b59f46a7946aed6"
-      ],
-      "sibling_previews": [
-        "3GPP-IMSI",
-        "3GPP-Charging-Id",
-        "3GPP-PDP-Type",
-        "3GPP-SGSN-Address",
-        "3GPP-GGSN-Address",
-        "3GPP-NSAPI",
-        "3GPP-Selection-Mode",
-        "3GPP-SGSN-IPv6-Address",
-        "3GPP-GGSN-IPv6-Address",
-        "3GPP-SGSN-MCC-MNC",
-        "3GPP-IMEISV",
-        "3GPP-RAT-Type",
-        "3GPP-User-Location-Info",
-        "3GPP-MS-TimeZone"
-      ],
-      "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "5c4d3c0bdb48c1ee",
-      "total_rows": 15
-    },
-    "source_file": "tests/fixtures/markdown_with_table.md",
-    "source_name": null,
-    "token_count": 60
-  },
-  {
-    "chunk_id": "d3fff648402c6d089b707b51e036798228c4284ca20a0fc2375b9566a8cf1d26",
-    "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-NSAPI.\nCode: 10.\nType: OctetString.\nFlags: V.",
-    "line_start": null,
-    "metadata": {
-      "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
-      "columns": [
-        "AVP",
-        "Code",
-        "Type",
-        "Flags"
-      ],
-      "row_index": 7,
-      "row_key": "3GPP-NSAPI",
-      "sibling_ids": [
-        "3e1fed476715c1f5aaa8d25af6b5754b5e0e5288eebc8cd5250a3d22e0bed98e",
-        "ab9947f73a38435f53b96acba4d7dd8d8c319d17d6da55c86f316d2823969a2c",
-        "2179a5280bb3d53bf8bfdab39a43dd63f8f6b8cfc1fd86c9d550ff25a3d70b95",
-        "d7c8fcceef9b7db9f0f727116d4937d92384d51ecfa3d49b062486368d914800",
-        "ee70138ca6c847586741f3d328b6d8faaeac1123fabd3a6992c4a7e6e9818060",
-        "96cb4b8e3f90e7228ac8fc4e4de8a147f2243b274774b5a677c326b3a51c6549",
-        "bd7425e9161ff1bcc79b669e8bd37aa26745303f56cb504a1bbf8bd4453e55ae",
-        "76ae6752a795199a51b2991b9be5ed4008c9ab8edf8e3b86c3d88f7d6690a4cd",
-        "5c4d353bba2550b3d78ca9f66032bf29c7ccd60f00486e7a1340ee35e63084f5",
-        "bf1b006a411b3bceb3e4ba5333f0b93826ba069b18d4c535770aceba70f16fb5",
-        "10dc11a5309794ed48fa4f7f2a6b41ce49591849b85afb09f09c1449690d6939",
-        "9537c43ed721e7c927d8b8bb1fbece23c8ef055d6ab513eded432f201bb622cc",
-        "3c1806091c118f5fe54dc34581ff0b02f7b2ff8aaef2b39c40df2368540ddaa9",
-        "832f796c926b872de4be131cffaf85789dc9dd7cc1b639940b59f46a7946aed6"
-      ],
-      "sibling_previews": [
-        "3GPP-IMSI",
-        "3GPP-Charging-Id",
-        "3GPP-PDP-Type",
-        "3GPP-SGSN-Address",
-        "3GPP-GGSN-Address",
-        "3GPP-IMSI-MCC-MNC",
-        "3GPP-Selection-Mode",
-        "3GPP-SGSN-IPv6-Address",
-        "3GPP-GGSN-IPv6-Address",
-        "3GPP-SGSN-MCC-MNC",
-        "3GPP-IMEISV",
-        "3GPP-RAT-Type",
-        "3GPP-User-Location-Info",
-        "3GPP-MS-TimeZone"
-      ],
-      "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "5c4d3c0bdb48c1ee",
-      "total_rows": 15
-    },
-    "source_file": "tests/fixtures/markdown_with_table.md",
-    "source_name": null,
-    "token_count": 56
-  },
-  {
-    "chunk_id": "bd7425e9161ff1bcc79b669e8bd37aa26745303f56cb504a1bbf8bd4453e55ae",
-    "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-Selection-Mode.\nCode: 12.\nType: UTF8String.\nFlags: V.",
-    "line_start": null,
-    "metadata": {
-      "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
-      "columns": [
-        "AVP",
-        "Code",
-        "Type",
-        "Flags"
-      ],
-      "row_index": 8,
-      "row_key": "3GPP-Selection-Mode",
-      "sibling_ids": [
-        "3e1fed476715c1f5aaa8d25af6b5754b5e0e5288eebc8cd5250a3d22e0bed98e",
-        "ab9947f73a38435f53b96acba4d7dd8d8c319d17d6da55c86f316d2823969a2c",
-        "2179a5280bb3d53bf8bfdab39a43dd63f8f6b8cfc1fd86c9d550ff25a3d70b95",
-        "d7c8fcceef9b7db9f0f727116d4937d92384d51ecfa3d49b062486368d914800",
-        "ee70138ca6c847586741f3d328b6d8faaeac1123fabd3a6992c4a7e6e9818060",
-        "96cb4b8e3f90e7228ac8fc4e4de8a147f2243b274774b5a677c326b3a51c6549",
-        "d3fff648402c6d089b707b51e036798228c4284ca20a0fc2375b9566a8cf1d26",
-        "76ae6752a795199a51b2991b9be5ed4008c9ab8edf8e3b86c3d88f7d6690a4cd",
-        "5c4d353bba2550b3d78ca9f66032bf29c7ccd60f00486e7a1340ee35e63084f5",
-        "bf1b006a411b3bceb3e4ba5333f0b93826ba069b18d4c535770aceba70f16fb5",
-        "10dc11a5309794ed48fa4f7f2a6b41ce49591849b85afb09f09c1449690d6939",
-        "9537c43ed721e7c927d8b8bb1fbece23c8ef055d6ab513eded432f201bb622cc",
-        "3c1806091c118f5fe54dc34581ff0b02f7b2ff8aaef2b39c40df2368540ddaa9",
-        "832f796c926b872de4be131cffaf85789dc9dd7cc1b639940b59f46a7946aed6"
-      ],
-      "sibling_previews": [
-        "3GPP-IMSI",
-        "3GPP-Charging-Id",
-        "3GPP-PDP-Type",
-        "3GPP-SGSN-Address",
-        "3GPP-GGSN-Address",
-        "3GPP-IMSI-MCC-MNC",
-        "3GPP-NSAPI",
-        "3GPP-SGSN-IPv6-Address",
-        "3GPP-GGSN-IPv6-Address",
-        "3GPP-SGSN-MCC-MNC",
-        "3GPP-IMEISV",
-        "3GPP-RAT-Type",
-        "3GPP-User-Location-Info",
-        "3GPP-MS-TimeZone"
-      ],
-      "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "5c4d3c0bdb48c1ee",
-      "total_rows": 15
-    },
-    "source_file": "tests/fixtures/markdown_with_table.md",
-    "source_name": null,
-    "token_count": 57
-  },
-  {
-    "chunk_id": "76ae6752a795199a51b2991b9be5ed4008c9ab8edf8e3b86c3d88f7d6690a4cd",
-    "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-SGSN-IPv6-Address.\nCode: 15.\nType: OctetString.\nFlags: V.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-SGSN-IPv6-Address.\nCode: 15.\nType: OctetString.\nFlags: V.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
@@ -617,20 +617,20 @@
       "row_index": 9,
       "row_key": "3GPP-SGSN-IPv6-Address",
       "sibling_ids": [
-        "3e1fed476715c1f5aaa8d25af6b5754b5e0e5288eebc8cd5250a3d22e0bed98e",
-        "ab9947f73a38435f53b96acba4d7dd8d8c319d17d6da55c86f316d2823969a2c",
-        "2179a5280bb3d53bf8bfdab39a43dd63f8f6b8cfc1fd86c9d550ff25a3d70b95",
-        "d7c8fcceef9b7db9f0f727116d4937d92384d51ecfa3d49b062486368d914800",
-        "ee70138ca6c847586741f3d328b6d8faaeac1123fabd3a6992c4a7e6e9818060",
-        "96cb4b8e3f90e7228ac8fc4e4de8a147f2243b274774b5a677c326b3a51c6549",
-        "d3fff648402c6d089b707b51e036798228c4284ca20a0fc2375b9566a8cf1d26",
-        "bd7425e9161ff1bcc79b669e8bd37aa26745303f56cb504a1bbf8bd4453e55ae",
-        "5c4d353bba2550b3d78ca9f66032bf29c7ccd60f00486e7a1340ee35e63084f5",
-        "bf1b006a411b3bceb3e4ba5333f0b93826ba069b18d4c535770aceba70f16fb5",
-        "10dc11a5309794ed48fa4f7f2a6b41ce49591849b85afb09f09c1449690d6939",
-        "9537c43ed721e7c927d8b8bb1fbece23c8ef055d6ab513eded432f201bb622cc",
-        "3c1806091c118f5fe54dc34581ff0b02f7b2ff8aaef2b39c40df2368540ddaa9",
-        "832f796c926b872de4be131cffaf85789dc9dd7cc1b639940b59f46a7946aed6"
+        "72992f6cef139e4ae2287dda4de41328153c8fc4e1ebaa1ef204b636af642628",
+        "3c17754fc1815d78d5e779e8618d2026a4aaef859d32ce315620c9b6e7d5d7c3",
+        "8c24a757c85a92ca7ed2276f49263e42c0386ffe0c7fc7af9107d1b20cb4b4ce",
+        "8c3c17b2ea73827f8e234d9bd33db59c34ee0258a134e01bfa5bf176d2184019",
+        "b9946806cfbc08b92ab093db32dc93d8e577bfe98866e6795f1fa30a26bfd9bf",
+        "4760c153665fea5a99a1c2883a0bd9c819f261e773a0a048d660a37c5c94ccff",
+        "7bbd6b80f35fbdfce98f91ac3c918d09ed0042ecd9f4ecace5e162d69b017e58",
+        "066e630381d3aa2f5044bf58c213ad224bde528c4ee768ae045d2d1f21503c64",
+        "d7983cf6089050a984a32e2e43d6a2639fe3876a7f4b7f4b66e325e55b7a3e07",
+        "a5da1ea6674a391d4331d7b2d1805dddeeafd8a73553f6a37f269dd102b7ca12",
+        "924fada26f59132a0785addb7a789104b5525d0d0f96c4e7a0b3aacca9b60dd9",
+        "9d4e687ba08003899af23c00909ce6b7de677ec79c3b3a7aaa3dc611b1505e75",
+        "0da702c671ecc63fe52f48cbee0025aba1ccb49541f3cd5aa8541172cf2e8245",
+        "aee92b4eb0d620dd49ac3e877175bd4fb3e23715904560e9a51df676818c7552"
       ],
       "sibling_previews": [
         "3GPP-IMSI",
@@ -654,12 +654,12 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 61
+    "token_count": 62
   },
   {
-    "chunk_id": "5c4d353bba2550b3d78ca9f66032bf29c7ccd60f00486e7a1340ee35e63084f5",
+    "chunk_id": "d7983cf6089050a984a32e2e43d6a2639fe3876a7f4b7f4b66e325e55b7a3e07",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-GGSN-IPv6-Address.\nCode: 16.\nType: OctetString.\nFlags: V.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-GGSN-IPv6-Address.\nCode: 16.\nType: OctetString.\nFlags: V.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
@@ -672,20 +672,20 @@
       "row_index": 10,
       "row_key": "3GPP-GGSN-IPv6-Address",
       "sibling_ids": [
-        "3e1fed476715c1f5aaa8d25af6b5754b5e0e5288eebc8cd5250a3d22e0bed98e",
-        "ab9947f73a38435f53b96acba4d7dd8d8c319d17d6da55c86f316d2823969a2c",
-        "2179a5280bb3d53bf8bfdab39a43dd63f8f6b8cfc1fd86c9d550ff25a3d70b95",
-        "d7c8fcceef9b7db9f0f727116d4937d92384d51ecfa3d49b062486368d914800",
-        "ee70138ca6c847586741f3d328b6d8faaeac1123fabd3a6992c4a7e6e9818060",
-        "96cb4b8e3f90e7228ac8fc4e4de8a147f2243b274774b5a677c326b3a51c6549",
-        "d3fff648402c6d089b707b51e036798228c4284ca20a0fc2375b9566a8cf1d26",
-        "bd7425e9161ff1bcc79b669e8bd37aa26745303f56cb504a1bbf8bd4453e55ae",
-        "76ae6752a795199a51b2991b9be5ed4008c9ab8edf8e3b86c3d88f7d6690a4cd",
-        "bf1b006a411b3bceb3e4ba5333f0b93826ba069b18d4c535770aceba70f16fb5",
-        "10dc11a5309794ed48fa4f7f2a6b41ce49591849b85afb09f09c1449690d6939",
-        "9537c43ed721e7c927d8b8bb1fbece23c8ef055d6ab513eded432f201bb622cc",
-        "3c1806091c118f5fe54dc34581ff0b02f7b2ff8aaef2b39c40df2368540ddaa9",
-        "832f796c926b872de4be131cffaf85789dc9dd7cc1b639940b59f46a7946aed6"
+        "72992f6cef139e4ae2287dda4de41328153c8fc4e1ebaa1ef204b636af642628",
+        "3c17754fc1815d78d5e779e8618d2026a4aaef859d32ce315620c9b6e7d5d7c3",
+        "8c24a757c85a92ca7ed2276f49263e42c0386ffe0c7fc7af9107d1b20cb4b4ce",
+        "8c3c17b2ea73827f8e234d9bd33db59c34ee0258a134e01bfa5bf176d2184019",
+        "b9946806cfbc08b92ab093db32dc93d8e577bfe98866e6795f1fa30a26bfd9bf",
+        "4760c153665fea5a99a1c2883a0bd9c819f261e773a0a048d660a37c5c94ccff",
+        "7bbd6b80f35fbdfce98f91ac3c918d09ed0042ecd9f4ecace5e162d69b017e58",
+        "066e630381d3aa2f5044bf58c213ad224bde528c4ee768ae045d2d1f21503c64",
+        "bf21d1fb106073aae9309f5f5e3e79eb6c415e620f0555baf7ceeb9ae8cfdeeb",
+        "a5da1ea6674a391d4331d7b2d1805dddeeafd8a73553f6a37f269dd102b7ca12",
+        "924fada26f59132a0785addb7a789104b5525d0d0f96c4e7a0b3aacca9b60dd9",
+        "9d4e687ba08003899af23c00909ce6b7de677ec79c3b3a7aaa3dc611b1505e75",
+        "0da702c671ecc63fe52f48cbee0025aba1ccb49541f3cd5aa8541172cf2e8245",
+        "aee92b4eb0d620dd49ac3e877175bd4fb3e23715904560e9a51df676818c7552"
       ],
       "sibling_previews": [
         "3GPP-IMSI",
@@ -698,6 +698,61 @@
         "3GPP-Selection-Mode",
         "3GPP-SGSN-IPv6-Address",
         "3GPP-SGSN-MCC-MNC",
+        "3GPP-IMEISV",
+        "3GPP-RAT-Type",
+        "3GPP-User-Location-Info",
+        "3GPP-MS-TimeZone"
+      ],
+      "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
+      "table_id": "5c4d3c0bdb48c1ee",
+      "total_rows": 15
+    },
+    "source_file": "tests/fixtures/markdown_with_table.md",
+    "source_name": null,
+    "token_count": 62
+  },
+  {
+    "chunk_id": "a5da1ea6674a391d4331d7b2d1805dddeeafd8a73553f6a37f269dd102b7ca12",
+    "chunk_type": "table_row",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-SGSN-MCC-MNC.\nCode: 18.\nType: UTF8String.\nFlags: V.",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
+      "columns": [
+        "AVP",
+        "Code",
+        "Type",
+        "Flags"
+      ],
+      "row_index": 11,
+      "row_key": "3GPP-SGSN-MCC-MNC",
+      "sibling_ids": [
+        "72992f6cef139e4ae2287dda4de41328153c8fc4e1ebaa1ef204b636af642628",
+        "3c17754fc1815d78d5e779e8618d2026a4aaef859d32ce315620c9b6e7d5d7c3",
+        "8c24a757c85a92ca7ed2276f49263e42c0386ffe0c7fc7af9107d1b20cb4b4ce",
+        "8c3c17b2ea73827f8e234d9bd33db59c34ee0258a134e01bfa5bf176d2184019",
+        "b9946806cfbc08b92ab093db32dc93d8e577bfe98866e6795f1fa30a26bfd9bf",
+        "4760c153665fea5a99a1c2883a0bd9c819f261e773a0a048d660a37c5c94ccff",
+        "7bbd6b80f35fbdfce98f91ac3c918d09ed0042ecd9f4ecace5e162d69b017e58",
+        "066e630381d3aa2f5044bf58c213ad224bde528c4ee768ae045d2d1f21503c64",
+        "bf21d1fb106073aae9309f5f5e3e79eb6c415e620f0555baf7ceeb9ae8cfdeeb",
+        "d7983cf6089050a984a32e2e43d6a2639fe3876a7f4b7f4b66e325e55b7a3e07",
+        "924fada26f59132a0785addb7a789104b5525d0d0f96c4e7a0b3aacca9b60dd9",
+        "9d4e687ba08003899af23c00909ce6b7de677ec79c3b3a7aaa3dc611b1505e75",
+        "0da702c671ecc63fe52f48cbee0025aba1ccb49541f3cd5aa8541172cf2e8245",
+        "aee92b4eb0d620dd49ac3e877175bd4fb3e23715904560e9a51df676818c7552"
+      ],
+      "sibling_previews": [
+        "3GPP-IMSI",
+        "3GPP-Charging-Id",
+        "3GPP-PDP-Type",
+        "3GPP-SGSN-Address",
+        "3GPP-GGSN-Address",
+        "3GPP-IMSI-MCC-MNC",
+        "3GPP-NSAPI",
+        "3GPP-Selection-Mode",
+        "3GPP-SGSN-IPv6-Address",
+        "3GPP-GGSN-IPv6-Address",
         "3GPP-IMEISV",
         "3GPP-RAT-Type",
         "3GPP-User-Location-Info",
@@ -712,64 +767,9 @@
     "token_count": 61
   },
   {
-    "chunk_id": "bf1b006a411b3bceb3e4ba5333f0b93826ba069b18d4c535770aceba70f16fb5",
+    "chunk_id": "924fada26f59132a0785addb7a789104b5525d0d0f96c4e7a0b3aacca9b60dd9",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-SGSN-MCC-MNC.\nCode: 18.\nType: UTF8String.\nFlags: V.",
-    "line_start": null,
-    "metadata": {
-      "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
-      "columns": [
-        "AVP",
-        "Code",
-        "Type",
-        "Flags"
-      ],
-      "row_index": 11,
-      "row_key": "3GPP-SGSN-MCC-MNC",
-      "sibling_ids": [
-        "3e1fed476715c1f5aaa8d25af6b5754b5e0e5288eebc8cd5250a3d22e0bed98e",
-        "ab9947f73a38435f53b96acba4d7dd8d8c319d17d6da55c86f316d2823969a2c",
-        "2179a5280bb3d53bf8bfdab39a43dd63f8f6b8cfc1fd86c9d550ff25a3d70b95",
-        "d7c8fcceef9b7db9f0f727116d4937d92384d51ecfa3d49b062486368d914800",
-        "ee70138ca6c847586741f3d328b6d8faaeac1123fabd3a6992c4a7e6e9818060",
-        "96cb4b8e3f90e7228ac8fc4e4de8a147f2243b274774b5a677c326b3a51c6549",
-        "d3fff648402c6d089b707b51e036798228c4284ca20a0fc2375b9566a8cf1d26",
-        "bd7425e9161ff1bcc79b669e8bd37aa26745303f56cb504a1bbf8bd4453e55ae",
-        "76ae6752a795199a51b2991b9be5ed4008c9ab8edf8e3b86c3d88f7d6690a4cd",
-        "5c4d353bba2550b3d78ca9f66032bf29c7ccd60f00486e7a1340ee35e63084f5",
-        "10dc11a5309794ed48fa4f7f2a6b41ce49591849b85afb09f09c1449690d6939",
-        "9537c43ed721e7c927d8b8bb1fbece23c8ef055d6ab513eded432f201bb622cc",
-        "3c1806091c118f5fe54dc34581ff0b02f7b2ff8aaef2b39c40df2368540ddaa9",
-        "832f796c926b872de4be131cffaf85789dc9dd7cc1b639940b59f46a7946aed6"
-      ],
-      "sibling_previews": [
-        "3GPP-IMSI",
-        "3GPP-Charging-Id",
-        "3GPP-PDP-Type",
-        "3GPP-SGSN-Address",
-        "3GPP-GGSN-Address",
-        "3GPP-IMSI-MCC-MNC",
-        "3GPP-NSAPI",
-        "3GPP-Selection-Mode",
-        "3GPP-SGSN-IPv6-Address",
-        "3GPP-GGSN-IPv6-Address",
-        "3GPP-IMEISV",
-        "3GPP-RAT-Type",
-        "3GPP-User-Location-Info",
-        "3GPP-MS-TimeZone"
-      ],
-      "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "5c4d3c0bdb48c1ee",
-      "total_rows": 15
-    },
-    "source_file": "tests/fixtures/markdown_with_table.md",
-    "source_name": null,
-    "token_count": 60
-  },
-  {
-    "chunk_id": "10dc11a5309794ed48fa4f7f2a6b41ce49591849b85afb09f09c1449690d6939",
-    "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-IMEISV.\nCode: 20.\nType: OctetString.\nFlags: V.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-IMEISV.\nCode: 20.\nType: OctetString.\nFlags: V.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
@@ -782,20 +782,20 @@
       "row_index": 12,
       "row_key": "3GPP-IMEISV",
       "sibling_ids": [
-        "3e1fed476715c1f5aaa8d25af6b5754b5e0e5288eebc8cd5250a3d22e0bed98e",
-        "ab9947f73a38435f53b96acba4d7dd8d8c319d17d6da55c86f316d2823969a2c",
-        "2179a5280bb3d53bf8bfdab39a43dd63f8f6b8cfc1fd86c9d550ff25a3d70b95",
-        "d7c8fcceef9b7db9f0f727116d4937d92384d51ecfa3d49b062486368d914800",
-        "ee70138ca6c847586741f3d328b6d8faaeac1123fabd3a6992c4a7e6e9818060",
-        "96cb4b8e3f90e7228ac8fc4e4de8a147f2243b274774b5a677c326b3a51c6549",
-        "d3fff648402c6d089b707b51e036798228c4284ca20a0fc2375b9566a8cf1d26",
-        "bd7425e9161ff1bcc79b669e8bd37aa26745303f56cb504a1bbf8bd4453e55ae",
-        "76ae6752a795199a51b2991b9be5ed4008c9ab8edf8e3b86c3d88f7d6690a4cd",
-        "5c4d353bba2550b3d78ca9f66032bf29c7ccd60f00486e7a1340ee35e63084f5",
-        "bf1b006a411b3bceb3e4ba5333f0b93826ba069b18d4c535770aceba70f16fb5",
-        "9537c43ed721e7c927d8b8bb1fbece23c8ef055d6ab513eded432f201bb622cc",
-        "3c1806091c118f5fe54dc34581ff0b02f7b2ff8aaef2b39c40df2368540ddaa9",
-        "832f796c926b872de4be131cffaf85789dc9dd7cc1b639940b59f46a7946aed6"
+        "72992f6cef139e4ae2287dda4de41328153c8fc4e1ebaa1ef204b636af642628",
+        "3c17754fc1815d78d5e779e8618d2026a4aaef859d32ce315620c9b6e7d5d7c3",
+        "8c24a757c85a92ca7ed2276f49263e42c0386ffe0c7fc7af9107d1b20cb4b4ce",
+        "8c3c17b2ea73827f8e234d9bd33db59c34ee0258a134e01bfa5bf176d2184019",
+        "b9946806cfbc08b92ab093db32dc93d8e577bfe98866e6795f1fa30a26bfd9bf",
+        "4760c153665fea5a99a1c2883a0bd9c819f261e773a0a048d660a37c5c94ccff",
+        "7bbd6b80f35fbdfce98f91ac3c918d09ed0042ecd9f4ecace5e162d69b017e58",
+        "066e630381d3aa2f5044bf58c213ad224bde528c4ee768ae045d2d1f21503c64",
+        "bf21d1fb106073aae9309f5f5e3e79eb6c415e620f0555baf7ceeb9ae8cfdeeb",
+        "d7983cf6089050a984a32e2e43d6a2639fe3876a7f4b7f4b66e325e55b7a3e07",
+        "a5da1ea6674a391d4331d7b2d1805dddeeafd8a73553f6a37f269dd102b7ca12",
+        "9d4e687ba08003899af23c00909ce6b7de677ec79c3b3a7aaa3dc611b1505e75",
+        "0da702c671ecc63fe52f48cbee0025aba1ccb49541f3cd5aa8541172cf2e8245",
+        "aee92b4eb0d620dd49ac3e877175bd4fb3e23715904560e9a51df676818c7552"
       ],
       "sibling_previews": [
         "3GPP-IMSI",
@@ -819,12 +819,12 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 57
+    "token_count": 58
   },
   {
-    "chunk_id": "9537c43ed721e7c927d8b8bb1fbece23c8ef055d6ab513eded432f201bb622cc",
+    "chunk_id": "9d4e687ba08003899af23c00909ce6b7de677ec79c3b3a7aaa3dc611b1505e75",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-RAT-Type.\nCode: 21.\nType: OctetString.\nFlags: V.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-RAT-Type.\nCode: 21.\nType: OctetString.\nFlags: V.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
@@ -837,20 +837,20 @@
       "row_index": 13,
       "row_key": "3GPP-RAT-Type",
       "sibling_ids": [
-        "3e1fed476715c1f5aaa8d25af6b5754b5e0e5288eebc8cd5250a3d22e0bed98e",
-        "ab9947f73a38435f53b96acba4d7dd8d8c319d17d6da55c86f316d2823969a2c",
-        "2179a5280bb3d53bf8bfdab39a43dd63f8f6b8cfc1fd86c9d550ff25a3d70b95",
-        "d7c8fcceef9b7db9f0f727116d4937d92384d51ecfa3d49b062486368d914800",
-        "ee70138ca6c847586741f3d328b6d8faaeac1123fabd3a6992c4a7e6e9818060",
-        "96cb4b8e3f90e7228ac8fc4e4de8a147f2243b274774b5a677c326b3a51c6549",
-        "d3fff648402c6d089b707b51e036798228c4284ca20a0fc2375b9566a8cf1d26",
-        "bd7425e9161ff1bcc79b669e8bd37aa26745303f56cb504a1bbf8bd4453e55ae",
-        "76ae6752a795199a51b2991b9be5ed4008c9ab8edf8e3b86c3d88f7d6690a4cd",
-        "5c4d353bba2550b3d78ca9f66032bf29c7ccd60f00486e7a1340ee35e63084f5",
-        "bf1b006a411b3bceb3e4ba5333f0b93826ba069b18d4c535770aceba70f16fb5",
-        "10dc11a5309794ed48fa4f7f2a6b41ce49591849b85afb09f09c1449690d6939",
-        "3c1806091c118f5fe54dc34581ff0b02f7b2ff8aaef2b39c40df2368540ddaa9",
-        "832f796c926b872de4be131cffaf85789dc9dd7cc1b639940b59f46a7946aed6"
+        "72992f6cef139e4ae2287dda4de41328153c8fc4e1ebaa1ef204b636af642628",
+        "3c17754fc1815d78d5e779e8618d2026a4aaef859d32ce315620c9b6e7d5d7c3",
+        "8c24a757c85a92ca7ed2276f49263e42c0386ffe0c7fc7af9107d1b20cb4b4ce",
+        "8c3c17b2ea73827f8e234d9bd33db59c34ee0258a134e01bfa5bf176d2184019",
+        "b9946806cfbc08b92ab093db32dc93d8e577bfe98866e6795f1fa30a26bfd9bf",
+        "4760c153665fea5a99a1c2883a0bd9c819f261e773a0a048d660a37c5c94ccff",
+        "7bbd6b80f35fbdfce98f91ac3c918d09ed0042ecd9f4ecace5e162d69b017e58",
+        "066e630381d3aa2f5044bf58c213ad224bde528c4ee768ae045d2d1f21503c64",
+        "bf21d1fb106073aae9309f5f5e3e79eb6c415e620f0555baf7ceeb9ae8cfdeeb",
+        "d7983cf6089050a984a32e2e43d6a2639fe3876a7f4b7f4b66e325e55b7a3e07",
+        "a5da1ea6674a391d4331d7b2d1805dddeeafd8a73553f6a37f269dd102b7ca12",
+        "924fada26f59132a0785addb7a789104b5525d0d0f96c4e7a0b3aacca9b60dd9",
+        "0da702c671ecc63fe52f48cbee0025aba1ccb49541f3cd5aa8541172cf2e8245",
+        "aee92b4eb0d620dd49ac3e877175bd4fb3e23715904560e9a51df676818c7552"
       ],
       "sibling_previews": [
         "3GPP-IMSI",
@@ -874,12 +874,12 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 56
+    "token_count": 57
   },
   {
-    "chunk_id": "3c1806091c118f5fe54dc34581ff0b02f7b2ff8aaef2b39c40df2368540ddaa9",
+    "chunk_id": "0da702c671ecc63fe52f48cbee0025aba1ccb49541f3cd5aa8541172cf2e8245",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-User-Location-Info.\nCode: 22.\nType: OctetString.\nFlags: V.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-User-Location-Info.\nCode: 22.\nType: OctetString.\nFlags: V.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
@@ -892,20 +892,20 @@
       "row_index": 14,
       "row_key": "3GPP-User-Location-Info",
       "sibling_ids": [
-        "3e1fed476715c1f5aaa8d25af6b5754b5e0e5288eebc8cd5250a3d22e0bed98e",
-        "ab9947f73a38435f53b96acba4d7dd8d8c319d17d6da55c86f316d2823969a2c",
-        "2179a5280bb3d53bf8bfdab39a43dd63f8f6b8cfc1fd86c9d550ff25a3d70b95",
-        "d7c8fcceef9b7db9f0f727116d4937d92384d51ecfa3d49b062486368d914800",
-        "ee70138ca6c847586741f3d328b6d8faaeac1123fabd3a6992c4a7e6e9818060",
-        "96cb4b8e3f90e7228ac8fc4e4de8a147f2243b274774b5a677c326b3a51c6549",
-        "d3fff648402c6d089b707b51e036798228c4284ca20a0fc2375b9566a8cf1d26",
-        "bd7425e9161ff1bcc79b669e8bd37aa26745303f56cb504a1bbf8bd4453e55ae",
-        "76ae6752a795199a51b2991b9be5ed4008c9ab8edf8e3b86c3d88f7d6690a4cd",
-        "5c4d353bba2550b3d78ca9f66032bf29c7ccd60f00486e7a1340ee35e63084f5",
-        "bf1b006a411b3bceb3e4ba5333f0b93826ba069b18d4c535770aceba70f16fb5",
-        "10dc11a5309794ed48fa4f7f2a6b41ce49591849b85afb09f09c1449690d6939",
-        "9537c43ed721e7c927d8b8bb1fbece23c8ef055d6ab513eded432f201bb622cc",
-        "832f796c926b872de4be131cffaf85789dc9dd7cc1b639940b59f46a7946aed6"
+        "72992f6cef139e4ae2287dda4de41328153c8fc4e1ebaa1ef204b636af642628",
+        "3c17754fc1815d78d5e779e8618d2026a4aaef859d32ce315620c9b6e7d5d7c3",
+        "8c24a757c85a92ca7ed2276f49263e42c0386ffe0c7fc7af9107d1b20cb4b4ce",
+        "8c3c17b2ea73827f8e234d9bd33db59c34ee0258a134e01bfa5bf176d2184019",
+        "b9946806cfbc08b92ab093db32dc93d8e577bfe98866e6795f1fa30a26bfd9bf",
+        "4760c153665fea5a99a1c2883a0bd9c819f261e773a0a048d660a37c5c94ccff",
+        "7bbd6b80f35fbdfce98f91ac3c918d09ed0042ecd9f4ecace5e162d69b017e58",
+        "066e630381d3aa2f5044bf58c213ad224bde528c4ee768ae045d2d1f21503c64",
+        "bf21d1fb106073aae9309f5f5e3e79eb6c415e620f0555baf7ceeb9ae8cfdeeb",
+        "d7983cf6089050a984a32e2e43d6a2639fe3876a7f4b7f4b66e325e55b7a3e07",
+        "a5da1ea6674a391d4331d7b2d1805dddeeafd8a73553f6a37f269dd102b7ca12",
+        "924fada26f59132a0785addb7a789104b5525d0d0f96c4e7a0b3aacca9b60dd9",
+        "9d4e687ba08003899af23c00909ce6b7de677ec79c3b3a7aaa3dc611b1505e75",
+        "aee92b4eb0d620dd49ac3e877175bd4fb3e23715904560e9a51df676818c7552"
       ],
       "sibling_previews": [
         "3GPP-IMSI",
@@ -929,12 +929,12 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 59
+    "token_count": 60
   },
   {
-    "chunk_id": "832f796c926b872de4be131cffaf85789dc9dd7cc1b639940b59f46a7946aed6",
+    "chunk_id": "aee92b4eb0d620dd49ac3e877175bd4fb3e23715904560e9a51df676818c7552",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-MS-TimeZone.\nCode: 23.\nType: OctetString.\nFlags: V.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are used:\nAVP: 3GPP-MS-TimeZone.\nCode: 23.\nType: OctetString.\nFlags: V.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
@@ -947,20 +947,20 @@
       "row_index": 15,
       "row_key": "3GPP-MS-TimeZone",
       "sibling_ids": [
-        "3e1fed476715c1f5aaa8d25af6b5754b5e0e5288eebc8cd5250a3d22e0bed98e",
-        "ab9947f73a38435f53b96acba4d7dd8d8c319d17d6da55c86f316d2823969a2c",
-        "2179a5280bb3d53bf8bfdab39a43dd63f8f6b8cfc1fd86c9d550ff25a3d70b95",
-        "d7c8fcceef9b7db9f0f727116d4937d92384d51ecfa3d49b062486368d914800",
-        "ee70138ca6c847586741f3d328b6d8faaeac1123fabd3a6992c4a7e6e9818060",
-        "96cb4b8e3f90e7228ac8fc4e4de8a147f2243b274774b5a677c326b3a51c6549",
-        "d3fff648402c6d089b707b51e036798228c4284ca20a0fc2375b9566a8cf1d26",
-        "bd7425e9161ff1bcc79b669e8bd37aa26745303f56cb504a1bbf8bd4453e55ae",
-        "76ae6752a795199a51b2991b9be5ed4008c9ab8edf8e3b86c3d88f7d6690a4cd",
-        "5c4d353bba2550b3d78ca9f66032bf29c7ccd60f00486e7a1340ee35e63084f5",
-        "bf1b006a411b3bceb3e4ba5333f0b93826ba069b18d4c535770aceba70f16fb5",
-        "10dc11a5309794ed48fa4f7f2a6b41ce49591849b85afb09f09c1449690d6939",
-        "9537c43ed721e7c927d8b8bb1fbece23c8ef055d6ab513eded432f201bb622cc",
-        "3c1806091c118f5fe54dc34581ff0b02f7b2ff8aaef2b39c40df2368540ddaa9"
+        "72992f6cef139e4ae2287dda4de41328153c8fc4e1ebaa1ef204b636af642628",
+        "3c17754fc1815d78d5e779e8618d2026a4aaef859d32ce315620c9b6e7d5d7c3",
+        "8c24a757c85a92ca7ed2276f49263e42c0386ffe0c7fc7af9107d1b20cb4b4ce",
+        "8c3c17b2ea73827f8e234d9bd33db59c34ee0258a134e01bfa5bf176d2184019",
+        "b9946806cfbc08b92ab093db32dc93d8e577bfe98866e6795f1fa30a26bfd9bf",
+        "4760c153665fea5a99a1c2883a0bd9c819f261e773a0a048d660a37c5c94ccff",
+        "7bbd6b80f35fbdfce98f91ac3c918d09ed0042ecd9f4ecace5e162d69b017e58",
+        "066e630381d3aa2f5044bf58c213ad224bde528c4ee768ae045d2d1f21503c64",
+        "bf21d1fb106073aae9309f5f5e3e79eb6c415e620f0555baf7ceeb9ae8cfdeeb",
+        "d7983cf6089050a984a32e2e43d6a2639fe3876a7f4b7f4b66e325e55b7a3e07",
+        "a5da1ea6674a391d4331d7b2d1805dddeeafd8a73553f6a37f269dd102b7ca12",
+        "924fada26f59132a0785addb7a789104b5525d0d0f96c4e7a0b3aacca9b60dd9",
+        "9d4e687ba08003899af23c00909ce6b7de677ec79c3b3a7aaa3dc611b1505e75",
+        "0da702c671ecc63fe52f48cbee0025aba1ccb49541f3cd5aa8541172cf2e8245"
       ],
       "sibling_previews": [
         "3GPP-IMSI",
@@ -984,12 +984,12 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 57
+    "token_count": 58
   },
   {
-    "chunk_id": "f221fdae056d9f7b219fb81fb23b90f18af973b3325b13b2e34e5ce1cbd6b65e",
+    "chunk_id": "ded57100d2ab8b10724852380ed94b52b2b5ecc8fffc5a3bc88cfe6dfd362749",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are not used:\nAVP: 3GPP-CG-Address.\nCode: 4.\nType: OctetString.\nFlags: V.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are not used:\nAVP: 3GPP-CG-Address.\nCode: 4.\nType: OctetString.\nFlags: V.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
@@ -1002,12 +1002,12 @@
       "row_index": 1,
       "row_key": "3GPP-CG-Address",
       "sibling_ids": [
-        "d041afc1895b2b67e8083d9560cd84217af2054b4932599b9d4c2ebd3503d960",
-        "acbc9b5a006f2c5ff72a60e1f20e4b9c63d3e80ee8233c98d1da77fb508e53e3",
-        "d70c4bde9eabd8d5e7080a3a20e90d31d683316d45d9c902f58c09d3f2b4111b",
-        "5911fc315ca6acf735c28c873f7f12ec8f4f9522046d4d28b22880d742561d02",
-        "99232312ac068e69009be92e0b2f011e1dbe25561deabc9cc2bcebeb1cbfc92a",
-        "f17ce76b2d722db69d8ea9a24babc1af601d739ebc2f95f59afb2af9a6467ebb"
+        "4b96369dd89be8aa2337e56c9b9ab6c62e738e007a5ee5da5f62dad0975791df",
+        "8d12e8905c062125583579aca4def8faabd29572772bf5861a3beccc9055b0d4",
+        "60e773505509ad373dabe51a12b2daa9a8a07f13fb64dec5844ce255e38c4019",
+        "63fa9d011f892c9b065e74179fa4fc74b323d971c0c57bd14302753696a38409",
+        "2f5b9fa1a8e7c9075d85226818c06f04ec2aadf1408e3b41916fe5a6e3211099",
+        "a411befc9272a66f63146a84c8021fe5b3d21f597c0cb107e546bc34542c7aa3"
       ],
       "sibling_previews": [
         "3GPP-Session-Stop-Indicator",
@@ -1023,12 +1023,12 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 58
+    "token_count": 59
   },
   {
-    "chunk_id": "d041afc1895b2b67e8083d9560cd84217af2054b4932599b9d4c2ebd3503d960",
+    "chunk_id": "4b96369dd89be8aa2337e56c9b9ab6c62e738e007a5ee5da5f62dad0975791df",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are not used:\nAVP: 3GPP-Session-Stop-Indicator.\nCode: 11.\nType: OctetString.\nFlags: V.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are not used:\nAVP: 3GPP-Session-Stop-Indicator.\nCode: 11.\nType: OctetString.\nFlags: V.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
@@ -1041,12 +1041,12 @@
       "row_index": 2,
       "row_key": "3GPP-Session-Stop-Indicator",
       "sibling_ids": [
-        "f221fdae056d9f7b219fb81fb23b90f18af973b3325b13b2e34e5ce1cbd6b65e",
-        "acbc9b5a006f2c5ff72a60e1f20e4b9c63d3e80ee8233c98d1da77fb508e53e3",
-        "d70c4bde9eabd8d5e7080a3a20e90d31d683316d45d9c902f58c09d3f2b4111b",
-        "5911fc315ca6acf735c28c873f7f12ec8f4f9522046d4d28b22880d742561d02",
-        "99232312ac068e69009be92e0b2f011e1dbe25561deabc9cc2bcebeb1cbfc92a",
-        "f17ce76b2d722db69d8ea9a24babc1af601d739ebc2f95f59afb2af9a6467ebb"
+        "ded57100d2ab8b10724852380ed94b52b2b5ecc8fffc5a3bc88cfe6dfd362749",
+        "8d12e8905c062125583579aca4def8faabd29572772bf5861a3beccc9055b0d4",
+        "60e773505509ad373dabe51a12b2daa9a8a07f13fb64dec5844ce255e38c4019",
+        "63fa9d011f892c9b065e74179fa4fc74b323d971c0c57bd14302753696a38409",
+        "2f5b9fa1a8e7c9075d85226818c06f04ec2aadf1408e3b41916fe5a6e3211099",
+        "a411befc9272a66f63146a84c8021fe5b3d21f597c0cb107e546bc34542c7aa3"
       ],
       "sibling_previews": [
         "3GPP-CG-Address",
@@ -1062,12 +1062,12 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 60
+    "token_count": 61
   },
   {
-    "chunk_id": "acbc9b5a006f2c5ff72a60e1f20e4b9c63d3e80ee8233c98d1da77fb508e53e3",
+    "chunk_id": "8d12e8905c062125583579aca4def8faabd29572772bf5861a3beccc9055b0d4",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are not used:\nAVP: 3GPP-CG-IPv6-Address.\nCode: 14.\nType: OctetString.\nFlags: V.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are not used:\nAVP: 3GPP-CG-IPv6-Address.\nCode: 14.\nType: OctetString.\nFlags: V.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
@@ -1080,12 +1080,12 @@
       "row_index": 3,
       "row_key": "3GPP-CG-IPv6-Address",
       "sibling_ids": [
-        "f221fdae056d9f7b219fb81fb23b90f18af973b3325b13b2e34e5ce1cbd6b65e",
-        "d041afc1895b2b67e8083d9560cd84217af2054b4932599b9d4c2ebd3503d960",
-        "d70c4bde9eabd8d5e7080a3a20e90d31d683316d45d9c902f58c09d3f2b4111b",
-        "5911fc315ca6acf735c28c873f7f12ec8f4f9522046d4d28b22880d742561d02",
-        "99232312ac068e69009be92e0b2f011e1dbe25561deabc9cc2bcebeb1cbfc92a",
-        "f17ce76b2d722db69d8ea9a24babc1af601d739ebc2f95f59afb2af9a6467ebb"
+        "ded57100d2ab8b10724852380ed94b52b2b5ecc8fffc5a3bc88cfe6dfd362749",
+        "4b96369dd89be8aa2337e56c9b9ab6c62e738e007a5ee5da5f62dad0975791df",
+        "60e773505509ad373dabe51a12b2daa9a8a07f13fb64dec5844ce255e38c4019",
+        "63fa9d011f892c9b065e74179fa4fc74b323d971c0c57bd14302753696a38409",
+        "2f5b9fa1a8e7c9075d85226818c06f04ec2aadf1408e3b41916fe5a6e3211099",
+        "a411befc9272a66f63146a84c8021fe5b3d21f597c0cb107e546bc34542c7aa3"
       ],
       "sibling_previews": [
         "3GPP-CG-Address",
@@ -1101,12 +1101,12 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 61
+    "token_count": 62
   },
   {
-    "chunk_id": "d70c4bde9eabd8d5e7080a3a20e90d31d683316d45d9c902f58c09d3f2b4111b",
+    "chunk_id": "60e773505509ad373dabe51a12b2daa9a8a07f13fb64dec5844ce255e38c4019",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are not used:\nAVP: 3GPP-CAMEL-Charging-Info.\nCode: 24.\nType: OctetString.\nFlags: V.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are not used:\nAVP: 3GPP-CAMEL-Charging-Info.\nCode: 24.\nType: OctetString.\nFlags: V.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
@@ -1119,12 +1119,12 @@
       "row_index": 4,
       "row_key": "3GPP-CAMEL-Charging-Info",
       "sibling_ids": [
-        "f221fdae056d9f7b219fb81fb23b90f18af973b3325b13b2e34e5ce1cbd6b65e",
-        "d041afc1895b2b67e8083d9560cd84217af2054b4932599b9d4c2ebd3503d960",
-        "acbc9b5a006f2c5ff72a60e1f20e4b9c63d3e80ee8233c98d1da77fb508e53e3",
-        "5911fc315ca6acf735c28c873f7f12ec8f4f9522046d4d28b22880d742561d02",
-        "99232312ac068e69009be92e0b2f011e1dbe25561deabc9cc2bcebeb1cbfc92a",
-        "f17ce76b2d722db69d8ea9a24babc1af601d739ebc2f95f59afb2af9a6467ebb"
+        "ded57100d2ab8b10724852380ed94b52b2b5ecc8fffc5a3bc88cfe6dfd362749",
+        "4b96369dd89be8aa2337e56c9b9ab6c62e738e007a5ee5da5f62dad0975791df",
+        "8d12e8905c062125583579aca4def8faabd29572772bf5861a3beccc9055b0d4",
+        "63fa9d011f892c9b065e74179fa4fc74b323d971c0c57bd14302753696a38409",
+        "2f5b9fa1a8e7c9075d85226818c06f04ec2aadf1408e3b41916fe5a6e3211099",
+        "a411befc9272a66f63146a84c8021fe5b3d21f597c0cb107e546bc34542c7aa3"
       ],
       "sibling_previews": [
         "3GPP-CG-Address",
@@ -1140,12 +1140,12 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 61
+    "token_count": 62
   },
   {
-    "chunk_id": "5911fc315ca6acf735c28c873f7f12ec8f4f9522046d4d28b22880d742561d02",
+    "chunk_id": "63fa9d011f892c9b065e74179fa4fc74b323d971c0c57bd14302753696a38409",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are not used:\nAVP: 3GPP-Packet-Filter.\nCode: 25.\nType: OctetString.\nFlags: V.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are not used:\nAVP: 3GPP-Packet-Filter.\nCode: 25.\nType: OctetString.\nFlags: V.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
@@ -1158,12 +1158,12 @@
       "row_index": 5,
       "row_key": "3GPP-Packet-Filter",
       "sibling_ids": [
-        "f221fdae056d9f7b219fb81fb23b90f18af973b3325b13b2e34e5ce1cbd6b65e",
-        "d041afc1895b2b67e8083d9560cd84217af2054b4932599b9d4c2ebd3503d960",
-        "acbc9b5a006f2c5ff72a60e1f20e4b9c63d3e80ee8233c98d1da77fb508e53e3",
-        "d70c4bde9eabd8d5e7080a3a20e90d31d683316d45d9c902f58c09d3f2b4111b",
-        "99232312ac068e69009be92e0b2f011e1dbe25561deabc9cc2bcebeb1cbfc92a",
-        "f17ce76b2d722db69d8ea9a24babc1af601d739ebc2f95f59afb2af9a6467ebb"
+        "ded57100d2ab8b10724852380ed94b52b2b5ecc8fffc5a3bc88cfe6dfd362749",
+        "4b96369dd89be8aa2337e56c9b9ab6c62e738e007a5ee5da5f62dad0975791df",
+        "8d12e8905c062125583579aca4def8faabd29572772bf5861a3beccc9055b0d4",
+        "60e773505509ad373dabe51a12b2daa9a8a07f13fb64dec5844ce255e38c4019",
+        "2f5b9fa1a8e7c9075d85226818c06f04ec2aadf1408e3b41916fe5a6e3211099",
+        "a411befc9272a66f63146a84c8021fe5b3d21f597c0cb107e546bc34542c7aa3"
       ],
       "sibling_previews": [
         "3GPP-CG-Address",
@@ -1179,12 +1179,12 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 58
+    "token_count": 59
   },
   {
-    "chunk_id": "99232312ac068e69009be92e0b2f011e1dbe25561deabc9cc2bcebeb1cbfc92a",
+    "chunk_id": "2f5b9fa1a8e7c9075d85226818c06f04ec2aadf1408e3b41916fe5a6e3211099",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are not used:\nAVP: 3GPP-Negotiated-DSCP.\nCode: 26.\nType: OctetString.\nFlags: V.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are not used:\nAVP: 3GPP-Negotiated-DSCP.\nCode: 26.\nType: OctetString.\nFlags: V.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
@@ -1197,12 +1197,12 @@
       "row_index": 6,
       "row_key": "3GPP-Negotiated-DSCP",
       "sibling_ids": [
-        "f221fdae056d9f7b219fb81fb23b90f18af973b3325b13b2e34e5ce1cbd6b65e",
-        "d041afc1895b2b67e8083d9560cd84217af2054b4932599b9d4c2ebd3503d960",
-        "acbc9b5a006f2c5ff72a60e1f20e4b9c63d3e80ee8233c98d1da77fb508e53e3",
-        "d70c4bde9eabd8d5e7080a3a20e90d31d683316d45d9c902f58c09d3f2b4111b",
-        "5911fc315ca6acf735c28c873f7f12ec8f4f9522046d4d28b22880d742561d02",
-        "f17ce76b2d722db69d8ea9a24babc1af601d739ebc2f95f59afb2af9a6467ebb"
+        "ded57100d2ab8b10724852380ed94b52b2b5ecc8fffc5a3bc88cfe6dfd362749",
+        "4b96369dd89be8aa2337e56c9b9ab6c62e738e007a5ee5da5f62dad0975791df",
+        "8d12e8905c062125583579aca4def8faabd29572772bf5861a3beccc9055b0d4",
+        "60e773505509ad373dabe51a12b2daa9a8a07f13fb64dec5844ce255e38c4019",
+        "63fa9d011f892c9b065e74179fa4fc74b323d971c0c57bd14302753696a38409",
+        "a411befc9272a66f63146a84c8021fe5b3d21f597c0cb107e546bc34542c7aa3"
       ],
       "sibling_previews": [
         "3GPP-CG-Address",
@@ -1218,12 +1218,12 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 59
+    "token_count": 60
   },
   {
-    "chunk_id": "f17ce76b2d722db69d8ea9a24babc1af601d739ebc2f95f59afb2af9a6467ebb",
+    "chunk_id": "a411befc9272a66f63146a84c8021fe5b3d21f597c0cb107e546bc34542c7aa3",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are not used:\nAVP: 3GPP-Allocate-IP-Type.\nCode: 27.\nType: OctetString.\nFlags: V.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications\nThe following AVP types from the base 3GPP Diameter dictionary are not used:\nAVP: 3GPP-Allocate-IP-Type.\nCode: 27.\nType: OctetString.\nFlags: V.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications",
@@ -1236,12 +1236,12 @@
       "row_index": 7,
       "row_key": "3GPP-Allocate-IP-Type",
       "sibling_ids": [
-        "f221fdae056d9f7b219fb81fb23b90f18af973b3325b13b2e34e5ce1cbd6b65e",
-        "d041afc1895b2b67e8083d9560cd84217af2054b4932599b9d4c2ebd3503d960",
-        "acbc9b5a006f2c5ff72a60e1f20e4b9c63d3e80ee8233c98d1da77fb508e53e3",
-        "d70c4bde9eabd8d5e7080a3a20e90d31d683316d45d9c902f58c09d3f2b4111b",
-        "5911fc315ca6acf735c28c873f7f12ec8f4f9522046d4d28b22880d742561d02",
-        "99232312ac068e69009be92e0b2f011e1dbe25561deabc9cc2bcebeb1cbfc92a"
+        "ded57100d2ab8b10724852380ed94b52b2b5ecc8fffc5a3bc88cfe6dfd362749",
+        "4b96369dd89be8aa2337e56c9b9ab6c62e738e007a5ee5da5f62dad0975791df",
+        "8d12e8905c062125583579aca4def8faabd29572772bf5861a3beccc9055b0d4",
+        "60e773505509ad373dabe51a12b2daa9a8a07f13fb64dec5844ce255e38c4019",
+        "63fa9d011f892c9b065e74179fa4fc74b323d971c0c57bd14302753696a38409",
+        "2f5b9fa1a8e7c9075d85226818c06f04ec2aadf1408e3b41916fe5a6e3211099"
       ],
       "sibling_previews": [
         "3GPP-CG-Address",
@@ -1257,12 +1257,12 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 59
+    "token_count": 60
   },
   {
-    "chunk_id": "bdd5d34aeda8bca2cf5b8659a11f460c0028e30604c9960ab30dbb908a340df8",
+    "chunk_id": "a1bd381ed859fa1a13c0bc191212889ae27884319e7ef9d072327bdc5a968547",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nCustom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\nAVP: Accounting-Input-Octets.\nVendor: 0.\nCode: 363.\nType: Unsigned64.\nFlags: M.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nCustom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\nAVP: Accounting-Input-Octets.\nVendor: 0.\nCode: 363.\nType: Unsigned64.\nFlags: M.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ",
@@ -1276,10 +1276,10 @@
       "row_index": 1,
       "row_key": "Accounting-Input-Octets",
       "sibling_ids": [
-        "60258bb59641dd36b396b03521634b812e9296906e1ccac05dadd81e6a4ca4a7",
-        "b73a4c87f2a33e626e97cc36f048ee69ba6abc253c984470d39a4f35d9c8ee26",
-        "88abb1b1dc381bed8418a93037d81bc04615605a0c7f1640a5577e409a9398ba",
-        "f698154d18a5b7ccf7fadac29d7d7025b3196fc363ee03b3e9181b048cd19eed"
+        "431d95b46d5c07847b0396f5a2e65190a4e5ba7f3d0d7587d86dd5f8fae79cfa",
+        "78f0812b5dbe4891cef5b5514c528b6463cb03335700d727a8180a83454451c4",
+        "2282f17b371bf806a57d12ebe549d79a3b0b1387827f847ee4ad3f290eae123a",
+        "768619d19712f4ef5603d2dad6eddc1312c2d0751766a871486a4ba52c8b9268"
       ],
       "sibling_previews": [
         "Accounting-Input-Packets",
@@ -1293,12 +1293,12 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 68
+    "token_count": 69
   },
   {
-    "chunk_id": "60258bb59641dd36b396b03521634b812e9296906e1ccac05dadd81e6a4ca4a7",
+    "chunk_id": "431d95b46d5c07847b0396f5a2e65190a4e5ba7f3d0d7587d86dd5f8fae79cfa",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nCustom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\nAVP: Accounting-Input-Packets.\nVendor: 0.\nCode: 365.\nType: Unsigned64.\nFlags: M.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nCustom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\nAVP: Accounting-Input-Packets.\nVendor: 0.\nCode: 365.\nType: Unsigned64.\nFlags: M.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ",
@@ -1312,10 +1312,10 @@
       "row_index": 2,
       "row_key": "Accounting-Input-Packets",
       "sibling_ids": [
-        "bdd5d34aeda8bca2cf5b8659a11f460c0028e30604c9960ab30dbb908a340df8",
-        "b73a4c87f2a33e626e97cc36f048ee69ba6abc253c984470d39a4f35d9c8ee26",
-        "88abb1b1dc381bed8418a93037d81bc04615605a0c7f1640a5577e409a9398ba",
-        "f698154d18a5b7ccf7fadac29d7d7025b3196fc363ee03b3e9181b048cd19eed"
+        "a1bd381ed859fa1a13c0bc191212889ae27884319e7ef9d072327bdc5a968547",
+        "78f0812b5dbe4891cef5b5514c528b6463cb03335700d727a8180a83454451c4",
+        "2282f17b371bf806a57d12ebe549d79a3b0b1387827f847ee4ad3f290eae123a",
+        "768619d19712f4ef5603d2dad6eddc1312c2d0751766a871486a4ba52c8b9268"
       ],
       "sibling_previews": [
         "Accounting-Input-Octets",
@@ -1329,12 +1329,12 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 68
+    "token_count": 69
   },
   {
-    "chunk_id": "b73a4c87f2a33e626e97cc36f048ee69ba6abc253c984470d39a4f35d9c8ee26",
+    "chunk_id": "78f0812b5dbe4891cef5b5514c528b6463cb03335700d727a8180a83454451c4",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nCustom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\nAVP: Accounting-Output-Octets.\nVendor: 0.\nCode: 364.\nType: Unsigned64.\nFlags: M.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nCustom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\nAVP: Accounting-Output-Octets.\nVendor: 0.\nCode: 364.\nType: Unsigned64.\nFlags: M.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ",
@@ -1348,10 +1348,10 @@
       "row_index": 3,
       "row_key": "Accounting-Output-Octets",
       "sibling_ids": [
-        "bdd5d34aeda8bca2cf5b8659a11f460c0028e30604c9960ab30dbb908a340df8",
-        "60258bb59641dd36b396b03521634b812e9296906e1ccac05dadd81e6a4ca4a7",
-        "88abb1b1dc381bed8418a93037d81bc04615605a0c7f1640a5577e409a9398ba",
-        "f698154d18a5b7ccf7fadac29d7d7025b3196fc363ee03b3e9181b048cd19eed"
+        "a1bd381ed859fa1a13c0bc191212889ae27884319e7ef9d072327bdc5a968547",
+        "431d95b46d5c07847b0396f5a2e65190a4e5ba7f3d0d7587d86dd5f8fae79cfa",
+        "2282f17b371bf806a57d12ebe549d79a3b0b1387827f847ee4ad3f290eae123a",
+        "768619d19712f4ef5603d2dad6eddc1312c2d0751766a871486a4ba52c8b9268"
       ],
       "sibling_previews": [
         "Accounting-Input-Octets",
@@ -1365,12 +1365,12 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 68
+    "token_count": 69
   },
   {
-    "chunk_id": "88abb1b1dc381bed8418a93037d81bc04615605a0c7f1640a5577e409a9398ba",
+    "chunk_id": "2282f17b371bf806a57d12ebe549d79a3b0b1387827f847ee4ad3f290eae123a",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nCustom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\nAVP: Accounting-Output-Packets.\nVendor: 0.\nCode: 366.\nType: Unsigned64.\nFlags: M.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nCustom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\nAVP: Accounting-Output-Packets.\nVendor: 0.\nCode: 366.\nType: Unsigned64.\nFlags: M.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ",
@@ -1384,10 +1384,10 @@
       "row_index": 4,
       "row_key": "Accounting-Output-Packets",
       "sibling_ids": [
-        "bdd5d34aeda8bca2cf5b8659a11f460c0028e30604c9960ab30dbb908a340df8",
-        "60258bb59641dd36b396b03521634b812e9296906e1ccac05dadd81e6a4ca4a7",
-        "b73a4c87f2a33e626e97cc36f048ee69ba6abc253c984470d39a4f35d9c8ee26",
-        "f698154d18a5b7ccf7fadac29d7d7025b3196fc363ee03b3e9181b048cd19eed"
+        "a1bd381ed859fa1a13c0bc191212889ae27884319e7ef9d072327bdc5a968547",
+        "431d95b46d5c07847b0396f5a2e65190a4e5ba7f3d0d7587d86dd5f8fae79cfa",
+        "78f0812b5dbe4891cef5b5514c528b6463cb03335700d727a8180a83454451c4",
+        "768619d19712f4ef5603d2dad6eddc1312c2d0751766a871486a4ba52c8b9268"
       ],
       "sibling_previews": [
         "Accounting-Input-Octets",
@@ -1401,12 +1401,12 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 68
+    "token_count": 69
   },
   {
-    "chunk_id": "f698154d18a5b7ccf7fadac29d7d7025b3196fc363ee03b3e9181b048cd19eed",
+    "chunk_id": "768619d19712f4ef5603d2dad6eddc1312c2d0751766a871486a4ba52c8b9268",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nCustom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\nAVP: Accounting-Record-Number.\nVendor: 0.\nCode: 485.\nType: Unsigned32.\nFlags: M.",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nCustom vendor AVPs (vendor 99999, id 1). The following AVP types are used:\nAVP: Accounting-Record-Number.\nVendor: 0.\nCode: 485.\nType: Unsigned32.\nFlags: M.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ",
@@ -1420,10 +1420,10 @@
       "row_index": 5,
       "row_key": "Accounting-Record-Number",
       "sibling_ids": [
-        "bdd5d34aeda8bca2cf5b8659a11f460c0028e30604c9960ab30dbb908a340df8",
-        "60258bb59641dd36b396b03521634b812e9296906e1ccac05dadd81e6a4ca4a7",
-        "b73a4c87f2a33e626e97cc36f048ee69ba6abc253c984470d39a4f35d9c8ee26",
-        "88abb1b1dc381bed8418a93037d81bc04615605a0c7f1640a5577e409a9398ba"
+        "a1bd381ed859fa1a13c0bc191212889ae27884319e7ef9d072327bdc5a968547",
+        "431d95b46d5c07847b0396f5a2e65190a4e5ba7f3d0d7587d86dd5f8fae79cfa",
+        "78f0812b5dbe4891cef5b5514c528b6463cb03335700d727a8180a83454451c4",
+        "2282f17b371bf806a57d12ebe549d79a3b0b1387827f847ee4ad3f290eae123a"
       ],
       "sibling_previews": [
         "Accounting-Input-Octets",
@@ -1437,12 +1437,12 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 68
+    "token_count": 69
   },
   {
-    "chunk_id": "fb283596c81d5aa6ac0e92d0004d38e281d798752a5b33e7dadd80986358594b",
+    "chunk_id": "f86985bbeb6365e667f4363cebf86f2f6e82e731030de8a2e276dd5362dad95c",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > Chart configuration\nThe following table lists the main configuration parameters and their default values:\nParameter: replicaCount.\nDescription: Number of Session Management Controller replicas to run.\nDefault: 1.",
+    "content": "# DIAMETER Support with SMC > Chart configuration\nThe following table lists the main configuration parameters and their default values:\nParameter: replicaCount.\nDescription: Number of Session Management Controller replicas to run.\nDefault: 1.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > Chart configuration",
@@ -1454,77 +1454,13 @@
       "row_index": 1,
       "row_key": "replicaCount",
       "sibling_ids": [
-        "ac0e40ae7d734bc3055f9ea19c30c54a57d9ec1561d2702e95a42cd9f3b54f43",
-        "048d44238b695f7f81422f8529d862efcfb2600af16c4f3ab97daa9b313ea2d2",
-        "bb14ba41c6024a156b546a156483b94e229ae2bc492e9417e3fdb68219c6338d"
+        "a757d92c67baeb41951d2860628d8e6b4b32818c571185aaf46bff66f5adbe07",
+        "1f3dec893892582fd77882b638992dd283908c6214bc7eb531da79087bfcc252",
+        "a3598bc65ec44206dc6b830c4da746f4c95c34f2c2a470fdd8969943d085da3f"
       ],
       "sibling_previews": [
         "image.tag",
         "resources.limits.cpu",
-        "logging.level"
-      ],
-      "table_caption": "The following table lists the main configuration parameters and their default values:",
-      "table_id": "85143d19881043f9",
-      "total_rows": 4
-    },
-    "source_file": "tests/fixtures/markdown_with_table.md",
-    "source_name": null,
-    "token_count": 45
-  },
-  {
-    "chunk_id": "ac0e40ae7d734bc3055f9ea19c30c54a57d9ec1561d2702e95a42cd9f3b54f43",
-    "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > Chart configuration\nThe following table lists the main configuration parameters and their default values:\nParameter: image.tag.\nDescription: Container image tag to deploy.\nDefault: latest.",
-    "line_start": null,
-    "metadata": {
-      "breadcrumb_path": "DIAMETER Support with SMC > Chart configuration",
-      "columns": [
-        "Parameter",
-        "Description",
-        "Default"
-      ],
-      "row_index": 2,
-      "row_key": "image.tag",
-      "sibling_ids": [
-        "fb283596c81d5aa6ac0e92d0004d38e281d798752a5b33e7dadd80986358594b",
-        "048d44238b695f7f81422f8529d862efcfb2600af16c4f3ab97daa9b313ea2d2",
-        "bb14ba41c6024a156b546a156483b94e229ae2bc492e9417e3fdb68219c6338d"
-      ],
-      "sibling_previews": [
-        "replicaCount",
-        "resources.limits.cpu",
-        "logging.level"
-      ],
-      "table_caption": "The following table lists the main configuration parameters and their default values:",
-      "table_id": "85143d19881043f9",
-      "total_rows": 4
-    },
-    "source_file": "tests/fixtures/markdown_with_table.md",
-    "source_name": null,
-    "token_count": 41
-  },
-  {
-    "chunk_id": "048d44238b695f7f81422f8529d862efcfb2600af16c4f3ab97daa9b313ea2d2",
-    "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > Chart configuration\nThe following table lists the main configuration parameters and their default values:\nParameter: resources.limits.cpu.\nDescription: CPU limit applied to each pod.\nDefault: 500m.",
-    "line_start": null,
-    "metadata": {
-      "breadcrumb_path": "DIAMETER Support with SMC > Chart configuration",
-      "columns": [
-        "Parameter",
-        "Description",
-        "Default"
-      ],
-      "row_index": 3,
-      "row_key": "resources.limits.cpu",
-      "sibling_ids": [
-        "fb283596c81d5aa6ac0e92d0004d38e281d798752a5b33e7dadd80986358594b",
-        "ac0e40ae7d734bc3055f9ea19c30c54a57d9ec1561d2702e95a42cd9f3b54f43",
-        "bb14ba41c6024a156b546a156483b94e229ae2bc492e9417e3fdb68219c6338d"
-      ],
-      "sibling_previews": [
-        "replicaCount",
-        "image.tag",
         "logging.level"
       ],
       "table_caption": "The following table lists the main configuration parameters and their default values:",
@@ -1536,9 +1472,73 @@
     "token_count": 46
   },
   {
-    "chunk_id": "bb14ba41c6024a156b546a156483b94e229ae2bc492e9417e3fdb68219c6338d",
+    "chunk_id": "a757d92c67baeb41951d2860628d8e6b4b32818c571185aaf46bff66f5adbe07",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > Chart configuration\nThe following table lists the main configuration parameters and their default values:\nParameter: logging.level.\nDescription: Log verbosity for the service.\nDefault: info.",
+    "content": "# DIAMETER Support with SMC > Chart configuration\nThe following table lists the main configuration parameters and their default values:\nParameter: image.tag.\nDescription: Container image tag to deploy.\nDefault: latest.",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "DIAMETER Support with SMC > Chart configuration",
+      "columns": [
+        "Parameter",
+        "Description",
+        "Default"
+      ],
+      "row_index": 2,
+      "row_key": "image.tag",
+      "sibling_ids": [
+        "f86985bbeb6365e667f4363cebf86f2f6e82e731030de8a2e276dd5362dad95c",
+        "1f3dec893892582fd77882b638992dd283908c6214bc7eb531da79087bfcc252",
+        "a3598bc65ec44206dc6b830c4da746f4c95c34f2c2a470fdd8969943d085da3f"
+      ],
+      "sibling_previews": [
+        "replicaCount",
+        "resources.limits.cpu",
+        "logging.level"
+      ],
+      "table_caption": "The following table lists the main configuration parameters and their default values:",
+      "table_id": "85143d19881043f9",
+      "total_rows": 4
+    },
+    "source_file": "tests/fixtures/markdown_with_table.md",
+    "source_name": null,
+    "token_count": 42
+  },
+  {
+    "chunk_id": "1f3dec893892582fd77882b638992dd283908c6214bc7eb531da79087bfcc252",
+    "chunk_type": "table_row",
+    "content": "# DIAMETER Support with SMC > Chart configuration\nThe following table lists the main configuration parameters and their default values:\nParameter: resources.limits.cpu.\nDescription: CPU limit applied to each pod.\nDefault: 500m.",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "DIAMETER Support with SMC > Chart configuration",
+      "columns": [
+        "Parameter",
+        "Description",
+        "Default"
+      ],
+      "row_index": 3,
+      "row_key": "resources.limits.cpu",
+      "sibling_ids": [
+        "f86985bbeb6365e667f4363cebf86f2f6e82e731030de8a2e276dd5362dad95c",
+        "a757d92c67baeb41951d2860628d8e6b4b32818c571185aaf46bff66f5adbe07",
+        "a3598bc65ec44206dc6b830c4da746f4c95c34f2c2a470fdd8969943d085da3f"
+      ],
+      "sibling_previews": [
+        "replicaCount",
+        "image.tag",
+        "logging.level"
+      ],
+      "table_caption": "The following table lists the main configuration parameters and their default values:",
+      "table_id": "85143d19881043f9",
+      "total_rows": 4
+    },
+    "source_file": "tests/fixtures/markdown_with_table.md",
+    "source_name": null,
+    "token_count": 47
+  },
+  {
+    "chunk_id": "a3598bc65ec44206dc6b830c4da746f4c95c34f2c2a470fdd8969943d085da3f",
+    "chunk_type": "table_row",
+    "content": "# DIAMETER Support with SMC > Chart configuration\nThe following table lists the main configuration parameters and their default values:\nParameter: logging.level.\nDescription: Log verbosity for the service.\nDefault: info.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > Chart configuration",
@@ -1550,9 +1550,9 @@
       "row_index": 4,
       "row_key": "logging.level",
       "sibling_ids": [
-        "fb283596c81d5aa6ac0e92d0004d38e281d798752a5b33e7dadd80986358594b",
-        "ac0e40ae7d734bc3055f9ea19c30c54a57d9ec1561d2702e95a42cd9f3b54f43",
-        "048d44238b695f7f81422f8529d862efcfb2600af16c4f3ab97daa9b313ea2d2"
+        "f86985bbeb6365e667f4363cebf86f2f6e82e731030de8a2e276dd5362dad95c",
+        "a757d92c67baeb41951d2860628d8e6b4b32818c571185aaf46bff66f5adbe07",
+        "1f3dec893892582fd77882b638992dd283908c6214bc7eb531da79087bfcc252"
       ],
       "sibling_previews": [
         "replicaCount",
@@ -1565,6 +1565,6 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 41
+    "token_count": 42
   }
 ]

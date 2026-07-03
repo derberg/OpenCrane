@@ -492,3 +492,119 @@ def test_no_h1_external_source_keeps_non_empty_index_section_and_does_not_poison
     assert "https://companion.example.com/docs/reference" in llms_txt, (
         "companion reference URL poisoned by no-H1 source"
     )
+
+
+@pytest.mark.unit
+def test_generated_source_without_resolvable_url_does_not_poison_mixed_bundle(
+    tmp_path, monkeypatch
+):
+    """Regression: a generated (github/local) source that contributes markdown content
+    but resolves NO per-page URL must not drop its ## section from llms.txt.
+
+    When the ## section is dropped, the combined llms.txt has fewer sections than
+    the combined llms-full.txt has ====== blocks.  The chunker falls back to legacy
+    marker detection (finds nothing in clean content) and sets source_url=None for
+    EVERY chunk in the entire bundle — poisoning even correctly-mapped sources.
+
+    Setup:
+      - mapped-source:   has a docs_url in the mapping → per-page URLs resolved
+      - unmapped-source: markdown files exist on disk but no mapping entry → no URLs
+
+    Expected:
+      - mapped-source chunks carry their correct per-page source_url
+      - unmapped-source chunks carry source_url=None (acceptable; the source itself
+        is unmapped — but it must NOT cause the mapped source to lose its URL)
+    """
+    import os
+    from opencrane.rag.chunker import main as chunker_main
+    from opencrane.rag.services.chunk_serializer import ChunkSerializer
+
+    opencrane_dir = tmp_path / ".opencrane"
+    opencrane_dir.mkdir()
+    config_yaml = opencrane_dir / "config.yaml"
+
+    # mapped-source: has docs_url → get_source_url() will return per-page URLs.
+    # no-url-source: in the mapping but has NO url and NO docs_url → get_source_url()
+    #   returns None for every file → build_project_output entries list stays empty.
+    #   This is the poison scenario: no-url-source contributes a content block but
+    #   its ## section gets dropped from llms.txt → block count > section count.
+    config_yaml.write_text(
+        "sources:\n"
+        "  mapped-source:\n"
+        "    url: https://github.com/example/mapped-source\n"
+        "    docs_url: https://mapped.example.com/docs\n"
+        "    manual: true\n"
+        "  no-url-source:\n"
+        "    manual: true\n"
+    )
+    monkeypatch.setenv("MAPPING_FILE", str(config_yaml))
+
+    sources_base = opencrane_dir / "sources"
+    llmstxt_dir = opencrane_dir / "llmstxt"
+
+    # mapped-source: one markdown file, docs_url will resolve a per-page URL
+    mapped_dir = sources_base / "mapped-source"
+    mapped_dir.mkdir(parents=True)
+    (mapped_dir / "page.md").write_text(
+        "# Mapped Page\n\nThis page belongs to the mapped source.\n"
+    )
+
+    # no-url-source: markdown files exist, IS in the mapping, but has no url/docs_url
+    # → get_source_url() returns None for every file
+    no_url_dir = sources_base / "no-url-source"
+    no_url_dir.mkdir(parents=True)
+    (no_url_dir / "readme.md").write_text(
+        "# No-URL Readme\n\nThis source has no url or docs_url in the mapping.\n"
+    )
+    (no_url_dir / "guide.md").write_text(
+        "# No-URL Guide\n\nAnother page from the no-url source.\n"
+    )
+
+    orig_cwd = os.getcwd()
+    orig_source_mapping = generate_llms_txt._source_mapping
+    try:
+        os.chdir(tmp_path)
+        generate_llms_txt._source_mapping = None
+
+        generate_outputs(
+            sources_dirs=[sources_base],
+            llmstxt_dir=llmstxt_dir,
+            force=True,
+        )
+    finally:
+        os.chdir(orig_cwd)
+        generate_llms_txt._source_mapping = orig_source_mapping
+
+    llms_txt_path = llmstxt_dir / "llms.txt"
+    assert llms_txt_path.exists(), "llms.txt must be written by generate_outputs"
+    llms_txt = llms_txt_path.read_text()
+
+    # The no-url source must still have a section (even if its entry is a placeholder)
+    # so block/section counts stay aligned and the mapped source is not poisoned.
+    assert "## no-url-source" in llms_txt, (
+        "no-url-source section missing from llms.txt — "
+        "block/section count mismatch will poison all source_urls"
+    )
+
+    # Run the chunker
+    chunks_file = tmp_path / "chunks.json"
+    try:
+        os.chdir(tmp_path)
+        generate_llms_txt._source_mapping = None
+        chunker_main(llmstxt_dir=llmstxt_dir, chunks_file=chunks_file)
+    finally:
+        os.chdir(orig_cwd)
+        generate_llms_txt._source_mapping = orig_source_mapping
+
+    chunks = ChunkSerializer.deserialize_chunks(chunks_file)
+    assert len(chunks) > 0, "No chunks produced"
+
+    # mapped-source chunks must carry their correct per-page source_url
+    mapped_chunks = [
+        c for c in chunks
+        if (c.metadata.get("source_url") or "").startswith("https://mapped.example.com/")
+    ]
+    assert len(mapped_chunks) > 0, (
+        "No chunks with mapped.example.com source_url — "
+        "the no-url source poisoned the entire bundle (regression)"
+    )

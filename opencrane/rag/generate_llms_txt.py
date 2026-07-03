@@ -380,6 +380,18 @@ def build_project_output(project_dir: Path, project_name: str | None = None, md_
         if entry is not None:
             entries.append(entry)
 
+    # If this project contributed content but resolved no URLs for any file, emit a
+    # single fallback IndexEntry so render_llms_txt never drops the ## {source}
+    # section.  A dropped section causes the combined llms.txt to have fewer
+    # sections than the combined llms-full.txt has ====== blocks; the chunker then
+    # falls back to legacy marker detection (finds nothing in clean content) and
+    # sets source_url=None for EVERY chunk in the bundle — poisoning even correctly-
+    # mapped sources.  The empty-title placeholder keeps the section present while
+    # leaving this unmapped source's own chunks with source_url=None, which is the
+    # pre-existing behaviour for an unmapped source in isolation.
+    if sections and not entries:
+        entries.append(IndexEntry(source=project_name, title="", url=""))
+
     return "\n\n-----\n\n".join(sections), entries
 
 

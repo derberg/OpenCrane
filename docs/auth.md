@@ -108,6 +108,34 @@ auth:
 
 `PUBLIC_URL` must be set (as with `local` mode).
 
+### Optional authentication (`allow_anonymous`)
+
+By default `oauth` mode requires a valid bearer token on every request (tokenless
+requests get `401`). Set `allow_anonymous: true` to make the token **optional**:
+
+```yaml
+auth:
+  type: oauth
+  allow_anonymous: true
+  oidc:
+    issuer: https://login.example.com/realms/docs
+    audience: opencrane-docs
+  scope_sources:
+    "docs:internal": [cgw, tsr, tposs]
+  default_sources: [cennso-glossary]
+```
+
+With `allow_anonymous: true`:
+
+- A request **with** a valid bearer token is authorized by its scopes, exactly as normal.
+- A request **without** a token (or with an invalid one) is allowed through as an
+  anonymous caller with no scopes, and resolves to `default_sources`.
+
+This serves public docs without a login while still giving authenticated callers
+their scoped access on the **same endpoint**. `PUBLIC_URL` is not required in this
+mode, and the server does not advertise OAuth discovery metadata, so authenticated
+clients must be configured with a token or authorization endpoint directly.
+
 ---
 
 ## Layer 2 — Authorization: `scope_sources` and `default_sources`

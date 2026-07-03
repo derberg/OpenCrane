@@ -44,6 +44,7 @@ class AuthConfig:
     default_sources: tuple[str, ...] = ()
     local_method: str = "token"
     local_scopes: tuple[str, ...] = ()
+    allow_anonymous: bool = False
 
 
 def parse_auth_config(data: dict, known_sources: set[str]) -> AuthConfig:
@@ -66,6 +67,10 @@ def parse_auth_config(data: dict, known_sources: set[str]) -> AuthConfig:
     auth_type = auth.get("type", "none")
     if auth_type not in ALLOWED_TYPES:
         raise AuthConfigError(f"unknown auth type: {auth_type!r}. Allowed: {sorted(ALLOWED_TYPES)}")
+
+    # When true (oauth mode only), a bearer token is validated if present but not
+    # required: anonymous callers are allowed and fall through to default_sources.
+    allow_anonymous = bool(auth.get("allow_anonymous", False))
 
     # --- scope_sources ---
     raw_scope_sources = auth.get("scope_sources", {})
@@ -140,4 +145,5 @@ def parse_auth_config(data: dict, known_sources: set[str]) -> AuthConfig:
         default_sources=default_sources,
         local_method=local_method,
         local_scopes=local_scopes,
+        allow_anonymous=allow_anonymous,
     )

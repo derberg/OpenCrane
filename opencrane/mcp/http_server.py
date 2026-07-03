@@ -212,8 +212,28 @@ def build_app() -> FastMCP:
     return mcp
 
 
+def build_asgi_app():
+    """Build the ASGI app, adding optional-auth middleware when configured.
+
+    For ``oauth`` mode with ``allow_anonymous: true`` the FastMCP app is left
+    open (no ``RequireAuthMiddleware``) and wrapped in
+    :class:`OptionalAuthMiddleware`, which validates a bearer token if present
+    but never rejects a tokenless request. Every other mode returns the FastMCP
+    app unchanged.
+    """
+    mcp = build_app()
+    asgi_app = mcp.streamable_http_app()
+    auth_config = _load_auth_config()
+    if auth_config.type == "oauth" and auth_config.allow_anonymous:
+        from opencrane.mcp.auth.oauth_verifier import build_token_verifier
+        from opencrane.mcp.auth.optional_auth import OptionalAuthMiddleware
+
+        asgi_app = OptionalAuthMiddleware(asgi_app, build_token_verifier(auth_config))
+    return asgi_app
+
+
 # Module-level Starlette ASGI app served by main().
-app = build_app().streamable_http_app()
+app = build_asgi_app()
 
 
 async def main():

@@ -114,6 +114,17 @@ def build_fastmcp_auth(auth_config: AuthConfig) -> dict:
         }
 
     # type == "oauth": resource-server mode — validate external-IdP JWTs.
+    if auth_config.allow_anonymous:
+        # Optional auth: the endpoint stays open (no RequireAuthMiddleware) and
+        # OpenCrane installs OptionalAuthMiddleware (see http_server) to validate
+        # a bearer token when one is present. Anonymous callers are allowed and
+        # fall through to default_sources.
+        logger.info(
+            "MCP HTTP auth mode: oauth (allow_anonymous) — token validated if "
+            "present, not required"
+        )
+        return {}
+
     public_url = (os.environ.get("PUBLIC_URL") or "").strip()
     if not public_url:
         raise AuthConfigError(

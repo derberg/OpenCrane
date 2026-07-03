@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from contextvars import ContextVar
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -15,14 +16,35 @@ logger = logging.getLogger(__name__)
 # Module-level policy cache; cleared by reset_auth_runtime().
 _access_policy: "AllowAllPolicy | ScopeSourcesPolicy | None" = None
 
+# Per-request scopes set by the optional-auth middleware (oauth allow_anonymous).
+# None means "not set" — current_scopes() then falls back to the SDK access token.
+_optional_scopes: ContextVar[tuple[str, ...] | None] = ContextVar(
+    "opencrane_optional_scopes", default=None
+)
+
+
+def set_optional_scopes(scopes: tuple[str, ...]) -> None:
+    """Record the caller's scopes for this request (optional-auth mode).
+
+    Called by :class:`OptionalAuthMiddleware` after validating (or failing to
+    validate) a bearer token. An anonymous caller is recorded as ``()``.
+    """
+    _optional_scopes.set(tuple(scopes))
+
 
 def current_scopes() -> tuple[str, ...]:
-    """Return the authenticated caller's OAuth scopes as a tuple.
+    """Return the caller's OAuth scopes as a tuple.
 
-    Reads the SDK access token from the current ASGI request context.  When
-    running under stdio transport or when no auth middleware is active,
-    ``get_access_token()`` returns ``None`` and this function returns ``()``.
+    In optional-auth mode the middleware records the scopes for the request, so
+    that value is used when present. Otherwise the SDK access token is read from
+    the current ASGI request context; under stdio transport or when no auth
+    middleware is active, ``get_access_token()`` returns ``None`` and this
+    returns ``()``.
     """
+    optional = _optional_scopes.get()
+    if optional is not None:
+        return optional
+
     from mcp.server.auth.middleware.auth_context import get_access_token
 
     token = get_access_token()
@@ -75,3 +97,4 @@ def reset_auth_runtime() -> None:
     """
     global _access_policy
     _access_policy = None
+    _optional_scopes.set(None)

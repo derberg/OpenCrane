@@ -116,6 +116,29 @@ class TestOAuthParsing:
         result = parse_auth_config(data, known_sources=set())
         assert result.scope_claim == "scope"
 
+    def test_allow_anonymous_defaults_false(self):
+        """allow_anonymous defaults to False."""
+        data = {
+            "auth": {
+                "type": "oauth",
+                "oidc": {"issuer": "https://auth.example.com", "audience": "myapp"},
+            }
+        }
+        result = parse_auth_config(data, known_sources=set())
+        assert result.allow_anonymous is False
+
+    def test_allow_anonymous_true(self):
+        """allow_anonymous: true is parsed as True (optional-auth mode)."""
+        data = {
+            "auth": {
+                "type": "oauth",
+                "allow_anonymous": True,
+                "oidc": {"issuer": "https://auth.example.com", "audience": "myapp"},
+            }
+        }
+        result = parse_auth_config(data, known_sources=set())
+        assert result.allow_anonymous is True
+
     def test_oauth_oidc_none_falls_through_to_issuer_error(self):
         """oauth with oidc: null coerces to empty dict and raises for missing issuer."""
         data = {"auth": {"type": "oauth", "oidc": None}}

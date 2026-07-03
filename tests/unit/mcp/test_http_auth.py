@@ -85,6 +85,48 @@ class TestBuildFastmcpAuth:
         with pytest.raises(AuthConfigError):
             build_fastmcp_auth(cfg)
 
+    def test_oauth_allow_anonymous_returns_open_kwargs(self, monkeypatch):
+        """optional-auth (allow_anonymous) leaves FastMCP open; no PUBLIC_URL needed."""
+        monkeypatch.delenv("PUBLIC_URL", raising=False)
+        cfg = AuthConfig(
+            type="oauth",
+            allow_anonymous=True,
+            oidc_issuer="https://idp.example.com",
+            oidc_audiences=("cennso-knowledge-mcp",),
+        )
+        assert build_fastmcp_auth(cfg) == {}
+
+
+class TestBuildAsgiApp:
+    def test_oauth_allow_anonymous_wraps_with_optional_auth(self, tmp_path, monkeypatch):
+        """optional-auth mode wraps the app in OptionalAuthMiddleware."""
+        from opencrane.mcp.auth.optional_auth import OptionalAuthMiddleware
+
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text(
+            "auth:\n"
+            "  type: oauth\n"
+            "  allow_anonymous: true\n"
+            "  oidc:\n"
+            "    issuer: https://idp.example.com\n"
+            "    audience: cennso-knowledge-mcp\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("MAPPING_FILE", str(cfg))
+        monkeypatch.delenv("PUBLIC_URL", raising=False)
+        app = http_server.build_asgi_app()
+        assert isinstance(app, OptionalAuthMiddleware)
+
+    def test_non_optional_returns_plain_app(self, tmp_path, monkeypatch):
+        """Modes other than oauth+allow_anonymous return the app unwrapped."""
+        from opencrane.mcp.auth.optional_auth import OptionalAuthMiddleware
+
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text("auth:\n  type: none\n", encoding="utf-8")
+        monkeypatch.setenv("MAPPING_FILE", str(cfg))
+        app = http_server.build_asgi_app()
+        assert not isinstance(app, OptionalAuthMiddleware)
+
 
 class TestOauthModeApp:
     def test_serves_protected_resource_metadata_and_401s(self, tmp_path, monkeypatch):

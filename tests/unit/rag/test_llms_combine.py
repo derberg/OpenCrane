@@ -386,3 +386,109 @@ def test_multi_source_llmstxt_section_order_matches_llms_full_txt(tmp_path, monk
         "llms.txt section order must match llms-full.txt block order so the "
         "chunker maps each page to the correct source_url"
     )
+
+
+@pytest.mark.unit
+def test_no_h1_external_source_keeps_non_empty_index_section_and_does_not_poison_other_sources(
+    tmp_path, monkeypatch
+):
+    """Regression: an external llmstxt source whose llms-full.txt has ZERO H1
+    headings (prose-only content, including a fenced code block with a ``#``
+    comment line) must still produce a non-empty ``## {source}`` section in the
+    combined llms.txt so the source-block count == index-section count invariant
+    holds.  When the invariant breaks, ALL external sources lose their source_url
+    ('poison').  This test asserts:
+
+    (a) The no-H1 source's ``## {source}`` section is present in llms.txt.
+    (b) A second external source that HAS a companion llms.txt retains its
+        correct per-page URLs (not poisoned by the no-H1 source).
+    """
+    opencrane_dir = tmp_path / ".opencrane"
+    opencrane_dir.mkdir()
+    config_yaml = opencrane_dir / "config.yaml"
+    config_yaml.write_text(
+        "sources:\n"
+        "  no-h1-source:\n"
+        "    type: llmstxt\n"
+        "    url: https://example.com/no-h1/llms-full.txt\n"
+        "    docs_url: https://no-h1.example.com/docs\n"
+        "    manual: true\n"
+        "  with-companion:\n"
+        "    type: llmstxt\n"
+        "    url: https://example.com/with-companion/llms-full.txt\n"
+        "    docs_url: https://companion.example.com/docs\n"
+        "    manual: true\n"
+    )
+    monkeypatch.setenv("MAPPING_FILE", str(config_yaml))
+
+    llmstxt_dir = opencrane_dir / "llmstxt"
+
+    # Source 1: no H1 headings — prose only, plus a fenced code block with a
+    # ``#`` comment line to prove fence-awareness (the ``#`` must NOT be
+    # mistaken for a page boundary).
+    no_h1_dir = llmstxt_dir / "no-h1-source"
+    no_h1_dir.mkdir(parents=True)
+    (no_h1_dir / "llms-full.txt").write_text(
+        "This source has no H1 headings at all.\n\n"
+        "Some introductory prose without any heading markers.\n\n"
+        "```python\n"
+        "# This is a Python comment, not an H1 heading\n"
+        "x = 42\n"
+        "```\n\n"
+        "More prose after the code block.\n"
+    )
+
+    # Source 2: has a companion llms.txt with real per-page URLs.
+    companion_dir = llmstxt_dir / "with-companion"
+    companion_dir.mkdir(parents=True)
+    (companion_dir / "llms-full.txt").write_text(
+        "# Getting Started\n\nWelcome to the companion source.\n\n"
+        "-----\n\n"
+        "# Reference\n\nAPI reference details.\n"
+    )
+    (companion_dir / "llms.txt").write_text(
+        "# Documentation\n\n"
+        "## with-companion\n"
+        "- [Getting Started](https://companion.example.com/docs/getting-started)\n"
+        "- [Reference](https://companion.example.com/docs/reference)\n"
+    )
+
+    monkeypatch.chdir(tmp_path)
+    generate_outputs(force=True, llmstxt_dir=llmstxt_dir)
+
+    combined_path = llmstxt_dir / "llms-full.txt"
+    llms_txt_path = llmstxt_dir / "llms.txt"
+
+    assert combined_path.exists(), "llms-full.txt must be generated"
+    assert llms_txt_path.exists(), "llms.txt must be generated"
+
+    llms_txt = llms_txt_path.read_text()
+
+    # (a) The no-H1 source must have a non-empty section in llms.txt.
+    assert "## no-h1-source" in llms_txt, (
+        "no-H1 source section missing from llms.txt — count invariant broken"
+    )
+    # The section must have at least one entry line (non-empty).
+    lines = llms_txt.splitlines()
+    no_h1_section_start = next(
+        (i for i, l in enumerate(lines) if l.strip() == "## no-h1-source"), None
+    )
+    assert no_h1_section_start is not None
+    # Find the next line after the heading that is non-empty
+    entry_lines = [
+        l for l in lines[no_h1_section_start + 1:]
+        if l.strip() and not l.strip().startswith("##")
+    ]
+    assert len(entry_lines) >= 1, (
+        "## no-h1-source section is empty — render_llms_txt will skip it and "
+        "break the block/section count invariant"
+    )
+
+    # (b) The companion source must retain its correct per-page URLs (not poisoned).
+    assert "## with-companion" in llms_txt, "companion section missing from llms.txt"
+    assert "https://companion.example.com/docs/getting-started" in llms_txt, (
+        "companion per-page URL poisoned by no-H1 source"
+    )
+    assert "https://companion.example.com/docs/reference" in llms_txt, (
+        "companion reference URL poisoned by no-H1 source"
+    )

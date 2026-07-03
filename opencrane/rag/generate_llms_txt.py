@@ -21,6 +21,7 @@ from typing import Callable, Dict, Iterable, List, NamedTuple, Optional
 
 import yaml
 
+from opencrane.rag.services.llms_index import IndexEntry
 from opencrane.rag.services.source_mapping import SourceMapping
 from opencrane.shared.config import get_config
 from opencrane.shared.utils.git import get_repo_subdir, has_changes
@@ -299,7 +300,7 @@ def ensure_leading_h1(body: str, title: str) -> str:
     return f"# {title}\n\n{body.lstrip(chr(10))}"
 
 
-def process_file(file_path: Path, project_dir: Path, project_name: str):
+def process_file(file_path: Path, project_dir: Path, project_name: str) -> tuple[str, IndexEntry | None]:
     """Process a markdown file and return ``(content, entry)``.
 
     ``content`` is the clean file text (no URL injections, no ``### {url}``
@@ -307,7 +308,6 @@ def process_file(file_path: Path, project_dir: Path, project_name: str):
     ``entry`` is an :class:`~opencrane.rag.services.llms_index.IndexEntry`
     for this file, or ``None`` when no source URL can be resolved.
     """
-    from opencrane.rag.services.llms_index import IndexEntry
     rel_with_project = Path(project_name) / file_path.relative_to(project_dir)
     raw_text = file_path.read_text(encoding="utf-8")
     frontmatter, body = strip_frontmatter(raw_text)
@@ -350,7 +350,7 @@ def process_fence_blocks(text: str, file_path: Path, project_dir: Path, project_
     return text
 
 
-def build_project_output(project_dir: Path, project_name: str | None = None, md_files: List[Path] | None = None, fence_types: Dict[str, "CodeFenceConfig"] | None = None):
+def build_project_output(project_dir: Path, project_name: str | None = None, md_files: List[Path] | None = None, fence_types: Dict[str, "CodeFenceConfig"] | None = None) -> tuple[str, list[IndexEntry]]:
     """Build combined output for a project.
 
     Returns a tuple ``(content, entries)`` where *content* is the sections
@@ -367,7 +367,6 @@ def build_project_output(project_dir: Path, project_name: str | None = None, md_
             ``process_fence_blocks``.  When None or empty, no fence blocks
             are processed.
     """
-    from opencrane.rag.services.llms_index import IndexEntry
     # project_name/md_files optional for backward compatibility with older callers/tests
     project_name = project_name or project_dir.name
     md_files = md_files or filter_markdown_files(sorted(project_dir.rglob("*.md")))

@@ -7,7 +7,11 @@ from unittest.mock import patch, mock_open, MagicMock
 from opencrane.rag.generate_llms_txt import (
     slugify,
     build_anchor,
+    strip_frontmatter,
+    derive_title,
+    filename_to_title,
     strip_images,
+    ensure_leading_h1,
     rewrite_links,
     get_source_url,
     process_file,
@@ -411,6 +415,33 @@ class TestProcessFile:
                 # No mapping means no entry
                 assert entry is None
 
+    def test_process_file_is_clean_and_returns_entry(self, tmp_path, monkeypatch):
+        """Clean content with no URL injected; entry carries resolved URL and title."""
+        proj = tmp_path / "proj"
+        proj.mkdir()
+        f = proj / "guide.md"
+        f.write_text("---\ntitle: The Guide\n---\n# The Guide\nBody text\n## Sub\nmore")
+        import opencrane.rag.generate_llms_txt as g
+        monkeypatch.setattr(g, "get_source_url", lambda rel, name: "https://docs.example.com/guide")
+        content, entry = g.process_file(f, proj, "proj")
+        assert "https://docs.example.com" not in content          # no URL injected in content
+        assert content.lstrip().startswith("# The Guide")          # leading H1 == title
+        assert "### https://" not in content                       # no boundary URL line
+        assert entry.title == "The Guide"
+        assert entry.url == "https://docs.example.com/guide"
+
+    def test_process_file_returns_none_entry_when_no_url(self, tmp_path, monkeypatch):
+        """Returns entry=None when get_source_url resolves to None."""
+        proj = tmp_path / "proj"
+        proj.mkdir()
+        f = proj / "page.md"
+        f.write_text("# Page\nContent")
+        import opencrane.rag.generate_llms_txt as g
+        monkeypatch.setattr(g, "get_source_url", lambda rel, name: None)
+        content, entry = g.process_file(f, proj, "proj")
+        assert entry is None
+        assert content.lstrip().startswith("# Page")
+
 
 class TestBuildProjectOutput:
     """Unit tests for build_project_output function."""
@@ -436,6 +467,23 @@ class TestBuildProjectOutput:
             assert "----" in content  # Separator between files
             # entries is a list (may be empty when no source mapping is configured)
             assert isinstance(entries, list)
+
+    def test_build_project_output_returns_tuple(self, tmp_path, monkeypatch):
+        """Returns (str, list[IndexEntry]) with correct entry fields when URL resolves."""
+        proj = tmp_path / "proj"
+        proj.mkdir()
+        f = proj / "page.md"
+        f.write_text("# Page\nContent")
+        import opencrane.rag.generate_llms_txt as g
+        monkeypatch.setattr(g, "get_source_url", lambda rel, name: "https://docs.example.com/page")
+        result = g.build_project_output(proj, "proj")
+        assert isinstance(result, tuple)
+        content, entries = result
+        assert isinstance(content, str)
+        assert isinstance(entries, list)
+        assert len(entries) == 1
+        assert entries[0].title == "Page"
+        assert entries[0].url == "https://docs.example.com/page"
 
 
 class TestWriteOutputs:
@@ -1095,3 +1143,53 @@ class TestGenerateOutputsSkipBehavior:
         finally:
             mod.SOURCE_ROOT = orig_source_root
             mod.OUTPUT_ROOT = orig_output_root
+
+
+class TestStripFrontmatter:
+    """Unit tests for strip_frontmatter helper."""
+
+    def test_parses_and_removes(self):
+        """Frontmatter is parsed into dict and body is returned without it."""
+        text = "---\ntitle: My Page\ntags: [a, b]\n---\n# Body\ncontent"
+        fm, body = strip_frontmatter(text)
+        assert fm["title"] == "My Page"
+        assert body == "# Body\ncontent"
+
+    def test_absent(self):
+        """Returns empty dict and full text when no frontmatter present."""
+        fm, body = strip_frontmatter("# No frontmatter\nx")
+        assert fm == {}
+        assert body == "# No frontmatter\nx"
+
+
+class TestFilenameToTitle:
+    """Unit tests for filename_to_title helper."""
+
+    def test_hyphenated(self):
+        assert filename_to_title("getting-started") == "Getting Started"
+
+    def test_underscored(self):
+        assert filename_to_title("api_v2") == "Api V2"
+
+
+class TestDeriveTitle:
+    """Unit tests for derive_title helper."""
+
+    def test_prefers_frontmatter(self):
+        assert derive_title({"title": "FM Title"}, "# Body H1\n", Path("x/file.md")) == "FM Title"
+
+    def test_falls_back_to_first_heading(self):
+        assert derive_title({}, "## Sub First\n", Path("x/file.md")) == "Sub First"
+
+    def test_falls_back_to_filename(self):
+        assert derive_title({}, "no headings here", Path("x/getting-started.md")) == "Getting Started"
+
+
+class TestEnsureLeadingH1:
+    """Unit tests for ensure_leading_h1 helper."""
+
+    def test_injects_when_missing(self):
+        assert ensure_leading_h1("no heading\nx", "T").startswith("# T\n")
+
+    def test_noop_when_present(self):
+        assert ensure_leading_h1("# T\nx", "T") == "# T\nx"

@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from opencrane.mcp.auth.config_model import AuthConfig, AuthConfigError
 from opencrane.mcp.auth.oauth_verifier import (
     JwtTokenVerifier,
+    _discover_jwks_uri,
     _extract_scopes,
     build_token_verifier,
 )
@@ -183,8 +184,19 @@ class TestBuildTokenVerifier:
         v = build_token_verifier(self._config())
         assert isinstance(v, JwtTokenVerifier)
 
-    def test_default_resolver_builds_pyjwkclient_at_jwks_url(self, monkeypatch):
+    def test_default_resolver_uses_discovered_jwks_uri(self, monkeypatch):
+        """The resolver builds PyJWKClient at the jwks_uri from OIDC discovery.
+
+        This is what makes the verifier work against IdPs like Dex, whose JWKS
+        lives at ``/keys`` rather than the assembled ``/.well-known/jwks.json``.
+        """
         captured = {}
+        discovered = "https://accounts.cennso.com/keys"
+
+        monkeypatch.setattr(
+            "opencrane.mcp.auth.oauth_verifier._discover_jwks_uri",
+            lambda issuer: discovered,
+        )
 
         class FakeKey:
             key = "the-key"
@@ -198,31 +210,101 @@ class TestBuildTokenVerifier:
 
         monkeypatch.setattr(jwt, "PyJWKClient", FakePyJWKClient)
         v = build_token_verifier(self._config())
-        # Exercise the default resolver so the PyJWKClient is actually constructed.
         key = v._signing_key_resolver("some-token")
         assert key == "the-key"
-        assert captured["url"] == f"{ISSUER}/.well-known/jwks.json"
+        assert captured["url"] == discovered
 
-    def test_default_resolver_strips_trailing_slash(self, monkeypatch):
-        captured = {}
+    def test_default_resolver_discovers_once_and_caches(self, monkeypatch):
+        """Discovery and PyJWKClient construction happen once, then are reused."""
+        calls = {"discover": 0, "client": 0}
+
+        def fake_discover(issuer):
+            calls["discover"] += 1
+            return "https://idp.example.com/keys"
+
+        monkeypatch.setattr(
+            "opencrane.mcp.auth.oauth_verifier._discover_jwks_uri", fake_discover
+        )
 
         class FakeKey:
             key = "k"
 
         class FakePyJWKClient:
             def __init__(self, url):
-                captured["url"] = url
+                calls["client"] += 1
 
             def get_signing_key_from_jwt(self, token):
                 return FakeKey()
 
         monkeypatch.setattr(jwt, "PyJWKClient", FakePyJWKClient)
-        cfg = AuthConfig(
-            type="oauth",
-            oidc_issuer=ISSUER + "/",
-            oidc_audience=AUDIENCE,
-            scope_claim="scope",
-        )
-        v = build_token_verifier(cfg)
-        v._signing_key_resolver("tok")
-        assert captured["url"] == f"{ISSUER}/.well-known/jwks.json"
+        v = build_token_verifier(self._config())
+        v._signing_key_resolver("tok-1")
+        v._signing_key_resolver("tok-2")
+        assert calls["discover"] == 1
+        assert calls["client"] == 1
+
+
+class _FakeResponse:
+    def __init__(self, body: bytes):
+        self._body = body
+
+    def read(self, *_args):
+        return self._body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+
+class TestDiscoverJwksUri:
+    def test_returns_jwks_uri_from_discovery_document(self, monkeypatch):
+        body = b'{"issuer": "https://accounts.cennso.com", "jwks_uri": "https://accounts.cennso.com/keys"}'
+        captured = {}
+
+        def fake_urlopen(url, *args, **kwargs):
+            captured["url"] = url
+            return _FakeResponse(body)
+
+        monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+        uri = _discover_jwks_uri("https://accounts.cennso.com")
+        assert uri == "https://accounts.cennso.com/keys"
+        assert captured["url"] == "https://accounts.cennso.com/.well-known/openid-configuration"
+
+    def test_strips_trailing_slash_from_issuer(self, monkeypatch):
+        captured = {}
+
+        def fake_urlopen(url, *args, **kwargs):
+            captured["url"] = url
+            return _FakeResponse(b'{"jwks_uri": "https://idp/keys"}')
+
+        monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+        _discover_jwks_uri("https://idp.example.com/")
+        assert captured["url"] == "https://idp.example.com/.well-known/openid-configuration"
+
+    def test_missing_jwks_uri_raises(self, monkeypatch):
+        def fake_urlopen(url, *args, **kwargs):
+            return _FakeResponse(b'{"issuer": "https://idp.example.com"}')
+
+        monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+        with pytest.raises(AuthConfigError):
+            _discover_jwks_uri("https://idp.example.com")
+
+    def test_network_error_raises_auth_config_error(self, monkeypatch):
+        import urllib.error
+
+        def fake_urlopen(url, *args, **kwargs):
+            raise urllib.error.URLError("connection refused")
+
+        monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+        with pytest.raises(AuthConfigError):
+            _discover_jwks_uri("https://idp.example.com")
+
+    def test_invalid_json_raises_auth_config_error(self, monkeypatch):
+        def fake_urlopen(url, *args, **kwargs):
+            return _FakeResponse(b"not json")
+
+        monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+        with pytest.raises(AuthConfigError):
+            _discover_jwks_uri("https://idp.example.com")

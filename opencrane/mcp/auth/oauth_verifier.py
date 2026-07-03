@@ -15,6 +15,9 @@ The network JWKS fetch lives *outside* :class:`JwtTokenVerifier` (injected as
 
 from __future__ import annotations
 
+import json
+import urllib.error
+import urllib.request
 from typing import Callable
 
 from mcp.server.auth.provider import AccessToken, TokenVerifier
@@ -104,12 +107,48 @@ class JwtTokenVerifier(TokenVerifier):
         )
 
 
+def _discover_jwks_uri(issuer: str) -> str:
+    """Return the IdP's ``jwks_uri`` from its OIDC discovery document.
+
+    Fetches ``<issuer>/.well-known/openid-configuration`` and reads the
+    ``jwks_uri`` field. This is the OIDC-compliant, IdP-agnostic way to locate the
+    signing keys: the path differs per provider (Dex serves ``/keys``, Keycloak
+    ``/protocol/openid-connect/certs``, Auth0 ``/.well-known/jwks.json``), so
+    assembling a fixed path only works for one IdP.
+
+    Args:
+        issuer: The OIDC issuer URL (``oidc.issuer``).
+
+    Returns:
+        The absolute ``jwks_uri`` URL advertised by the IdP.
+
+    Raises:
+        AuthConfigError: If the discovery document cannot be fetched or parsed, or
+            does not advertise a ``jwks_uri``.
+    """
+    url = f"{issuer.rstrip('/')}/.well-known/openid-configuration"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as response:
+            doc = json.load(response)
+    except (urllib.error.URLError, ValueError) as exc:  # network error / invalid JSON
+        raise AuthConfigError(
+            f"could not fetch OIDC discovery document from {url}: {exc}"
+        ) from exc
+    jwks_uri = doc.get("jwks_uri")
+    if not jwks_uri:
+        raise AuthConfigError(
+            f"OIDC discovery document at {url} does not advertise a 'jwks_uri'"
+        )
+    return jwks_uri
+
+
 def build_token_verifier(auth_config: AuthConfig) -> JwtTokenVerifier:
     """Build a :class:`JwtTokenVerifier` from ``auth_config`` (fail-closed).
 
-    The default ``signing_key_resolver`` fetches the IdP's JWKS from
-    ``<issuer>/.well-known/jwks.json`` and returns the key matching the token's
-    ``kid``.
+    The default ``signing_key_resolver`` locates the IdP's JWKS via OIDC discovery
+    (``<issuer>/.well-known/openid-configuration`` → ``jwks_uri``) and returns the
+    key matching the token's ``kid``. Discovery runs once on first use and the
+    resulting ``PyJWKClient`` is cached for subsequent tokens.
 
     Args:
         auth_config: The parsed auth configuration (must be ``type: oauth``).
@@ -127,10 +166,15 @@ def build_token_verifier(auth_config: AuthConfig) -> JwtTokenVerifier:
             "install opencrane[auth] to use auth.type 'oauth'"
         ) from exc
 
-    jwks_url = f"{auth_config.oidc_issuer.rstrip('/')}/.well-known/jwks.json"
+    cache: dict = {}
 
     def default_resolver(token: str) -> object:
-        return jwt.PyJWKClient(jwks_url).get_signing_key_from_jwt(token).key
+        client = cache.get("client")
+        if client is None:
+            jwks_uri = _discover_jwks_uri(auth_config.oidc_issuer)
+            client = jwt.PyJWKClient(jwks_uri)
+            cache["client"] = client
+        return client.get_signing_key_from_jwt(token).key
 
     return JwtTokenVerifier(
         issuer=auth_config.oidc_issuer,

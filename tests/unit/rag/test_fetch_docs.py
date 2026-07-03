@@ -247,6 +247,132 @@ class TestFetchDocsLlmstxt:
         assert "missing-src" in caplog.text
         assert "not found" in caplog.text.lower()
 
+
+@pytest.mark.unit
+class TestCompanionLlmsTxtUrl:
+    """Tests for _companion_llms_txt_url helper."""
+
+    def test_companion_url_from_full(self):
+        from opencrane.rag.fetch_docs import _companion_llms_txt_url
+        assert _companion_llms_txt_url("https://x/llms-full.txt", None) == "https://x/llms.txt"
+
+    def test_companion_url_from_docs_url(self):
+        from opencrane.rag.fetch_docs import _companion_llms_txt_url
+        assert _companion_llms_txt_url("https://x/bundle.txt", "https://x/docs") == "https://x/docs/llms.txt"
+
+    def test_companion_url_docs_url_trailing_slash(self):
+        from opencrane.rag.fetch_docs import _companion_llms_txt_url
+        assert _companion_llms_txt_url("https://x/bundle.txt", "https://x/docs/") == "https://x/docs/llms.txt"
+
+    def test_companion_url_none(self):
+        from opencrane.rag.fetch_docs import _companion_llms_txt_url
+        assert _companion_llms_txt_url("https://x/bundle.txt", None) is None
+
+    def test_companion_fetch_writes_llms_txt(self, tmp_path):
+        """When companion URL returns content, llms.txt is written next to llms-full.txt."""
+        setup_sources_yaml(tmp_path, {
+            "my-src": {
+                "url": "https://example.com/llms-full.txt",
+                "type": "llmstxt",
+                "manual": True,
+            }
+        })
+        config = make_config(tmp_path)
+
+        full_content = b"# Full content"
+        companion_content = b"# Companion index"
+
+        def fake_urlopen(req):
+            mock_response = MagicMock()
+            if req.full_url.endswith("llms-full.txt"):
+                mock_response.read.return_value = full_content
+            elif req.full_url.endswith("llms.txt"):
+                mock_response.read.return_value = companion_content
+            else:
+                from urllib.error import HTTPError
+                raise HTTPError(req.full_url, 404, "Not Found", {}, None)
+            mock_response.__enter__ = lambda s: s
+            mock_response.__exit__ = MagicMock(return_value=False)
+            return mock_response
+
+        run_main_with_mocks(tmp_path, config, mock_urlopen=fake_urlopen)
+
+        dest_dir = tmp_path / ".opencrane" / "llmstxt" / "my-src"
+        assert (dest_dir / "llms-full.txt").read_bytes() == full_content
+        assert (dest_dir / "llms.txt").read_bytes() == companion_content
+
+    def test_companion_fetch_404_leaves_only_full(self, tmp_path):
+        """When companion URL 404s, only llms-full.txt is present and no exception is raised."""
+        from urllib.error import HTTPError
+
+        setup_sources_yaml(tmp_path, {
+            "my-src": {
+                "url": "https://example.com/llms-full.txt",
+                "type": "llmstxt",
+                "manual": True,
+            }
+        })
+        config = make_config(tmp_path)
+
+        full_content = b"# Full content"
+
+        def fake_urlopen(req):
+            mock_response = MagicMock()
+            if req.full_url.endswith("llms-full.txt"):
+                mock_response.read.return_value = full_content
+                mock_response.__enter__ = lambda s: s
+                mock_response.__exit__ = MagicMock(return_value=False)
+                return mock_response
+            raise HTTPError(req.full_url, 404, "Not Found", {}, None)
+
+        run_main_with_mocks(tmp_path, config, mock_urlopen=fake_urlopen)
+
+        dest_dir = tmp_path / ".opencrane" / "llmstxt" / "my-src"
+        assert (dest_dir / "llms-full.txt").read_bytes() == full_content
+        assert not (dest_dir / "llms.txt").exists()
+
+    def test_companion_local_sibling_copied(self, tmp_path):
+        """For a local llmstxt source, a sibling llms.txt is copied when present."""
+        local_full = tmp_path / "my-docs-full.txt"
+        local_full.write_text("# Full content")
+        local_companion = tmp_path / "llms.txt"
+        local_companion.write_text("# Companion index")
+
+        setup_sources_yaml(tmp_path, {
+            "local-src": {
+                "url": str(local_full),
+                "type": "llmstxt",
+                "manual": True,
+            }
+        })
+        config = make_config(tmp_path)
+
+        run_main_with_mocks(tmp_path, config)
+
+        dest_dir = tmp_path / ".opencrane" / "llmstxt" / "local-src"
+        assert (dest_dir / "llms-full.txt").exists()
+        assert (dest_dir / "llms.txt").read_text() == "# Companion index"
+
+    def test_companion_local_sibling_absent_no_crash(self, tmp_path):
+        """For a local llmstxt source, no crash when sibling llms.txt is absent."""
+        local_full = tmp_path / "my-docs-full.txt"
+        local_full.write_text("# Full content")
+
+        setup_sources_yaml(tmp_path, {
+            "local-src": {
+                "url": str(local_full),
+                "type": "llmstxt",
+                "manual": True,
+            }
+        })
+        config = make_config(tmp_path)
+
+        run_main_with_mocks(tmp_path, config)
+
+        dest_dir = tmp_path / ".opencrane" / "llmstxt" / "local-src"
+        assert (dest_dir / "llms-full.txt").exists()
+        assert not (dest_dir / "llms.txt").exists()
+
         dest_file = tmp_path / ".opencrane" / "llmstxt" / "missing-src" / "llms-full.txt"
         assert not dest_file.exists()
 

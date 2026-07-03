@@ -109,6 +109,14 @@ def build_table_chunks(
         row_ids.append(generate_unique_chunk_id(content, str(source_file), "table_row", hash_meta))
 
     # Pass 2: assemble each row chunk, adding sibling_ids referencing the other rows.
+    #
+    # Row fields use table-specific names (`row_index`, `total_rows`). They map
+    # one-to-one onto list_item's generic `position` / `total_siblings`
+    # (row_index == position, total_rows == total_siblings). It might be nice to
+    # also make the list_item terms list-specific (for example `item_index` /
+    # `total_items`) so both chunk types follow one `<unit>_index` / `total_<unit>s`
+    # pattern, but that is a breaking rename of an already-released schema, so it
+    # is left as a future consideration.
     for i, cells in enumerate(rows):
         meta = {
             "table_id": table_id, "columns": columns, "row_index": i + 1,

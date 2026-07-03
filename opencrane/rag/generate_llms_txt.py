@@ -19,6 +19,8 @@ import re
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, NamedTuple, Optional
 
+import yaml
+
 from opencrane.rag.services.source_mapping import SourceMapping
 from opencrane.shared.config import get_config
 from opencrane.shared.utils.git import get_repo_subdir, has_changes
@@ -34,6 +36,40 @@ OUTPUT_ROOT = LLMSTXT_BASE
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
+
+_FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
+
+
+def strip_frontmatter(text: str) -> tuple[dict, str]:
+    """Split leading YAML frontmatter from body. Returns ({}, text) if absent."""
+    match = _FRONTMATTER_RE.match(text)
+    if not match:
+        return {}, text
+    try:
+        data = yaml.safe_load(match.group(1)) or {}
+    except yaml.YAMLError:
+        return {}, text
+    if not isinstance(data, dict):
+        return {}, text
+    return data, text[match.end():]
+
+
+def filename_to_title(stem: str) -> str:
+    """Turn a file stem into a human title: 'getting-started' -> 'Getting Started'."""
+    words = re.split(r"[-_]+", stem.strip())
+    return " ".join(w.capitalize() for w in words if w) or stem
+
+
+def derive_title(frontmatter: dict, body: str, file_path: Path) -> str:
+    """Priority: frontmatter title -> first heading -> filename-derived."""
+    fm_title = frontmatter.get("title")
+    if isinstance(fm_title, str) and fm_title.strip():
+        return fm_title.strip()
+    for line in body.splitlines():
+        m = HEADING_RE.match(line)
+        if m:
+            return m.group(2).strip()
+    return filename_to_title(file_path.stem)
 
 
 class CodeFenceConfig(NamedTuple):

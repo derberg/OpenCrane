@@ -436,6 +436,10 @@ def _synthesize_entries_from_full(source_name: str, full_text: str, docs_url: st
         m = re.match(r"^#\s+(.*)$", line)
         if m:
             titles.append(m.group(1).strip())
+    if not titles:
+        # No H1 headings found — emit a single fallback entry so the section is
+        # never dropped from the index and block/section counts stay aligned.
+        return [IndexEntry(source=source_name, title="", url=docs_url or "")]
     return [IndexEntry(source=source_name, title=title, url=docs_url) for title in titles]
 
 

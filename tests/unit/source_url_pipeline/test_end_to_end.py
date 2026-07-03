@@ -452,3 +452,146 @@ def test_no_companion_chunks_have_no_source_url(tmp_path):
         assert chunk.metadata.get("source_url") is None, (
             f"Expected source_url=None for no-companion chunk, got {chunk.metadata.get('source_url')}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Regression: external source with NO H1 headings must not drop its section
+# ---------------------------------------------------------------------------
+
+@pytest.mark.unit
+def test_no_h1_external_source_keeps_section_and_companion_urls_intact(tmp_path):
+    """Regression: _synthesize_entries_from_full must return a fallback entry when
+    the external llms-full.txt has zero H1 headings.
+
+    Setup:
+      - ext-with-companion:  has a companion llms.txt with real per-page URLs
+      - ext-no-h1:           llms-full.txt has NO H1 (only prose, no headings)
+        docs_url = https://noh1.example.com/docs
+
+    Expected:
+      - Combined llms.txt contains ``## ext-no-h1`` (section NOT dropped)
+      - Combined llms.txt still contains the companion's per-page URLs
+      - ext-no-h1 chunks carry source_url = https://noh1.example.com/docs
+      - companion chunks carry per-page source_url from companion llms.txt
+    """
+    workspace = tmp_path / "workspace"
+    llmstxt_base = workspace / ".opencrane" / "llmstxt"
+
+    # --- ext-with-companion ---
+    ext_with = llmstxt_base / "ext-with-companion"
+    ext_with.mkdir(parents=True)
+    (ext_with / "llms-full.txt").write_text(
+        "# Companion Home\n"
+        "Content of companion home page for testing purposes.\n"
+        "# Companion Reference\n"
+        "Content of companion reference page for testing purposes.\n"
+    )
+    (ext_with / "llms.txt").write_text(
+        "# Companion Docs\n\n"
+        "## ext-with-companion\n"
+        "- [Companion Home](https://companion.example.com/docs/home)\n"
+        "- [Companion Reference](https://companion.example.com/docs/reference)\n"
+    )
+
+    # --- ext-no-h1 (no H1 headings, only prose) ---
+    ext_no_h1 = llmstxt_base / "ext-no-h1"
+    ext_no_h1.mkdir(parents=True)
+    (ext_no_h1 / "llms-full.txt").write_text(
+        "This bundle has no H1 headings at all.\n\n"
+        "It contains only prose content without any top-level heading.\n\n"
+        "More prose describing the content of this source.\n"
+    )
+    # No companion llms.txt — _synthesize_entries_from_full is used
+
+    # Source mapping with docs_url for ext-no-h1
+    opencrane_dir = workspace / ".opencrane"
+    opencrane_dir.mkdir(parents=True, exist_ok=True)
+    config_yaml = (
+        "sources:\n"
+        "  ext-with-companion:\n"
+        "    url: https://github.com/example/ext-with-companion\n"
+        "    type: llmstxt\n"
+        "    manual: true\n"
+        "  ext-no-h1:\n"
+        "    url: https://github.com/example/ext-no-h1\n"
+        "    docs_url: https://noh1.example.com/docs\n"
+        "    type: llmstxt\n"
+        "    manual: true\n"
+    )
+    (opencrane_dir / "config.yaml").write_text(config_yaml)
+
+    orig_cwd = os.getcwd()
+    orig_source_mapping = gen_mod._source_mapping
+    try:
+        os.chdir(workspace)
+        gen_mod._source_mapping = None
+        import opencrane.shared.config as cfg_mod
+        monkeypatch = pytest.MonkeyPatch()
+        monkeypatch.setenv("MAPPING_FILE", str(opencrane_dir / "config.yaml"))
+
+        gen_mod._combine_existing_llmstxt(llmstxt_base)
+    finally:
+        os.chdir(orig_cwd)
+        gen_mod._source_mapping = orig_source_mapping
+        monkeypatch.undo()
+
+    top_llms_txt = (llmstxt_base / "llms.txt").read_text()
+
+    # The no-H1 source's section MUST NOT be dropped
+    assert "## ext-no-h1" in top_llms_txt, (
+        "ext-no-h1 section was dropped from llms.txt — "
+        "_synthesize_entries_from_full returned empty for no-H1 source"
+    )
+    # The no-H1 source's entry should carry the fallback docs_url
+    assert "https://noh1.example.com/docs" in top_llms_txt, (
+        "docs_url not present in llms.txt for no-H1 source"
+    )
+
+    # The companion source's per-page URLs must still be present (no alignment drift)
+    assert "## ext-with-companion" in top_llms_txt, (
+        "ext-with-companion section missing from llms.txt"
+    )
+    assert "https://companion.example.com/docs/home" in top_llms_txt, (
+        "companion home URL missing from llms.txt"
+    )
+    assert "https://companion.example.com/docs/reference" in top_llms_txt, (
+        "companion reference URL missing from llms.txt"
+    )
+
+    # Run the chunker and verify per-page URLs
+    chunks_file = tmp_path / "chunks.json"
+    try:
+        os.chdir(workspace)
+        gen_mod._source_mapping = None
+        monkeypatch2 = pytest.MonkeyPatch()
+        monkeypatch2.setenv("MAPPING_FILE", str(opencrane_dir / "config.yaml"))
+        chunker_main(llmstxt_dir=llmstxt_base, chunks_file=chunks_file)
+    finally:
+        os.chdir(orig_cwd)
+        gen_mod._source_mapping = orig_source_mapping
+        monkeypatch2.undo()
+
+    from opencrane.rag.services.chunk_serializer import ChunkSerializer
+    chunks = ChunkSerializer.deserialize_chunks(chunks_file)
+
+    # ext-no-h1 chunks must carry the fallback docs_url
+    no_h1_chunks = [
+        c for c in chunks
+        if "no H1 headings" in (c.content or "") or "prose content" in (c.content or "")
+        or "prose describing" in (c.content or "")
+    ]
+    assert len(no_h1_chunks) > 0, "No chunks produced from ext-no-h1 source"
+    for chunk in no_h1_chunks:
+        assert chunk.metadata.get("source_url") == "https://noh1.example.com/docs", (
+            f"Expected docs_url for no-H1 chunk, got {chunk.metadata.get('source_url')}"
+        )
+
+    # companion chunks must carry per-page URLs
+    companion_chunks = [
+        c for c in chunks
+        if (c.metadata.get("source_url") or "").startswith("https://companion.example.com/")
+    ]
+    assert len(companion_chunks) > 0, "No chunks with companion.example.com source_url"
+    companion_urls = {c.metadata["source_url"] for c in companion_chunks}
+    assert "https://companion.example.com/docs/home" in companion_urls
+    assert "https://companion.example.com/docs/reference" in companion_urls

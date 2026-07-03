@@ -169,3 +169,9 @@ def test_caption_is_empty_when_last_line_before_table_is_heading():
     chunks = TableChunkingStrategy().process(_node(text), Path("d.md"))
     row = [c for c in chunks if c.chunk_type == "table_row"][0]
     assert row.metadata.get("table_caption", "") == ""
+
+
+def test_render_row_no_double_period_when_cell_ends_with_period():
+    out = _render_row(["Description"], ["Ends with a period."], "", "")
+    assert "period.." not in out
+    assert out.endswith("Ends with a period.")

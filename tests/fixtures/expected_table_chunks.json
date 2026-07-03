@@ -1320,9 +1320,9 @@
     "token_count": 68
   },
   {
-    "chunk_id": "93f0f2e21420341b60b16a95d9f4ff66af97210657af510a1ba38efa032c0d32",
+    "chunk_id": "fb283596c81d5aa6ac0e92d0004d38e281d798752a5b33e7dadd80986358594b",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > Chart configuration\nThe following table lists the main configuration parameters and their default values:\nParameter: replicaCount.\nDescription: Number of Session Management Controller replicas to run..\nDefault: 1.",
+    "content": "DIAMETER Support with SMC > Chart configuration\nThe following table lists the main configuration parameters and their default values:\nParameter: replicaCount.\nDescription: Number of Session Management Controller replicas to run.\nDefault: 1.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > Chart configuration",
@@ -1334,9 +1334,9 @@
       "row_index": 1,
       "row_key": "replicaCount",
       "sibling_ids": [
-        "d67ec6e4d66223c8a1df04457027001a44af9ccb2ee00117b5ab47c56aa9352a",
-        "c5d9fd9d71275d4c1267924c87eff505d31c859d1bdb92a64b478dedc07519b5",
-        "481d57ce8ddac703162ed9ae3d262dd02f673f41cbc15882d553dde1aa94925e"
+        "ac0e40ae7d734bc3055f9ea19c30c54a57d9ec1561d2702e95a42cd9f3b54f43",
+        "048d44238b695f7f81422f8529d862efcfb2600af16c4f3ab97daa9b313ea2d2",
+        "bb14ba41c6024a156b546a156483b94e229ae2bc492e9417e3fdb68219c6338d"
       ],
       "sibling_previews": [
         "image.tag",
@@ -1352,9 +1352,9 @@
     "token_count": 45
   },
   {
-    "chunk_id": "d67ec6e4d66223c8a1df04457027001a44af9ccb2ee00117b5ab47c56aa9352a",
+    "chunk_id": "ac0e40ae7d734bc3055f9ea19c30c54a57d9ec1561d2702e95a42cd9f3b54f43",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > Chart configuration\nThe following table lists the main configuration parameters and their default values:\nParameter: image.tag.\nDescription: Container image tag to deploy..\nDefault: latest.",
+    "content": "DIAMETER Support with SMC > Chart configuration\nThe following table lists the main configuration parameters and their default values:\nParameter: image.tag.\nDescription: Container image tag to deploy.\nDefault: latest.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > Chart configuration",
@@ -1366,9 +1366,9 @@
       "row_index": 2,
       "row_key": "image.tag",
       "sibling_ids": [
-        "93f0f2e21420341b60b16a95d9f4ff66af97210657af510a1ba38efa032c0d32",
-        "c5d9fd9d71275d4c1267924c87eff505d31c859d1bdb92a64b478dedc07519b5",
-        "481d57ce8ddac703162ed9ae3d262dd02f673f41cbc15882d553dde1aa94925e"
+        "fb283596c81d5aa6ac0e92d0004d38e281d798752a5b33e7dadd80986358594b",
+        "048d44238b695f7f81422f8529d862efcfb2600af16c4f3ab97daa9b313ea2d2",
+        "bb14ba41c6024a156b546a156483b94e229ae2bc492e9417e3fdb68219c6338d"
       ],
       "sibling_previews": [
         "replicaCount",
@@ -1384,9 +1384,9 @@
     "token_count": 41
   },
   {
-    "chunk_id": "c5d9fd9d71275d4c1267924c87eff505d31c859d1bdb92a64b478dedc07519b5",
+    "chunk_id": "048d44238b695f7f81422f8529d862efcfb2600af16c4f3ab97daa9b313ea2d2",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > Chart configuration\nThe following table lists the main configuration parameters and their default values:\nParameter: resources.limits.cpu.\nDescription: CPU limit applied to each pod..\nDefault: 500m.",
+    "content": "DIAMETER Support with SMC > Chart configuration\nThe following table lists the main configuration parameters and their default values:\nParameter: resources.limits.cpu.\nDescription: CPU limit applied to each pod.\nDefault: 500m.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > Chart configuration",
@@ -1398,9 +1398,9 @@
       "row_index": 3,
       "row_key": "resources.limits.cpu",
       "sibling_ids": [
-        "93f0f2e21420341b60b16a95d9f4ff66af97210657af510a1ba38efa032c0d32",
-        "d67ec6e4d66223c8a1df04457027001a44af9ccb2ee00117b5ab47c56aa9352a",
-        "481d57ce8ddac703162ed9ae3d262dd02f673f41cbc15882d553dde1aa94925e"
+        "fb283596c81d5aa6ac0e92d0004d38e281d798752a5b33e7dadd80986358594b",
+        "ac0e40ae7d734bc3055f9ea19c30c54a57d9ec1561d2702e95a42cd9f3b54f43",
+        "bb14ba41c6024a156b546a156483b94e229ae2bc492e9417e3fdb68219c6338d"
       ],
       "sibling_previews": [
         "replicaCount",
@@ -1416,9 +1416,9 @@
     "token_count": 46
   },
   {
-    "chunk_id": "481d57ce8ddac703162ed9ae3d262dd02f673f41cbc15882d553dde1aa94925e",
+    "chunk_id": "bb14ba41c6024a156b546a156483b94e229ae2bc492e9417e3fdb68219c6338d",
     "chunk_type": "table_row",
-    "content": "DIAMETER Support with SMC > Chart configuration\nThe following table lists the main configuration parameters and their default values:\nParameter: logging.level.\nDescription: Log verbosity for the service..\nDefault: info.",
+    "content": "DIAMETER Support with SMC > Chart configuration\nThe following table lists the main configuration parameters and their default values:\nParameter: logging.level.\nDescription: Log verbosity for the service.\nDefault: info.",
     "line_start": null,
     "metadata": {
       "breadcrumb_path": "DIAMETER Support with SMC > Chart configuration",
@@ -1430,9 +1430,9 @@
       "row_index": 4,
       "row_key": "logging.level",
       "sibling_ids": [
-        "93f0f2e21420341b60b16a95d9f4ff66af97210657af510a1ba38efa032c0d32",
-        "d67ec6e4d66223c8a1df04457027001a44af9ccb2ee00117b5ab47c56aa9352a",
-        "c5d9fd9d71275d4c1267924c87eff505d31c859d1bdb92a64b478dedc07519b5"
+        "fb283596c81d5aa6ac0e92d0004d38e281d798752a5b33e7dadd80986358594b",
+        "ac0e40ae7d734bc3055f9ea19c30c54a57d9ec1561d2702e95a42cd9f3b54f43",
+        "048d44238b695f7f81422f8529d862efcfb2600af16c4f3ab97daa9b313ea2d2"
       ],
       "sibling_previews": [
         "replicaCount",

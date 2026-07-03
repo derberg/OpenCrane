@@ -63,7 +63,8 @@ def _render_row(columns: List[str], cells: List[str], breadcrumb: str, caption: 
         cells = cells[:len(columns) - 1] + [" | ".join(cells[len(columns) - 1:])]
     for col, val in zip(columns, cells):
         if val:
-            lines.append(f"{col}: {val}.")
+            sep = "" if val.endswith(".") else "."
+            lines.append(f"{col}: {val}{sep}")
     return "\n".join(lines)
 
 

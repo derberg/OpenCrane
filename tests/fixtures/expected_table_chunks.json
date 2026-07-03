@@ -198,7 +198,15 @@
         "3GPP-SGSN-Address",
         "3GPP-GGSN-Address",
         "3GPP-IMSI-MCC-MNC",
-        "... +9 more"
+        "3GPP-NSAPI",
+        "3GPP-Selection-Mode",
+        "3GPP-SGSN-IPv6-Address",
+        "3GPP-GGSN-IPv6-Address",
+        "3GPP-SGSN-MCC-MNC",
+        "3GPP-IMEISV",
+        "3GPP-RAT-Type",
+        "3GPP-User-Location-Info",
+        "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
       "table_id": "5c4d3c0bdb48c1ee",
@@ -245,7 +253,15 @@
         "3GPP-SGSN-Address",
         "3GPP-GGSN-Address",
         "3GPP-IMSI-MCC-MNC",
-        "... +9 more"
+        "3GPP-NSAPI",
+        "3GPP-Selection-Mode",
+        "3GPP-SGSN-IPv6-Address",
+        "3GPP-GGSN-IPv6-Address",
+        "3GPP-SGSN-MCC-MNC",
+        "3GPP-IMEISV",
+        "3GPP-RAT-Type",
+        "3GPP-User-Location-Info",
+        "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
       "table_id": "5c4d3c0bdb48c1ee",
@@ -292,7 +308,15 @@
         "3GPP-SGSN-Address",
         "3GPP-GGSN-Address",
         "3GPP-IMSI-MCC-MNC",
-        "... +9 more"
+        "3GPP-NSAPI",
+        "3GPP-Selection-Mode",
+        "3GPP-SGSN-IPv6-Address",
+        "3GPP-GGSN-IPv6-Address",
+        "3GPP-SGSN-MCC-MNC",
+        "3GPP-IMEISV",
+        "3GPP-RAT-Type",
+        "3GPP-User-Location-Info",
+        "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
       "table_id": "5c4d3c0bdb48c1ee",
@@ -339,7 +363,15 @@
         "3GPP-PDP-Type",
         "3GPP-GGSN-Address",
         "3GPP-IMSI-MCC-MNC",
-        "... +9 more"
+        "3GPP-NSAPI",
+        "3GPP-Selection-Mode",
+        "3GPP-SGSN-IPv6-Address",
+        "3GPP-GGSN-IPv6-Address",
+        "3GPP-SGSN-MCC-MNC",
+        "3GPP-IMEISV",
+        "3GPP-RAT-Type",
+        "3GPP-User-Location-Info",
+        "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
       "table_id": "5c4d3c0bdb48c1ee",
@@ -386,7 +418,15 @@
         "3GPP-PDP-Type",
         "3GPP-SGSN-Address",
         "3GPP-IMSI-MCC-MNC",
-        "... +9 more"
+        "3GPP-NSAPI",
+        "3GPP-Selection-Mode",
+        "3GPP-SGSN-IPv6-Address",
+        "3GPP-GGSN-IPv6-Address",
+        "3GPP-SGSN-MCC-MNC",
+        "3GPP-IMEISV",
+        "3GPP-RAT-Type",
+        "3GPP-User-Location-Info",
+        "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
       "table_id": "5c4d3c0bdb48c1ee",
@@ -433,7 +473,15 @@
         "3GPP-PDP-Type",
         "3GPP-SGSN-Address",
         "3GPP-GGSN-Address",
-        "... +9 more"
+        "3GPP-NSAPI",
+        "3GPP-Selection-Mode",
+        "3GPP-SGSN-IPv6-Address",
+        "3GPP-GGSN-IPv6-Address",
+        "3GPP-SGSN-MCC-MNC",
+        "3GPP-IMEISV",
+        "3GPP-RAT-Type",
+        "3GPP-User-Location-Info",
+        "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
       "table_id": "5c4d3c0bdb48c1ee",
@@ -480,7 +528,15 @@
         "3GPP-PDP-Type",
         "3GPP-SGSN-Address",
         "3GPP-GGSN-Address",
-        "... +9 more"
+        "3GPP-IMSI-MCC-MNC",
+        "3GPP-Selection-Mode",
+        "3GPP-SGSN-IPv6-Address",
+        "3GPP-GGSN-IPv6-Address",
+        "3GPP-SGSN-MCC-MNC",
+        "3GPP-IMEISV",
+        "3GPP-RAT-Type",
+        "3GPP-User-Location-Info",
+        "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
       "table_id": "5c4d3c0bdb48c1ee",
@@ -527,7 +583,15 @@
         "3GPP-PDP-Type",
         "3GPP-SGSN-Address",
         "3GPP-GGSN-Address",
-        "... +9 more"
+        "3GPP-IMSI-MCC-MNC",
+        "3GPP-NSAPI",
+        "3GPP-SGSN-IPv6-Address",
+        "3GPP-GGSN-IPv6-Address",
+        "3GPP-SGSN-MCC-MNC",
+        "3GPP-IMEISV",
+        "3GPP-RAT-Type",
+        "3GPP-User-Location-Info",
+        "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
       "table_id": "5c4d3c0bdb48c1ee",
@@ -574,7 +638,15 @@
         "3GPP-PDP-Type",
         "3GPP-SGSN-Address",
         "3GPP-GGSN-Address",
-        "... +9 more"
+        "3GPP-IMSI-MCC-MNC",
+        "3GPP-NSAPI",
+        "3GPP-Selection-Mode",
+        "3GPP-GGSN-IPv6-Address",
+        "3GPP-SGSN-MCC-MNC",
+        "3GPP-IMEISV",
+        "3GPP-RAT-Type",
+        "3GPP-User-Location-Info",
+        "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
       "table_id": "5c4d3c0bdb48c1ee",
@@ -621,7 +693,15 @@
         "3GPP-PDP-Type",
         "3GPP-SGSN-Address",
         "3GPP-GGSN-Address",
-        "... +9 more"
+        "3GPP-IMSI-MCC-MNC",
+        "3GPP-NSAPI",
+        "3GPP-Selection-Mode",
+        "3GPP-SGSN-IPv6-Address",
+        "3GPP-SGSN-MCC-MNC",
+        "3GPP-IMEISV",
+        "3GPP-RAT-Type",
+        "3GPP-User-Location-Info",
+        "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
       "table_id": "5c4d3c0bdb48c1ee",
@@ -668,7 +748,15 @@
         "3GPP-PDP-Type",
         "3GPP-SGSN-Address",
         "3GPP-GGSN-Address",
-        "... +9 more"
+        "3GPP-IMSI-MCC-MNC",
+        "3GPP-NSAPI",
+        "3GPP-Selection-Mode",
+        "3GPP-SGSN-IPv6-Address",
+        "3GPP-GGSN-IPv6-Address",
+        "3GPP-IMEISV",
+        "3GPP-RAT-Type",
+        "3GPP-User-Location-Info",
+        "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
       "table_id": "5c4d3c0bdb48c1ee",
@@ -715,7 +803,15 @@
         "3GPP-PDP-Type",
         "3GPP-SGSN-Address",
         "3GPP-GGSN-Address",
-        "... +9 more"
+        "3GPP-IMSI-MCC-MNC",
+        "3GPP-NSAPI",
+        "3GPP-Selection-Mode",
+        "3GPP-SGSN-IPv6-Address",
+        "3GPP-GGSN-IPv6-Address",
+        "3GPP-SGSN-MCC-MNC",
+        "3GPP-RAT-Type",
+        "3GPP-User-Location-Info",
+        "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
       "table_id": "5c4d3c0bdb48c1ee",
@@ -762,7 +858,15 @@
         "3GPP-PDP-Type",
         "3GPP-SGSN-Address",
         "3GPP-GGSN-Address",
-        "... +9 more"
+        "3GPP-IMSI-MCC-MNC",
+        "3GPP-NSAPI",
+        "3GPP-Selection-Mode",
+        "3GPP-SGSN-IPv6-Address",
+        "3GPP-GGSN-IPv6-Address",
+        "3GPP-SGSN-MCC-MNC",
+        "3GPP-IMEISV",
+        "3GPP-User-Location-Info",
+        "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
       "table_id": "5c4d3c0bdb48c1ee",
@@ -809,7 +913,15 @@
         "3GPP-PDP-Type",
         "3GPP-SGSN-Address",
         "3GPP-GGSN-Address",
-        "... +9 more"
+        "3GPP-IMSI-MCC-MNC",
+        "3GPP-NSAPI",
+        "3GPP-Selection-Mode",
+        "3GPP-SGSN-IPv6-Address",
+        "3GPP-GGSN-IPv6-Address",
+        "3GPP-SGSN-MCC-MNC",
+        "3GPP-IMEISV",
+        "3GPP-RAT-Type",
+        "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
       "table_id": "5c4d3c0bdb48c1ee",
@@ -856,7 +968,15 @@
         "3GPP-PDP-Type",
         "3GPP-SGSN-Address",
         "3GPP-GGSN-Address",
-        "... +9 more"
+        "3GPP-IMSI-MCC-MNC",
+        "3GPP-NSAPI",
+        "3GPP-Selection-Mode",
+        "3GPP-SGSN-IPv6-Address",
+        "3GPP-GGSN-IPv6-Address",
+        "3GPP-SGSN-MCC-MNC",
+        "3GPP-IMEISV",
+        "3GPP-RAT-Type",
+        "3GPP-User-Location-Info"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
       "table_id": "5c4d3c0bdb48c1ee",
@@ -895,7 +1015,7 @@
         "3GPP-CAMEL-Charging-Info",
         "3GPP-Packet-Filter",
         "3GPP-Negotiated-DSCP",
-        "... +1 more"
+        "3GPP-Allocate-IP-Type"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are not used:",
       "table_id": "2cdd030822c1fd98",
@@ -934,7 +1054,7 @@
         "3GPP-CAMEL-Charging-Info",
         "3GPP-Packet-Filter",
         "3GPP-Negotiated-DSCP",
-        "... +1 more"
+        "3GPP-Allocate-IP-Type"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are not used:",
       "table_id": "2cdd030822c1fd98",
@@ -973,7 +1093,7 @@
         "3GPP-CAMEL-Charging-Info",
         "3GPP-Packet-Filter",
         "3GPP-Negotiated-DSCP",
-        "... +1 more"
+        "3GPP-Allocate-IP-Type"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are not used:",
       "table_id": "2cdd030822c1fd98",
@@ -1012,7 +1132,7 @@
         "3GPP-CG-IPv6-Address",
         "3GPP-Packet-Filter",
         "3GPP-Negotiated-DSCP",
-        "... +1 more"
+        "3GPP-Allocate-IP-Type"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are not used:",
       "table_id": "2cdd030822c1fd98",
@@ -1051,7 +1171,7 @@
         "3GPP-CG-IPv6-Address",
         "3GPP-CAMEL-Charging-Info",
         "3GPP-Negotiated-DSCP",
-        "... +1 more"
+        "3GPP-Allocate-IP-Type"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are not used:",
       "table_id": "2cdd030822c1fd98",
@@ -1090,7 +1210,7 @@
         "3GPP-CG-IPv6-Address",
         "3GPP-CAMEL-Charging-Info",
         "3GPP-Packet-Filter",
-        "... +1 more"
+        "3GPP-Allocate-IP-Type"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are not used:",
       "table_id": "2cdd030822c1fd98",
@@ -1129,7 +1249,7 @@
         "3GPP-CG-IPv6-Address",
         "3GPP-CAMEL-Charging-Info",
         "3GPP-Packet-Filter",
-        "... +1 more"
+        "3GPP-Negotiated-DSCP"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are not used:",
       "table_id": "2cdd030822c1fd98",

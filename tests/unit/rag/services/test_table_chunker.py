@@ -53,13 +53,23 @@ def test_build_table_chunks_empty_cells_dropped_and_no_data_returns_empty():
 
 
 def test_build_table_chunks_preview_cap():
-    lines = ["| K |", "|---|"] + [f"| k{i} |" for i in range(10)]
+    lines = ["| K |", "|---|"] + [f"| k{i} |" for i in range(20)]
     chunks = build_table_chunks(lines, breadcrumb="", caption="",
                                 source_file=Path("d.md"), source_url=None)
-    row = [c for c in chunks if c.chunk_type == "table_row"][0]
+    row = chunks[0]
     previews = row.metadata["sibling_previews"]
     assert previews[-1].startswith("... +")
-    assert len([p for p in previews if not p.startswith("... +")]) == 5
+    assert len([p for p in previews if not p.startswith("... +")]) == 15
+
+
+def test_build_table_chunks_preview_width_trim():
+    longkey = "x" * 40
+    lines = ["| K |", "|---|", f"| {longkey} |", "| short |"]
+    chunks = build_table_chunks(lines, breadcrumb="", caption="",
+                                source_file=Path("d.md"), source_url=None)
+    # the 'short' row's preview of the long row must be trimmed with an ellipsis
+    short_row = [c for c in chunks if c.metadata["row_key"] == "short"][0]
+    assert any(p.endswith("…") and len(p) == 30 for p in short_row.metadata["sibling_previews"])
 
 
 def _node(text):

@@ -15,10 +15,8 @@ from opencrane.rag.services.utils.chunk_id_generator import generate_unique_chun
 from opencrane.shared.models.chunk import Chunk
 from opencrane.shared.utils.token_counter import get_token_count
 from opencrane.rag.services.base_strategy import ProcessingStrategy
-from opencrane.rag.services.list_chunker import ListChunkingStrategy
+from opencrane.rag.services.list_chunker import ListChunkingStrategy, PREVIEW_CAP, TOTAL_CAP
 from opencrane.rag.services.prose_chunker import ProseChunkingStrategy
-
-_PREVIEW_CAP = 5
 
 
 def _is_table_separator(line: str) -> bool:
@@ -44,11 +42,18 @@ def _table_id(breadcrumb: str, caption: str, columns: List[str], row_keys: List[
     return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
 
 
+def _preview_text(row_key: str) -> str:
+    if len(row_key) > TOTAL_CAP:
+        return row_key[:TOTAL_CAP - 1] + "…"
+    return row_key
+
+
 def _previews(row_keys: List[str], exclude_index: int) -> List[str]:
     others = [k for i, k in enumerate(row_keys) if i != exclude_index]
-    if len(others) <= _PREVIEW_CAP:
-        return others
-    return others[:_PREVIEW_CAP] + [f"... +{len(others) - _PREVIEW_CAP} more"]
+    kept = [_preview_text(k) for k in others[:PREVIEW_CAP]]
+    if len(others) > PREVIEW_CAP:
+        kept.append(f"... +{len(others) - PREVIEW_CAP} more")
+    return kept
 
 
 def _render_row(columns: List[str], cells: List[str], breadcrumb: str, caption: str) -> str:

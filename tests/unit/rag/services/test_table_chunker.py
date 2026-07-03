@@ -185,3 +185,17 @@ def test_render_row_no_double_period_when_cell_ends_with_period():
     out = _render_row(["Description"], ["Ends with a period."], "", "")
     assert "period.." not in out
     assert out.endswith("Ends with a period.")
+
+
+def test_delegated_list_breadcrumb_includes_ancestors_from_prior_region():
+    text = "\n".join([
+        "# A", "## B", "", "intro:", "",
+        "| T |", "|---|", "| 1 |",
+        "### C", "", "- item one", "- item two",
+        "", "| U |", "|---|", "| 2 |",
+    ])
+    chunks = TableChunkingStrategy().process(_node(text), Path("d.md"))
+    li = [c for c in chunks if c.chunk_type == "list_item"][0]
+    tr = [c for c in chunks if c.chunk_type == "table_row" and c.metadata["breadcrumb_path"].endswith("C")][0]
+    assert li.metadata["breadcrumb_path"] == "A > B > C"
+    assert li.metadata["breadcrumb_path"] == tr.metadata["breadcrumb_path"]

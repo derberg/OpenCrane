@@ -69,8 +69,8 @@ class ListChunkingStrategy(ProcessingStrategy):
         segments = self._segment(text)
 
         chunks: List[Chunk] = []
-        heading_stack: List[Tuple[int, str]] = []     # (level, title) above current point
-        section_breadcrumb = ""                       # breadcrumb at most recent heading change
+        heading_stack: List[Tuple[int, str]] = list(getattr(node, "heading_ancestry", None) or [])
+        section_breadcrumb = " > ".join(title for _, title in heading_stack)
         list_ordinal_in_section = 0                   # counts top-level lists per section
 
         for kind, payload in segments:

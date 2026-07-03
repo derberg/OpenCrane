@@ -145,10 +145,11 @@ _HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 class _SyntheticNode:
     """Minimal node passed to delegated strategies for a non-table region."""
 
-    def __init__(self, text: str, source_url: Optional[str]):
+    def __init__(self, text: str, source_url: Optional[str], heading_ancestry=None):
         self.text = text
         self.node_type = "text"
         self.source_url = source_url
+        self.heading_ancestry = heading_ancestry or []
 
 
 class TableChunkingStrategy(ProcessingStrategy):
@@ -172,8 +173,9 @@ class TableChunkingStrategy(ProcessingStrategy):
         caption = ""
         for kind, lines in self._split_regions(text):
             if kind == "other":
+                ancestors = list(heading_stack)
                 caption = self._update(heading_stack, lines)
-                chunks.extend(self._delegate(lines, source_url, source_file))
+                chunks.extend(self._delegate(lines, source_url, source_file, ancestors))
             else:
                 breadcrumb = " > ".join(t for _, t in heading_stack)
                 chunks.extend(build_table_chunks(
@@ -275,11 +277,11 @@ class TableChunkingStrategy(ProcessingStrategy):
     # --- delegation ---------------------------------------------------------
 
     @staticmethod
-    def _delegate(lines: List[str], source_url: Optional[str], source_file: Path) -> List[Chunk]:
+    def _delegate(lines: List[str], source_url: Optional[str], source_file: Path, ancestors=None) -> List[Chunk]:
         text = "\n".join(lines).strip()
         if not text:
             return []
-        node = _SyntheticNode(text, source_url)
+        node = _SyntheticNode(text, source_url, ancestors)
         list_strategy = ListChunkingStrategy()
         if list_strategy.can_process(node):
             return list_strategy.process(node, source_file)

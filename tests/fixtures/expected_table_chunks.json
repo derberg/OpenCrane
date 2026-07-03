@@ -1,20 +1,20 @@
 [
   {
-    "chunk_id": "23279e928356903bc6e57f657aac9801d2fc122b1cf3096db98c53289c93c00d",
+    "chunk_id": "e25a101787b98093f3adcfb001c9168e7fdfb4c689c6f0424f40ef935d40597b",
     "chunk_type": "list_item",
-    "content": "# Authentication via NASREQ\nBase Diameter (RFC 6733)",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nBase Diameter (RFC 6733)",
     "line_start": null,
     "metadata": {
-      "breadcrumb_path": "Authentication via NASREQ",
+      "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ",
       "depth": 0,
-      "list_id": "e2b4052e033127cd",
+      "list_id": "3adc078257e1f6f5",
       "list_style": "unordered",
       "parent_item_id": null,
       "position": 1,
       "sibling_ids": [
-        "baacec48904513bf314809654c736cf7bcc420c36ae546a65cc08a81fc1b90fa",
-        "a18fc46025143fc2fbbe31d9ad137921ef0f24b6a79e57a1a688de4ae4a593eb",
-        "a559c07f6a350629deb8e77adcd233250155851c042178f8ee52591da1989cad"
+        "ce2141ae6b0d081cf35362c4a85fcaf57b014bec9d9e6e68288866e30bc1c4bf",
+        "a63601ef692e5ef527802c8af21f2dbe1eec99553e42458f6b446b7e01926494",
+        "2c193cc7991e63d65bce18a3e1cb066862a8014e3d0e609be642cf3b8ecac5dc"
       ],
       "sibling_previews": [
         "NASREQ Application (RFC 4005)",
@@ -25,24 +25,24 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 14
+    "token_count": 27
   },
   {
-    "chunk_id": "baacec48904513bf314809654c736cf7bcc420c36ae546a65cc08a81fc1b90fa",
+    "chunk_id": "ce2141ae6b0d081cf35362c4a85fcaf57b014bec9d9e6e68288866e30bc1c4bf",
     "chunk_type": "list_item",
-    "content": "# Authentication via NASREQ\nNASREQ Application (RFC 4005)",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nNASREQ Application (RFC 4005)",
     "line_start": null,
     "metadata": {
-      "breadcrumb_path": "Authentication via NASREQ",
+      "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ",
       "depth": 0,
-      "list_id": "e2b4052e033127cd",
+      "list_id": "3adc078257e1f6f5",
       "list_style": "unordered",
       "parent_item_id": null,
       "position": 2,
       "sibling_ids": [
-        "23279e928356903bc6e57f657aac9801d2fc122b1cf3096db98c53289c93c00d",
-        "a18fc46025143fc2fbbe31d9ad137921ef0f24b6a79e57a1a688de4ae4a593eb",
-        "a559c07f6a350629deb8e77adcd233250155851c042178f8ee52591da1989cad"
+        "e25a101787b98093f3adcfb001c9168e7fdfb4c689c6f0424f40ef935d40597b",
+        "a63601ef692e5ef527802c8af21f2dbe1eec99553e42458f6b446b7e01926494",
+        "2c193cc7991e63d65bce18a3e1cb066862a8014e3d0e609be642cf3b8ecac5dc"
       ],
       "sibling_previews": [
         "Base Diameter (RFC 6733)",
@@ -53,24 +53,24 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 15
+    "token_count": 28
   },
   {
-    "chunk_id": "a18fc46025143fc2fbbe31d9ad137921ef0f24b6a79e57a1a688de4ae4a593eb",
+    "chunk_id": "a63601ef692e5ef527802c8af21f2dbe1eec99553e42458f6b446b7e01926494",
     "chunk_type": "list_item",
-    "content": "# Authentication via NASREQ\nCredit-Control Application (RFC 4006)",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nCredit-Control Application (RFC 4006)",
     "line_start": null,
     "metadata": {
-      "breadcrumb_path": "Authentication via NASREQ",
+      "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ",
       "depth": 0,
-      "list_id": "e2b4052e033127cd",
+      "list_id": "3adc078257e1f6f5",
       "list_style": "unordered",
       "parent_item_id": null,
       "position": 3,
       "sibling_ids": [
-        "23279e928356903bc6e57f657aac9801d2fc122b1cf3096db98c53289c93c00d",
-        "baacec48904513bf314809654c736cf7bcc420c36ae546a65cc08a81fc1b90fa",
-        "a559c07f6a350629deb8e77adcd233250155851c042178f8ee52591da1989cad"
+        "e25a101787b98093f3adcfb001c9168e7fdfb4c689c6f0424f40ef935d40597b",
+        "ce2141ae6b0d081cf35362c4a85fcaf57b014bec9d9e6e68288866e30bc1c4bf",
+        "2c193cc7991e63d65bce18a3e1cb066862a8014e3d0e609be642cf3b8ecac5dc"
       ],
       "sibling_previews": [
         "Base Diameter (RFC 6733)",
@@ -81,24 +81,24 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 15
+    "token_count": 28
   },
   {
-    "chunk_id": "a559c07f6a350629deb8e77adcd233250155851c042178f8ee52591da1989cad",
+    "chunk_id": "2c193cc7991e63d65bce18a3e1cb066862a8014e3d0e609be642cf3b8ecac5dc",
     "chunk_type": "list_item",
-    "content": "# Authentication via NASREQ\nCustom vendor AVPs (vendor 99999, id 1). The following AVP types are used:",
+    "content": "# DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ\nCustom vendor AVPs (vendor 99999, id 1). The following AVP types are used:",
     "line_start": null,
     "metadata": {
-      "breadcrumb_path": "Authentication via NASREQ",
+      "breadcrumb_path": "DIAMETER Support with SMC > DIAMETER Applications > Authentication via NASREQ",
       "depth": 0,
-      "list_id": "e2b4052e033127cd",
+      "list_id": "3adc078257e1f6f5",
       "list_style": "unordered",
       "parent_item_id": null,
       "position": 4,
       "sibling_ids": [
-        "23279e928356903bc6e57f657aac9801d2fc122b1cf3096db98c53289c93c00d",
-        "baacec48904513bf314809654c736cf7bcc420c36ae546a65cc08a81fc1b90fa",
-        "a18fc46025143fc2fbbe31d9ad137921ef0f24b6a79e57a1a688de4ae4a593eb"
+        "e25a101787b98093f3adcfb001c9168e7fdfb4c689c6f0424f40ef935d40597b",
+        "ce2141ae6b0d081cf35362c4a85fcaf57b014bec9d9e6e68288866e30bc1c4bf",
+        "a63601ef692e5ef527802c8af21f2dbe1eec99553e42458f6b446b7e01926494"
       ],
       "sibling_previews": [
         "Base Diameter (RFC 6733)",
@@ -109,7 +109,7 @@
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
     "source_name": null,
-    "token_count": 28
+    "token_count": 41
   },
   {
     "chunk_id": "c445af9616c0fdd25af98a55254a4d58f2c1e373b3e596d6f22395be1eea89b7",

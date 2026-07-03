@@ -42,7 +42,7 @@ def public_key(keypair):
 def verifier(public_key):
     return JwtTokenVerifier(
         issuer=ISSUER,
-        audience=AUDIENCE,
+        audiences=(AUDIENCE,),
         scope_claim="scope",
         signing_key_resolver=lambda token: public_key,
     )
@@ -83,7 +83,7 @@ class TestJwtTokenVerifier:
     def test_scalar_scope_claim_returns_access_token_no_scopes(self, public_key, private_key):
         v = JwtTokenVerifier(
             issuer=ISSUER,
-            audience=AUDIENCE,
+            audiences=(AUDIENCE,),
             scope_claim="scope",
             signing_key_resolver=lambda token: public_key,
         )
@@ -104,7 +104,7 @@ class TestJwtTokenVerifier:
     def test_valid_token_list_scope(self, public_key, private_key):
         v = JwtTokenVerifier(
             issuer=ISSUER,
-            audience=AUDIENCE,
+            audiences=(AUDIENCE,),
             scope_claim="scp",
             signing_key_resolver=lambda token: public_key,
         )
@@ -122,7 +122,7 @@ class TestJwtTokenVerifier:
     def test_client_id_falls_back_to_client_id_claim(self, public_key, private_key):
         v = JwtTokenVerifier(
             issuer=ISSUER,
-            audience=AUDIENCE,
+            audiences=(AUDIENCE,),
             scope_claim="scope",
             signing_key_resolver=lambda token: public_key,
         )
@@ -164,7 +164,7 @@ class TestBuildTokenVerifier:
         return AuthConfig(
             type="oauth",
             oidc_issuer=ISSUER,
-            oidc_audience=AUDIENCE,
+            oidc_audiences=(AUDIENCE,),
             scope_claim="scope",
         )
 
@@ -308,3 +308,34 @@ class TestDiscoverJwksUri:
         monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
         with pytest.raises(AuthConfigError):
             _discover_jwks_uri("https://idp.example.com")
+
+
+class TestMultipleAudiences:
+    """A token is valid if its ``aud`` matches ANY configured audience.
+
+    This lets one MCP server accept tokens from several front-end OAuth clients
+    (e.g. a local-CLI client and a web-app client), each of which — with Dex —
+    carries its own client_id as the ``aud``.
+    """
+
+    def test_accepts_any_configured_audience(self, public_key, private_key):
+        v = JwtTokenVerifier(
+            issuer=ISSUER,
+            audiences=("cli-client", "web-client"),
+            scope_claim="scope",
+            signing_key_resolver=lambda token: public_key,
+        )
+        for aud in ("cli-client", "web-client"):
+            token = _mint(private_key, aud=aud)
+            result = asyncio.run(v.verify_token(token))
+            assert result is not None, f"expected {aud} to be accepted"
+
+    def test_rejects_audience_not_in_set(self, public_key, private_key):
+        v = JwtTokenVerifier(
+            issuer=ISSUER,
+            audiences=("cli-client", "web-client"),
+            scope_claim="scope",
+            signing_key_resolver=lambda token: public_key,
+        )
+        token = _mint(private_key, aud="some-other-client")
+        assert asyncio.run(v.verify_token(token)) is None

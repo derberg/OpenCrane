@@ -11,13 +11,34 @@ class AuthConfigError(Exception):
     """Raised when the auth block in config.yaml is invalid."""
 
 
+def _parse_audiences(raw) -> tuple[str, ...]:
+    """Normalize ``oidc.audience`` (a string or list of strings) to a tuple.
+
+    Accepting a list lets one MCP server trust tokens from several front-end
+    OAuth clients (e.g. a local-CLI client and a web-app client) — with Dex each
+    carries its own client_id as the ``aud`` claim, so the server must accept a
+    set of audiences.
+
+    Raises:
+        AuthConfigError: If ``raw`` is not a non-empty string or a non-empty list
+            of non-empty strings.
+    """
+    if isinstance(raw, str) and raw:
+        return (raw,)
+    if isinstance(raw, list) and raw and all(isinstance(a, str) and a for a in raw):
+        return tuple(raw)
+    raise AuthConfigError(
+        "oauth requires oidc.audience to be a non-empty string or list of strings"
+    )
+
+
 @dataclass(frozen=True)
 class AuthConfig:
     """Parsed and validated auth configuration."""
 
     type: str = "none"
     oidc_issuer: str | None = None
-    oidc_audience: str | None = None
+    oidc_audiences: tuple[str, ...] = ()
     scope_claim: str = "scope"
     scope_sources: dict[str, tuple[str, ...]] = field(default_factory=dict)
     default_sources: tuple[str, ...] = ()
@@ -80,7 +101,7 @@ def parse_auth_config(data: dict, known_sources: set[str]) -> AuthConfig:
 
     # --- oauth-specific ---
     oidc_issuer: str | None = None
-    oidc_audience: str | None = None
+    oidc_audiences: tuple[str, ...] = ()
     scope_claim = "scope"
 
     if auth_type == "oauth":
@@ -89,11 +110,9 @@ def parse_auth_config(data: dict, known_sources: set[str]) -> AuthConfig:
             raise AuthConfigError("oauth requires oidc to be a mapping")
         oidc_block = oidc_raw or {}
         oidc_issuer = oidc_block.get("issuer")
-        oidc_audience = oidc_block.get("audience")
         if not oidc_issuer:
             raise AuthConfigError("oauth requires oidc.issuer to be set")
-        if not oidc_audience:
-            raise AuthConfigError("oauth requires oidc.audience to be set")
+        oidc_audiences = _parse_audiences(oidc_block.get("audience"))
         scope_claim = oidc_block.get("scope_claim", "scope")  # OIDC-only: read from oidc: block
 
     # --- local-specific ---
@@ -115,7 +134,7 @@ def parse_auth_config(data: dict, known_sources: set[str]) -> AuthConfig:
     return AuthConfig(
         type=auth_type,
         oidc_issuer=oidc_issuer,
-        oidc_audience=oidc_audience,
+        oidc_audiences=oidc_audiences,
         scope_claim=scope_claim,
         scope_sources=scope_sources,
         default_sources=default_sources,

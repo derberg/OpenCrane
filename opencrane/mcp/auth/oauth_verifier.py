@@ -55,7 +55,7 @@ class JwtTokenVerifier(TokenVerifier):
         self,
         *,
         issuer: str,
-        audience: str,
+        audiences: tuple[str, ...],
         scope_claim: str,
         signing_key_resolver: Callable[[str], object],
     ) -> None:
@@ -63,14 +63,17 @@ class JwtTokenVerifier(TokenVerifier):
 
         Args:
             issuer: Expected ``iss`` claim (the external IdP).
-            audience: Expected ``aud`` claim (this resource server).
+            audiences: Accepted ``aud`` values. A token is valid if its ``aud``
+                matches ANY entry — this lets one server trust tokens from
+                several front-end OAuth clients (each carrying its own client_id
+                as ``aud`` with Dex).
             scope_claim: Name of the claim carrying granted scopes.
             signing_key_resolver: Callable mapping a raw token to the key used to
                 verify its signature. The (network) JWKS lookup lives here so the
                 verifier itself stays unit-testable.
         """
         self._issuer = issuer
-        self._audience = audience
+        self._audiences = audiences
         self._scope_claim = scope_claim
         self._signing_key_resolver = signing_key_resolver
 
@@ -92,7 +95,7 @@ class JwtTokenVerifier(TokenVerifier):
                 token,
                 key,
                 algorithms=["RS256", "ES256"],
-                audience=self._audience,
+                audience=list(self._audiences),
                 issuer=self._issuer,
                 options={"require": ["exp", "aud", "iss"]},
             )
@@ -178,7 +181,7 @@ def build_token_verifier(auth_config: AuthConfig) -> JwtTokenVerifier:
 
     return JwtTokenVerifier(
         issuer=auth_config.oidc_issuer,
-        audience=auth_config.oidc_audience,
+        audiences=auth_config.oidc_audiences,
         scope_claim=auth_config.scope_claim,
         signing_key_resolver=default_resolver,
     )

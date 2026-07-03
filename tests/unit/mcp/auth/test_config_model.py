@@ -97,7 +97,7 @@ class TestOAuthParsing:
         result = parse_auth_config(data, known_sources={"docs", "api"})
         assert result.type == "oauth"
         assert result.oidc_issuer == "https://auth.example.com"
-        assert result.oidc_audience == "myapp"
+        assert result.oidc_audiences == ("myapp",)
         assert result.scope_claim == "permissions"
         assert result.scope_sources == {"docs:read": ("docs", "api"), "docs:write": ("api",)}
         assert result.default_sources == ("docs",)
@@ -277,7 +277,7 @@ class TestAuthConfigDefaults:
         cfg = AuthConfig()
         assert cfg.type == "none"
         assert cfg.oidc_issuer is None
-        assert cfg.oidc_audience is None
+        assert cfg.oidc_audiences == ()
         assert cfg.scope_claim == "scope"
         assert cfg.scope_sources == {}
         assert cfg.default_sources == ()
@@ -289,3 +289,35 @@ class TestAuthConfigDefaults:
         cfg = AuthConfig()
         with pytest.raises(FrozenInstanceError):
             cfg.type = "oauth"  # type: ignore[misc]
+
+
+class TestAudienceParsing:
+    """oidc.audience accepts a single string or a list of strings."""
+
+    def _oauth(self, audience):
+        return {
+            "auth": {
+                "type": "oauth",
+                "oidc": {"issuer": "https://idp.example.com", "audience": audience},
+            }
+        }
+
+    def test_string_audience_becomes_single_tuple(self):
+        cfg = parse_auth_config(self._oauth("myapp"), known_sources=set())
+        assert cfg.oidc_audiences == ("myapp",)
+
+    def test_list_audience_becomes_tuple(self):
+        cfg = parse_auth_config(self._oauth(["cli-client", "web-client"]), known_sources=set())
+        assert cfg.oidc_audiences == ("cli-client", "web-client")
+
+    def test_empty_list_audience_raises(self):
+        with pytest.raises(AuthConfigError):
+            parse_auth_config(self._oauth([]), known_sources=set())
+
+    def test_non_string_audience_entry_raises(self):
+        with pytest.raises(AuthConfigError):
+            parse_auth_config(self._oauth(["ok", 123]), known_sources=set())
+
+    def test_missing_audience_raises(self):
+        with pytest.raises(AuthConfigError):
+            parse_auth_config(self._oauth(None), known_sources=set())

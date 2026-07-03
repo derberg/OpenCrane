@@ -68,7 +68,7 @@ class TestBuildFastmcpAuth:
         cfg = AuthConfig(
             type="oauth",
             oidc_issuer="https://idp.example.com",
-            oidc_audience="https://docs.example.com",
+            oidc_audiences=("https://docs.example.com",),
         )
         kwargs = build_fastmcp_auth(cfg)
         assert kwargs["token_verifier"] is stub_verifier
@@ -80,7 +80,7 @@ class TestBuildFastmcpAuth:
         cfg = AuthConfig(
             type="oauth",
             oidc_issuer="https://idp.example.com",
-            oidc_audience="https://docs.example.com",
+            oidc_audiences=("https://docs.example.com",),
         )
         with pytest.raises(AuthConfigError):
             build_fastmcp_auth(cfg)

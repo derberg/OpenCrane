@@ -378,10 +378,15 @@ class FileProcessor:
                     segments = re.split(r'\n[ \t]*-{3,}[ \t]*\n', block)
                 else:
                     # Split on H1 lines, keeping the H1 with its content.
+                    # Track code-fence state so that '# comment' lines inside
+                    # fenced blocks are not treated as page boundaries.
                     segments = []
                     current = []
+                    in_fence = False
                     for line in block.split('\n'):
-                        if re.match(r'^#\s+', line) and current:
+                        if line.strip().startswith('```'):
+                            in_fence = not in_fence
+                        if re.match(r'^#\s+', line) and current and not in_fence:
                             segments.append('\n'.join(current))
                             current = [line]
                         else:

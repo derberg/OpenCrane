@@ -119,6 +119,43 @@ def test_processor_index_keeps_tabs_html_block_intact(tmp_path):
     assert any("<Tabs>" in c.content and "</Tabs>" in c.content for c in chunks)
 
 
+def test_processor_h1_split_ignores_fenced_hash_comments(tmp_path):
+    """Fenced code block containing '# comment' must NOT be treated as a page boundary.
+
+    A single-source blob (no -----) with two real H1 pages where the first
+    page body contains a fenced code block with a shell comment line that
+    matches ^#\\s+.  That fenced line must NOT create a third page, and both
+    real pages must receive their correct index URLs (no alignment drift).
+    """
+    full = (
+        "# Installation\n"
+        "Install the package as shown below:\n\n"
+        "```bash\n"
+        "# not a real heading\n"
+        "pip install mypackage\n"
+        "```\n\n"
+        "Now you are ready to use it.\n"
+        "# Usage\n"
+        "Use the package like this.\n"
+    )
+    idx = LlmsIndex.parse(
+        "# D\n## proj\n"
+        "- [Installation](https://x/install)\n"
+        "- [Usage](https://x/usage)\n"
+    )
+    f = tmp_path / "llms-full.txt"
+    f.write_text(full)
+    chunks = FileProcessor().process_file(f, index=idx)
+    all_urls = {c.metadata.get("source_url") for c in chunks}
+    # Both real pages get their correct URLs — no drift.
+    assert "https://x/install" in all_urls
+    assert "https://x/usage" in all_urls
+    # The fenced '# not a real heading' must NOT create a spurious third page,
+    # so every chunk must carry a real URL (None would indicate a drifted/
+    # unmatched page caused by the false boundary).
+    assert None not in all_urls
+
+
 def test_processor_section_anchors_applies_anchor_for(tmp_path):
     """When config.section_anchors is on, anchor_for is applied per sub-section
     using that sub-section's nearest heading."""

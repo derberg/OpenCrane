@@ -286,45 +286,38 @@ def get_source_url(rel_with_project: Path, project_name: str) -> str | None:
     return f"{url}/blob/main/{repo_prefix}{rel_str}"
 
 
-def prefix_headings_with_path(content: str, rel_with_project: Path, project_name: str) -> str:
-    """Prefix headings with GitHub source URL for traceability in llms-full.txt files.
-    
-    The chunker will extract clean titles from these prefixed headings,
-    but keeping URLs in llms-full.txt is useful for humans reading the files directly.
+def ensure_leading_h1(body: str, title: str) -> str:
+    """Guarantee the block starts with ``# {title}``.
+
+    If the body's first non-blank line is already ``# {title}`` (exact match),
+    the body is returned unchanged; otherwise ``# {title}`` is prepended.
     """
-    output: List[str] = []
-    gh_url = get_source_url(rel_with_project, project_name)
-
-    for line in content.splitlines():
-        heading_match = HEADING_RE.match(line)
-        if heading_match:
-            hashes, heading_text = heading_match.groups()
-            heading_text = heading_text.strip()
-            if gh_url:
-                output.append(f"{hashes} {gh_url} {heading_text}")
-            else:
-                output.append(f"{hashes} {heading_text}")
-        else:
-            output.append(line)
-
-    return "\n".join(output)
+    stripped = body.lstrip("\n")
+    first_line = stripped.split("\n", 1)[0].strip()
+    if first_line == f"# {title}":
+        return body
+    return f"# {title}\n\n{body.lstrip(chr(10))}"
 
 
-def process_file(file_path: Path, project_dir: Path, project_name: str) -> str:
+def process_file(file_path: Path, project_dir: Path, project_name: str):
+    """Process a markdown file and return ``(content, entry)``.
+
+    ``content`` is the clean file text (no URL injections, no ``### {url}``
+    boundary line) with a guaranteed leading ``# {title}`` heading.
+    ``entry`` is an :class:`~opencrane.rag.services.llms_index.IndexEntry`
+    for this file, or ``None`` when no source URL can be resolved.
+    """
+    from opencrane.rag.services.llms_index import IndexEntry
     rel_with_project = Path(project_name) / file_path.relative_to(project_dir)
-
     raw_text = file_path.read_text(encoding="utf-8")
-    text_no_images = strip_images(raw_text)
-    text_relinked = rewrite_links(text_no_images, file_path, rel_with_project, project_dir, project_name)
-    text_with_prefixed_headings = prefix_headings_with_path(text_relinked, rel_with_project, project_name)
-
-    gh_url = get_source_url(rel_with_project, project_name)
-
-    output_lines = []
-    if gh_url:
-        output_lines.append(f"### {gh_url}")  # clickable source link
-    output_lines.append(text_with_prefixed_headings)
-    return "\n\n".join(output_lines)
+    frontmatter, body = strip_frontmatter(raw_text)
+    body = strip_images(body)
+    body = rewrite_links(body, file_path, rel_with_project, project_dir, project_name)
+    title = derive_title(frontmatter, body, file_path)
+    content = ensure_leading_h1(body, title)
+    url = get_source_url(rel_with_project, project_name)
+    entry = IndexEntry(source=project_name, title=title, url=url) if url else None
+    return content, entry
 
 
 
@@ -357,8 +350,13 @@ def process_fence_blocks(text: str, file_path: Path, project_dir: Path, project_
     return text
 
 
-def build_project_output(project_dir: Path, project_name: str | None = None, md_files: List[Path] | None = None, fence_types: Dict[str, "CodeFenceConfig"] | None = None) -> str:
+def build_project_output(project_dir: Path, project_name: str | None = None, md_files: List[Path] | None = None, fence_types: Dict[str, "CodeFenceConfig"] | None = None):
     """Build combined output for a project.
+
+    Returns a tuple ``(content, entries)`` where *content* is the sections
+    joined by ``\\n\\n-----\\n\\n`` and *entries* is the ordered list of
+    :class:`~opencrane.rag.services.llms_index.IndexEntry` objects collected
+    from each processed file.
 
     Args:
         project_dir: Root directory of the project.
@@ -369,17 +367,21 @@ def build_project_output(project_dir: Path, project_name: str | None = None, md_
             ``process_fence_blocks``.  When None or empty, no fence blocks
             are processed.
     """
+    from opencrane.rag.services.llms_index import IndexEntry
     # project_name/md_files optional for backward compatibility with older callers/tests
     project_name = project_name or project_dir.name
     md_files = md_files or filter_markdown_files(sorted(project_dir.rglob("*.md")))
     sections: List[str] = []
+    entries: List[IndexEntry] = []
 
     for md_file in md_files:
-        processed = process_file(md_file, project_dir, project_name)
+        processed, entry = process_file(md_file, project_dir, project_name)
         processed = process_fence_blocks(processed, md_file, project_dir, project_name, fence_types=fence_types)
         sections.append(processed)
+        if entry is not None:
+            entries.append(entry)
 
-    return "\n\n-----\n\n".join(sections)
+    return "\n\n-----\n\n".join(sections), entries
 
 
 def write_outputs(project_outputs: Dict[str, str], output_root: Path = OUTPUT_ROOT, root_projects: set[str] | None = None) -> None:
@@ -501,7 +503,7 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             md_files = filter_markdown_files(sorted(project_dir.rglob("*.md")))
             if not md_files:
                 continue  # pragma: no cover
-            project_outputs[project_dir.name] = build_project_output(project_dir, project_dir.name, md_files, fence_types=fence_types)
+            project_outputs[project_dir.name], _entries = build_project_output(project_dir, project_dir.name, md_files, fence_types=fence_types)
 
         output_root = OUTPUT_ROOT
         root_projects: set[str] = set()
@@ -697,7 +699,7 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
         project_outputs: Dict[str, str] = {}
         root_projects: set[str] = set()
         for project_name, project_dir, md_files, is_root in projects:
-            project_outputs[project_name] = build_project_output(project_dir, project_name, md_files, fence_types=fence_types)
+            project_outputs[project_name], _entries = build_project_output(project_dir, project_name, md_files, fence_types=fence_types)
             if is_root:
                 root_projects.add(project_name)
 

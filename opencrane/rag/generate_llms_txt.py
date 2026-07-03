@@ -21,7 +21,7 @@ from typing import Callable, Dict, Iterable, List, NamedTuple, Optional
 
 import yaml
 
-from opencrane.rag.services.llms_index import IndexEntry, render_llms_txt
+from opencrane.rag.services.llms_index import IndexEntry, LlmsIndex, render_llms_txt
 from opencrane.rag.services.source_mapping import SourceMapping
 from opencrane.shared.config import get_config
 from opencrane.shared.utils.git import get_repo_subdir, has_changes
@@ -413,6 +413,61 @@ def write_outputs(project_outputs: Dict[str, str], output_root: Path = OUTPUT_RO
         (output_root / "llms.txt").write_text(index_content, encoding="utf-8")
 
 
+def _synthesize_entries_from_full(source_name: str, full_text: str, docs_url: str) -> list[IndexEntry]:
+    """Synthesize one index entry per H1 page in a pre-existing llms-full.txt.
+
+    Splits *full_text* on ``^#\\s+`` H1 lines (FENCE-AWARE — ``#`` lines inside
+    ```` ``` ```` fenced code blocks are ignored so they are not mistaken for
+    page boundaries, mirroring the chunker's ``_split_block_into_pages``). Each
+    H1 becomes one entry: title = the H1 text, url = *docs_url* (the source's
+    base URL, repeated for every page) when set, else ``""``.
+
+    The entry count matches the number of H1-delimited pages the chunker will
+    detect in the same block, so the positional join aligns.
+    """
+    titles: list[str] = []
+    in_fence = False
+    for line in full_text.split("\n"):
+        if line.strip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        m = re.match(r"^#\s+(.*)$", line)
+        if m:
+            titles.append(m.group(1).strip())
+    return [IndexEntry(source=source_name, title=title, url=docs_url) for title in titles]
+
+
+def _external_index_section(
+    subdir: Path,
+    full_text: str,
+    mapped_paths: Dict[str, dict],
+) -> tuple[str, list[IndexEntry]]:
+    """Build the combined-llms.txt ``## {source}`` section for an external bundle.
+
+    Prefers the fetched companion ``{subdir}/llms.txt`` — its entries carry real
+    per-page URLs. Re-tags every parsed entry under *subdir*'s name so section
+    ordering matches the appended ``llms-full.txt`` block. When no companion
+    exists, synthesizes one entry per H1 page from *full_text*, using the
+    source's ``docs_url`` from the mapping (repeated for every page) when set.
+    """
+    source_name = subdir.name
+    companion = subdir / "llms.txt"
+    if companion.exists():
+        parsed = LlmsIndex.parse(companion.read_text(encoding="utf-8"))
+        entries = [
+            IndexEntry(source=source_name, title=e.title, url=e.url)
+            for e in parsed._entries
+        ]
+        return source_name, entries
+    docs_url = ""
+    cfg = mapped_paths.get(source_name)
+    if cfg:
+        docs_url = cfg.get("docs_url", "") or ""
+    return source_name, _synthesize_entries_from_full(source_name, full_text, docs_url)
+
+
 def _combine_existing_llmstxt(llmstxt_base: Path) -> List[Path]:
     """Scan llmstxt subdirectories for existing llms-full.txt files and combine them.
 
@@ -432,15 +487,27 @@ def _combine_existing_llmstxt(llmstxt_base: Path) -> List[Path]:
     if not existing:
         return []
 
+    try:
+        mapped_paths = get_source_mapping().data.get("sources", {})
+    except Exception:  # pragma: no cover
+        mapped_paths = {}
+
     combined_parts = []
+    index_sections: List[tuple[str, list[IndexEntry]]] = []
     for subdir in existing:
         llms_file = subdir / "llms-full.txt"
         content = llms_file.read_text(encoding="utf-8")
         combined_parts.append(content)
+        # One ## {source} section per ====== block, same order — so the chunker's
+        # count-based block/section alignment always matches.
+        index_sections.append(_external_index_section(subdir, content, mapped_paths))
 
     llmstxt_base.mkdir(parents=True, exist_ok=True)
     (llmstxt_base / "llms-full.txt").write_text(
         "\n\n======\n\n".join(combined_parts), encoding="utf-8"
+    )
+    (llmstxt_base / "llms.txt").write_text(
+        render_llms_txt("Documentation", index_sections), encoding="utf-8"
     )
 
     print(f"Combined {len(existing)} existing llms-full.txt files into {llmstxt_base / 'llms-full.txt'}")
@@ -775,9 +842,17 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
                 if sd.is_dir():
                     covered_subdirs.add(sd.name)
         # In single_source_is_base the per-source llms.txt was already written
-        # by write_outputs (to the same output_root == LLMSTXT_BASE). The
-        # top-level llms.txt is that same file — nothing more to do here.
+        # by write_outputs (to the same output_root == LLMSTXT_BASE). Seed
+        # top_entry_sections from that existing index so any external blocks
+        # appended below can extend it — keeping section count == block count.
         top_entry_sections: List[tuple[str, list[IndexEntry]]] = []
+        top_llms_index = LLMSTXT_BASE / "llms.txt"
+        if top_llms_index.exists():
+            existing_index = LlmsIndex.parse(top_llms_index.read_text(encoding="utf-8"))
+            top_entry_sections = [
+                (src, existing_index.entries_for(src))
+                for src in existing_index.sources()
+            ]
     else:
         # Assemble the top-level combined from the per-source contributions
         # captured during processing — each source_dir exactly once. Building
@@ -797,7 +872,13 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
 
     # Include pre-existing llmstxt sources (e.g., added via `opencrane add` with
     # type: llmstxt) that weren't already covered by source-dir processing above.
+    # For every external ====== block appended here, build one matching
+    # ## {source} index section (in the SAME order) so the chunker's count-based
+    # block/section alignment always holds: companion llms.txt → real per-page
+    # URLs; no companion → synthesized H1 entries carrying the base docs_url.
+    appended_external = False
     if LLMSTXT_BASE.exists():
+        mapped_paths = get_source_mapping().data.get("sources", {})
         for subdir in sorted(LLMSTXT_BASE.iterdir()):
             if not subdir.is_dir():
                 continue
@@ -808,13 +889,17 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
                 continue
             content = llms_file.read_text(encoding="utf-8")
             combined_parts.append(content)
+            top_entry_sections.append(_external_index_section(subdir, content, mapped_paths))
+            appended_external = True
 
     if combined_parts:
         LLMSTXT_BASE.mkdir(parents=True, exist_ok=True)
         (LLMSTXT_BASE / "llms-full.txt").write_text("\n\n======\n\n".join(combined_parts), encoding="utf-8")
-        # Write top-level llms.txt index (only for the multi-source case; in
-        # single_source_is_base, write_outputs already wrote it to LLMSTXT_BASE).
-        if top_entry_sections:
+        # Write the top-level llms.txt index. In single_source_is_base,
+        # write_outputs already wrote a base index; only rewrite here when
+        # external blocks were appended (so section count == block count).
+        # In the multi-source case, top_entry_sections is always authoritative.
+        if top_entry_sections and (not single_source_is_base or appended_external):
             index_content = render_llms_txt("Documentation", top_entry_sections)
             (LLMSTXT_BASE / "llms.txt").write_text(index_content, encoding="utf-8")
 

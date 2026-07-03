@@ -21,7 +21,7 @@ from typing import Callable, Dict, Iterable, List, NamedTuple, Optional
 
 import yaml
 
-from opencrane.rag.services.llms_index import IndexEntry
+from opencrane.rag.services.llms_index import IndexEntry, render_llms_txt
 from opencrane.rag.services.source_mapping import SourceMapping
 from opencrane.shared.config import get_config
 from opencrane.shared.utils.git import get_repo_subdir, has_changes
@@ -383,8 +383,9 @@ def build_project_output(project_dir: Path, project_name: str | None = None, md_
     return "\n\n-----\n\n".join(sections), entries
 
 
-def write_outputs(project_outputs: Dict[str, str], output_root: Path = OUTPUT_ROOT, root_projects: set[str] | None = None) -> None:
+def write_outputs(project_outputs: Dict[str, str], output_root: Path = OUTPUT_ROOT, root_projects: set[str] | None = None, project_entries: Dict[str, list[IndexEntry]] | None = None) -> None:
     root_projects = root_projects or set()
+    project_entries = project_entries or {}
     output_root.mkdir(parents=True, exist_ok=True)
 
     # Per-project outputs
@@ -401,6 +402,15 @@ def write_outputs(project_outputs: Dict[str, str], output_root: Path = OUTPUT_RO
         combined_sections.append(content)
 
     (output_root / "llms-full.txt").write_text("\n\n".join(combined_sections), encoding="utf-8")
+
+    # Write per-source llms.txt index alongside the combined llms-full.txt
+    if project_entries:
+        sections = [
+            (project, project_entries.get(project, []))
+            for project in project_outputs
+        ]
+        index_content = render_llms_txt("Documentation", sections)
+        (output_root / "llms.txt").write_text(index_content, encoding="utf-8")
 
 
 def _combine_existing_llmstxt(llmstxt_base: Path) -> List[Path]:
@@ -423,20 +433,9 @@ def _combine_existing_llmstxt(llmstxt_base: Path) -> List[Path]:
         return []
 
     combined_parts = []
-    mapping = get_source_mapping()
     for subdir in existing:
         llms_file = subdir / "llms-full.txt"
         content = llms_file.read_text(encoding="utf-8")
-        # Inject docs_url into headings if configured for this source
-        source = mapping.get_source(subdir.name)
-        if source and source.get("docs_url"):
-            docs_url = source["docs_url"].rstrip("/")
-            content = re.sub(
-                r"^(#{1,6})\s+(.+)$",
-                rf"\1 [{docs_url}] \2",
-                content,
-                flags=re.MULTILINE,
-            )
         combined_parts.append(content)
 
     llmstxt_base.mkdir(parents=True, exist_ok=True)
@@ -498,15 +497,16 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             project_dirs = [p for p in project_dirs if p.name in selected_projects]
 
         project_outputs: Dict[str, str] = {}
+        project_entries: Dict[str, list[IndexEntry]] = {}
         for project_dir in sorted(project_dirs, key=lambda p: p.name):
             md_files = filter_markdown_files(sorted(project_dir.rglob("*.md")))
             if not md_files:
                 continue  # pragma: no cover
-            project_outputs[project_dir.name], _entries = build_project_output(project_dir, project_dir.name, md_files, fence_types=fence_types)
+            project_outputs[project_dir.name], project_entries[project_dir.name] = build_project_output(project_dir, project_dir.name, md_files, fence_types=fence_types)
 
         output_root = OUTPUT_ROOT
         root_projects: set[str] = set()
-        write_outputs(project_outputs, output_root, root_projects)
+        write_outputs(project_outputs, output_root, root_projects, project_entries=project_entries)
         return
 
     # Multiple source directories support
@@ -579,6 +579,8 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
     # combined file is assembled from these at the end so overlapping roots
     # cannot duplicate content.
     loop_contributions: List[tuple[str, str]] = []
+    # Parallel accumulator: (source_key, output_name) → entries for top-level llms.txt
+    loop_entry_sections: List[tuple[str, list[IndexEntry]]] = []
     loop_covered: set[str] = set()
 
     for source_dir in sorted(source_dirs, key=lambda p: p.name):
@@ -696,9 +698,10 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             continue
 
         project_outputs: Dict[str, str] = {}
+        project_entries_map: Dict[str, list[IndexEntry]] = {}
         root_projects: set[str] = set()
         for project_name, project_dir, md_files, is_root in projects:
-            project_outputs[project_name], _entries = build_project_output(project_dir, project_name, md_files, fence_types=fence_types)
+            project_outputs[project_name], project_entries_map[project_name] = build_project_output(project_dir, project_name, md_files, fence_types=fence_types)
             if is_root:
                 root_projects.add(project_name)
 
@@ -717,26 +720,31 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
 
         # Strip source_dir prefix from project names for output paths
         # since output_root already includes it
-        output_mapping = {}
+        output_mapping: Dict[str, str] = {}
+        output_entries: Dict[str, list[IndexEntry]] = {}
         source_prefix = f"{source_rel.as_posix()}/"
-        
+
         for project_name, content in project_outputs.items():
             # Remove source directory prefix if present
             output_name = project_name
             if project_name.startswith(source_prefix):
                 output_name = project_name[len(source_prefix):]
             output_mapping[output_name] = content
+            output_entries[output_name] = project_entries_map.get(project_name, [])
             # Mark the top-level subdir this bundle lives under as covered so the
             # pre-existing llmstxt sweep below does not re-append it.
             loop_covered.add((source_rel / output_name).parts[0])
 
-        write_outputs(output_mapping, output_root, root_projects)
+        write_outputs(output_mapping, output_root, root_projects, project_entries=output_entries)
 
         # Record this source_dir's combined content (mirrors write_outputs'
         # combined section) for the single authoritative top-level assembly.
         loop_contributions.append(
             (source_dir.as_posix(), "\n\n".join(output_mapping.values()))
         )
+        # Accumulate per-project entries for the top-level llms.txt
+        for output_name in output_mapping:
+            loop_entry_sections.append((output_name, output_entries.get(output_name, [])))
 
     # Top-level combined output used by setup.sh (llmstxt/llms-full.txt)
     # When there's a single source_dir that maps to output_root == LLMSTXT_BASE,
@@ -764,6 +772,10 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             for sd in LLMSTXT_BASE.iterdir():
                 if sd.is_dir():
                     covered_subdirs.add(sd.name)
+        # In single_source_is_base the per-source llms.txt was already written
+        # by write_outputs (to the same output_root == LLMSTXT_BASE). The
+        # top-level llms.txt is that same file — nothing more to do here.
+        top_entry_sections: List[tuple[str, list[IndexEntry]]] = []
     else:
         # Assemble the top-level combined from the per-source contributions
         # captured during processing — each source_dir exactly once. Building
@@ -774,11 +786,11 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             content for _, content in sorted(loop_contributions, key=lambda c: c[0])
         ]
         covered_subdirs = set(loop_covered)
+        top_entry_sections = loop_entry_sections
 
     # Include pre-existing llmstxt sources (e.g., added via `opencrane add` with
     # type: llmstxt) that weren't already covered by source-dir processing above.
     if LLMSTXT_BASE.exists():
-        mapping = get_source_mapping()
         for subdir in sorted(LLMSTXT_BASE.iterdir()):
             if not subdir.is_dir():
                 continue
@@ -788,21 +800,16 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             if not llms_file.exists():
                 continue
             content = llms_file.read_text(encoding="utf-8")
-            # Inject docs_url into headings if configured for this source
-            source = mapping.get_source(subdir.name)
-            if source and source.get("docs_url"):
-                docs_url = source["docs_url"].rstrip("/")
-                content = re.sub(
-                    r"^(#{1,6})\s+(.+)$",
-                    rf"\1 [{docs_url}] \2",
-                    content,
-                    flags=re.MULTILINE,
-                )
             combined_parts.append(content)
 
     if combined_parts:
         LLMSTXT_BASE.mkdir(parents=True, exist_ok=True)
         (LLMSTXT_BASE / "llms-full.txt").write_text("\n\n======\n\n".join(combined_parts), encoding="utf-8")
+        # Write top-level llms.txt index (only for the multi-source case; in
+        # single_source_is_base, write_outputs already wrote it to LLMSTXT_BASE).
+        if top_entry_sections:
+            index_content = render_llms_txt("Documentation", top_entry_sections)
+            (LLMSTXT_BASE / "llms.txt").write_text(index_content, encoding="utf-8")
 
 
 # IMPORTANT: This block is required for setup.sh to work properly.

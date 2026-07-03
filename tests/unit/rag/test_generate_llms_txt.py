@@ -1161,6 +1161,20 @@ class TestStripFrontmatter:
         assert fm == {}
         assert body == "# No frontmatter\nx"
 
+    def test_invalid_yaml_returns_empty(self):
+        """Returns ({}, original text) when the frontmatter block is invalid YAML."""
+        text = "---\n: invalid: yaml: {\n---\n# Body"
+        fm, body = strip_frontmatter(text)
+        assert fm == {}
+        assert body == text
+
+    def test_non_dict_yaml_returns_empty(self):
+        """Returns ({}, original text) when frontmatter YAML is valid but not a dict."""
+        text = "---\n- item1\n- item2\n---\n# Body"
+        fm, body = strip_frontmatter(text)
+        assert fm == {}
+        assert body == text
+
 
 class TestFilenameToTitle:
     """Unit tests for filename_to_title helper."""
@@ -1193,3 +1207,89 @@ class TestEnsureLeadingH1:
 
     def test_noop_when_present(self):
         assert ensure_leading_h1("# T\nx", "T") == "# T\nx"
+
+
+class TestGenerateOutputsLlmsTxt:
+    """Tests for llms.txt generation and clean combined output (no URL injection)."""
+
+    def test_generate_outputs_writes_llms_txt(self, tmp_path, monkeypatch):
+        """generate_outputs writes llmstxt/llms.txt starting with '#' and linking the page URL."""
+        import yaml
+        opencrane_dir = tmp_path / ".opencrane"
+        opencrane_dir.mkdir()
+
+        # Source file
+        sources_base = opencrane_dir / "sources" / "my-source"
+        sources_base.mkdir(parents=True)
+        (sources_base / "guide.md").write_text("# Guide\n\nBody text.")
+
+        # Config with docs_url so get_source_url resolves to a nice URL
+        config_yaml = opencrane_dir / "config.yaml"
+        config_yaml.write_text(yaml.dump({"sources": {
+            "my-source": {
+                "url": "https://github.com/test/my-source",
+                "docs_path": "",
+                "docs_url": "https://docs.example.com/my-source",
+            }
+        }}))
+
+        llmstxt_dir = opencrane_dir / "llmstxt"
+        llmstxt_dir.mkdir()
+
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr("opencrane.rag.generate_llms_txt._source_mapping", None)
+        monkeypatch.setenv("MAPPING_FILE", str(config_yaml))
+        monkeypatch.delenv("AI_DOCS_SOURCES_DIRS", raising=False)
+        monkeypatch.delenv("AI_DOCS_SOURCES_DIR", raising=False)
+        monkeypatch.delenv("AI_DOCS_NO_FILTER", raising=False)
+
+        generate_outputs(force=True, llmstxt_dir=llmstxt_dir)
+
+        llms_txt = llmstxt_dir / "llms.txt"
+        assert llms_txt.exists(), f"llms.txt not created; files: {list(llmstxt_dir.rglob('*'))}"
+        content = llms_txt.read_text()
+        assert content.startswith("#"), f"llms.txt should start with '#', got: {content[:50]!r}"
+        # Should link to the page URL resolved via docs_url (guide.md → guide)
+        assert "https://docs.example.com/my-source/guide" in content
+
+    def test_generate_outputs_writes_clean_full(self, tmp_path, monkeypatch):
+        """Combined llms-full.txt must NOT contain '[https://...]' bracket tags."""
+        import yaml
+        opencrane_dir = tmp_path / ".opencrane"
+        opencrane_dir.mkdir()
+
+        sources_base = opencrane_dir / "sources" / "ext-source"
+        sources_base.mkdir(parents=True)
+        (sources_base / "page.md").write_text("# External Page\n\nContent here.")
+
+        config_yaml = opencrane_dir / "config.yaml"
+        config_yaml.write_text(yaml.dump({"sources": {
+            "ext-source": {
+                "url": "https://github.com/test/ext-source",
+                "docs_path": "",
+                "docs_url": "https://docs.example.com/ext",
+            }
+        }}))
+
+        llmstxt_dir = opencrane_dir / "llmstxt"
+        llmstxt_dir.mkdir()
+
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr("opencrane.rag.generate_llms_txt._source_mapping", None)
+        monkeypatch.setenv("MAPPING_FILE", str(config_yaml))
+        monkeypatch.delenv("AI_DOCS_SOURCES_DIRS", raising=False)
+        monkeypatch.delenv("AI_DOCS_SOURCES_DIR", raising=False)
+        monkeypatch.delenv("AI_DOCS_NO_FILTER", raising=False)
+
+        generate_outputs(force=True, llmstxt_dir=llmstxt_dir)
+
+        combined = llmstxt_dir / "llms-full.txt"
+        assert combined.exists()
+        content = combined.read_text()
+        # Must NOT contain injected bracket URL tags like [https://...]
+        import re
+        bracket_urls = re.findall(r"\[https?://[^\]]+\]", content)
+        assert not bracket_urls, f"Found injected URL brackets in combined: {bracket_urls}"
+        # Body text must be present
+        assert "External Page" in content
+        assert "Content here" in content

@@ -70,8 +70,13 @@ def test_no_sources_no_llmstxt_files_warns(llmstxt_workspace, monkeypatch, capsy
 
 
 @pytest.mark.unit
-def test_combine_injects_docs_url_into_headings(llmstxt_workspace, monkeypatch):
-    """When a llmstxt source has docs_url, headings get URL prefixes."""
+def test_combine_llmstxt_source_with_docs_url_leaves_headings_clean(llmstxt_workspace, monkeypatch):
+    """External llmstxt sources are no longer modified with URL bracket injections.
+
+    Per-page URLs for external sources are provided via a companion llms.txt
+    file fetched in a later pipeline step; the combined llms-full.txt must have
+    clean, unmodified headings regardless of whether docs_url is configured.
+    """
     config_yaml = llmstxt_workspace / ".opencrane" / "config.yaml"
     config_yaml.write_text(
         "sources:\n"
@@ -89,8 +94,10 @@ def test_combine_injects_docs_url_into_headings(llmstxt_workspace, monkeypatch):
 
     combined = llmstxt_dir / "llms-full.txt"
     content = combined.read_text()
-    assert "[https://docs.example.com]" in content
-    assert "# [https://docs.example.com] Project A docs" in content
+    # Headings must NOT have injected bracket URL tags
+    assert "[https://docs.example.com]" not in content
+    # Original heading text must be preserved
+    assert "# Project A docs" in content
 
 
 @pytest.mark.unit
@@ -151,8 +158,10 @@ def test_combine_includes_preexisting_llmstxt_alongside_source_dirs(tmp_path, mo
     content = combined.read_text()
     assert "My Project" in content, "Source-dir content should be in combined output"
     assert "LikeC4 Tutorial" in content, "Pre-existing llmstxt content should be in combined output"
-    # Verify docs_url was injected into likec4 headings
-    assert "[https://likec4.dev/tutorial]" in content
+    # Headings must NOT have injected bracket URL tags — docs_url heading injection
+    # was removed; per-page URLs come from a companion llms.txt in a later step.
+    assert "[https://likec4.dev/tutorial]" not in content
+    assert "# LikeC4 Tutorial" in content
 
 
 @pytest.mark.unit

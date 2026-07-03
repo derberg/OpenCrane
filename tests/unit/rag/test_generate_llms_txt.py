@@ -10,7 +10,6 @@ from opencrane.rag.generate_llms_txt import (
     strip_images,
     rewrite_links,
     get_source_url,
-    prefix_headings_with_path,
     process_file,
     process_fence_blocks,
     build_project_output,
@@ -316,59 +315,6 @@ class TestGetSourceUrl:
                     assert result == "https://github.com/org/repo/blob/main/subdir/docs/guide.md"
 
 
-class TestPrefixHeadingsWithPath:
-    """Unit tests for prefix_headings_with_path function."""
-
-    def test_heading_prefixing(self):
-        """Test adding GitHub source links to headings."""
-        with tempfile.TemporaryDirectory() as tmp:
-            mapping_file = Path(tmp) / "mapping.yaml"
-            mapping = SourceMapping(mapping_file)
-            mapping.add_source(
-                path_key="project-a",
-                url="https://github.com/test/project-a",
-                docs_path=""
-            )
-            mapping.save()
-            
-            with patch("opencrane.rag.generate_llms_txt._source_mapping", mapping):
-                content = "# Main Title\n\nSome content\n\n## Sub Title\n\nMore content"
-                rel_path = Path("project-a/docs/file.md")
-                result = prefix_headings_with_path(content, rel_path, "project-a")
-                expected = "# https://github.com/test/project-a/blob/main/project-a/docs/file.md Main Title\n\nSome content\n\n## https://github.com/test/project-a/blob/main/project-a/docs/file.md Sub Title\n\nMore content"
-                assert result == expected
-
-    def test_no_headings(self):
-        """Test content without headings."""
-        with tempfile.TemporaryDirectory() as tmp:
-            mapping_file = Path(tmp) / "mapping.yaml"
-            mapping = SourceMapping(mapping_file)
-            mapping.add_source(
-                path_key="project-a",
-                url="https://github.com/test/project-a",
-                docs_path=""
-            )
-            mapping.save()
-
-            with patch("opencrane.rag.generate_llms_txt._source_mapping", mapping):
-                content = "Just plain text content."
-                rel_path = Path("project-a/file.md")
-                result = prefix_headings_with_path(content, rel_path, "project-a")
-                assert result == content
-
-    def test_no_url_headings_preserved_without_prefix(self):
-        """Test that headings are kept as-is when no URL is available."""
-        with tempfile.TemporaryDirectory() as tmp:
-            mapping_file = Path(tmp) / "mapping.yaml"
-            mapping = SourceMapping(mapping_file)
-            mapping.save()
-
-            with patch("opencrane.rag.generate_llms_txt._source_mapping", mapping):
-                content = "# Main Title\n\nSome content"
-                rel_path = Path("unmapped/file.md")
-                result = prefix_headings_with_path(content, rel_path, "unmapped")
-                assert result == content
-
 
 class TestProcessFenceBlocks:
     """Unit tests for process_fence_blocks dispatch mechanism."""
@@ -410,7 +356,7 @@ class TestProcessFile:
     """Unit tests for process_file function."""
 
     def test_process_file(self):
-        """Test processing a file."""
+        """Test processing a file returns (content, entry) with clean content and a resolved entry."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Setup mapping
             mapping_file = Path(temp_dir) / "mapping.yaml"
@@ -421,7 +367,7 @@ class TestProcessFile:
                 docs_path=""
             )
             mapping.save()
-            
+
             with patch("opencrane.rag.generate_llms_txt._source_mapping", mapping):
                 project_dir = (Path(temp_dir) / "project-a").resolve()
                 project_dir.mkdir()
@@ -430,14 +376,21 @@ class TestProcessFile:
                 file_path = docs_dir / "test.md"
                 file_path.write_text("# Test Heading\n\nSome content with [link](./other.md)")
 
-                result = process_file(file_path, project_dir, "project-a")
+                content, entry = process_file(file_path, project_dir, "project-a")
 
-                assert "### https://github.com/test/project-a/blob/main/project-a/docs/test.md" in result
-                assert "# https://github.com/test/project-a/blob/main/project-a/docs/test.md Test Heading" in result
-                assert "Some content with" in result
+                # Content must NOT contain injected URL prefixes in headings or a ### boundary line
+                assert "### https://" not in content
+                assert "# https://" not in content
+                # Heading text and body are intact
+                assert "# Test Heading" in content
+                assert "Some content with" in content
+                # entry carries the source URL for the index
+                assert entry is not None
+                assert entry.url == "https://github.com/test/project-a/blob/main/project-a/docs/test.md"
+                assert entry.title == "Test Heading"
 
     def test_process_file_no_url(self):
-        """Test that process_file omits source link when no mapping exists."""
+        """Test that process_file returns entry=None when no mapping exists."""
         with tempfile.TemporaryDirectory() as temp_dir:
             mapping_file = Path(temp_dir) / "mapping.yaml"
             mapping = SourceMapping(mapping_file)
@@ -449,17 +402,20 @@ class TestProcessFile:
                 file_path = project_dir / "test.md"
                 file_path.write_text("# Test Heading\n\nSome content")
 
-                result = process_file(file_path, project_dir, "project-a")
+                content, entry = process_file(file_path, project_dir, "project-a")
 
-                assert "###" not in result
-                assert "# Test Heading" in result
-                assert "Some content" in result
+                # No URL boundary line, clean heading
+                assert "###" not in content
+                assert "# Test Heading" in content
+                assert "Some content" in content
+                # No mapping means no entry
+                assert entry is None
 
 
 class TestBuildProjectOutput:
     """Unit tests for build_project_output function."""
     def test_build_project_output(self):
-        """Test building project output from multiple files."""
+        """Test building project output from multiple files returns (content, entries)."""
         # Create temporary directory structure
         with tempfile.TemporaryDirectory() as temp_dir:
             project_dir = Path(temp_dir) / "project"
@@ -471,13 +427,15 @@ class TestBuildProjectOutput:
             (project_dir / "subdir").mkdir()
             (project_dir / "subdir" / "file3.md").write_text("# File 3")
 
-            result = build_project_output(project_dir)
+            content, entries = build_project_output(project_dir)
 
-            # Should have processed all files
-            assert "File 1" in result
-            assert "File 2" in result
-            assert "File 3" in result
-            assert "----" in result  # Separator between files
+            # content must be a string with all file headings and a separator
+            assert "File 1" in content
+            assert "File 2" in content
+            assert "File 3" in content
+            assert "----" in content  # Separator between files
+            # entries is a list (may be empty when no source mapping is configured)
+            assert isinstance(entries, list)
 
 
 class TestWriteOutputs:
@@ -576,7 +534,7 @@ class TestGenerateOutputs:
     @patch("opencrane.rag.generate_llms_txt.build_project_output")
     def test_generate_outputs_legacy_path_with_selected_projects(self, mock_build, mock_write):
         """Test legacy code path with selected_projects parameter."""
-        mock_build.return_value = "test output"
+        mock_build.return_value = ("test output", [])
         
         with patch("opencrane.rag.generate_llms_txt.SOURCE_ROOT") as mock_source:
             mock_source.exists.return_value = True

@@ -83,7 +83,7 @@ class TestChunk:
         """Test table_row chunk metadata validation."""
         ok = Chunk(chunk_id="x", content="A: a. B: b.", source_file="d.md", chunk_type="table_row",
                    metadata={"table_id": "t1", "columns": ["A", "B"], "row_index": 1,
-                             "total_rows": 2, "row_key": "a", "sibling_previews": ["b"]},
+                             "total_rows": 2, "row_key": "a", "sibling_ids": [], "sibling_previews": ["b"]},
                    token_count=5)
         assert ok.chunk_type == "table_row"
         with pytest.raises(ValidationError):
@@ -105,4 +105,4 @@ def test_table_row_chunk_rejects_non_string_content():
     with pytest.raises(Exception):
         Chunk(chunk_id="x", content={"a": 1}, source_file="d.md", chunk_type="table_row",
               metadata={"table_id": "t1", "columns": ["A"], "row_index": 1, "total_rows": 1,
-                        "row_key": "a", "sibling_previews": []}, token_count=1)
+                        "row_key": "a", "sibling_ids": [], "sibling_previews": []}, token_count=1)

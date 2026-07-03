@@ -236,6 +236,13 @@ reconstructed when needed.
 - **Example**: `"replicas"` (if the first column is "Field")
 - **Usage**: Quick identification without parsing the full row content
 
+### `sibling_ids` (array of chunk_id strings)
+
+- **Purpose**: chunk_ids of every OTHER row in the same table, in row order
+- **Length**: Always `total_rows - 1` (self excluded)
+- **Usage**: Follow these to fetch specific sibling row chunks. For bulk fetch,
+  use `get_table_members(table_id=...)` instead — it is one call.
+
 ### `sibling_previews` (array of strings, optional)
 
 - **Purpose**: Short text previews of other rows in the same table

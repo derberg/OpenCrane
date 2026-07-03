@@ -113,11 +113,22 @@ def build_table_chunks(
         metadata=overview_meta, token_count=get_token_count(overview_content),
     ))
 
+    # Pass 1: render each row and compute a stable chunk_id from a reduced
+    # metadata subset (excluding sibling_ids, which depend on other rows' ids).
+    row_contents = [_render_row(columns, cells, breadcrumb, caption) for cells in rows]
+    row_ids = []
+    for i, content in enumerate(row_contents):
+        hash_meta = {"table_id": table_id, "row_index": i + 1}
+        if source_url:
+            hash_meta["source_url"] = source_url
+        row_ids.append(generate_unique_chunk_id(content, str(source_file), "table_row", hash_meta))
+
+    # Pass 2: assemble each row chunk, adding sibling_ids referencing the other rows.
     for i, cells in enumerate(rows):
-        content = _render_row(columns, cells, breadcrumb, caption)
         meta = {
             "table_id": table_id, "columns": columns, "row_index": i + 1,
             "total_rows": len(rows), "row_key": row_keys[i],
+            "sibling_ids": [rid for j, rid in enumerate(row_ids) if j != i],
             "sibling_previews": _previews(row_keys, i),
         }
         if breadcrumb:
@@ -127,9 +138,9 @@ def build_table_chunks(
         if source_url:
             meta["source_url"] = source_url
         chunks.append(Chunk(
-            chunk_id=generate_unique_chunk_id(content, str(source_file), "table_row", meta),
-            content=content, source_file=str(source_file), chunk_type="table_row",
-            metadata=meta, token_count=get_token_count(content),
+            chunk_id=row_ids[i],
+            content=row_contents[i], source_file=str(source_file), chunk_type="table_row",
+            metadata=meta, token_count=get_token_count(row_contents[i]),
         ))
 
     return chunks

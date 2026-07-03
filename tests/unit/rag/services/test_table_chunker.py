@@ -35,6 +35,9 @@ def test_build_table_chunks_overview_and_rows():
     assert row.metadata["total_rows"] == 2
     # sibling_previews lists the other row keys
     assert "3GPP-Charging-Id" in row.metadata["sibling_previews"]
+    # sibling_ids contains chunk_ids of all other rows
+    assert len(row.metadata["sibling_ids"]) == overview.metadata["total_rows"] - 1
+    assert chunks[2].chunk_id in row.metadata["sibling_ids"]
     # all rows share one table_id
     assert chunks[1].metadata["table_id"] == chunks[2].metadata["table_id"] == overview.metadata["table_id"]
 

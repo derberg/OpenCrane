@@ -579,8 +579,9 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
     # combined file is assembled from these at the end so overlapping roots
     # cannot duplicate content.
     loop_contributions: List[tuple[str, str]] = []
-    # Parallel accumulator: (source_key, output_name) → entries for top-level llms.txt
-    loop_entry_sections: List[tuple[str, list[IndexEntry]]] = []
+    # Parallel accumulator: (source_dir_posix, output_name, entries) — keyed so
+    # top_entry_sections can be sorted by the same key as loop_contributions.
+    loop_entry_sections: List[tuple[str, str, list[IndexEntry]]] = []
     loop_covered: set[str] = set()
 
     for source_dir in sorted(source_dirs, key=lambda p: p.name):
@@ -742,9 +743,10 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
         loop_contributions.append(
             (source_dir.as_posix(), "\n\n".join(output_mapping.values()))
         )
-        # Accumulate per-project entries for the top-level llms.txt
+        # Accumulate per-project entries for the top-level llms.txt, tagged with
+        # source_dir.as_posix() so the final sort order matches loop_contributions.
         for output_name in output_mapping:
-            loop_entry_sections.append((output_name, output_entries.get(output_name, [])))
+            loop_entry_sections.append((source_dir.as_posix(), output_name, output_entries.get(output_name, [])))
 
     # Top-level combined output used by setup.sh (llmstxt/llms-full.txt)
     # When there's a single source_dir that maps to output_root == LLMSTXT_BASE,
@@ -786,7 +788,12 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             content for _, content in sorted(loop_contributions, key=lambda c: c[0])
         ]
         covered_subdirs = set(loop_covered)
-        top_entry_sections = loop_entry_sections
+        # Sort by the same key (source_dir.as_posix()) used for combined_parts so
+        # the Nth ## section in llms.txt corresponds to the Nth block in llms-full.txt.
+        top_entry_sections = [
+            (output_name, entries)
+            for _, output_name, entries in sorted(loop_entry_sections, key=lambda e: e[0])
+        ]
 
     # Include pre-existing llmstxt sources (e.g., added via `opencrane add` with
     # type: llmstxt) that weren't already covered by source-dir processing above.

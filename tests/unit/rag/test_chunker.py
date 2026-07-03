@@ -131,6 +131,38 @@ Content with marker.
                 "Warning should include counts"
 
 
+class TestChunkerLoadsLlmsIndex:
+    """Cover the companion llms.txt index-loading + join branch in main()."""
+
+    def test_index_join_assigns_page_urls(self, tmp_path, caplog):
+        """When a companion llms.txt exists, page URLs come from the index join."""
+        llms_dir = tmp_path / "llmstxt"
+        llms_dir.mkdir()
+        (llms_dir / "llms-full.txt").write_text(
+            "# Home\nWelcome to the home page content here.\n\n"
+            "-----\n\n"
+            "# Setup\nSetup instructions live on this page now.\n"
+        )
+        (llms_dir / "llms.txt").write_text(
+            "# Docs\n## proj\n- [Home](https://x/home)\n- [Setup](https://x/setup)\n"
+        )
+
+        test_output = tmp_path / "out.json"
+        with patch.dict(os.environ, {
+            'AI_DOCS_LLMSTXT_DIR': str(llms_dir),
+            'AI_DOCS_CHUNKS_FILE': str(test_output),
+        }):
+            with caplog.at_level(logging.INFO):
+                main()
+
+        with open(test_output) as f:
+            chunks = json.load(f)
+        urls = {c.get("metadata", {}).get("source_url") for c in chunks}
+        assert "https://x/home" in urls
+        assert "https://x/setup" in urls
+        assert any("Loaded llms.txt index" in r.message for r in caplog.records)
+
+
 class TestAnnotateSourceNames:
     """Verify chunks pick up source_name from the source mapping."""
 

@@ -211,9 +211,13 @@ reconstructed when needed.
 
 ### `sibling_previews` (array of strings, optional)
 
-- **Purpose**: Short text previews of other rows in the same table
-- **Format**: One preview per sibling row, capped at ~30 characters; `...`
-  appended when truncated
+- **Purpose**: Short text previews of other rows in the same table, in row order
+- **Format**: Preview capped at 30 display characters; `…` appended when
+  truncated
+- **Cap**: 15 entries maximum
+  - If fewer than 15 siblings: one preview per sibling (length matches `sibling_ids`)
+  - If more than 15 siblings: first 15 previews + a 16th entry literally
+    `"... +N more"` where N is the overflow count
 - **Usage**: Give the agent an at-a-glance summary of other rows so it can
   decide whether to call `get_table_members` without a follow-up tool call
 
@@ -223,6 +227,14 @@ Use `get_table_members(table_id=...)` to fetch all `table_row` chunks for a
 given `table_id`, returned in `row_index` order.
 The MCP `search_docs` tool appends a tip automatically when a result is a
 `table_row` chunk.
+
+### When Multiple Table Rows Match One Query
+
+When top-K search results contain two or more rows sharing the same `table_id`,
+the MCP `search_docs` tool **auto-groups them into a single result slot** with
+all matched rows inline. Unmatched rows appear as `sibling_previews` in the
+grouped output. This prevents duplicate content from consuming multiple result
+slots. Use `get_table_members(table_id=...)` to retrieve the full table.
 
 ## Programmatic Usage Examples
 

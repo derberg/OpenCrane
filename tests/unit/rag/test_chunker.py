@@ -140,7 +140,7 @@ class TestChunkerLoadsLlmsIndex:
         llms_dir.mkdir()
         (llms_dir / "llms-full.txt").write_text(
             "# Home\nWelcome to the home page content here.\n\n"
-            "-----\n\n"
+            "<!-- opencrane:page -->\n\n"
             "# Setup\nSetup instructions live on this page now.\n"
         )
         (llms_dir / "llms.txt").write_text(

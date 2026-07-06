@@ -57,7 +57,7 @@ The `llms` step emits a **clean** `llms-full.txt` — source URLs are **not** in
 
 Within `llms-full.txt`, boundaries are marked structurally:
 
-1. `-----` — separates the individual files (pages) that make up one source
+1. `<!-- opencrane:page -->` — separates the individual files (pages) that make up one source. This is a collision-proof HTML-comment sentinel (invisible when rendered) rather than a dash rule, because a markdown thematic break (`---`, `-----`) in page content would be indistinguishable from a dash-based separator and silently split the page.
 2. `======` — separates one source's block from the next in the combined bundle
 
 Each page begins with a single `# {title}` H1 heading (see [Page titles](#page-titles)). Image references are stripped and relative links are rewritten so they continue to work in the flattened output.
@@ -72,7 +72,7 @@ Welcome to the home page.
 
 ...
 
------
+<!-- opencrane:page -->
 
 # Setup Guide
 
@@ -102,7 +102,7 @@ Next to every `llms-full.txt`, the `llms` step writes a standard `llms.txt` inde
 
 - A top-level `# {project}` H1.
 - One `## {source}` section per source, in the **same order** as the corresponding `======` blocks in `llms-full.txt`.
-- One `- [{title}]({page_url})` link per page, in the **same order** as the `-----`-separated pages inside that source's block.
+- One `- [{title}]({page_url})` link per page, in the **same order** as the `<!-- opencrane:page -->`-separated pages inside that source's block.
 
 Per-source `llms.txt` files are also written next to each per-source `llms-full.txt`. The URL for each entry comes from `get_source_url(...)`, which is page-specific for GitHub sources and for sources configured with a `docs_url`.
 

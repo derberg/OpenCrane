@@ -464,7 +464,7 @@ class TestBuildProjectOutput:
             assert "File 1" in content
             assert "File 2" in content
             assert "File 3" in content
-            assert "----" in content  # Separator between files
+            assert "<!-- opencrane:page -->" in content  # Page separator between files
             # entries is a list (may be empty when no source mapping is configured)
             assert isinstance(entries, list)
 

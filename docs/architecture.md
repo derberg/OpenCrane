@@ -47,7 +47,7 @@ The `opencrane llms` command flattens the cloned Markdown files into a hierarchy
 
 - Processes Markdown files recursively.
 - Emits **clean** content — no URLs are injected into headings.
-- Adds visual separators (`-----` between files within a source, `======` between sources) and normalizes each page to lead with a single `# {title}` H1 (title precedence: frontmatter `title` → first heading → filename).
+- Adds separators (a `<!-- opencrane:page -->` sentinel between files within a source, `======` between sources) and normalizes each page to lead with a single `# {title}` H1 (title precedence: frontmatter `title` → first heading → filename). The page separator is a collision-proof HTML comment so markdown thematic breaks (`---`) in content are not mistaken for page boundaries.
 - Rewrites relative links to work in the flattened output.
 - Invokes fence type handlers for structured content such as OpenAPI specs and Kubernetes CRDs embedded as fenced code blocks.
 - Writes a companion `llms.txt` index next to each `llms-full.txt`: a `# {project}` H1 with one `## {source}` section per source and a `- [title](page_url)` link per page, in the same order as the bundle. This index is how the `chunk` step recovers each chunk's specific page `source_url`. For external `llmstxt` sources, a fetched companion `llms.txt` (real per-page URLs) is merged, or an index is synthesized from the source's `docs_url` when no companion exists.

@@ -15,7 +15,7 @@ This generates `./rag-chunks.json` with RAG-ready chunks.
 The chunker reads **both** the clean `llms-full.txt` bundle and its companion `llms.txt` index (see [Generating bundles](llms-generation.md)). Because `llms-full.txt` no longer carries URLs in its headings, each chunk's page `source_url` is recovered by joining the clean content back to the index:
 
 1. **Split into source blocks** — `llms-full.txt` is split on `======` separators. The Nth block aligns with the Nth `## {source}` section in `llms.txt`.
-2. **Split into pages** — within a source block, pages are split on `-----` separators when present, otherwise on `#` H1 lines (fence-aware, so a `#` comment inside a fenced code block is not mistaken for a page boundary).
+2. **Split into pages** — within a source block, pages are split on the `<!-- opencrane:page -->` sentinel when present, otherwise on `#` H1 lines (fence-aware, so a `#` comment inside a fenced code block is not mistaken for a page boundary). The separator is a collision-proof HTML comment, not a dash rule, so a markdown thematic break (`---`, `-----`) in page content never mis-splits the page.
 3. **Positional, title-validated join** — each page's URL is taken from the next entry in that source's index list, and validated against the page's leading H1 title (case-insensitive, whitespace-normalized). On a mismatch the join scans ahead within the same source's remaining entries for a matching title and realigns; if no match is found, `source_url` is left unset and a warning is logged.
 4. **Assign to sub-chunks** — the resolved page URL is attached to every chunk produced from that page.
 
@@ -39,7 +39,7 @@ Output (rag-chunks.json):
   }
 ```
 
-**Legacy fallback.** When no companion `llms.txt` is present (an older bundle that still has inline URL markers, or a bundle without an index), the chunker falls back to the previous marker-based behavior: `-----` and `### https://...` boundary markers are treated as document boundaries and the source URL is extracted from the injected markers. This keeps old bundles resolvable until the next `build`.
+**Legacy fallback.** When no companion `llms.txt` is present (an older bundle that still has inline URL markers, or a bundle without an index), the chunker falls back to the previous marker-based behavior: `### https://...` boundary markers are treated as document boundaries and the source URL is extracted from the injected markers. This keeps old bundles resolvable until the next `build`.
 
 This design ensures that each chunk maintains full context through its header hierarchy while document boundaries remain clear for processing.
 

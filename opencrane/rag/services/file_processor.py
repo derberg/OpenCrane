@@ -9,6 +9,7 @@ from opencrane.rag.services.docling_adapter import DoclingAdapter
 from opencrane.rag.services.prose_chunker import ProseChunkingStrategy
 from opencrane.rag.services.yaml_chunker import YamlChunkingStrategy
 from opencrane.rag.services.code_chunker import CodeChunkingStrategy
+from opencrane.rag.services.llms_index import PAGE_SEPARATOR
 from opencrane.shared.models.chunk import Chunk
 
 logger = logging.getLogger(__name__)
@@ -16,14 +17,20 @@ logger = logging.getLogger(__name__)
 _HEADING_PREFIX_RE = re.compile(r'^#{1,6}\s+')
 _LEADING_URL_RE = re.compile(r'(https?://[^\s\]]+)(.*)$')
 
-# Separator lines emitted by the generator are always surrounded by BLANK lines
-# (``\n\n======\n\n`` / ``\n\n-----\n\n``). A Setext heading underline, by
-# contrast, sits directly under its title (``Title\n======`` — a NON-blank line
-# immediately before). Requiring a blank line BEFORE the run of ``=``/``-`` is
-# what distinguishes a real separator from a Setext underline, so the two split
-# regexes below only match generator separators, never Setext headings.
+# The SOURCE separator (``======``) emitted by the generator is always surrounded
+# by BLANK lines (``\n\n======\n\n``). A Setext H1 underline, by contrast, sits
+# directly under its title (``Title\n======`` — a NON-blank line immediately
+# before), so requiring a blank line BEFORE the run of ``=`` distinguishes a real
+# separator from a Setext underline; ``=`` runs are never thematic breaks, so the
+# source separator is collision-safe.
 _SOURCE_SEP_RE = re.compile(r'\n[ \t]*\n[ \t]*=+[ \t]*\n')
-_PAGE_SEP_RE = re.compile(r'\n[ \t]*\n[ \t]*-{3,}[ \t]*\n')
+# The PAGE separator is a collision-proof HTML-comment sentinel
+# (``<!-- opencrane:page -->``), matched exactly and blank-line-surrounded. A
+# dash-based separator could NOT be used: any blank-line-surrounded run of 3+
+# dashes is a valid markdown thematic break (horizontal rule), so real HRs in
+# page content would split the page and strip its source_url. Matching the
+# sentinel means content HRs (``---``/``-----``) are inert.
+_PAGE_SEP_RE = re.compile(r'\n[ \t]*\n[ \t]*' + re.escape(PAGE_SEPARATOR) + r'[ \t]*\n')
 
 
 def _bare_url_marker(heading_line: str) -> str | None:
@@ -335,8 +342,9 @@ class FileProcessor:
 
                 Splits the combined content into source blocks (on ``======``),
                 aligns the Nth block with ``index.sources()[N]``, then splits
-                each block into pages (on ``-----`` when present, else on ``^# ``
-                H1 lines).  Each page's title is joined against the index to get
+                each block into pages (on the ``<!-- opencrane:page -->``
+                sentinel when present, else on ``^# `` H1 lines).  Each page's
+                title is joined against the index to get
                 its URL, which is assigned to every sub-section produced from
                 that page.
 
@@ -381,12 +389,13 @@ class FileProcessor:
             def _split_block_into_pages(block):
                 """Split a source block into ``(title, page_text)`` pairs.
 
-                Pages are delimited by ``-----`` separators when present;
-                otherwise each ``^# `` H1 line starts a new page.  A page's
-                title is the first ``# `` heading text in the segment.
+                Pages are delimited by the ``<!-- opencrane:page -->`` sentinel
+                when present; otherwise each ``^# `` H1 line starts a new page.
+                A page's title is the first ``# `` heading text in the segment.
                 """
-                # Only a run of ``-`` preceded by a BLANK line is a page
-                # separator; a Setext H2 underline (``Sub\n------``) is not.
+                # The page separator is the collision-proof sentinel — never a
+                # dash run, so markdown thematic breaks (``---``/``-----``) in
+                # content do NOT split the page.
                 if _PAGE_SEP_RE.search(block):
                     segments = _PAGE_SEP_RE.split(block)
                 else:

@@ -7,7 +7,7 @@ Welcome to the home page. This is the primary landing page for the documentation
 This documentation covers installation, setup, and usage of the product.
 
 
------
+<!-- opencrane:page -->
 
 # No Heading
 
@@ -17,7 +17,7 @@ The title should be derived from the filename: "no-heading" becomes "No Heading"
 A synthetic H1 will be prepended to this content during llms-full.txt generation.
 
 
------
+<!-- opencrane:page -->
 
 # Overview
 
@@ -28,7 +28,7 @@ This is the overview page for source-alpha. It introduces the core concepts.
 The system uses a pipeline architecture with modular components.
 
 
------
+<!-- opencrane:page -->
 
 # Setup Guide
 

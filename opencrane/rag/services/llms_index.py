@@ -3,6 +3,16 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+# Collision-proof page boundary emitted between pages in a generated
+# llms-full.txt block.  It MUST be a token no markdown construct can impersonate:
+# an HTML comment renders invisibly and can never be a heading, thematic break
+# (horizontal rule), or Setext underline.  A dash-based separator (``-----``)
+# was previously used, but any blank-line-surrounded run of 3+ dashes is a valid
+# markdown thematic break, so real HRs in content silently split pages and
+# stripped their per-page source_url.  The generator joins pages with this
+# sentinel and the chunker splits on it exactly — HRs are now inert.
+PAGE_SEPARATOR = "<!-- opencrane:page -->"
+
 
 @dataclass(frozen=True)
 class IndexEntry:

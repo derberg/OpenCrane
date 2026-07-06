@@ -21,7 +21,7 @@ from typing import Callable, Dict, Iterable, List, NamedTuple, Optional
 
 import yaml
 
-from opencrane.rag.services.llms_index import IndexEntry, LlmsIndex, render_llms_txt
+from opencrane.rag.services.llms_index import PAGE_SEPARATOR, IndexEntry, LlmsIndex, render_llms_txt
 from opencrane.rag.services.source_mapping import SourceMapping
 from opencrane.shared.config import get_config
 from opencrane.shared.utils.git import get_repo_subdir, has_changes
@@ -354,7 +354,8 @@ def build_project_output(project_dir: Path, project_name: str | None = None, md_
     """Build combined output for a project.
 
     Returns a tuple ``(content, entries)`` where *content* is the sections
-    joined by ``\\n\\n-----\\n\\n`` and *entries* is the ordered list of
+    joined by the collision-proof page separator
+    (``\\n\\n<!-- opencrane:page -->\\n\\n``) and *entries* is the ordered list of
     :class:`~opencrane.rag.services.llms_index.IndexEntry` objects collected
     from each processed file.
 
@@ -392,7 +393,7 @@ def build_project_output(project_dir: Path, project_name: str | None = None, md_
     if sections and not entries:
         entries.append(IndexEntry(source=project_name, title="", url=""))
 
-    return "\n\n-----\n\n".join(sections), entries
+    return f"\n\n{PAGE_SEPARATOR}\n\n".join(sections), entries
 
 
 def write_outputs(project_outputs: Dict[str, str], output_root: Path = OUTPUT_ROOT, root_projects: set[str] | None = None, project_entries: Dict[str, list[IndexEntry]] | None = None) -> None:

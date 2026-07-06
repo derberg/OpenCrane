@@ -37,8 +37,11 @@ def _split_row(line: str) -> List[str]:
     return [c.strip() for c in s.split("|")]
 
 
-def _table_id(breadcrumb: str, caption: str, columns: List[str], row_keys: List[str]) -> str:
-    key = f"{breadcrumb}|{caption}|{'|'.join(columns)}|{'|'.join(row_keys)}"
+def _table_id(breadcrumb: str, caption: str, columns: List[str], row_keys: List[str], table_ordinal: int) -> str:
+    # table_ordinal disambiguates two structurally identical tables in the same
+    # section (same heading, caption, columns, and first-column values), mirroring
+    # list_id's list_ordinal. Without it they would collapse to one table_id.
+    key = f"{breadcrumb}|{caption}|{table_ordinal}|{'|'.join(columns)}|{'|'.join(row_keys)}"
     return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
 
 
@@ -80,12 +83,17 @@ def build_table_chunks(
     caption: str,
     source_file: Path,
     source_url: Optional[str],
+    table_ordinal: int = 1,
 ) -> List[Chunk]:
     """Build one ``table_row`` chunk per data row for a markdown table.
 
     Returns an empty list when the input is not a valid table (fewer than three
     lines, or the second line is not a separator row).  No overview chunk is
     produced; rows self-organize via ``table_id`` and ``sibling_ids``.
+
+    ``table_ordinal`` is this table's 1-based position within its heading section;
+    it feeds ``table_id`` so two structurally identical tables under one heading
+    do not collide.
     """
     data_lines = [ln for ln in table_lines if ln.strip()]
     # Need at least a header, a separator, and one data row.
@@ -94,7 +102,7 @@ def build_table_chunks(
     columns = _split_row(data_lines[0])
     rows = [_split_row(ln) for ln in data_lines[2:]]
     row_keys = [cells[0] for cells in rows]
-    table_id = _table_id(breadcrumb, caption, columns, row_keys)
+    table_id = _table_id(breadcrumb, caption, columns, row_keys, table_ordinal)
 
     chunks: List[Chunk] = []
 
@@ -171,16 +179,29 @@ class TableChunkingStrategy(ProcessingStrategy):
         chunks: List[Chunk] = []
         heading_stack: List[tuple] = []
         caption = ""
+        table_ordinal_in_section = 0     # counts tables per heading section
         for kind, lines in self._split_regions(text):
             if kind == "other":
                 ancestors = list(heading_stack)
+                breadcrumb_before = " > ".join(t for _, t in heading_stack)
                 caption = self._update(heading_stack, lines)
+                if " > ".join(t for _, t in heading_stack) != breadcrumb_before:
+                    table_ordinal_in_section = 0
                 chunks.extend(self._delegate(lines, source_url, source_file, ancestors))
             else:
                 breadcrumb = " > ".join(t for _, t in heading_stack)
-                chunks.extend(build_table_chunks(
+                row_chunks = build_table_chunks(
                     lines, breadcrumb=breadcrumb, caption=caption,
-                    source_file=source_file, source_url=source_url))
+                    source_file=source_file, source_url=source_url,
+                    table_ordinal=table_ordinal_in_section + 1)
+                if row_chunks:
+                    table_ordinal_in_section += 1
+                    chunks.extend(row_chunks)
+                else:
+                    # A pseudo-table (row-like line + separator with no data rows,
+                    # or an empty table) yields no row chunks. Delegate rather than
+                    # drop it, so the source lines still reach the corpus as prose.
+                    chunks.extend(self._delegate(lines, source_url, source_file, list(heading_stack)))
         return chunks
 
     # --- region splitting ---------------------------------------------------

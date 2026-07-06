@@ -187,6 +187,44 @@ def test_render_row_no_double_period_when_cell_ends_with_period():
     assert out.endswith("Ends with a period.")
 
 
+def test_identical_tables_same_section_get_distinct_table_ids():
+    # Two structurally identical tables (same columns and first-column values)
+    # under one heading must not collapse to the same table_id.
+    text = "\n".join([
+        "## Config", "",
+        "| Key | Value |", "|-----|-------|", "| a | 1 |", "",
+        "| Key | Value |", "|-----|-------|", "| a | 2 |",
+    ])
+    chunks = TableChunkingStrategy().process(_node(text), Path("d.md"))
+    rows = [c for c in chunks if c.chunk_type == "table_row"]
+    assert len(rows) == 2
+    assert rows[0].metadata["table_id"] != rows[1].metadata["table_id"]
+
+
+def test_table_ordinal_resets_after_heading_change():
+    # Structurally identical tables under different headings stay distinct, and
+    # the per-section ordinal resets so each is the first table of its section.
+    text = "\n".join([
+        "## First", "", "| K | V |", "|---|---|", "| a | 1 |",
+        "## Second", "", "| K | V |", "|---|---|", "| a | 1 |",
+    ])
+    chunks = TableChunkingStrategy().process(_node(text), Path("d.md"))
+    rows = [c for c in chunks if c.chunk_type == "table_row"]
+    assert {r.metadata["breadcrumb_path"] for r in rows} == {"First", "Second"}
+    assert rows[0].metadata["table_id"] != rows[1].metadata["table_id"]
+
+
+def test_pseudo_table_lines_are_not_dropped():
+    # A row-like line followed by a separator but no data rows is not a real
+    # table; its lines must fall through to prose rather than vanish.
+    text = "\n".join(["Use A | B for input.", "| --- |", "", "Trailing prose survives."])
+    chunks = TableChunkingStrategy().process(_node(text), Path("d.md"))
+    assert [c.chunk_type for c in chunks].count("table_row") == 0
+    joined = "\n".join(c.content for c in chunks)
+    assert "Use A | B for input." in joined
+    assert "Trailing prose survives." in joined
+
+
 def test_delegated_list_breadcrumb_includes_ancestors_from_prior_region():
     text = "\n".join([
         "# A", "## B", "", "intro:", "",

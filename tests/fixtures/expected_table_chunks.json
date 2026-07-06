@@ -209,7 +209,7 @@
         "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "5c4d3c0bdb48c1ee",
+      "table_id": "891aa6a3eb5defe3",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -264,7 +264,7 @@
         "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "5c4d3c0bdb48c1ee",
+      "table_id": "891aa6a3eb5defe3",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -319,7 +319,7 @@
         "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "5c4d3c0bdb48c1ee",
+      "table_id": "891aa6a3eb5defe3",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -374,7 +374,7 @@
         "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "5c4d3c0bdb48c1ee",
+      "table_id": "891aa6a3eb5defe3",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -429,7 +429,7 @@
         "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "5c4d3c0bdb48c1ee",
+      "table_id": "891aa6a3eb5defe3",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -484,7 +484,7 @@
         "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "5c4d3c0bdb48c1ee",
+      "table_id": "891aa6a3eb5defe3",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -539,7 +539,7 @@
         "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "5c4d3c0bdb48c1ee",
+      "table_id": "891aa6a3eb5defe3",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -594,7 +594,7 @@
         "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "5c4d3c0bdb48c1ee",
+      "table_id": "891aa6a3eb5defe3",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -649,7 +649,7 @@
         "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "5c4d3c0bdb48c1ee",
+      "table_id": "891aa6a3eb5defe3",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -704,7 +704,7 @@
         "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "5c4d3c0bdb48c1ee",
+      "table_id": "891aa6a3eb5defe3",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -759,7 +759,7 @@
         "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "5c4d3c0bdb48c1ee",
+      "table_id": "891aa6a3eb5defe3",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -814,7 +814,7 @@
         "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "5c4d3c0bdb48c1ee",
+      "table_id": "891aa6a3eb5defe3",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -869,7 +869,7 @@
         "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "5c4d3c0bdb48c1ee",
+      "table_id": "891aa6a3eb5defe3",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -924,7 +924,7 @@
         "3GPP-MS-TimeZone"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "5c4d3c0bdb48c1ee",
+      "table_id": "891aa6a3eb5defe3",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -979,7 +979,7 @@
         "3GPP-User-Location-Info"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are used:",
-      "table_id": "5c4d3c0bdb48c1ee",
+      "table_id": "891aa6a3eb5defe3",
       "total_rows": 15
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -1018,7 +1018,7 @@
         "3GPP-Allocate-IP-Type"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are not used:",
-      "table_id": "2cdd030822c1fd98",
+      "table_id": "f2b1daf89e693692",
       "total_rows": 7
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -1057,7 +1057,7 @@
         "3GPP-Allocate-IP-Type"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are not used:",
-      "table_id": "2cdd030822c1fd98",
+      "table_id": "f2b1daf89e693692",
       "total_rows": 7
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -1096,7 +1096,7 @@
         "3GPP-Allocate-IP-Type"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are not used:",
-      "table_id": "2cdd030822c1fd98",
+      "table_id": "f2b1daf89e693692",
       "total_rows": 7
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -1135,7 +1135,7 @@
         "3GPP-Allocate-IP-Type"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are not used:",
-      "table_id": "2cdd030822c1fd98",
+      "table_id": "f2b1daf89e693692",
       "total_rows": 7
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -1174,7 +1174,7 @@
         "3GPP-Allocate-IP-Type"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are not used:",
-      "table_id": "2cdd030822c1fd98",
+      "table_id": "f2b1daf89e693692",
       "total_rows": 7
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -1213,7 +1213,7 @@
         "3GPP-Allocate-IP-Type"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are not used:",
-      "table_id": "2cdd030822c1fd98",
+      "table_id": "f2b1daf89e693692",
       "total_rows": 7
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -1252,7 +1252,7 @@
         "3GPP-Negotiated-DSCP"
       ],
       "table_caption": "The following AVP types from the base 3GPP Diameter dictionary are not used:",
-      "table_id": "2cdd030822c1fd98",
+      "table_id": "f2b1daf89e693692",
       "total_rows": 7
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -1288,7 +1288,7 @@
         "Accounting-Record-Number"
       ],
       "table_caption": "Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:",
-      "table_id": "e96f0be7d64bee5e",
+      "table_id": "16f805387c9a50ed",
       "total_rows": 5
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -1324,7 +1324,7 @@
         "Accounting-Record-Number"
       ],
       "table_caption": "Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:",
-      "table_id": "e96f0be7d64bee5e",
+      "table_id": "16f805387c9a50ed",
       "total_rows": 5
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -1360,7 +1360,7 @@
         "Accounting-Record-Number"
       ],
       "table_caption": "Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:",
-      "table_id": "e96f0be7d64bee5e",
+      "table_id": "16f805387c9a50ed",
       "total_rows": 5
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -1396,7 +1396,7 @@
         "Accounting-Record-Number"
       ],
       "table_caption": "Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:",
-      "table_id": "e96f0be7d64bee5e",
+      "table_id": "16f805387c9a50ed",
       "total_rows": 5
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -1432,7 +1432,7 @@
         "Accounting-Output-Packets"
       ],
       "table_caption": "Custom vendor AVPs (vendor 99999, id 1). The following AVP types are used:",
-      "table_id": "e96f0be7d64bee5e",
+      "table_id": "16f805387c9a50ed",
       "total_rows": 5
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -1464,7 +1464,7 @@
         "logging.level"
       ],
       "table_caption": "The following table lists the main configuration parameters and their default values:",
-      "table_id": "85143d19881043f9",
+      "table_id": "0650891afbebc5b4",
       "total_rows": 4
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -1496,7 +1496,7 @@
         "logging.level"
       ],
       "table_caption": "The following table lists the main configuration parameters and their default values:",
-      "table_id": "85143d19881043f9",
+      "table_id": "0650891afbebc5b4",
       "total_rows": 4
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -1528,7 +1528,7 @@
         "logging.level"
       ],
       "table_caption": "The following table lists the main configuration parameters and their default values:",
-      "table_id": "85143d19881043f9",
+      "table_id": "0650891afbebc5b4",
       "total_rows": 4
     },
     "source_file": "tests/fixtures/markdown_with_table.md",
@@ -1560,7 +1560,7 @@
         "resources.limits.cpu"
       ],
       "table_caption": "The following table lists the main configuration parameters and their default values:",
-      "table_id": "85143d19881043f9",
+      "table_id": "0650891afbebc5b4",
       "total_rows": 4
     },
     "source_file": "tests/fixtures/markdown_with_table.md",

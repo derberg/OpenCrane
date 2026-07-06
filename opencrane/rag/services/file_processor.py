@@ -16,6 +16,15 @@ logger = logging.getLogger(__name__)
 _HEADING_PREFIX_RE = re.compile(r'^#{1,6}\s+')
 _LEADING_URL_RE = re.compile(r'(https?://[^\s\]]+)(.*)$')
 
+# Separator lines emitted by the generator are always surrounded by BLANK lines
+# (``\n\n======\n\n`` / ``\n\n-----\n\n``). A Setext heading underline, by
+# contrast, sits directly under its title (``Title\n======`` — a NON-blank line
+# immediately before). Requiring a blank line BEFORE the run of ``=``/``-`` is
+# what distinguishes a real separator from a Setext underline, so the two split
+# regexes below only match generator separators, never Setext headings.
+_SOURCE_SEP_RE = re.compile(r'\n[ \t]*\n[ \t]*=+[ \t]*\n')
+_PAGE_SEP_RE = re.compile(r'\n[ \t]*\n[ \t]*-{3,}[ \t]*\n')
+
 
 def _bare_url_marker(heading_line: str) -> str | None:
     """Return the source URL when a heading is a bare (non-bracketed) URL marker.
@@ -337,10 +346,12 @@ class FileProcessor:
                 """
                 sources = index.sources()
 
-                # Split into source blocks on the generator's ====== delimiter,
-                # tolerating surrounding blank lines.
+                # Split into source blocks on the generator's ====== delimiter.
+                # Only a run of ``=`` preceded by a BLANK line is a separator; a
+                # Setext H1 underline (``Title\n======``) is not, so it never
+                # creates a phantom block.
                 blocks = [
-                    b for b in re.split(r'\n[ \t]*=+[ \t]*\n', content)
+                    b for b in _SOURCE_SEP_RE.split(content)
                 ]
                 blocks = [b for b in blocks if b.strip()]
 
@@ -374,8 +385,10 @@ class FileProcessor:
                 otherwise each ``^# `` H1 line starts a new page.  A page's
                 title is the first ``# `` heading text in the segment.
                 """
-                if re.search(r'\n[ \t]*-{3,}[ \t]*\n', block):
-                    segments = re.split(r'\n[ \t]*-{3,}[ \t]*\n', block)
+                # Only a run of ``-`` preceded by a BLANK line is a page
+                # separator; a Setext H2 underline (``Sub\n------``) is not.
+                if _PAGE_SEP_RE.search(block):
+                    segments = _PAGE_SEP_RE.split(block)
                 else:
                     # Split on H1 lines, keeping the H1 with its content.
                     # Track code-fence state so that '# comment' lines inside

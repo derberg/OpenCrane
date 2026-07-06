@@ -1,0 +1,5 @@
+# External Docs
+
+## external-with-companion
+- [External Home](https://external.example.com/docs/home)
+- [External Reference](https://external.example.com/docs/reference)

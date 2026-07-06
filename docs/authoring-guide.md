@@ -196,7 +196,7 @@ Headings are the primary chunk boundary. Get them right and most chunking proble
 
   Avoid: "Run the main command to execute it all."
 
-- **Don't open a section with a URL heading** like `## https://example.com/page Title`. That pattern is reserved by the pipeline for source-injection and will be rewritten.
+- **Don't open a section with a URL heading** like `## https://example.com/page Title`. The pipeline no longer injects URLs into headings, so a URL in your heading is kept verbatim as heading text — which makes for a noisy chunk title and, if it lands on a page's leading `#`, a noisy page title in the `llms.txt` index. Keep headings human-readable.
 
   Avoid:
 
@@ -548,9 +548,9 @@ Fenced YAML blocks are inspected by the chunker. If the YAML parses to a known s
 
 ## YAML Front Matter
 
-- **Front matter is ignored by chunking.** Flat `key: value` blocks at the top of a file with only scalar values are detected as front matter and skipped.
+- **Front matter is ignored by chunking**, but its `title` is used for the page title. Flat `key: value` blocks at the top of a file with only scalar values are detected as front matter and skipped from chunk content. When a `title` field is present, it becomes the page title used in the `llms.txt` index and normalized onto the page's leading `#` heading — taking precedence over the first body heading and the filename. See [Generating bundles](llms-generation.md#page-titles).
 
-  Skipped as front matter:
+  Skipped as front matter (its `title` becomes the page title):
 
   ````md
   ---

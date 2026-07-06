@@ -76,6 +76,7 @@ add → fetch → llms → chunk → embed → index → serve
 - Each step is independently callable via CLI (`opencrane <step>`) or via `opencrane build` for the full pipeline
 - `build` exits gracefully when no sources are configured (suggests `opencrane add`)
 - The `llms` step combines pre-existing llms-full.txt files even when `config.yaml` is empty
+- The `llms` step also writes a companion `llms.txt` index alongside each `llms-full.txt`; the `chunk` step reads both to assign each chunk its specific page `source_url`
 
 ## Development
 
@@ -134,6 +135,7 @@ Config is auto-discovered from `.opencrane/extensions.py:Config` or set via `--c
 - **Token-based YAML splitting** — recursive split when chunks exceed 800 tokens
 - **Hybrid search scoring** — `HYBRID_ALPHA * vector + (1 - HYBRID_ALPHA) * BM25` (default 0.6)
 - **Prose chunks split at heading boundaries only** — preserves complete sections for semantic coherence, no token-based splitting within sections
+- **Per-page `source_url` via companion `llms.txt`** — `llms-full.txt` stays clean (no URLs injected into headings); each chunk's page URL is recovered by joining the clean content to the standard `llms.txt` index, matched positionally per source and validated by H1 title. External `llmstxt` sources contribute their fetched companion `llms.txt` (real per-page URLs) or a synthesized index from their `docs_url`
 
 ## CI/CD
 
@@ -146,7 +148,7 @@ Config is auto-discovered from `.opencrane/extensions.py:Config` or set via `--c
 
 All outputs go to `.opencrane/` directory:
 - `.opencrane/sources/` — fetched documentation source files
-- `.opencrane/llmstxt/` — generated llms-full.txt files
+- `.opencrane/llmstxt/` — generated `llms-full.txt` bundles plus a companion `llms.txt` index (page title → page URL) written next to each `llms-full.txt`
 - `.opencrane/chunks.json` — chunked documents
 - `.opencrane/embeddings.json` — embedding vectors
 - `.opencrane/config.yaml` — source mapping and project configuration

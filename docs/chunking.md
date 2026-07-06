@@ -10,32 +10,36 @@ opencrane chunk --config yourproject.config:YourConfig
 
 This generates `./rag-chunks.json` with RAG-ready chunks.
 
-## How Document Boundaries are Handled
+## How Document Boundaries and `source_url` are Handled
 
-The chunker intelligently processes llms-full.txt files:
+The chunker reads **both** the clean `llms-full.txt` bundle and its companion `llms.txt` index (see [Generating bundles](llms-generation.md)). Because `llms-full.txt` no longer carries URLs in its headings, each chunk's page `source_url` is recovered by joining the clean content back to the index:
 
-1. Boundary markers are ignored: The `-----` separators and `### https://github.com/...` H3 markers are treated as document boundaries, not content
-2. URL prefixes are captured: Each heading's text (including GitHub URL) is tracked for context
+1. **Split into source blocks** — `llms-full.txt` is split on `======` separators. The Nth block aligns with the Nth `## {source}` section in `llms.txt`.
+2. **Split into pages** — within a source block, pages are split on the `<!-- opencrane:page -->` sentinel when present, otherwise on `#` H1 lines (fence-aware, so a `#` comment inside a fenced code block is not mistaken for a page boundary). The separator is a collision-proof HTML comment, not a dash rule, so a markdown thematic break (`---`, `-----`) in page content never mis-splits the page.
+3. **Positional, title-validated join** — each page's URL is taken from the next entry in that source's index list, and validated against the page's leading H1 title (case-insensitive, whitespace-normalized). On a mismatch the join scans ahead within the same source's remaining entries for a matching title and realigns; if no match is found, `source_url` is left unset and a warning is logged.
+4. **Assign to sub-chunks** — the resolved page URL is attached to every chunk produced from that page.
 
-Example of how a document is chunked:
+Because matching is scoped per source, duplicate page titles across sources are harmless — each page resolves to its own source's URL.
+
+Example:
 ```
-Input (llms-full.txt):
-  ### https://github.com/.../file.md          ← Ignored (boundary marker)
-
-  # https://github.com/.../file.md Title      ← Content
-  Paragraph content...                        ← Chunk content
-  ## https://github.com/.../file.md Section   ← Subheading
-  More content...                             ← Another chunk
+Input (llms-full.txt):          Input (llms.txt):
+  # Setup Guide                   ## my-source
+  Paragraph content...            - [Setup Guide](https://docs.example.com/setup)
+  ## Prerequisites
+  More content...
 
 Output (rag-chunks.json):
   {
     "chunk_type": "prose",
     "metadata": {
-      "source_url": "https://github.com/.../file.md"
+      "source_url": "https://docs.example.com/setup"
     },
     "content": "More content..."
   }
 ```
+
+**Legacy fallback.** When no companion `llms.txt` is present (an older bundle that still has inline URL markers, or a bundle without an index), the chunker falls back to the previous marker-based behavior: `### https://...` boundary markers are treated as document boundaries and the source URL is extracted from the injected markers. This keeps old bundles resolvable until the next `build`.
 
 This design ensures that each chunk maintains full context through its header hierarchy while document boundaries remain clear for processing.
 
@@ -104,11 +108,11 @@ All chunks include a `metadata` object with type-specific fields:
 ##### Universal Metadata (all chunk types)
 
 ###### `source_url` (string, URL, optional)
-- Purpose: Link back to original documentation page
-- Format: Full URL from markdown heading (e.g., `### https://...`)
-- Example: `"https://github.com/org/repo/blob/main/docs/configuration.md"`
+- Purpose: Link back to the specific documentation page the chunk came from
+- Format: The page URL resolved via the `llms.txt` index join (see [How Document Boundaries and `source_url` are Handled](#how-document-boundaries-and-source_url-are-handled))
+- Example: `"https://github.com/org/repo/blob/main/docs/configuration.md"` or a rendered docs-site page URL such as `"https://docs.example.com/configuration"`
 - Usage: Provide users with source documentation link in RAG responses
-- Present in: All chunk types when source URL is available
+- Present in: All chunk types when a page URL can be resolved
 
 ###### `original_format` (string, optional)
 - Purpose: Original serialization format of content

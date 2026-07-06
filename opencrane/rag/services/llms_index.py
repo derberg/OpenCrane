@@ -14,7 +14,12 @@ class IndexEntry:
 
 _H1_RE = re.compile(r'^#\s+(.*)$')
 _H2_RE = re.compile(r'^##\s+(.*)$')
-_LINK_RE = re.compile(r'^-\s*\[(?P<title>.*?)\]\((?P<url>[^)]+)\)\s*$')
+# The url group is ``[^)]*`` (zero-or-more) so a placeholder entry with an empty
+# URL — ``- []()``, emitted for a source that contributes content but resolves
+# no per-page URL — round-trips through parse. Dropping it would make the index
+# have fewer ## sections than the llms-full.txt has ====== blocks, forcing the
+# chunker into the legacy path and poisoning every source_url in the bundle.
+_LINK_RE = re.compile(r'^-\s*\[(?P<title>.*?)\]\((?P<url>[^)]*)\)\s*$')
 
 
 def _norm_title(title: str) -> str:

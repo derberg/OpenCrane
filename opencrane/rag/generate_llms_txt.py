@@ -408,12 +408,17 @@ def write_outputs(project_outputs: Dict[str, str], output_root: Path = OUTPUT_RO
         target_dir.mkdir(parents=True, exist_ok=True)
         (target_dir / "llms-full.txt").write_text(content, encoding="utf-8")
 
-    # Combined output - just concatenate project contents without metadata headers
+    # Combined output - concatenate project contents with a ====== separator
+    # between each project so the number of ====== blocks equals the number of
+    # ## {source} sections in the companion llms.txt. The chunker aligns the Nth
+    # block to the Nth index section by count+position; joining projects with a
+    # plain "\n\n" would collapse N projects into a single block and force the
+    # chunker into the legacy marker path (dropping every source_url).
     combined_sections = []
     for project, content in project_outputs.items():
         combined_sections.append(content)
 
-    (output_root / "llms-full.txt").write_text("\n\n".join(combined_sections), encoding="utf-8")
+    (output_root / "llms-full.txt").write_text("\n\n======\n\n".join(combined_sections), encoding="utf-8")
 
     # Write per-source llms.txt index alongside the combined llms-full.txt
     if project_entries:
@@ -823,8 +828,10 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
 
         # Record this source_dir's combined content (mirrors write_outputs'
         # combined section) for the single authoritative top-level assembly.
+        # Projects are joined with ====== so each carries its own block, matching
+        # its ## {source} index section (see write_outputs for the rationale).
         loop_contributions.append(
-            (source_dir.as_posix(), "\n\n".join(output_mapping.values()))
+            (source_dir.as_posix(), "\n\n======\n\n".join(output_mapping.values()))
         )
         # Accumulate per-project entries for the top-level llms.txt, tagged with
         # source_dir.as_posix() so the final sort order matches loop_contributions.

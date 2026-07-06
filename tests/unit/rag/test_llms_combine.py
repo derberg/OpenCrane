@@ -495,6 +495,74 @@ def test_no_h1_external_source_keeps_non_empty_index_section_and_does_not_poison
 
 
 @pytest.mark.unit
+def test_companion_md_urls_stripped_when_docs_url_set(tmp_path, monkeypatch):
+    """A GitBook-style companion llms.txt lists source-file URLs ending in
+    ``.md`` (or ``/index.md``).  When the source has a ``docs_url`` configured,
+    those must be normalized to the rendered docs-site page path (no ``.md``),
+    consistent with ``get_source_url``.  Without ``docs_url`` they stay verbatim.
+    """
+    opencrane_dir = tmp_path / ".opencrane"
+    opencrane_dir.mkdir()
+    config_yaml = opencrane_dir / "config.yaml"
+    config_yaml.write_text(
+        "sources:\n"
+        "  with-docs-url:\n"
+        "    type: llmstxt\n"
+        "    url: https://example.com/with-docs-url/llms-full.txt\n"
+        "    docs_url: https://docs.opencollective.com\n"
+        "    manual: true\n"
+        "  no-docs-url:\n"
+        "    type: llmstxt\n"
+        "    url: https://example.com/no-docs-url/llms-full.txt\n"
+        "    manual: true\n"
+    )
+    monkeypatch.setenv("MAPPING_FILE", str(config_yaml))
+
+    llmstxt_dir = opencrane_dir / "llmstxt"
+
+    with_dir = llmstxt_dir / "with-docs-url"
+    with_dir.mkdir(parents=True)
+    (with_dir / "llms-full.txt").write_text(
+        "# The Foundation\n\nFoundation content.\n\n"
+        "-----\n\n"
+        "# Overview\n\nSection overview.\n\n"
+        "-----\n\n"
+        "# Already Clean\n\nNo extension here.\n"
+    )
+    (with_dir / "llms.txt").write_text(
+        "# Docs\n\n"
+        "## with-docs-url\n"
+        "- [The Foundation](https://docs.opencollective.com/oc-europe-internal-doc/the-foundation.md)\n"
+        "- [Overview](https://docs.opencollective.com/oc-europe-internal-doc/section/index.md)\n"
+        "- [Already Clean](https://docs.opencollective.com/oc-europe-internal-doc/clean)\n"
+    )
+
+    no_dir = llmstxt_dir / "no-docs-url"
+    no_dir.mkdir(parents=True)
+    (no_dir / "llms-full.txt").write_text("# Home\n\nHome content.\n")
+    (no_dir / "llms.txt").write_text(
+        "# Docs\n\n"
+        "## no-docs-url\n"
+        "- [Home](https://raw.example.com/home.md)\n"
+    )
+
+    monkeypatch.chdir(tmp_path)
+    generate_outputs(force=True, llmstxt_dir=llmstxt_dir)
+
+    llms_txt = (llmstxt_dir / "llms.txt").read_text()
+
+    # docs_url source: .md stripped, /index.md → parent path.
+    assert "https://docs.opencollective.com/oc-europe-internal-doc/the-foundation" in llms_txt
+    assert "the-foundation.md" not in llms_txt
+    assert "https://docs.opencollective.com/oc-europe-internal-doc/section" in llms_txt
+    assert "section/index.md" not in llms_txt
+    # docs_url source: a URL already without .md is left unchanged.
+    assert "https://docs.opencollective.com/oc-europe-internal-doc/clean" in llms_txt
+    # no docs_url source: URL left verbatim.
+    assert "https://raw.example.com/home.md" in llms_txt
+
+
+@pytest.mark.unit
 def test_generated_source_without_resolvable_url_does_not_poison_mixed_bundle(
     tmp_path, monkeypatch
 ):

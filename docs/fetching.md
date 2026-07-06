@@ -61,6 +61,8 @@ When a source is added as a pre-existing `llmstxt` bundle (a URL or local path t
 
 When a companion index is available, the `chunk` step uses its per-page URLs so each chunk carries its specific page `source_url`. When it is absent, the `llms` step synthesizes an index from the source's `docs_url` (the base URL, repeated for every page) — see [Source mapping](source-mapping.md).
 
+Companion entries may include the standard optional `: description` suffix after the link (`- [Title](url): some text`); it is parsed and ignored. GitBook-style companions often list source-file URLs ending in `.md` (or `/index.md`). When the source has a `docs_url` configured, those URLs are normalized to the rendered docs-site page (the extension is stripped and `/index.md` maps to its parent path), matching how `docs_url` sources resolve page URLs. Without a `docs_url`, companion URLs are used verbatim.
+
 ### Generate LLM bundles
 
 ```bash

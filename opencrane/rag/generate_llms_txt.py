@@ -461,6 +461,28 @@ def _synthesize_entries_from_full(source_name: str, full_text: str, docs_url: st
     return [IndexEntry(source=source_name, title=title, url=docs_url) for title in titles]
 
 
+def _strip_docs_md_suffix(url: str) -> str:
+    """Normalize a companion source-file URL to its rendered docs-site page.
+
+    GitBook-style companions list source-file URLs ending in ``.md`` (or
+    ``/index.md``); the rendered site serves those without the extension
+    (``.../the-foundation.md`` → ``.../the-foundation``) and an ``index`` page as
+    its containing directory (``.../section/index.md`` → ``.../section``),
+    mirroring :func:`_docs_site_page_path` but on an absolute URL. A plain suffix
+    strip: companion URLs carry no query/fragment, so we do not special-case one
+    (a ``.md`` preceding a ``?``/``#`` would be left intact — not a concern here).
+    """
+    for ext in (".md", ".markdown"):
+        if url.endswith(ext):
+            url = url[: -len(ext)]
+            break
+    else:
+        return url
+    if url.endswith("/index"):
+        url = url[: -len("/index")]
+    return url
+
+
 def _external_index_section(
     subdir: Path,
     full_text: str,
@@ -470,23 +492,31 @@ def _external_index_section(
 
     Prefers the fetched companion ``{subdir}/llms.txt`` — its entries carry real
     per-page URLs. Re-tags every parsed entry under *subdir*'s name so section
-    ordering matches the appended ``llms-full.txt`` block. When no companion
-    exists, synthesizes one entry per H1 page from *full_text*, using the
-    source's ``docs_url`` from the mapping (repeated for every page) when set.
+    ordering matches the appended ``llms-full.txt`` block. When the source has a
+    ``docs_url`` in the mapping, each companion URL is normalized to its rendered
+    docs-site page (trailing ``.md`` stripped) via :func:`_strip_docs_md_suffix`.
+    When no companion exists, synthesizes one entry per H1 page from *full_text*,
+    using the source's ``docs_url`` (repeated for every page) when set.
     """
     source_name = subdir.name
+    cfg = mapped_paths.get(source_name)
+    docs_url = (cfg.get("docs_url", "") or "") if cfg else ""
     companion = subdir / "llms.txt"
     if companion.exists():
         parsed = LlmsIndex.parse(companion.read_text(encoding="utf-8"))
+        # When docs_url is set the companion URLs point at rendered docs-site
+        # pages, which are served without the ``.md`` source extension. Strip it
+        # so the per-page source_url matches the canonical page (consistent with
+        # get_source_url). Without docs_url, leave companion URLs verbatim.
         entries = [
-            IndexEntry(source=source_name, title=e.title, url=e.url)
+            IndexEntry(
+                source=source_name,
+                title=e.title,
+                url=_strip_docs_md_suffix(e.url) if docs_url else e.url,
+            )
             for e in parsed._entries
         ]
         return source_name, entries
-    docs_url = ""
-    cfg = mapped_paths.get(source_name)
-    if cfg:
-        docs_url = cfg.get("docs_url", "") or ""
     return source_name, _synthesize_entries_from_full(source_name, full_text, docs_url)
 
 

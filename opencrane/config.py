@@ -56,3 +56,27 @@ class OpenCraneConfig:
         OpenAPITreeWalker,
         JsonSchemaTreeWalker,
     ]
+
+    # When True, sub-section chunks may carry a #anchor fragment appended to
+    # their source_url by anchor_for().  The default is False (page-URL-only).
+    # This attribute is a hint for callers; override anchor_for() to implement
+    # the actual slug logic.  There is no config.yaml plumbing for this key —
+    # enable it by subclassing and setting section_anchors = True alongside an
+    # anchor_for() override in .opencrane/extensions.py:Config.
+    section_anchors: bool = False
+
+    def anchor_for(self, page_url: str, heading: str | None) -> str:
+        """Return the URL to use for a chunk that lives under *heading*.
+
+        The default implementation returns *page_url* unchanged (page-URL-only
+        behavior).  Subclasses may override to append a ``#slug`` fragment so
+        that links point directly to the relevant section.
+
+        Args:
+            page_url: The canonical URL of the page that contains the chunk.
+            heading:  The nearest heading above the chunk, or ``None``.
+
+        Returns:
+            A URL string — either *page_url* as-is or *page_url* + ``#slug``.
+        """
+        return page_url

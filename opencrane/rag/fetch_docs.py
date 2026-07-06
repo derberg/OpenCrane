@@ -16,6 +16,19 @@ from opencrane.shared.utils.github_url_parser import parse_github_url
 logger = logging.getLogger(__name__)
 
 
+def _companion_llms_txt_url(url: str, docs_url: str | None) -> str | None:
+    """Derive the companion llms.txt URL from an llms-full.txt URL or docs_url.
+
+    Returns:
+        The companion URL, or None if it cannot be derived.
+    """
+    if url.endswith("llms-full.txt"):
+        return url[: -len("llms-full.txt")] + "llms.txt"
+    if docs_url:
+        return docs_url.rstrip("/") + "/llms.txt"
+    return None
+
+
 def main(config=None):
     """Main entry point for the documentation fetcher."""
     try:
@@ -186,6 +199,7 @@ def main(config=None):
             dest_file = dest_dir / "llms-full.txt"
 
             try:
+                docs_url = source_config.get("docs_url")
                 if url.startswith("http://") or url.startswith("https://"):
                     logger.info(f"Downloading llmstxt: {path_key} from {url}")
                     req = Request(url, headers={"User-Agent": "OpenCrane"})
@@ -193,6 +207,18 @@ def main(config=None):
                         content = response.read()
                     logger.debug(f"Downloaded {len(content)} bytes for {path_key}")
                     dest_file.write_bytes(content)
+
+                    # Attempt to fetch companion llms.txt
+                    companion_url = _companion_llms_txt_url(url, docs_url)
+                    if companion_url:
+                        try:
+                            companion_req = Request(companion_url, headers={"User-Agent": "OpenCrane"})
+                            with urlopen(companion_req) as companion_response:
+                                companion_content = companion_response.read()
+                            logger.debug(f"Downloaded companion llms.txt ({len(companion_content)} bytes) for {path_key}")
+                            (dest_dir / "llms.txt").write_bytes(companion_content)
+                        except Exception as e:
+                            logger.debug(f"Companion llms.txt not available for {path_key}: {e}")
                 else:
                     source_path = Path(url).resolve()
                     if not source_path.exists():
@@ -200,6 +226,12 @@ def main(config=None):
                         continue
                     logger.info(f"Copying llmstxt: {path_key} from {source_path}")
                     shutil.copy2(source_path, dest_file)
+
+                    # Look for a sibling llms.txt next to the source file
+                    sibling = source_path.parent / "llms.txt"
+                    if sibling.exists():
+                        logger.debug(f"Copying sibling llms.txt for {path_key} from {sibling}")
+                        shutil.copy2(sibling, dest_dir / "llms.txt")
 
                 active_repos.add(path_key)
                 logger.info(f"Fetched llmstxt source: {path_key} -> {dest_file}")

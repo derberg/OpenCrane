@@ -10,12 +10,28 @@ from opencrane.rag.services.prose_chunker import ProseChunkingStrategy
 from opencrane.rag.services.yaml_chunker import YamlChunkingStrategy
 from opencrane.rag.services.code_chunker import CodeChunkingStrategy
 from opencrane.rag.services.table_chunker import _is_table_separator
+from opencrane.rag.services.llms_index import PAGE_SEPARATOR
 from opencrane.shared.models.chunk import Chunk
 
 logger = logging.getLogger(__name__)
 
 _HEADING_PREFIX_RE = re.compile(r'^#{1,6}\s+')
 _LEADING_URL_RE = re.compile(r'(https?://[^\s\]]+)(.*)$')
+
+# The SOURCE separator (``======``) emitted by the generator is always surrounded
+# by BLANK lines (``\n\n======\n\n``). A Setext H1 underline, by contrast, sits
+# directly under its title (``Title\n======`` — a NON-blank line immediately
+# before), so requiring a blank line BEFORE the run of ``=`` distinguishes a real
+# separator from a Setext underline; ``=`` runs are never thematic breaks, so the
+# source separator is collision-safe.
+_SOURCE_SEP_RE = re.compile(r'\n[ \t]*\n[ \t]*=+[ \t]*\n')
+# The PAGE separator is a collision-proof HTML-comment sentinel
+# (``<!-- opencrane:page -->``), matched exactly and blank-line-surrounded. A
+# dash-based separator could NOT be used: any blank-line-surrounded run of 3+
+# dashes is a valid markdown thematic break (horizontal rule), so real HRs in
+# page content would split the page and strip its source_url. Matching the
+# sentinel means content HRs (``---``/``-----``) are inert.
+_PAGE_SEP_RE = re.compile(r'\n[ \t]*\n[ \t]*' + re.escape(PAGE_SEPARATOR) + r'[ \t]*\n')
 
 
 def _section_has_table(text: str) -> bool:
@@ -92,6 +108,7 @@ class FileProcessor:
             from opencrane.config import OpenCraneConfig
             config = OpenCraneConfig()
 
+        self.config = config
         self.docling_adapter = DoclingAdapter()
 
         # Build a YamlChunkingStrategy that uses the walkers from config.
@@ -104,22 +121,32 @@ class FileProcessor:
             for s in config.chunking_strategies
         ]
 
-    def process_file(self, file_path: Path) -> List[Chunk]:
-        """Process a file and return chunks."""
+    def process_file(self, file_path: Path, index=None) -> List[Chunk]:
+        """Process a file and return chunks.
+
+        Args:
+            file_path: File to chunk.
+            index: Optional :class:`~opencrane.rag.services.llms_index.LlmsIndex`.
+                When provided, page URLs are assigned by an ordered,
+                title-validated join against the ``llms.txt`` index instead of
+                inline URL markers.  When ``None`` the legacy marker-based
+                behavior is used unchanged (backward compatibility for old
+                files / no companion index).
+        """
         from .utils.chunk_id_generator import reset_collision_tracking
-        
+
         # Reset collision tracking for each file to ensure determinism
         reset_collision_tracking()
-        
+
         logger.info(f"Processing file: {file_path}")
 
         display_path = self._to_display_path(file_path)
-        
+
         # For .txt files, force fallback processing to handle section markers
         # Docling doesn't understand our custom ### URL section markers
         if file_path.suffix.lower() == '.txt':
             logger.debug(f"Detected .txt file, using fallback processing to handle section markers")
-            document = self._create_fallback_document(file_path)
+            document = self._create_fallback_document(file_path, index)
         else:
             try:
                 # Convert file to docling document
@@ -128,7 +155,7 @@ class FileProcessor:
 
             except ConversionError as e:
                 logger.debug(f"Docling conversion failed for {file_path}: {e}. Using fallback text processing.")
-                document = self._create_fallback_document(file_path)
+                document = self._create_fallback_document(file_path, index)
 
         chunks = []
         nodes_processed = 0
@@ -151,7 +178,7 @@ class FileProcessor:
         # If no nodes were processed successfully, fall back to plain text processing
         if nodes_processed == 0 and file_path.exists():
             logger.warning(f"FALLBACK: No Docling nodes processed, falling back to plain text processing for {file_path}")
-            fallback_doc = self._create_fallback_document(file_path)
+            fallback_doc = self._create_fallback_document(file_path, index)
             logger.warning(f"FALLBACK: Created fallback document with {len(list(fallback_doc.iterate_items()))} items")
             for node in fallback_doc.iterate_items():
                 for strategy in self.strategies:
@@ -210,36 +237,52 @@ class FileProcessor:
         if heading_text.startswith("Source missing:"):  # pragma: no cover
             logger.debug(f"Filtered out 'Source missing:' heading: {heading_text[:50]}...")
 
-    def _create_fallback_document(self, file_path: Path):
+    def _create_fallback_document(self, file_path: Path, index=None):
         """Create a fallback document for unsupported formats.
-        
+
         For large aggregated files (like llms-full.txt), splits content into
         logical sections to allow different chunking strategies to process
         different parts appropriately.
+
+        When ``index`` (an ``LlmsIndex``) is supplied, page URLs are assigned by
+        joining clean content to the ``llms.txt`` index instead of parsing
+        inline URL markers.  When ``index`` is ``None`` the legacy marker-based
+        splitting is used unchanged.
         """
         try:
             content = file_path.read_text()
         except Exception as e:  # pragma: no cover
             logger.error(f"Failed to read file {file_path}: {e}")
             content = ""
-        
+
+        config = self.config
+
         class FakeTextItem:
             def __init__(self, text, source_url=None):
                 self.text = text
                 self.node_type = 'text'
                 self.source_url = source_url
-        
+
         class FakeDocument:
-            def __init__(self, content, file_path):
+            def __init__(self, content, file_path, index=None):
                 self.content = content
                 self.file_path = file_path
-            
+                self.index = index
+
 
             def iterate_items(self):
                 # Only return item if there's content
                 if not self.content.strip():
                     return []
-                
+
+                # When an llms.txt index is available, assign page URLs via the
+                # ordered, title-validated join instead of inline markers.
+                if self.index is not None:
+                    sections = self._split_into_pages(self.content, self.index)
+                    if sections is not None:
+                        return self._extract_yaml_from_sections(sections)
+                    # Source-block count mismatch → fall through to legacy path.
+
                 # Always split into sections if content has ### URL markers
                 # These markers indicate logical file boundaries and must be respected
                 # Matches both bare URLs (### https://github.com/...) and
@@ -248,7 +291,7 @@ class FileProcessor:
                     '### https://github.com/' in self.content
                     or re.search(r'^#{1,6}\s+\[https?://', self.content, re.MULTILINE)
                 )
-                
+
                 # For large files with mixed content, or files with section markers, split into logical sections
                 # This allows prose, code, and YAML sections to be processed independently
                 if has_section_markers or len(self.content) > 100000 or self.content.count('```') > 100:
@@ -302,7 +345,165 @@ class FileProcessor:
                         result.append(section)
                 
                 return result
-            
+
+            def _split_into_pages(self, content, index):
+                """Assign page URLs by joining clean content to the llms.txt index.
+
+                Splits the combined content into source blocks (on ``======``),
+                aligns the Nth block with ``index.sources()[N]``, then splits
+                each block into pages (on the ``<!-- opencrane:page -->``
+                sentinel when present, else on ``^# `` H1 lines).  Each page's
+                title is joined against the index to get
+                its URL, which is assigned to every sub-section produced from
+                that page.
+
+                Returns the list of ``FakeTextItem`` sub-sections, or ``None``
+                when the source-block count does not match ``index.sources()``
+                (caller then falls back to the legacy marker path).
+                """
+                sources = index.sources()
+
+                # Split into source blocks on the generator's ====== delimiter.
+                # Only a run of ``=`` preceded by a BLANK line is a separator; a
+                # Setext H1 underline (``Title\n======``) is not, so it never
+                # creates a phantom block.
+                blocks = [
+                    b for b in _SOURCE_SEP_RE.split(content)
+                ]
+                blocks = [b for b in blocks if b.strip()]
+
+                # Single-source bundles carry no ====== delimiter.
+                if len(blocks) != len(sources):
+                    logger.warning(
+                        "llms.txt index source count (%d) does not match content "
+                        "blocks (%d); falling back to legacy marker extraction.",
+                        len(sources), len(blocks),
+                    )
+                    return None
+
+                sections = []
+                for source_name, block in zip(sources, blocks):
+                    cursor = 0
+                    for title, page_text in self._split_block_into_pages(block):
+                        url, cursor = index.match_page(source_name, title, cursor)
+                        if url is None:
+                            logger.warning(
+                                "No llms.txt index match for page '%s' in source '%s'; "
+                                "leaving source_url unset.", title, source_name,
+                            )
+                        sections.extend(self._subsplit_page(page_text, url))
+                return [s for s in sections if s.text.strip()]
+
+            @staticmethod
+            def _split_block_into_pages(block):
+                """Split a source block into ``(title, page_text)`` pairs.
+
+                Pages are delimited by the ``<!-- opencrane:page -->`` sentinel
+                when present; otherwise each ``^# `` H1 line starts a new page.
+                A page's title is the first ``# `` heading text in the segment.
+                """
+                # The page separator is the collision-proof sentinel — never a
+                # dash run, so markdown thematic breaks (``---``/``-----``) in
+                # content do NOT split the page.
+                if _PAGE_SEP_RE.search(block):
+                    segments = _PAGE_SEP_RE.split(block)
+                else:
+                    # Split on H1 lines, keeping the H1 with its content.
+                    # Track code-fence state so that '# comment' lines inside
+                    # fenced blocks are not treated as page boundaries.
+                    segments = []
+                    current = []
+                    in_fence = False
+                    for line in block.split('\n'):
+                        if line.strip().startswith('```'):
+                            in_fence = not in_fence
+                        if re.match(r'^#\s+', line) and current and not in_fence:
+                            segments.append('\n'.join(current))
+                            current = [line]
+                        else:
+                            current.append(line)
+                    if current:
+                        segments.append('\n'.join(current))
+
+                pages = []
+                for seg in segments:
+                    if not seg.strip():
+                        continue
+                    title = ""
+                    for line in seg.split('\n'):
+                        m = re.match(r'^#\s+(.*)$', line.strip())
+                        if m:
+                            title = m.group(1).strip()
+                            break
+                    pages.append((title, seg))
+                return pages
+
+            def _subsplit_page(self, page_text, page_url):
+                """Sub-split a single page into strategy-ready ``FakeTextItem``s.
+
+                Preserves the code-fence / ``<Tabs>`` HTML sub-splitting so
+                prose/code/yaml strategy dispatch is identical to the legacy
+                path.  Each emitted item carries ``page_url`` (optionally with a
+                per-sub-section ``#anchor`` when ``config.section_anchors``).
+                """
+                sub_sections = []
+                current_section = []
+                in_code_block = False
+                in_html_block = False
+                html_block_depth = 0
+
+                def emit(text):
+                    if text.strip():
+                        sub_sections.append((text, self._nearest_heading(text)))
+
+                for line in page_text.split('\n'):
+                    stripped_line = line.lstrip()
+                    if stripped_line.startswith('<Tabs>') or stripped_line.startswith('<Tabs '):
+                        in_html_block = True
+                        html_block_depth += line.count('<Tabs')
+
+                    current_section.append(line)
+
+                    if '</Tabs>' in line:
+                        html_block_depth -= line.count('</Tabs>')
+                        if html_block_depth <= 0:
+                            in_html_block = False
+                            html_block_depth = 0
+                            emit('\n'.join(current_section).strip())
+                            current_section = []
+
+                    if line.strip().startswith('```') and not in_html_block:
+                        if not in_code_block:
+                            if len(current_section) > 1:
+                                emit('\n'.join(current_section[:-1]).strip())
+                                current_section = [line]
+                            in_code_block = True
+                        else:
+                            in_code_block = False
+                            emit('\n'.join(current_section))
+                            current_section = []
+
+                if current_section:
+                    emit('\n'.join(current_section).strip())
+
+                items = []
+                for text, heading in sub_sections:
+                    url = page_url
+                    if url is not None and getattr(config, "section_anchors", False):
+                        url = config.anchor_for(url, heading)
+                    items.append(FakeTextItem(text, url))
+                return items
+
+            @staticmethod
+            def _nearest_heading(text):
+                """Return the last heading text within a sub-section, or None."""
+                heading = None
+                for line in text.split('\n'):
+                    m = re.match(r'^#{1,6}\s+(.*)$', line.strip())
+                    if m and m.group(1).strip():
+                        heading = m.group(1).strip()
+                return heading
+
             def _split_into_sections(self, content):
                 """Split content into sections for independent processing.
                 
@@ -479,7 +680,7 @@ class FileProcessor:
                 match = re.search(r'https://github\.com/[^\s\]]+', text)
                 return match.group(0) if match else None
         
-        return FakeDocument(content, file_path)
+        return FakeDocument(content, file_path, index)
 
 
 def process_file(file_path: Path) -> List[Chunk]:

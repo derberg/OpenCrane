@@ -19,6 +19,9 @@ import re
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, NamedTuple, Optional
 
+import yaml
+
+from opencrane.rag.services.llms_index import PAGE_SEPARATOR, IndexEntry, LlmsIndex, render_llms_txt
 from opencrane.rag.services.source_mapping import SourceMapping
 from opencrane.shared.config import get_config
 from opencrane.shared.utils.git import get_repo_subdir, has_changes
@@ -34,6 +37,40 @@ OUTPUT_ROOT = LLMSTXT_BASE
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
+
+_FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
+
+
+def strip_frontmatter(text: str) -> tuple[dict, str]:
+    """Split leading YAML frontmatter from body. Returns ({}, text) if absent."""
+    match = _FRONTMATTER_RE.match(text)
+    if not match:
+        return {}, text
+    try:
+        data = yaml.safe_load(match.group(1)) or {}
+    except yaml.YAMLError:
+        return {}, text
+    if not isinstance(data, dict):
+        return {}, text
+    return data, text[match.end():]
+
+
+def filename_to_title(stem: str) -> str:
+    """Turn a file stem into a human title: 'getting-started' -> 'Getting Started'."""
+    words = re.split(r"[-_]+", stem.strip())
+    return " ".join(w.capitalize() for w in words if w) or stem
+
+
+def derive_title(frontmatter: dict, body: str, file_path: Path) -> str:
+    """Priority: frontmatter title -> first heading -> filename-derived."""
+    fm_title = frontmatter.get("title")
+    if isinstance(fm_title, str) and fm_title.strip():
+        return fm_title.strip()
+    for line in body.splitlines():
+        m = HEADING_RE.match(line)
+        if m:
+            return m.group(2).strip()
+    return filename_to_title(file_path.stem)
 
 
 class CodeFenceConfig(NamedTuple):
@@ -250,45 +287,37 @@ def get_source_url(rel_with_project: Path, project_name: str) -> str | None:
     return f"{url}/blob/main/{repo_prefix}{rel_str}"
 
 
-def prefix_headings_with_path(content: str, rel_with_project: Path, project_name: str) -> str:
-    """Prefix headings with GitHub source URL for traceability in llms-full.txt files.
-    
-    The chunker will extract clean titles from these prefixed headings,
-    but keeping URLs in llms-full.txt is useful for humans reading the files directly.
+def ensure_leading_h1(body: str, title: str) -> str:
+    """Guarantee the block starts with ``# {title}``.
+
+    If the body's first non-blank line is already ``# {title}`` (exact match),
+    the body is returned unchanged; otherwise ``# {title}`` is prepended.
     """
-    output: List[str] = []
-    gh_url = get_source_url(rel_with_project, project_name)
-
-    for line in content.splitlines():
-        heading_match = HEADING_RE.match(line)
-        if heading_match:
-            hashes, heading_text = heading_match.groups()
-            heading_text = heading_text.strip()
-            if gh_url:
-                output.append(f"{hashes} {gh_url} {heading_text}")
-            else:
-                output.append(f"{hashes} {heading_text}")
-        else:
-            output.append(line)
-
-    return "\n".join(output)
+    stripped = body.lstrip("\n")
+    first_line = stripped.split("\n", 1)[0].strip()
+    if first_line == f"# {title}":
+        return body
+    return f"# {title}\n\n{body.lstrip(chr(10))}"
 
 
-def process_file(file_path: Path, project_dir: Path, project_name: str) -> str:
+def process_file(file_path: Path, project_dir: Path, project_name: str) -> tuple[str, IndexEntry | None]:
+    """Process a markdown file and return ``(content, entry)``.
+
+    ``content`` is the clean file text (no URL injections, no ``### {url}``
+    boundary line) with a guaranteed leading ``# {title}`` heading.
+    ``entry`` is an :class:`~opencrane.rag.services.llms_index.IndexEntry`
+    for this file, or ``None`` when no source URL can be resolved.
+    """
     rel_with_project = Path(project_name) / file_path.relative_to(project_dir)
-
     raw_text = file_path.read_text(encoding="utf-8")
-    text_no_images = strip_images(raw_text)
-    text_relinked = rewrite_links(text_no_images, file_path, rel_with_project, project_dir, project_name)
-    text_with_prefixed_headings = prefix_headings_with_path(text_relinked, rel_with_project, project_name)
-
-    gh_url = get_source_url(rel_with_project, project_name)
-
-    output_lines = []
-    if gh_url:
-        output_lines.append(f"### {gh_url}")  # clickable source link
-    output_lines.append(text_with_prefixed_headings)
-    return "\n\n".join(output_lines)
+    frontmatter, body = strip_frontmatter(raw_text)
+    body = strip_images(body)
+    body = rewrite_links(body, file_path, rel_with_project, project_dir, project_name)
+    title = derive_title(frontmatter, body, file_path)
+    content = ensure_leading_h1(body, title)
+    url = get_source_url(rel_with_project, project_name)
+    entry = IndexEntry(source=project_name, title=title, url=url) if url else None
+    return content, entry
 
 
 
@@ -321,8 +350,14 @@ def process_fence_blocks(text: str, file_path: Path, project_dir: Path, project_
     return text
 
 
-def build_project_output(project_dir: Path, project_name: str | None = None, md_files: List[Path] | None = None, fence_types: Dict[str, "CodeFenceConfig"] | None = None) -> str:
+def build_project_output(project_dir: Path, project_name: str | None = None, md_files: List[Path] | None = None, fence_types: Dict[str, "CodeFenceConfig"] | None = None) -> tuple[str, list[IndexEntry]]:
     """Build combined output for a project.
+
+    Returns a tuple ``(content, entries)`` where *content* is the sections
+    joined by the collision-proof page separator
+    (``\\n\\n<!-- opencrane:page -->\\n\\n``) and *entries* is the ordered list of
+    :class:`~opencrane.rag.services.llms_index.IndexEntry` objects collected
+    from each processed file.
 
     Args:
         project_dir: Root directory of the project.
@@ -337,17 +372,33 @@ def build_project_output(project_dir: Path, project_name: str | None = None, md_
     project_name = project_name or project_dir.name
     md_files = md_files or filter_markdown_files(sorted(project_dir.rglob("*.md")))
     sections: List[str] = []
+    entries: List[IndexEntry] = []
 
     for md_file in md_files:
-        processed = process_file(md_file, project_dir, project_name)
+        processed, entry = process_file(md_file, project_dir, project_name)
         processed = process_fence_blocks(processed, md_file, project_dir, project_name, fence_types=fence_types)
         sections.append(processed)
+        if entry is not None:
+            entries.append(entry)
 
-    return "\n\n-----\n\n".join(sections)
+    # If this project contributed content but resolved no URLs for any file, emit a
+    # single fallback IndexEntry so render_llms_txt never drops the ## {source}
+    # section.  A dropped section causes the combined llms.txt to have fewer
+    # sections than the combined llms-full.txt has ====== blocks; the chunker then
+    # falls back to legacy marker detection (finds nothing in clean content) and
+    # sets source_url=None for EVERY chunk in the bundle — poisoning even correctly-
+    # mapped sources.  The empty-title placeholder keeps the section present while
+    # leaving this unmapped source's own chunks with source_url=None, which is the
+    # pre-existing behaviour for an unmapped source in isolation.
+    if sections and not entries:
+        entries.append(IndexEntry(source=project_name, title="", url=""))
+
+    return f"\n\n{PAGE_SEPARATOR}\n\n".join(sections), entries
 
 
-def write_outputs(project_outputs: Dict[str, str], output_root: Path = OUTPUT_ROOT, root_projects: set[str] | None = None) -> None:
+def write_outputs(project_outputs: Dict[str, str], output_root: Path = OUTPUT_ROOT, root_projects: set[str] | None = None, project_entries: Dict[str, list[IndexEntry]] | None = None) -> None:
     root_projects = root_projects or set()
+    project_entries = project_entries or {}
     output_root.mkdir(parents=True, exist_ok=True)
 
     # Per-project outputs
@@ -358,12 +409,115 @@ def write_outputs(project_outputs: Dict[str, str], output_root: Path = OUTPUT_RO
         target_dir.mkdir(parents=True, exist_ok=True)
         (target_dir / "llms-full.txt").write_text(content, encoding="utf-8")
 
-    # Combined output - just concatenate project contents without metadata headers
+    # Combined output - concatenate project contents with a ====== separator
+    # between each project so the number of ====== blocks equals the number of
+    # ## {source} sections in the companion llms.txt. The chunker aligns the Nth
+    # block to the Nth index section by count+position; joining projects with a
+    # plain "\n\n" would collapse N projects into a single block and force the
+    # chunker into the legacy marker path (dropping every source_url).
     combined_sections = []
     for project, content in project_outputs.items():
         combined_sections.append(content)
 
-    (output_root / "llms-full.txt").write_text("\n\n".join(combined_sections), encoding="utf-8")
+    (output_root / "llms-full.txt").write_text("\n\n======\n\n".join(combined_sections), encoding="utf-8")
+
+    # Write per-source llms.txt index alongside the combined llms-full.txt
+    if project_entries:
+        sections = [
+            (project, project_entries.get(project, []))
+            for project in project_outputs
+        ]
+        index_content = render_llms_txt("Documentation", sections)
+        (output_root / "llms.txt").write_text(index_content, encoding="utf-8")
+
+
+def _synthesize_entries_from_full(source_name: str, full_text: str, docs_url: str) -> list[IndexEntry]:
+    """Synthesize one index entry per H1 page in a pre-existing llms-full.txt.
+
+    Splits *full_text* on ``^#\\s+`` H1 lines (FENCE-AWARE — ``#`` lines inside
+    ```` ``` ```` fenced code blocks are ignored so they are not mistaken for
+    page boundaries, mirroring the chunker's ``_split_block_into_pages``). Each
+    H1 becomes one entry: title = the H1 text, url = *docs_url* (the source's
+    base URL, repeated for every page) when set, else ``""``.
+
+    The entry count matches the number of H1-delimited pages the chunker will
+    detect in the same block, so the positional join aligns.
+    """
+    titles: list[str] = []
+    in_fence = False
+    for line in full_text.split("\n"):
+        if line.strip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        m = re.match(r"^#\s+(.*)$", line)
+        if m:
+            titles.append(m.group(1).strip())
+    if not titles:
+        # No H1 headings found — emit a single fallback entry so the section is
+        # never dropped from the index and block/section counts stay aligned.
+        return [IndexEntry(source=source_name, title="", url=docs_url or "")]
+    return [IndexEntry(source=source_name, title=title, url=docs_url) for title in titles]
+
+
+def _strip_docs_md_suffix(url: str) -> str:
+    """Normalize a companion source-file URL to its rendered docs-site page.
+
+    GitBook-style companions list source-file URLs ending in ``.md`` (or
+    ``/index.md``); the rendered site serves those without the extension
+    (``.../the-foundation.md`` → ``.../the-foundation``) and an ``index`` page as
+    its containing directory (``.../section/index.md`` → ``.../section``),
+    mirroring :func:`_docs_site_page_path` but on an absolute URL. A plain suffix
+    strip: companion URLs carry no query/fragment, so we do not special-case one
+    (a ``.md`` preceding a ``?``/``#`` would be left intact — not a concern here).
+    """
+    for ext in (".md", ".markdown"):
+        if url.endswith(ext):
+            url = url[: -len(ext)]
+            break
+    else:
+        return url
+    if url.endswith("/index"):
+        url = url[: -len("/index")]
+    return url
+
+
+def _external_index_section(
+    subdir: Path,
+    full_text: str,
+    mapped_paths: Dict[str, dict],
+) -> tuple[str, list[IndexEntry]]:
+    """Build the combined-llms.txt ``## {source}`` section for an external bundle.
+
+    Prefers the fetched companion ``{subdir}/llms.txt`` — its entries carry real
+    per-page URLs. Re-tags every parsed entry under *subdir*'s name so section
+    ordering matches the appended ``llms-full.txt`` block. When the source has a
+    ``docs_url`` in the mapping, each companion URL is normalized to its rendered
+    docs-site page (trailing ``.md`` stripped) via :func:`_strip_docs_md_suffix`.
+    When no companion exists, synthesizes one entry per H1 page from *full_text*,
+    using the source's ``docs_url`` (repeated for every page) when set.
+    """
+    source_name = subdir.name
+    cfg = mapped_paths.get(source_name)
+    docs_url = (cfg.get("docs_url", "") or "") if cfg else ""
+    companion = subdir / "llms.txt"
+    if companion.exists():
+        parsed = LlmsIndex.parse(companion.read_text(encoding="utf-8"))
+        # When docs_url is set the companion URLs point at rendered docs-site
+        # pages, which are served without the ``.md`` source extension. Strip it
+        # so the per-page source_url matches the canonical page (consistent with
+        # get_source_url). Without docs_url, leave companion URLs verbatim.
+        entries = [
+            IndexEntry(
+                source=source_name,
+                title=e.title,
+                url=_strip_docs_md_suffix(e.url) if docs_url else e.url,
+            )
+            for e in parsed._entries
+        ]
+        return source_name, entries
+    return source_name, _synthesize_entries_from_full(source_name, full_text, docs_url)
 
 
 def _combine_existing_llmstxt(llmstxt_base: Path) -> List[Path]:
@@ -385,26 +539,27 @@ def _combine_existing_llmstxt(llmstxt_base: Path) -> List[Path]:
     if not existing:
         return []
 
+    try:
+        mapped_paths = get_source_mapping().data.get("sources", {})
+    except Exception:  # pragma: no cover
+        mapped_paths = {}
+
     combined_parts = []
-    mapping = get_source_mapping()
+    index_sections: List[tuple[str, list[IndexEntry]]] = []
     for subdir in existing:
         llms_file = subdir / "llms-full.txt"
         content = llms_file.read_text(encoding="utf-8")
-        # Inject docs_url into headings if configured for this source
-        source = mapping.get_source(subdir.name)
-        if source and source.get("docs_url"):
-            docs_url = source["docs_url"].rstrip("/")
-            content = re.sub(
-                r"^(#{1,6})\s+(.+)$",
-                rf"\1 [{docs_url}] \2",
-                content,
-                flags=re.MULTILINE,
-            )
         combined_parts.append(content)
+        # One ## {source} section per ====== block, same order — so the chunker's
+        # count-based block/section alignment always matches.
+        index_sections.append(_external_index_section(subdir, content, mapped_paths))
 
     llmstxt_base.mkdir(parents=True, exist_ok=True)
     (llmstxt_base / "llms-full.txt").write_text(
         "\n\n======\n\n".join(combined_parts), encoding="utf-8"
+    )
+    (llmstxt_base / "llms.txt").write_text(
+        render_llms_txt("Documentation", index_sections), encoding="utf-8"
     )
 
     print(f"Combined {len(existing)} existing llms-full.txt files into {llmstxt_base / 'llms-full.txt'}")
@@ -461,15 +616,16 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             project_dirs = [p for p in project_dirs if p.name in selected_projects]
 
         project_outputs: Dict[str, str] = {}
+        project_entries: Dict[str, list[IndexEntry]] = {}
         for project_dir in sorted(project_dirs, key=lambda p: p.name):
             md_files = filter_markdown_files(sorted(project_dir.rglob("*.md")))
             if not md_files:
                 continue  # pragma: no cover
-            project_outputs[project_dir.name] = build_project_output(project_dir, project_dir.name, md_files, fence_types=fence_types)
+            project_outputs[project_dir.name], project_entries[project_dir.name] = build_project_output(project_dir, project_dir.name, md_files, fence_types=fence_types)
 
         output_root = OUTPUT_ROOT
         root_projects: set[str] = set()
-        write_outputs(project_outputs, output_root, root_projects)
+        write_outputs(project_outputs, output_root, root_projects, project_entries=project_entries)
         return
 
     # Multiple source directories support
@@ -542,6 +698,9 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
     # combined file is assembled from these at the end so overlapping roots
     # cannot duplicate content.
     loop_contributions: List[tuple[str, str]] = []
+    # Parallel accumulator: (source_dir_posix, output_name, entries) — keyed so
+    # top_entry_sections can be sorted by the same key as loop_contributions.
+    loop_entry_sections: List[tuple[str, str, list[IndexEntry]]] = []
     loop_covered: set[str] = set()
 
     for source_dir in sorted(source_dirs, key=lambda p: p.name):
@@ -659,9 +818,10 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             continue
 
         project_outputs: Dict[str, str] = {}
+        project_entries_map: Dict[str, list[IndexEntry]] = {}
         root_projects: set[str] = set()
         for project_name, project_dir, md_files, is_root in projects:
-            project_outputs[project_name] = build_project_output(project_dir, project_name, md_files, fence_types=fence_types)
+            project_outputs[project_name], project_entries_map[project_name] = build_project_output(project_dir, project_name, md_files, fence_types=fence_types)
             if is_root:
                 root_projects.add(project_name)
 
@@ -680,26 +840,34 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
 
         # Strip source_dir prefix from project names for output paths
         # since output_root already includes it
-        output_mapping = {}
+        output_mapping: Dict[str, str] = {}
+        output_entries: Dict[str, list[IndexEntry]] = {}
         source_prefix = f"{source_rel.as_posix()}/"
-        
+
         for project_name, content in project_outputs.items():
             # Remove source directory prefix if present
             output_name = project_name
             if project_name.startswith(source_prefix):
                 output_name = project_name[len(source_prefix):]
             output_mapping[output_name] = content
+            output_entries[output_name] = project_entries_map.get(project_name, [])
             # Mark the top-level subdir this bundle lives under as covered so the
             # pre-existing llmstxt sweep below does not re-append it.
             loop_covered.add((source_rel / output_name).parts[0])
 
-        write_outputs(output_mapping, output_root, root_projects)
+        write_outputs(output_mapping, output_root, root_projects, project_entries=output_entries)
 
         # Record this source_dir's combined content (mirrors write_outputs'
         # combined section) for the single authoritative top-level assembly.
+        # Projects are joined with ====== so each carries its own block, matching
+        # its ## {source} index section (see write_outputs for the rationale).
         loop_contributions.append(
-            (source_dir.as_posix(), "\n\n".join(output_mapping.values()))
+            (source_dir.as_posix(), "\n\n======\n\n".join(output_mapping.values()))
         )
+        # Accumulate per-project entries for the top-level llms.txt, tagged with
+        # source_dir.as_posix() so the final sort order matches loop_contributions.
+        for output_name in output_mapping:
+            loop_entry_sections.append((source_dir.as_posix(), output_name, output_entries.get(output_name, [])))
 
     # Top-level combined output used by setup.sh (llmstxt/llms-full.txt)
     # When there's a single source_dir that maps to output_root == LLMSTXT_BASE,
@@ -727,6 +895,18 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             for sd in LLMSTXT_BASE.iterdir():
                 if sd.is_dir():
                     covered_subdirs.add(sd.name)
+        # In single_source_is_base the per-source llms.txt was already written
+        # by write_outputs (to the same output_root == LLMSTXT_BASE). Seed
+        # top_entry_sections from that existing index so any external blocks
+        # appended below can extend it — keeping section count == block count.
+        top_entry_sections: List[tuple[str, list[IndexEntry]]] = []
+        top_llms_index = LLMSTXT_BASE / "llms.txt"
+        if top_llms_index.exists():
+            existing_index = LlmsIndex.parse(top_llms_index.read_text(encoding="utf-8"))
+            top_entry_sections = [
+                (src, existing_index.entries_for(src))
+                for src in existing_index.sources()
+            ]
     else:
         # Assemble the top-level combined from the per-source contributions
         # captured during processing — each source_dir exactly once. Building
@@ -737,11 +917,22 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             content for _, content in sorted(loop_contributions, key=lambda c: c[0])
         ]
         covered_subdirs = set(loop_covered)
+        # Sort by the same key (source_dir.as_posix()) used for combined_parts so
+        # the Nth ## section in llms.txt corresponds to the Nth block in llms-full.txt.
+        top_entry_sections = [
+            (output_name, entries)
+            for _, output_name, entries in sorted(loop_entry_sections, key=lambda e: e[0])
+        ]
 
     # Include pre-existing llmstxt sources (e.g., added via `opencrane add` with
     # type: llmstxt) that weren't already covered by source-dir processing above.
+    # For every external ====== block appended here, build one matching
+    # ## {source} index section (in the SAME order) so the chunker's count-based
+    # block/section alignment always holds: companion llms.txt → real per-page
+    # URLs; no companion → synthesized H1 entries carrying the base docs_url.
+    appended_external = False
     if LLMSTXT_BASE.exists():
-        mapping = get_source_mapping()
+        mapped_paths = get_source_mapping().data.get("sources", {})
         for subdir in sorted(LLMSTXT_BASE.iterdir()):
             if not subdir.is_dir():
                 continue
@@ -751,21 +942,20 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             if not llms_file.exists():
                 continue
             content = llms_file.read_text(encoding="utf-8")
-            # Inject docs_url into headings if configured for this source
-            source = mapping.get_source(subdir.name)
-            if source and source.get("docs_url"):
-                docs_url = source["docs_url"].rstrip("/")
-                content = re.sub(
-                    r"^(#{1,6})\s+(.+)$",
-                    rf"\1 [{docs_url}] \2",
-                    content,
-                    flags=re.MULTILINE,
-                )
             combined_parts.append(content)
+            top_entry_sections.append(_external_index_section(subdir, content, mapped_paths))
+            appended_external = True
 
     if combined_parts:
         LLMSTXT_BASE.mkdir(parents=True, exist_ok=True)
         (LLMSTXT_BASE / "llms-full.txt").write_text("\n\n======\n\n".join(combined_parts), encoding="utf-8")
+        # Write the top-level llms.txt index. In single_source_is_base,
+        # write_outputs already wrote a base index; only rewrite here when
+        # external blocks were appended (so section count == block count).
+        # In the multi-source case, top_entry_sections is always authoritative.
+        if top_entry_sections and (not single_source_is_base or appended_external):
+            index_content = render_llms_txt("Documentation", top_entry_sections)
+            (LLMSTXT_BASE / "llms.txt").write_text(index_content, encoding="utf-8")
 
 
 # IMPORTANT: This block is required for setup.sh to work properly.

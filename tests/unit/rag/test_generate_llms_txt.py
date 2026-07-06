@@ -7,10 +7,13 @@ from unittest.mock import patch, mock_open, MagicMock
 from opencrane.rag.generate_llms_txt import (
     slugify,
     build_anchor,
+    strip_frontmatter,
+    derive_title,
+    filename_to_title,
     strip_images,
+    ensure_leading_h1,
     rewrite_links,
     get_source_url,
-    prefix_headings_with_path,
     process_file,
     process_fence_blocks,
     build_project_output,
@@ -316,59 +319,6 @@ class TestGetSourceUrl:
                     assert result == "https://github.com/org/repo/blob/main/subdir/docs/guide.md"
 
 
-class TestPrefixHeadingsWithPath:
-    """Unit tests for prefix_headings_with_path function."""
-
-    def test_heading_prefixing(self):
-        """Test adding GitHub source links to headings."""
-        with tempfile.TemporaryDirectory() as tmp:
-            mapping_file = Path(tmp) / "mapping.yaml"
-            mapping = SourceMapping(mapping_file)
-            mapping.add_source(
-                path_key="project-a",
-                url="https://github.com/test/project-a",
-                docs_path=""
-            )
-            mapping.save()
-            
-            with patch("opencrane.rag.generate_llms_txt._source_mapping", mapping):
-                content = "# Main Title\n\nSome content\n\n## Sub Title\n\nMore content"
-                rel_path = Path("project-a/docs/file.md")
-                result = prefix_headings_with_path(content, rel_path, "project-a")
-                expected = "# https://github.com/test/project-a/blob/main/project-a/docs/file.md Main Title\n\nSome content\n\n## https://github.com/test/project-a/blob/main/project-a/docs/file.md Sub Title\n\nMore content"
-                assert result == expected
-
-    def test_no_headings(self):
-        """Test content without headings."""
-        with tempfile.TemporaryDirectory() as tmp:
-            mapping_file = Path(tmp) / "mapping.yaml"
-            mapping = SourceMapping(mapping_file)
-            mapping.add_source(
-                path_key="project-a",
-                url="https://github.com/test/project-a",
-                docs_path=""
-            )
-            mapping.save()
-
-            with patch("opencrane.rag.generate_llms_txt._source_mapping", mapping):
-                content = "Just plain text content."
-                rel_path = Path("project-a/file.md")
-                result = prefix_headings_with_path(content, rel_path, "project-a")
-                assert result == content
-
-    def test_no_url_headings_preserved_without_prefix(self):
-        """Test that headings are kept as-is when no URL is available."""
-        with tempfile.TemporaryDirectory() as tmp:
-            mapping_file = Path(tmp) / "mapping.yaml"
-            mapping = SourceMapping(mapping_file)
-            mapping.save()
-
-            with patch("opencrane.rag.generate_llms_txt._source_mapping", mapping):
-                content = "# Main Title\n\nSome content"
-                rel_path = Path("unmapped/file.md")
-                result = prefix_headings_with_path(content, rel_path, "unmapped")
-                assert result == content
-
 
 class TestProcessFenceBlocks:
     """Unit tests for process_fence_blocks dispatch mechanism."""
@@ -410,7 +360,7 @@ class TestProcessFile:
     """Unit tests for process_file function."""
 
     def test_process_file(self):
-        """Test processing a file."""
+        """Test processing a file returns (content, entry) with clean content and a resolved entry."""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Setup mapping
             mapping_file = Path(temp_dir) / "mapping.yaml"
@@ -421,7 +371,7 @@ class TestProcessFile:
                 docs_path=""
             )
             mapping.save()
-            
+
             with patch("opencrane.rag.generate_llms_txt._source_mapping", mapping):
                 project_dir = (Path(temp_dir) / "project-a").resolve()
                 project_dir.mkdir()
@@ -430,14 +380,21 @@ class TestProcessFile:
                 file_path = docs_dir / "test.md"
                 file_path.write_text("# Test Heading\n\nSome content with [link](./other.md)")
 
-                result = process_file(file_path, project_dir, "project-a")
+                content, entry = process_file(file_path, project_dir, "project-a")
 
-                assert "### https://github.com/test/project-a/blob/main/project-a/docs/test.md" in result
-                assert "# https://github.com/test/project-a/blob/main/project-a/docs/test.md Test Heading" in result
-                assert "Some content with" in result
+                # Content must NOT contain injected URL prefixes in headings or a ### boundary line
+                assert "### https://" not in content
+                assert "# https://" not in content
+                # Heading text and body are intact
+                assert "# Test Heading" in content
+                assert "Some content with" in content
+                # entry carries the source URL for the index
+                assert entry is not None
+                assert entry.url == "https://github.com/test/project-a/blob/main/project-a/docs/test.md"
+                assert entry.title == "Test Heading"
 
     def test_process_file_no_url(self):
-        """Test that process_file omits source link when no mapping exists."""
+        """Test that process_file returns entry=None when no mapping exists."""
         with tempfile.TemporaryDirectory() as temp_dir:
             mapping_file = Path(temp_dir) / "mapping.yaml"
             mapping = SourceMapping(mapping_file)
@@ -449,17 +406,47 @@ class TestProcessFile:
                 file_path = project_dir / "test.md"
                 file_path.write_text("# Test Heading\n\nSome content")
 
-                result = process_file(file_path, project_dir, "project-a")
+                content, entry = process_file(file_path, project_dir, "project-a")
 
-                assert "###" not in result
-                assert "# Test Heading" in result
-                assert "Some content" in result
+                # No URL boundary line, clean heading
+                assert "###" not in content
+                assert "# Test Heading" in content
+                assert "Some content" in content
+                # No mapping means no entry
+                assert entry is None
+
+    def test_process_file_is_clean_and_returns_entry(self, tmp_path, monkeypatch):
+        """Clean content with no URL injected; entry carries resolved URL and title."""
+        proj = tmp_path / "proj"
+        proj.mkdir()
+        f = proj / "guide.md"
+        f.write_text("---\ntitle: The Guide\n---\n# The Guide\nBody text\n## Sub\nmore")
+        import opencrane.rag.generate_llms_txt as g
+        monkeypatch.setattr(g, "get_source_url", lambda rel, name: "https://docs.example.com/guide")
+        content, entry = g.process_file(f, proj, "proj")
+        assert "https://docs.example.com" not in content          # no URL injected in content
+        assert content.lstrip().startswith("# The Guide")          # leading H1 == title
+        assert "### https://" not in content                       # no boundary URL line
+        assert entry.title == "The Guide"
+        assert entry.url == "https://docs.example.com/guide"
+
+    def test_process_file_returns_none_entry_when_no_url(self, tmp_path, monkeypatch):
+        """Returns entry=None when get_source_url resolves to None."""
+        proj = tmp_path / "proj"
+        proj.mkdir()
+        f = proj / "page.md"
+        f.write_text("# Page\nContent")
+        import opencrane.rag.generate_llms_txt as g
+        monkeypatch.setattr(g, "get_source_url", lambda rel, name: None)
+        content, entry = g.process_file(f, proj, "proj")
+        assert entry is None
+        assert content.lstrip().startswith("# Page")
 
 
 class TestBuildProjectOutput:
     """Unit tests for build_project_output function."""
     def test_build_project_output(self):
-        """Test building project output from multiple files."""
+        """Test building project output from multiple files returns (content, entries)."""
         # Create temporary directory structure
         with tempfile.TemporaryDirectory() as temp_dir:
             project_dir = Path(temp_dir) / "project"
@@ -471,13 +458,32 @@ class TestBuildProjectOutput:
             (project_dir / "subdir").mkdir()
             (project_dir / "subdir" / "file3.md").write_text("# File 3")
 
-            result = build_project_output(project_dir)
+            content, entries = build_project_output(project_dir)
 
-            # Should have processed all files
-            assert "File 1" in result
-            assert "File 2" in result
-            assert "File 3" in result
-            assert "----" in result  # Separator between files
+            # content must be a string with all file headings and a separator
+            assert "File 1" in content
+            assert "File 2" in content
+            assert "File 3" in content
+            assert "<!-- opencrane:page -->" in content  # Page separator between files
+            # entries is a list (may be empty when no source mapping is configured)
+            assert isinstance(entries, list)
+
+    def test_build_project_output_returns_tuple(self, tmp_path, monkeypatch):
+        """Returns (str, list[IndexEntry]) with correct entry fields when URL resolves."""
+        proj = tmp_path / "proj"
+        proj.mkdir()
+        f = proj / "page.md"
+        f.write_text("# Page\nContent")
+        import opencrane.rag.generate_llms_txt as g
+        monkeypatch.setattr(g, "get_source_url", lambda rel, name: "https://docs.example.com/page")
+        result = g.build_project_output(proj, "proj")
+        assert isinstance(result, tuple)
+        content, entries = result
+        assert isinstance(content, str)
+        assert isinstance(entries, list)
+        assert len(entries) == 1
+        assert entries[0].title == "Page"
+        assert entries[0].url == "https://docs.example.com/page"
 
 
 class TestWriteOutputs:
@@ -576,7 +582,7 @@ class TestGenerateOutputs:
     @patch("opencrane.rag.generate_llms_txt.build_project_output")
     def test_generate_outputs_legacy_path_with_selected_projects(self, mock_build, mock_write):
         """Test legacy code path with selected_projects parameter."""
-        mock_build.return_value = "test output"
+        mock_build.return_value = ("test output", [])
         
         with patch("opencrane.rag.generate_llms_txt.SOURCE_ROOT") as mock_source:
             mock_source.exists.return_value = True
@@ -1137,3 +1143,153 @@ class TestGenerateOutputsSkipBehavior:
         finally:
             mod.SOURCE_ROOT = orig_source_root
             mod.OUTPUT_ROOT = orig_output_root
+
+
+class TestStripFrontmatter:
+    """Unit tests for strip_frontmatter helper."""
+
+    def test_parses_and_removes(self):
+        """Frontmatter is parsed into dict and body is returned without it."""
+        text = "---\ntitle: My Page\ntags: [a, b]\n---\n# Body\ncontent"
+        fm, body = strip_frontmatter(text)
+        assert fm["title"] == "My Page"
+        assert body == "# Body\ncontent"
+
+    def test_absent(self):
+        """Returns empty dict and full text when no frontmatter present."""
+        fm, body = strip_frontmatter("# No frontmatter\nx")
+        assert fm == {}
+        assert body == "# No frontmatter\nx"
+
+    def test_invalid_yaml_returns_empty(self):
+        """Returns ({}, original text) when the frontmatter block is invalid YAML."""
+        text = "---\n: invalid: yaml: {\n---\n# Body"
+        fm, body = strip_frontmatter(text)
+        assert fm == {}
+        assert body == text
+
+    def test_non_dict_yaml_returns_empty(self):
+        """Returns ({}, original text) when frontmatter YAML is valid but not a dict."""
+        text = "---\n- item1\n- item2\n---\n# Body"
+        fm, body = strip_frontmatter(text)
+        assert fm == {}
+        assert body == text
+
+
+class TestFilenameToTitle:
+    """Unit tests for filename_to_title helper."""
+
+    def test_hyphenated(self):
+        assert filename_to_title("getting-started") == "Getting Started"
+
+    def test_underscored(self):
+        assert filename_to_title("api_v2") == "Api V2"
+
+
+class TestDeriveTitle:
+    """Unit tests for derive_title helper."""
+
+    def test_prefers_frontmatter(self):
+        assert derive_title({"title": "FM Title"}, "# Body H1\n", Path("x/file.md")) == "FM Title"
+
+    def test_falls_back_to_first_heading(self):
+        assert derive_title({}, "## Sub First\n", Path("x/file.md")) == "Sub First"
+
+    def test_falls_back_to_filename(self):
+        assert derive_title({}, "no headings here", Path("x/getting-started.md")) == "Getting Started"
+
+
+class TestEnsureLeadingH1:
+    """Unit tests for ensure_leading_h1 helper."""
+
+    def test_injects_when_missing(self):
+        assert ensure_leading_h1("no heading\nx", "T").startswith("# T\n")
+
+    def test_noop_when_present(self):
+        assert ensure_leading_h1("# T\nx", "T") == "# T\nx"
+
+
+class TestGenerateOutputsLlmsTxt:
+    """Tests for llms.txt generation and clean combined output (no URL injection)."""
+
+    def test_generate_outputs_writes_llms_txt(self, tmp_path, monkeypatch):
+        """generate_outputs writes llmstxt/llms.txt starting with '#' and linking the page URL."""
+        import yaml
+        opencrane_dir = tmp_path / ".opencrane"
+        opencrane_dir.mkdir()
+
+        # Source file
+        sources_base = opencrane_dir / "sources" / "my-source"
+        sources_base.mkdir(parents=True)
+        (sources_base / "guide.md").write_text("# Guide\n\nBody text.")
+
+        # Config with docs_url so get_source_url resolves to a nice URL
+        config_yaml = opencrane_dir / "config.yaml"
+        config_yaml.write_text(yaml.dump({"sources": {
+            "my-source": {
+                "url": "https://github.com/test/my-source",
+                "docs_path": "",
+                "docs_url": "https://docs.example.com/my-source",
+            }
+        }}))
+
+        llmstxt_dir = opencrane_dir / "llmstxt"
+        llmstxt_dir.mkdir()
+
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr("opencrane.rag.generate_llms_txt._source_mapping", None)
+        monkeypatch.setenv("MAPPING_FILE", str(config_yaml))
+        monkeypatch.delenv("AI_DOCS_SOURCES_DIRS", raising=False)
+        monkeypatch.delenv("AI_DOCS_SOURCES_DIR", raising=False)
+        monkeypatch.delenv("AI_DOCS_NO_FILTER", raising=False)
+
+        generate_outputs(force=True, llmstxt_dir=llmstxt_dir)
+
+        llms_txt = llmstxt_dir / "llms.txt"
+        assert llms_txt.exists(), f"llms.txt not created; files: {list(llmstxt_dir.rglob('*'))}"
+        content = llms_txt.read_text()
+        assert content.startswith("#"), f"llms.txt should start with '#', got: {content[:50]!r}"
+        # Should link to the page URL resolved via docs_url (guide.md → guide)
+        assert "https://docs.example.com/my-source/guide" in content
+
+    def test_generate_outputs_writes_clean_full(self, tmp_path, monkeypatch):
+        """Combined llms-full.txt must NOT contain '[https://...]' bracket tags."""
+        import yaml
+        opencrane_dir = tmp_path / ".opencrane"
+        opencrane_dir.mkdir()
+
+        sources_base = opencrane_dir / "sources" / "ext-source"
+        sources_base.mkdir(parents=True)
+        (sources_base / "page.md").write_text("# External Page\n\nContent here.")
+
+        config_yaml = opencrane_dir / "config.yaml"
+        config_yaml.write_text(yaml.dump({"sources": {
+            "ext-source": {
+                "url": "https://github.com/test/ext-source",
+                "docs_path": "",
+                "docs_url": "https://docs.example.com/ext",
+            }
+        }}))
+
+        llmstxt_dir = opencrane_dir / "llmstxt"
+        llmstxt_dir.mkdir()
+
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr("opencrane.rag.generate_llms_txt._source_mapping", None)
+        monkeypatch.setenv("MAPPING_FILE", str(config_yaml))
+        monkeypatch.delenv("AI_DOCS_SOURCES_DIRS", raising=False)
+        monkeypatch.delenv("AI_DOCS_SOURCES_DIR", raising=False)
+        monkeypatch.delenv("AI_DOCS_NO_FILTER", raising=False)
+
+        generate_outputs(force=True, llmstxt_dir=llmstxt_dir)
+
+        combined = llmstxt_dir / "llms-full.txt"
+        assert combined.exists()
+        content = combined.read_text()
+        # Must NOT contain injected bracket URL tags like [https://...]
+        import re
+        bracket_urls = re.findall(r"\[https?://[^\]]+\]", content)
+        assert not bracket_urls, f"Found injected URL brackets in combined: {bracket_urls}"
+        # Body text must be present
+        assert "External Page" in content
+        assert "Content here" in content

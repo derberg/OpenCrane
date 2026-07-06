@@ -118,7 +118,7 @@ opencrane add
 Interactively add documentation sources to your project. The command loops, asking for each source:
 
 1. **GitHub repository** — adds an entry to `.opencrane/config.yaml` with the repo URL, docs path, and optional published docs URL. The `fetch` step will clone it on the next `opencrane build`.
-2. **Existing llms.txt file** — provide a URL or local file path. OpenCrane downloads/copies it into `.opencrane/llmstxt/<name>/llms-full.txt`, ready for chunking. No `fetch` or `llms` step needed for these sources.
+2. **Existing llms.txt file** — provide a URL or local file path. OpenCrane downloads/copies it into `.opencrane/llmstxt/<name>/llms-full.txt`, and (when available) fetches the upstream companion `llms.txt` next to it for real per-page source URLs. The `llms` step merges it into the combined index and the `chunk` step assigns per-page `source_url`.
 
 After each source, you're asked whether to add another or finish.
 
@@ -155,6 +155,8 @@ opencrane fetch [--config CLASS] [--org NAME] [--repo PATH_KEY]
 opencrane llms [--config CLASS] [--sources-dir PATH]... [--llmstxt-dir PATH] [--force]
 ```
 
+Emits a clean `llms-full.txt` (no URLs injected into headings) plus a companion `llms.txt` index (page title → page URL) next to it. The `chunk` step reads both to assign each chunk its specific page `source_url`. See [docs/llms-generation.md](docs/llms-generation.md).
+
 | Flag | Description |
 |---|---|
 | `--sources-dir PATH` | Source directory to process; repeat for multiple dirs (overrides `AI_DOCS_SOURCES_DIRS` env var) |
@@ -180,9 +182,11 @@ opencrane chunk [--config CLASS] [--llmstxt-dir PATH] [--chunks-file PATH]
 
 > Authoring docs that will be chunked? See [docs/authoring-guide.md](docs/authoring-guide.md) for how to structure markdown so chunks are high quality and retrievable.
 
+Reads the companion `llms.txt` index (when present) alongside `llms-full.txt` to assign each chunk its specific page `source_url`; falls back to legacy inline-marker extraction for older bundles without an index.
+
 | Flag | Description |
 |---|---|
-| `--llmstxt-dir PATH` | Directory containing llms-full.txt (overrides `AI_DOCS_LLMSTXT_DIR` env var) |
+| `--llmstxt-dir PATH` | Directory containing llms-full.txt and its companion llms.txt (overrides `AI_DOCS_LLMSTXT_DIR` env var) |
 | `--chunks-file PATH` | Output path for chunks JSON (overrides `AI_DOCS_CHUNKS_FILE` env var) |
 
 #### `opencrane embed` — generate embeddings
@@ -312,7 +316,7 @@ CLI flags take precedence over environment variables. Use env vars for persisten
 
 | Variable | Default | Description |
 |---|---|---|
-| `MAPPING_FILE` | `.opencrane/config.yaml` | Path to the source mapping file used by `fetch` (to record cloned repos) and `llms` (to embed source links) |
+| `MAPPING_FILE` | `.opencrane/config.yaml` | Path to the source mapping file used by `fetch` (to record cloned repos) and `llms` (to build per-page source URLs in the companion `llms.txt` index) |
 
 **`fetch` step** — only needed if you use `opencrane fetch` to pull docs from GitHub:
 
@@ -368,15 +372,15 @@ OpenCrane supports two Milvus modes. Set `MILVUS_DB_PATH` to use **Milvus Lite**
 
 ### Source mapping file (`.opencrane/config.yaml`)
 
-OpenCrane maintains a file called `.opencrane/config.yaml` that records where each documentation source lives and where its content can be found online. It is used by the `fetch` step (to track cloned repos) and by the `llms` step (to embed source links in llms-full.txt). The `fetch` step populates it automatically; for manually managed sources you can edit it directly.
+OpenCrane maintains a file called `.opencrane/config.yaml` that records where each documentation source lives and where its content can be found online. It is used by the `fetch` step (to track cloned repos) and by the `llms` step (to build the companion `llms.txt` index of per-page source URLs). The `fetch` step populates it automatically; for manually managed sources you can edit it directly.
 
 Each entry supports the following fields:
 
 | Field | Required | Description |
 |---|---|---|
-| `url` | Yes (for `fetch`) | GitHub repository URL — used by `opencrane fetch` to clone the repo and as a fallback source link in llms-full.txt |
+| `url` | Yes (for `fetch`) | GitHub repository URL — used by `opencrane fetch` to clone the repo and to build per-page GitHub source URLs in the companion `llms.txt` index |
 | `docs_path` | No | Path within the repo where docs are stored (e.g. `docs`) |
-| `docs_url` | No | Base URL of the published documentation site (e.g. `https://docs.example.com/product`). When set, this is used instead of `url` when embedding source links in llms-full.txt — lets AI agents point users to rendered docs rather than raw GitHub files. If neither is set, no source links are embedded. |
+| `docs_url` | No | Base URL of the published documentation site (e.g. `https://docs.example.com/product`). When set, per-page URLs are built from it instead of `url` — lets AI agents point users to rendered docs rather than raw GitHub files. For external `llmstxt` sources with no companion `llms.txt`, `docs_url` is used as the base URL for every page in that bundle. If neither is set, chunks from that source get no `source_url`. |
 | `manual` | No | When `true`, the entry is user-managed and will not be overwritten by `opencrane fetch` auto-discovery |
 | `branch` | No | Pin to a specific branch (e.g. `develop`) |
 | `tag` | No | Pin to a specific git tag (e.g. `v2.1.0`) |

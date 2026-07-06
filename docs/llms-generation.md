@@ -53,33 +53,67 @@ Then generation produces:
 
 ## Document Structure
 
-The generated llms-full.txt files use visual and structural markers to separate documents:
+The `llms` step emits a **clean** `llms-full.txt` — source URLs are **not** injected into headings, and there is no per-file `### {url}` boundary line. Instead, the bundle carries only the documentation content, and per-page source URLs are recorded in a companion `llms.txt` index written alongside it (see below).
 
-1. `-----` - Visual separator between documents
-2. `### https://github.com/.../file.md` - H3 document boundary marker with GitHub source URL
+Within `llms-full.txt`, boundaries are marked structurally:
 
-These markers serve dual purposes:
-- Visual clarity: Easy to identify document boundaries when reading
-- Programmatic recognition: Chunking logic can detect document transitions
+1. `<!-- opencrane:page -->` — separates the individual files (pages) that make up one source. This is a collision-proof HTML-comment sentinel (invisible when rendered) rather than a dash rule, because a markdown thematic break (`---`, `-----`) in page content would be indistinguishable from a dash-based separator and silently split the page.
+2. `======` — separates one source's block from the next in the combined bundle
 
-Example structure:
+Each page begins with a single `# {title}` H1 heading (see [Page titles](#page-titles)). Image references are stripped and relative links are rewritten so they continue to work in the flattened output.
+
+Example structure of the combined `llms-full.txt`:
 ```markdown
-### https://github.com/org/repo/blob/main/docs/file1.md
+# Home
 
-# https://github.com/.../file1.md Title
-Content...
-## https://github.com/.../file1.md Section
-More content...
+Welcome to the home page.
 
------
+## Overview
 
-### https://github.com/org/repo/blob/main/docs/file2.md
-
-# https://github.com/.../file2.md Another Title
 ...
+
+<!-- opencrane:page -->
+
+# Setup Guide
+
+Installation instructions...
+
+======
+
+# Overview
+
+A page from a different source...
 ```
 
-Note that every heading includes the full GitHub URL prefix to ensure:
-- Unique anchor IDs across all documents
-- Source traceability for every section
-- Working internal links in the flattened format
+## Companion `llms.txt` index
+
+Next to every `llms-full.txt`, the `llms` step writes a standard `llms.txt` index that maps each page's title to its specific URL. The combined `.opencrane/llmstxt/llms.txt` follows the `llms.txt` convention:
+
+```markdown
+# Documentation
+
+## source-alpha
+- [Home](https://alpha.example.com/docs/home)
+- [Setup Guide](https://alpha.example.com/docs/setup)
+
+## source-beta
+- [Overview](https://beta.example.com/docs/overview)
+```
+
+- A top-level `# {project}` H1.
+- One `## {source}` section per source, in the **same order** as the corresponding `======` blocks in `llms-full.txt`.
+- One `- [{title}]({page_url})` link per page, in the **same order** as the `<!-- opencrane:page -->`-separated pages inside that source's block.
+
+Per-source `llms.txt` files are also written next to each per-source `llms-full.txt`. The URL for each entry comes from `get_source_url(...)`, which is page-specific for GitHub sources and for sources configured with a `docs_url`.
+
+This positional, per-source alignment is what lets the `chunk` step recover each chunk's specific page `source_url` from clean content — see [Chunking](chunking.md).
+
+## Page titles
+
+Each page's title is chosen with this precedence:
+
+1. **Frontmatter `title`** — YAML frontmatter is stripped from the emitted content, and its `title` field (when present and non-empty) is used.
+2. **First heading** — the first Markdown heading in the body.
+3. **Filename** — derived from the file stem (e.g. `getting-started.md` → "Getting Started").
+
+The page block's leading H1 in `llms-full.txt` is normalized to equal the chosen title (a synthetic `# {title}` is prepended when the body has no matching leading H1). This keeps the H1 exactly equal to the matching `llms.txt` index entry so the title-validated join stays exact.

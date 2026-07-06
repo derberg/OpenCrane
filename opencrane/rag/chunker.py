@@ -48,7 +48,18 @@ def main(config=None, llmstxt_dir=None, chunks_file=None):
 
     try:
         processor = FileProcessor(config=config)
-        chunks = processor.process_file(input_file)
+
+        # Load the companion llms.txt index (if present) so page URLs are
+        # assigned by joining clean content to the index instead of inline
+        # markers. Absent index → legacy marker-based behavior.
+        index_file = llmstxt_dir / "llms.txt"
+        if index_file.exists():
+            from opencrane.rag.services.llms_index import LlmsIndex
+            index = LlmsIndex.parse(index_file.read_text())
+            logger.info(f"Loaded llms.txt index with {len(index.sources())} source section(s)")
+            chunks = processor.process_file(input_file, index=index)
+        else:
+            chunks = processor.process_file(input_file)
 
         mapping_file = get_config().mapping_file
         if not mapping_file.is_absolute():

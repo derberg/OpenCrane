@@ -34,7 +34,7 @@ class ChunkValidator:
                 errors.append(f"Chunk {i}: source_file is empty")
 
             # Check chunk_type is valid
-            if chunk.chunk_type not in ["prose", "code_snippet", "crd_definition", "openapi_spec", "yaml_content"]:  # pragma: no cover
+            if chunk.chunk_type not in ["prose", "code_snippet", "crd_definition", "openapi_spec", "yaml_content", "json_schema", "list_item", "table_row"]:  # pragma: no cover
                 errors.append(f"Chunk {i}: invalid chunk_type {chunk.chunk_type}")
 
             # Type-specific validation removed - not needed

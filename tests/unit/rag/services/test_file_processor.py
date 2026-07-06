@@ -9,6 +9,80 @@ from opencrane.rag.services.file_processor import FileProcessor
 class TestFileProcessor:
     """Test cases for FileProcessor."""
 
+    def test_table_after_code_fence_keeps_heading(self, tmp_path):
+        """A code fence between a heading and a table must not strip the heading
+        from the table's chunk."""
+        processor = FileProcessor()
+        url = "https://github.com/org/repo/blob/main/perf.md"
+        content = "\n".join([
+            f"### {url} Performance tuning",
+            "",
+            "Intro about performance.",
+            "",
+            "```bash",
+            "kubectl get pods",
+            "```",
+            "",
+            "The table below shows throughput by pool size:",
+            "",
+            "| Pool size | CPU % | throughput |",
+            "|---|---|---|",
+            "| 8 | 50 | 935 |",
+            "| 16 | 117 | 1500 |",
+        ])
+        # Pad past the 100KB threshold so section splitting is triggered.
+        large_content = content + "\n" + ("x" * 100001)
+        test_file = tmp_path / "perf.txt"
+        test_file.write_text(large_content, encoding="utf-8")
+
+        with patch.object(processor.docling_adapter, "convert_file") as mock_convert:
+            from docling.exceptions import ConversionError
+            mock_convert.side_effect = ConversionError("test")
+            chunks = processor.process_file(test_file)
+
+        table_chunks = [c for c in chunks if c.chunk_type in ("table", "table_row")]
+        assert table_chunks, "expected a chunk containing the table"
+        assert any("Performance tuning" in c.content for c in table_chunks), \
+            "table chunk must carry its section heading"
+
+    def test_table_with_own_heading_is_not_double_prefixed(self, tmp_path):
+        """When a section already contains a heading, the splitter must not
+        prepend a second one."""
+        processor = FileProcessor()
+        url = "https://github.com/org/repo/blob/main/x.md"
+        content = "\n".join([
+            f"### {url} Outer",
+            "",
+            "Intro paragraph here.",
+            "",
+            "```bash",
+            "echo hi",
+            "```",
+            "",
+            "## Inner heading",
+            "",
+            "Lead-in to the table:",
+            "",
+            "| A | B |",
+            "|---|---|",
+            "| 1 | 2 |",
+        ])
+        large_content = content + "\n" + ("x" * 100001)
+        test_file = tmp_path / "own_heading.txt"
+        test_file.write_text(large_content, encoding="utf-8")
+
+        with patch.object(processor.docling_adapter, "convert_file") as mock_convert:
+            from docling.exceptions import ConversionError
+            mock_convert.side_effect = ConversionError("test")
+            chunks = processor.process_file(test_file)
+
+        table_chunks = [c for c in chunks if c.chunk_type in ("table", "table_row")]
+        assert table_chunks
+        # The table's own section heading is "Inner heading"; "Outer" must not be
+        # prepended on top of it.
+        assert all(c.content.count("Inner heading") <= 1 for c in table_chunks)
+        assert all("Outer" not in c.content for c in table_chunks)
+
     def test_process_file_uses_relative_source_file_when_under_cwd(self, tmp_path, monkeypatch):
         """Chunks should store a repo-relative source_file when possible."""
         processor = FileProcessor()

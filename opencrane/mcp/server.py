@@ -202,11 +202,30 @@ _CHUNK_TYPE_LABELS = {
     "openapi_spec": "openapi_spec (OpenAPI specification endpoints/schemas)",
     "json_schema": "json_schema (JSON Schema definitions)",
     "list_item": "list_item (individual markdown list items)",
+    "table_row": "table_row (individual markdown table rows)",
 }
 
 
 def _has_list_item_chunks() -> bool:
     return "list_item" in _get_indexed_chunk_types()
+
+
+def _has_table_row_chunks() -> bool:
+    return "table_row" in _get_indexed_chunk_types()
+
+
+def _get_table_members(table_id: str) -> list[dict]:
+    """Return all ``table_row`` chunks for a table_id, sorted by row_index."""
+    chunk_index = _build_chunk_index()
+    rows = []
+    for chunk in chunk_index.values():
+        metadata = chunk.get("metadata", {}) or {}
+        if metadata.get("table_id") != table_id:
+            continue
+        if chunk.get("chunk_type") == "table_row":
+            rows.append(chunk)
+    rows.sort(key=lambda c: c.get("metadata", {}).get("row_index", 0))
+    return rows
 
 
 def _get_list_members(list_id: str) -> list[dict]:
@@ -329,6 +348,108 @@ def _format_grouped_list_item(result: dict, chunk_index: dict) -> str:
                 lines.append(f"  - {p}")
 
     lines.append(f"💡 Tip: Use get_list_members(list_id='{list_id}') for the full list.")
+    return "\n".join(lines) + "\n"
+
+
+def _group_table_row_results(results: list[dict]) -> list[dict]:
+    """Collapse consecutive result slots that share a table_id into a grouped slot.
+
+    When two or more table_row hits share the same table_id, combine them into a
+    single result dict tagged with ``_grouped_table=True`` and containing a
+    ``_grouped_items`` list preserving per-row score, row_index, and content.
+    The grouped slot inherits the max score of its members. Non table_row
+    results (including already-grouped list slots) pass through untouched.
+    """
+    groups: dict = {}
+    order: list = []
+    for r in results:
+        if r.get("chunk_type") != "table_row":
+            order.append(("single", id(r)))
+            groups[("single", id(r))] = [r]
+            continue
+        metadata_json = r.get("metadata_json", "{}")
+        try:
+            metadata = json.loads(metadata_json) if isinstance(metadata_json, str) else metadata_json
+        except (json.JSONDecodeError, TypeError, ValueError):  # pragma: no cover - defensive
+            metadata = {}  # pragma: no cover
+        table_id = metadata.get("table_id")
+        if not table_id:  # pragma: no cover - validated table_row chunks always carry table_id
+            order.append(("single", id(r)))
+            groups[("single", id(r))] = [r]
+            continue
+        key = ("table", table_id)
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(r)
+
+    merged: list[dict] = []
+    for key in order:
+        members = groups[key]
+        if key[0] == "single" or len(members) == 1:
+            merged.append(members[0])
+            continue
+        # Grouped slot — sort members by row_index, inherit the max score
+        def _row_idx(rec):
+            try:
+                return json.loads(rec.get("metadata_json") or "{}").get("row_index", 0)
+            except Exception:  # pragma: no cover
+                return 0
+        members_sorted = sorted(members, key=_row_idx)
+        max_score = max(float(m.get("distance", 0.0)) for m in members_sorted)
+        head = dict(members_sorted[0])
+        head["distance"] = max_score
+        head["_grouped_table"] = True
+        head["_grouped_items"] = members_sorted
+        merged.append(head)
+    return merged
+
+
+def _format_grouped_table_row(result: dict, chunk_index: dict) -> str:
+    """Format a grouped table_row result slot showing all matched members inline."""
+    members = result["_grouped_items"]
+    try:
+        head_meta = json.loads(members[0].get("metadata_json") or "{}")
+    except Exception:  # pragma: no cover
+        head_meta = {}
+    breadcrumb = head_meta.get("breadcrumb_path", "")
+    table_id = head_meta.get("table_id", "")
+    total = head_meta.get("total_rows", len(members))
+
+    lines = [
+        f"Matched Table ({len(members)} of {total} rows):",
+    ]
+    if breadcrumb:
+        lines.append(f"Location: {breadcrumb}")
+    lines.append(f"Table ID: {table_id}")
+    lines.append("Matched rows:")
+    for m in members:
+        try:
+            mm = json.loads(m.get("metadata_json") or "{}")
+        except Exception:  # pragma: no cover
+            mm = {}
+        row_index = mm.get("row_index")
+        content = m.get("content", "")
+        # Drop breadcrumb header prefix when displaying inline for readability
+        if breadcrumb and content.startswith(f"# {breadcrumb}\n"):
+            content = content[len(breadcrumb) + 3:].lstrip("\n")
+        lines.append(f"  [{row_index}] {content}")
+
+    unmatched_previews = head_meta.get("sibling_previews") or []
+    unmatched = []
+    if unmatched_previews:
+        # sibling_previews excludes self; map via sibling_ids to detect matched ones.
+        sibling_ids = head_meta.get("sibling_ids") or []
+        member_ids = {m.get("chunk_id") for m in members}
+        for sid, preview in zip(sibling_ids, unmatched_previews):
+            if sid not in member_ids:
+                unmatched.append(preview)
+        if unmatched:
+            lines.append("Other rows in table (not matched):")
+            for p in unmatched:
+                lines.append(f"  - {p}")
+
+    lines.append(f"💡 Tip: Use get_table_members(table_id='{table_id}') for the full table.")
     return "\n".join(lines) + "\n"
 
 
@@ -484,6 +605,22 @@ async def list_tools() -> list[Tool]:
             },
         ))
 
+    if _has_table_row_chunks():
+        tools.append(Tool(
+            name="get_table_members",
+            description="Fetch all row chunks for a markdown table sharing a table_id, ordered by row_index. Use when a search returned one or more table_row chunks and you need the whole table.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "table_id": {
+                        "type": "string",
+                        "description": "The table_id from a table_row chunk's metadata."
+                    }
+                },
+                "required": ["table_id"],
+            },
+        ))
+
     if _has_yaml_chunks():
         tools.append(Tool(
             name="get_yaml_definition",
@@ -500,10 +637,10 @@ async def list_tools() -> list[Tool]:
             }
         ))
 
-    if _has_yaml_chunks() or _has_list_item_chunks():
+    if _has_yaml_chunks() or _has_list_item_chunks() or _has_table_row_chunks():
         tools.append(Tool(
             name="get_metadata_schema",
-            description="Retrieve comprehensive documentation of all metadata fields available in chunks. Use this when you need to understand what metadata fields mean (breadcrumb_path, logical_parent, neighbor_chunks, list_id, sibling_ids, etc.) and how to use them programmatically for navigation, context expansion, and re-hydration. Pass chunk_type to get only the section for a specific type (e.g., 'list_item' returns the list_item metadata fields plus the universal fields).",
+            description="Retrieve comprehensive documentation of all metadata fields available in chunks. Use this when you need to understand what metadata fields mean (breadcrumb_path, logical_parent, neighbor_chunks, list_id, sibling_ids, table_id, row_index, etc.) and how to use them programmatically for navigation, context expansion, and re-hydration. Pass chunk_type to get only the section for a specific type (e.g., 'list_item' returns the list_item metadata fields plus the universal fields; 'table_row' returns the table_row metadata fields).",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -533,6 +670,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         "get_yaml_definition": get_yaml_definition,
         "get_metadata_schema": get_metadata_schema,
         "get_list_members": get_list_members,
+        "get_table_members": get_table_members,
     }
 
     handler = _TOOL_HANDLERS.get(name)
@@ -579,6 +717,8 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
 
             # Collapse list_item hits that share a list_id into one slot each.
             results = _group_list_item_results(results)
+            # Collapse table_row hits that share a table_id into one slot each.
+            results = _group_table_row_results(results)
             logger.info(f"   📖 search: {len(results)} results found (after list grouping)")
 
             source_map = _build_chunk_source_map()
@@ -587,6 +727,10 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
             for i, result in enumerate(results, 1):
                 if result.get("_grouped"):
                     grouped_body = _format_grouped_list_item(result, chunk_index)
+                    formatted.append(TextContent(type="text", text=f"Result {i}:\n{grouped_body}"))
+                    continue
+                elif result.get("_grouped_table"):
+                    grouped_body = _format_grouped_table_row(result, chunk_index)
                     formatted.append(TextContent(type="text", text=f"Result {i}:\n{grouped_body}"))
                     continue
                 content = result.get("content", "")
@@ -649,6 +793,10 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
                     result_text += f"💡 Tip: Use get_yaml_definition tool with chunk_id='{chunk_id}' to retrieve the complete definition with breadcrumb comments.\n"
                 elif chunk_type in ("crd_definition", "openapi_spec", "json_schema"):
                     result_text += f"💡 Tip: Use get_yaml_definition(chunk_id='{chunk_id}') to see this with breadcrumb comments showing its location in the YAML tree and neighbor chunks.\n"
+                if chunk_type == "table_row":
+                    table_id = (metadata or {}).get("table_id")
+                    if table_id:
+                        result_text += f"\n💡 Tip: Use get_table_members(table_id='{table_id}') for the full table.\n"
                 result_text += f"Score: {score}\n\n"
 
                 formatted.append(TextContent(type="text", text=result_text))
@@ -827,6 +975,7 @@ async def get_yaml_definition(arguments: dict) -> list[TextContent]:
 
 _CHUNK_TYPE_SECTION_HEADINGS = {
     "list_item": "List Item Metadata",
+    "table_row": "Table Row Metadata",
     "crd_definition": "CRD-Specific Metadata",
     "openapi_spec": "OpenAPI-Specific Metadata",
     "json_schema": "JSON Schema-Specific Metadata",
@@ -924,6 +1073,29 @@ async def get_list_members(arguments: dict) -> list[TextContent]:
         lines.append(f"{indent}[{pos}] {content}")
 
     return [TextContent(type="text", text="\n".join(lines) + "\n")]
+
+
+async def get_table_members(arguments: dict) -> list[TextContent]:
+    """Return all row chunks for the given table_id, ordered by row_index."""
+    table_id = arguments.get("table_id")
+    logger.info(f"   📊 get_table_members: table_id={table_id!r}")
+    if not table_id:
+        return [TextContent(type="text", text="Error: table_id must be a non-empty string.")]
+    members = _get_table_members(table_id)
+    if not members:
+        return [TextContent(type="text", text=f"No table found for table_id={table_id!r}.")]
+    first_meta = members[0].get("metadata", {}) or {}
+    breadcrumb = first_meta.get("breadcrumb_path", "")
+    lines = []
+    for m in members:
+        content = m.get("content", "")
+        # Strip breadcrumb header for readable inline display
+        if breadcrumb and content.startswith(f"# {breadcrumb}\n"):
+            content = content[len(breadcrumb) + 3:].lstrip("\n")
+        lines.append(content)
+        lines.append("")
+    return [TextContent(type="text", text="\n".join(lines).strip() + "\n")]
+
 
 async def main():
     """Main entry point for the MCP server."""

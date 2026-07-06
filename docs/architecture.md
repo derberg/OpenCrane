@@ -54,14 +54,15 @@ The `opencrane llms` command flattens the cloned Markdown files into a hierarchy
 
 ### Chunk
 
-The `opencrane chunk` command splits each `llms-full.txt` bundle into typed semantic chunks and writes them to `.opencrane/chunks.json`. It reads the companion `llms.txt` index alongside the bundle and assigns each chunk its specific page `source_url` by joining the clean content to the index positionally per source, validated by the page's H1 title (falling back to the legacy inline-marker path when no companion index is present). Four chunking strategies run in priority order — the first strategy that matches a document fragment handles it:
+The `opencrane chunk` command splits each `llms-full.txt` bundle into typed semantic chunks and writes them to `.opencrane/chunks.json`. It reads the companion `llms.txt` index alongside the bundle and assigns each chunk its specific page `source_url` by joining the clean content to the index positionally per source, validated by the page's H1 title (falling back to the legacy inline-marker path when no companion index is present). Chunking strategies run in priority order — the first strategy that matches a document fragment handles it:
 
 1. **YAML strategy:** Handles YAML content. Delegates structured specs (CRDs, OpenAPI, JSON Schema) to tree walkers. Falls back to a generic `yaml_content` chunk for unrecognized YAML.
 2. **Code strategy:** Handles fenced code blocks. Detects the language and, for structured YAML specs embedded in code fences, invokes tree walkers.
-3. **List strategy:** Handles Markdown lists. Produces one chunk per top-level list item and attaches sibling previews and breadcrumb paths.
-4. **Prose strategy:** The fallback. Splits at heading boundaries (`#`, `##`, `###`). Preserves complete sections — does not split within a section by token count.
+3. **Table strategy:** Handles Markdown tables. Produces one `table_row` chunk per data row, rendered as natural-language `Column: value.` lines and self-linked via `table_id` and `sibling_ids`. Delegates non-table regions to the list and prose strategies.
+4. **List strategy:** Handles Markdown lists. Produces one chunk per top-level list item and attaches sibling previews and breadcrumb paths.
+5. **Prose strategy:** The fallback. Splits at heading boundaries (`#`, `##`, `###`). Preserves complete sections — does not split within a section by token count.
 
-Each chunk carries a `chunk_type` field (`prose`, `code_snippet`, `crd_definition`, `openapi_spec`, `json_schema`, `yaml_content`, or `list_item`) and type-specific metadata fields. See [Chunk metadata schema](metadata-schema.md) for the full field reference.
+Each chunk carries a `chunk_type` field (`prose`, `code_snippet`, `crd_definition`, `openapi_spec`, `json_schema`, `yaml_content`, `list_item`, or `table_row`) and type-specific metadata fields. See [Chunk metadata schema](metadata-schema.md) for the full field reference.
 
 ### Embed
 
@@ -85,7 +86,7 @@ The `opencrane serve` command starts the MCP server backed by the indexed data. 
 
 ## MCP tools
 
-The server exposes up to five tools. The set of tools adapts to the content of the index — `get_yaml_definition`, `get_metadata_schema`, and `get_list_members` appear only when the index contains the relevant chunk types.
+The server exposes up to six tools. The set of tools adapts to the content of the index — `get_yaml_definition`, `get_metadata_schema`, `get_list_members`, and `get_table_members` appear only when the index contains the relevant chunk types.
 
 | Tool | Condition | Description |
 |---|---|---|
@@ -93,6 +94,7 @@ The server exposes up to five tools. The set of tools adapts to the content of t
 | `get_yaml_definition` | YAML chunks indexed | Retrieve a complete YAML document by chunk ID, with breadcrumb comments showing its location |
 | `get_metadata_schema` | YAML chunks indexed | Reference documentation for all chunk metadata fields |
 | `get_list_members` | List chunks indexed | Retrieve all items in a list by list ID |
+| `get_table_members` | Table row chunks indexed | Retrieve all rows of a table by table ID |
 | `health` | Always present | Service status, Milvus connection state, and collection stats |
 
 ### Search modes
@@ -143,7 +145,7 @@ Tree walkers live in `opencrane/rag/services/chunking_strategies/` and handle st
 The server initializes its backing services lazily on the first tool call, so startup is fast. At initialization time it precomputes two lookup structures for O(1) access:
 
 - A **chunk source map** for chunk-ID lookups used by `get_yaml_definition`.
-- A **chunk index** for list membership queries used by `get_list_members`.
+- A **chunk index** for list membership queries used by `get_list_members` and table membership queries used by `get_table_members`.
 
 The two backing services are:
 
@@ -228,7 +230,7 @@ The `Chunk` model (`opencrane/shared/models/chunk.py`) is the core data structur
 | **content** | `str` or `dict` or `list` | String for prose and code; dict or list for YAML |
 | **source_file** | `str` | Relative path from the workspace root |
 | **source_name** | `str` or `None` | Resolved from **source_url**; `None` if no mapping exists |
-| **chunk_type** | `str` | One of the seven chunk type literals |
+| **chunk_type** | `str` | One of the chunk type literals (see the Chunk step above) |
 | **metadata** | `dict` | Type-specific metadata fields |
 | **token_count** | `int` | Token count using `cl100k_base` encoding |
 | **line_start** | `int` or `None` | Reserved for future line-level source tracking; currently always `None` |

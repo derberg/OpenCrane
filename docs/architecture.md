@@ -17,7 +17,7 @@ GitHub repositories
       ↓  add / fetch
 .opencrane/sources/
       ↓  llms
-.opencrane/llmstxt/  (hierarchical llms-full.txt bundles)
+.opencrane/llmstxt/  (hierarchical llms-full.txt bundles + companion llms.txt index)
       ↓  chunk
 .opencrane/chunks.json
       ↓  embed
@@ -46,14 +46,15 @@ The command fetches repositories concurrently. It auto-removes stale sources (re
 The `opencrane llms` command flattens the cloned Markdown files into a hierarchy of `llms-full.txt` bundles under `.opencrane/llmstxt/`: a top-level combined bundle, plus per-source, per-project, and per-subproject bundles. For each bundle it:
 
 - Processes Markdown files recursively.
-- Adds URL markers (`### https://...`) so chunks carry a source URL.
-- Adds visual separators (`-----`) between files.
+- Emits **clean** content — no URLs are injected into headings.
+- Adds visual separators (`-----` between files within a source, `======` between sources) and normalizes each page to lead with a single `# {title}` H1 (title precedence: frontmatter `title` → first heading → filename).
 - Rewrites relative links to work in the flattened output.
 - Invokes fence type handlers for structured content such as OpenAPI specs and Kubernetes CRDs embedded as fenced code blocks.
+- Writes a companion `llms.txt` index next to each `llms-full.txt`: a `# {project}` H1 with one `## {source}` section per source and a `- [title](page_url)` link per page, in the same order as the bundle. This index is how the `chunk` step recovers each chunk's specific page `source_url`. For external `llmstxt` sources, a fetched companion `llms.txt` (real per-page URLs) is merged, or an index is synthesized from the source's `docs_url` when no companion exists.
 
 ### Chunk
 
-The `opencrane chunk` command splits each `llms-full.txt` bundle into typed semantic chunks and writes them to `.opencrane/chunks.json`. Four chunking strategies run in priority order — the first strategy that matches a document fragment handles it:
+The `opencrane chunk` command splits each `llms-full.txt` bundle into typed semantic chunks and writes them to `.opencrane/chunks.json`. It reads the companion `llms.txt` index alongside the bundle and assigns each chunk its specific page `source_url` by joining the clean content to the index positionally per source, validated by the page's H1 title (falling back to the legacy inline-marker path when no companion index is present). Four chunking strategies run in priority order — the first strategy that matches a document fragment handles it:
 
 1. **YAML strategy:** Handles YAML content. Delegates structured specs (CRDs, OpenAPI, JSON Schema) to tree walkers. Falls back to a generic `yaml_content` chunk for unrecognized YAML.
 2. **Code strategy:** Handles fenced code blocks. Detects the language and, for structured YAML specs embedded in code fences, invokes tree walkers.
@@ -124,7 +125,8 @@ The CLI auto-discovers a custom `OpenCraneConfig` subclass from `.opencrane/exte
 This package contains the implementation of all pipeline stages. The key modules are:
 
 - **`opencrane/rag/fetch_docs.py`** — GitHub repository fetching, source discovery, and stale-source cleanup.
-- **`opencrane/rag/generate_llms_txt.py`** — `llms-full.txt` bundle generation, fence type dispatch, and link rewriting.
+- **`opencrane/rag/generate_llms_txt.py`** — `llms-full.txt` bundle generation, companion `llms.txt` index emission, fence type dispatch, and link rewriting.
+- **`opencrane/rag/services/llms_index.py`** — parses and renders the `llms.txt` index (`LlmsIndex`, `render_llms_txt`) used to join clean content to per-page URLs.
 - **`opencrane/rag/chunker.py`** — Top-level chunking orchestration. Loads bundles, resolves source names, and writes `chunks.json`.
 - **`opencrane/rag/services/file_processor.py`** — Strategy-pattern chunking. Evaluates strategies in order; the first match handles the fragment.
 - **`opencrane/rag/generate_embeddings.py`** — Batch embedding generation.

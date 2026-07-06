@@ -5,9 +5,11 @@ This document defines the metadata schema for all chunk types. Metadata fields e
 ## Universal Metadata (All Chunk Types)
 
 ### `source_url` (string, optional)
-- **Purpose**: Link to original documentation page
+- **Purpose**: Link to the **specific** documentation page the chunk came from
 - **Usage**: Provide source attribution in RAG responses
-- **Example**: `"https://github.com/org/repo/blob/main/docs/config.md"`
+- **Example**: `"https://github.com/org/repo/blob/main/docs/config.md"` or a rendered docs-site page URL such as `"https://docs.example.com/config"`
+- **How it is set**: Resolved during chunking by joining the clean `llms-full.txt` content to the companion `llms.txt` index per source, validated by the page's H1 title. See [Chunking](chunking.md).
+- **Section anchors (optional)**: By default `source_url` is the page URL only. Projects can opt in to per-section `#anchor` fragments by setting `section_anchors = True` and overriding `anchor_for(page_url, heading)` on their `OpenCraneConfig` subclass in `.opencrane/extensions.py`. The default `anchor_for` returns the page URL unchanged.
 
 ### `original_format` (string, optional)
 - **Purpose**: Original serialization format of content

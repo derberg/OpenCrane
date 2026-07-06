@@ -82,7 +82,10 @@ Strategies are evaluated in order; first match wins.
   - `"code_snippet"` - Fenced code blocks with language detection
   - `"crd_definition"` - Kubernetes Custom Resource Definition properties
   - `"openapi_spec"` - OpenAPI specification elements
+  - `"json_schema"` - JSON Schema definition properties
   - `"yaml_content"` - Generic YAML configuration (not a recognized structured format)
+  - `"list_item"` - A single Markdown list item
+  - `"table_row"` - A single Markdown table data row
 - Usage: Route chunks to appropriate processing logic and templates
 
 ##### `content` (string or object)

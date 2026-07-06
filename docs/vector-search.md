@@ -89,7 +89,7 @@ Search indexed documentation. The description and available chunk types are dyna
 - `limit` (integer, optional): Maximum number of results (1-50, default: 5)
 - `search_mode` (string, optional): Search mode - "semantic", "keyword", or "hybrid" (default: "hybrid")
 - `alpha` (number, optional): Weight for semantic score in hybrid mode (0-1, default: 0.6)
-- `chunk_types` (array, optional): Filter by content type - "prose", "code_snippet", "crd_definition", "openapi_spec", "json_schema"
+- `chunk_types` (array, optional): Filter by content type - "prose", "code_snippet", "crd_definition", "openapi_spec", "json_schema", "yaml_content", "list_item", "table_row"
 - `metadata_contains` (array, optional): Filter by metadata content (AND logic)
 - `source_names` (array, optional): Restrict results to one or more configured sources (OR logic). Values must be path keys from `.opencrane/config.yaml` sources (e.g. `MicrosoftDocs/microsoft-style-guide`). The tool schema only advertises this parameter when sources are configured, and the enum lists the exact valid values.
 
@@ -131,7 +131,7 @@ Retrieve comprehensive documentation of all metadata fields available in chunks.
 **Returns:** Complete metadata schema documentation including:
 - Universal metadata fields (`source_url`, `original_format`, `schema_type`)
 - Hierarchical navigation metadata (`breadcrumb_path`, `logical_parent`, `neighbor_chunks`)
-- Type-specific metadata (CRD, OpenAPI, JSON Schema)
+- Type-specific metadata (CRD, OpenAPI, JSON Schema, list_item, table_row)
 - Programmatic usage examples
 - MCP server integration patterns
 
@@ -146,7 +146,39 @@ Retrieve comprehensive documentation of all metadata fields available in chunks.
 get_metadata_schema()
 ```
 
-### 4. `health`
+### 4. `get_list_members`
+
+Retrieve all items of a Markdown list by its `list_id`. Available only when the index contains `list_item` chunks.
+
+**Parameters:**
+- `list_id` (string, required): The `list_id` from a `list_item` chunk's metadata
+
+**Use cases:**
+- A search returned one or more `list_item` chunks and you need the whole list
+- Reconstructing a list in order without following each `sibling_ids` chunk individually
+
+**Example:**
+```python
+get_list_members(list_id="abc123...")
+```
+
+### 5. `get_table_members`
+
+Retrieve all rows of a Markdown table by its `table_id`, ordered by `row_index`. Available only when the index contains `table_row` chunks.
+
+**Parameters:**
+- `table_id` (string, required): The `table_id` from a `table_row` chunk's metadata
+
+**Use cases:**
+- A search returned one or more `table_row` chunks and you need the whole table
+- Reconstructing a table in order without following each `sibling_ids` chunk individually
+
+**Example:**
+```python
+get_table_members(table_id="abc123...")
+```
+
+### 6. `health`
 
 Check the health status of the MCP server and its services.
 

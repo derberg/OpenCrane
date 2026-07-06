@@ -273,7 +273,7 @@ reconstructed when needed.
 - **Purpose**: Total number of data rows in the table
 - **Usage**: Show "row 3 of 12" context; decide whether to fetch the full table
 
-### `row_key` (string, optional)
+### `row_key` (string)
 - **Purpose**: Value of the first column for this row, used as a concise label
 - **Example**: `"replicas"` (if the first column is "Field")
 - **Usage**: Quick identification without parsing the full row content
@@ -284,7 +284,7 @@ reconstructed when needed.
 - **Usage**: Follow these to fetch specific sibling row chunks. For bulk fetch,
   use `get_table_members(table_id=...)` instead — it is one call.
 
-### `sibling_previews` (array of strings, optional)
+### `sibling_previews` (array of strings)
 - **Purpose**: Short text previews of other rows in the same table, in row order
 - **Format**: Preview capped at 30 display characters; `…` appended when
   truncated
@@ -294,6 +294,16 @@ reconstructed when needed.
     `"... +N more"` where N is the overflow count
 - **Usage**: Give the agent an at-a-glance summary of other rows so it can
   decide whether to call `get_table_members` without a follow-up tool call
+
+### `breadcrumb_path` (string, optional)
+- **Purpose**: Heading ancestry of the table, joined by ` > ` (for example `DIAMETER Support > AVP types`)
+- **Presence**: Set only when the table sits under one or more headings; omitted otherwise
+- **Usage**: Prefixed to the row content as `# {breadcrumb_path}` so each row is self-locating
+
+### `table_caption` (string, optional)
+- **Purpose**: The table's lead-in sentence, the last non-blank line before the table (for example `The following AVP types are used:`)
+- **Presence**: Set only when a lead-in sentence precedes the table; omitted otherwise
+- **Usage**: Included in the row content so a row embeds with the sentence that introduces the table
 
 ### Rehydration Tool
 

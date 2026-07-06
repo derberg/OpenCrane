@@ -29,7 +29,13 @@ _H2_RE = re.compile(r'^##\s+(.*)$')
 # no per-page URL — round-trips through parse. Dropping it would make the index
 # have fewer ## sections than the llms-full.txt has ====== blocks, forcing the
 # chunker into the legacy path and poisoning every source_url in the bundle.
-_LINK_RE = re.compile(r'^-\s*\[(?P<title>.*?)\]\((?P<url>[^)]*)\)\s*$')
+#
+# No end anchor: the llms.txt standard permits an optional ``: description``
+# after the link (``- [Title](url): some text``). Anchoring at ``)`` would drop
+# every described entry, and because entries are consumed positionally that
+# cascades — mis-aligning later pages too. We match the link prefix and ignore
+# any trailing text.
+_LINK_RE = re.compile(r'^-\s*\[(?P<title>.*?)\]\((?P<url>[^)]*)\)')
 
 
 def _norm_title(title: str) -> str:

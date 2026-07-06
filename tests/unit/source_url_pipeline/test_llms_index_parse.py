@@ -31,6 +31,36 @@ def test_entries_for_unknown_source_is_empty():
     assert idx.entries_for("missing") == []
 
 
+def test_parse_link_without_description():
+    idx = LlmsIndex.parse("# Docs\n## s\n- [Foo](https://x/foo.md)\n")
+    entry = idx.entries_for("s")[0]
+    assert entry.title == "Foo"
+    assert entry.url == "https://x/foo.md"
+
+
+def test_parse_link_with_description_suffix():
+    """The llms.txt standard allows an optional ': description' after a link."""
+    idx = LlmsIndex.parse("# Docs\n## s\n- [Foo](https://x/foo.md): a description\n")
+    entries = idx.entries_for("s")
+    assert len(entries) == 1
+    assert entries[0].title == "Foo"
+    assert entries[0].url == "https://x/foo.md"
+
+
+def test_parse_empty_placeholder_entry_round_trips():
+    idx = LlmsIndex.parse("# Docs\n## s\n- []()\n")
+    entries = idx.entries_for("s")
+    assert len(entries) == 1
+    assert entries[0].title == ""
+    assert entries[0].url == ""
+
+
+def test_parse_ignores_non_link_lines():
+    idx = LlmsIndex.parse("# Docs\n## s\nsome prose line\n- [Foo](https://x/foo)\n")
+    entries = idx.entries_for("s")
+    assert [e.title for e in entries] == ["Foo"]
+
+
 def test_parse_ignores_blank_lines():
     idx = LlmsIndex.parse("# Docs\n\n## s\n\n- [Home](https://x/home)\n\n")
     assert idx.sources() == ["s"]

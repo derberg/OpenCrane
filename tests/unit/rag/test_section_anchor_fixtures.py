@@ -51,3 +51,4 @@ def test_section_anchor_fixture(tmp_path, monkeypatch):
         assert chunk["chunk_type"] == entry["chunk_type"], marker
         assert chunk["metadata"].get("source_url") == entry["source_url"], marker
         assert chunk["metadata"].get("section_anchor") == entry["section_anchor"], marker
+        assert chunk["metadata"].get("breadcrumb_path") == entry["breadcrumb_path"], marker

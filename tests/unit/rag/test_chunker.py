@@ -15,6 +15,7 @@ from types import SimpleNamespace
 
 from opencrane.config import OpenCraneConfig
 from opencrane.rag.chunker import (
+    _annotate_breadcrumb_paths,
     _annotate_section_anchors,
     _annotate_source_names,
     _chunk_section_heading,
@@ -25,6 +26,47 @@ from opencrane.shared.models.chunk import Chunk
 
 def _stub(chunk_type, content="", metadata=None):
     return SimpleNamespace(chunk_type=chunk_type, content=content, metadata=metadata or {})
+
+
+def _fake_index(url_titles):
+    entries = [SimpleNamespace(url=u, title=t) for u, t in url_titles]
+    return SimpleNamespace(sources=lambda: ["s"], entries_for=lambda _s: entries)
+
+
+class TestAnnotateBreadcrumbPaths:
+    """Prose chunks get 'page title > section' from the index title + content."""
+
+    _INDEX = [("https://x/about", "About Page")]
+
+    def test_prose_gets_page_title_and_section(self):
+        c = _stub("prose", content="## Who We Serve\nbody", metadata={"source_url": "https://x/about"})
+        _annotate_breadcrumb_paths([c], _fake_index(self._INDEX))
+        assert c.metadata["breadcrumb_path"] == "About Page > Who We Serve"
+
+    def test_page_level_prose_gets_title_only(self):
+        c = _stub("prose", content="# About Page\nintro paragraph", metadata={"source_url": "https://x/about"})
+        _annotate_breadcrumb_paths([c], _fake_index(self._INDEX))
+        assert c.metadata["breadcrumb_path"] == "About Page"
+
+    def test_none_index_is_noop(self):
+        c = _stub("prose", content="## Who We Serve\nbody", metadata={"source_url": "https://x/about"})
+        _annotate_breadcrumb_paths([c], None)
+        assert "breadcrumb_path" not in c.metadata
+
+    def test_non_prose_left_untouched(self):
+        c = _stub("list_item", metadata={"source_url": "https://x/about", "breadcrumb_path": "Kept > As Is"})
+        _annotate_breadcrumb_paths([c], _fake_index(self._INDEX))
+        assert c.metadata["breadcrumb_path"] == "Kept > As Is"
+
+    def test_url_not_in_index_skipped(self):
+        c = _stub("prose", content="## S\nbody", metadata={"source_url": "https://x/other"})
+        _annotate_breadcrumb_paths([c], _fake_index(self._INDEX))
+        assert "breadcrumb_path" not in c.metadata
+
+    def test_prose_without_metadata_skipped(self):
+        c = _stub("prose", content="## S\nbody", metadata={})
+        _annotate_breadcrumb_paths([c], _fake_index(self._INDEX))
+        assert c.metadata == {}
 
 
 class TestChunkSectionHeading:

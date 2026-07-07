@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 from opencrane.rag.services.file_processor import FileProcessor
@@ -11,6 +12,59 @@ from opencrane.rag.services.source_resolver import SourceResolver
 from opencrane.shared.config import get_config
 
 logger = logging.getLogger(__name__)
+
+
+# First level>=2 (section) heading in a prose chunk's content. Prose chunks are
+# split at heading boundaries, so this is the chunk's own section heading; a
+# chunk under only the page-title H1 has no match and gets no anchor.
+_SECTION_HEADING_RE = re.compile(r"^#{2,6}[ \t]+(.+?)[ \t]*$", re.MULTILINE)
+
+
+def _chunk_section_heading(chunk) -> str | None:
+    """Return the documentation section heading a chunk lives under, or None.
+
+    - ``prose``: the first level>=2 heading in the chunk content.
+    - ``list_item`` / ``table_row``: the last ``breadcrumb_path`` segment, but
+      only when the breadcrumb has more than the page title (a real section).
+    - other (structured YAML) chunk types: None — their breadcrumb is a
+      data-tree path, not a documentation heading, and has no page anchor.
+    """
+    chunk_type = chunk.chunk_type
+    if chunk_type == "prose":
+        if isinstance(chunk.content, str):
+            match = _SECTION_HEADING_RE.search(chunk.content)
+            if match:
+                return match.group(1).strip()
+        return None
+    if chunk_type in ("list_item", "table_row"):
+        breadcrumb = (chunk.metadata or {}).get("breadcrumb_path")
+        if breadcrumb:
+            segments = [s.strip() for s in breadcrumb.split(">") if s.strip()]
+            if len(segments) >= 2:
+                return segments[-1]
+    return None
+
+
+def _annotate_section_anchors(chunks, config) -> None:
+    """Record a ``section_anchor`` on each markdown chunk from its section
+    heading, so consumers can link to ``{source_url}#{section_anchor}`` while
+    ``source_url`` stays a clean page link.
+
+    Only chunks that have a ``source_url`` (something to anchor against) and a
+    section heading are annotated; the slug comes from ``config.section_anchor_for``
+    (so the style/override is honoured). Page-level and structured chunks are
+    left without an anchor.
+    """
+    for chunk in chunks:
+        metadata = chunk.metadata
+        if not metadata or not metadata.get("source_url"):
+            continue
+        heading = _chunk_section_heading(chunk)
+        if not heading:
+            continue
+        anchor = config.section_anchor_for(heading)
+        if anchor:
+            metadata["section_anchor"] = anchor
 
 
 def _annotate_source_names(chunks, mapping_file: Path) -> None:
@@ -60,6 +114,9 @@ def main(config=None, llmstxt_dir=None, chunks_file=None):
             chunks = processor.process_file(input_file, index=index)
         else:
             chunks = processor.process_file(input_file)
+
+        from opencrane.config import OpenCraneConfig
+        _annotate_section_anchors(chunks, config if config is not None else OpenCraneConfig())
 
         mapping_file = get_config().mapping_file
         if not mapping_file.is_absolute():

@@ -28,6 +28,7 @@ A standalone, extensible RAG/MCP pipeline for building AI-powered documentation 
   - [Source mapping file](#source-mapping-file-opencraneonfigyaml)
 - [Extending OpenCrane](#extending-opencrane)
   - [Extension points](#extension-points)
+  - [Section anchors](#section-anchors)
   - [Built-in fence types](#built-in-fence-types)
   - [Built-in YAML tree walkers](#built-in-yaml-tree-walkers)
   - [Writing a custom fence type](#writing-a-custom-fence-type)
@@ -40,6 +41,7 @@ A standalone, extensible RAG/MCP pipeline for building AI-powered documentation 
 - **Flexible RAG pipeline**: run the full flow (fetch → generate llms-full.txt → chunk → embed → index → serve) or use only the steps you need
 - **MCP server**: exposes search tools consumable by Claude, Cursor, and any MCP-compatible client
 - **Extensible**: subclass `OpenCraneConfig` to add custom fence types, chunking strategies, and YAML tree walkers; `openapi`, `asyncapi`, `crd`, and `json-schema` fence types are built in
+- **Section anchors**: chunks record a `section_anchor` so citations link straight to the exact doc section (`{source_url}#{section_anchor}`); on by default, style-selectable, and overridable per project
 - **CLI**: every pipeline step is a subcommand; works in CI/CD and non-Python projects
 
 
@@ -445,6 +447,40 @@ opencrane build --config myproject.config:MyConfig
 | `fence_types` | `llms` | Register custom fence language identifiers and control how matching blocks are transformed during llms-full.txt generation |
 | `chunking_strategies` | `chunk` | Add or replace chunking strategies for different content types |
 | `yaml_tree_walkers` | `chunk` | Add walkers for custom YAML document formats |
+| `section_anchor_for` | `chunk` | Build the in-page anchor slug recorded in each chunk's `section_anchor` metadata |
+
+### Section anchors
+
+Each markdown sub-section chunk records a **`section_anchor`** in its metadata — the in-page anchor slug of its nearest section heading (level ≥ 2; the page-title H1 is skipped). `source_url` stays a clean page link, and consumers build a direct section link by joining the two:
+
+```
+{source_url}#{section_anchor}
+```
+
+For example a chunk under the "Who We Serve" heading of the About page gets `source_url: https://docs.example.com/guide/about` and `section_anchor: who-we-serve`, i.e. `https://docs.example.com/guide/about#who-we-serve`. The `search_docs` results expose it on a `Section Anchor:` line, and `get_metadata_schema` documents it.
+
+**Choosing a style** — set `section_anchor_style` in `.opencrane/config.yaml` (no subclass needed):
+
+```yaml
+section_anchor_style: generic   # default — GitBook/GitHub-style slugs
+# section_anchor_style: none    # disable section anchors entirely
+```
+
+**Writing a custom anchor builder** — when your docs host slugs headings differently, override `section_anchor_for` in your config subclass (`.opencrane/extensions.py:Config`). It receives the nearest heading and returns the fragment slug (no `#`), or `None` to skip:
+
+```python
+from opencrane import OpenCraneConfig
+
+
+class Config(OpenCraneConfig):
+    def section_anchor_for(self, heading):
+        if not heading:
+            return None
+        # Example: a host that lowercases and uses underscores instead of hyphens
+        return heading.strip().lower().replace(" ", "_")
+```
+
+An override takes precedence over `section_anchor_style`.
 
 ### Built-in fence types
 

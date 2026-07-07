@@ -38,7 +38,7 @@ class Chunk(BaseModel):
         
         # Validate metadata shape based on chunk_type
         if self.chunk_type == "prose":
-            allowed_keys = {"source_url", "tab_value", "tab_label", "key"}
+            allowed_keys = {"source_url", "section_anchor", "tab_value", "tab_label", "key"}
             invalid_keys = set(self.metadata.keys()) - allowed_keys
             if invalid_keys:
                 raise ValueError("prose chunks must use supported metadata keys only")

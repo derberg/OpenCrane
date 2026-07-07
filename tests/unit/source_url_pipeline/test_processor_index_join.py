@@ -156,24 +156,13 @@ def test_processor_h1_split_ignores_fenced_hash_comments(tmp_path):
     assert None not in all_urls
 
 
-def test_processor_section_anchors_applies_anchor_for(tmp_path):
-    """When config.section_anchors is on, anchor_for is applied per sub-section
-    using that sub-section's nearest heading."""
-    from opencrane.config import OpenCraneConfig
-
-    class AnchorConfig(OpenCraneConfig):
-        section_anchors = True
-
-        def anchor_for(self, page_url, heading):
-            if heading:
-                slug = heading.strip().lower().replace(" ", "-")
-                return f"{page_url}#{slug}"
-            return page_url
-
+def test_processor_leaves_source_url_a_clean_page_link(tmp_path):
+    """FileProcessor assigns plain page URLs; section anchors are added later by
+    the chunker, so no source_url carries a #fragment here."""
     full = "# Home\n## Getting Started\nHere is how you get started with it.\n"
     idx = LlmsIndex.parse("# D\n## proj\n- [Home](https://x/home)\n")
     f = tmp_path / "llms-full.txt"
     f.write_text(full)
-    chunks = FileProcessor(config=AnchorConfig()).process_file(f, index=idx)
+    chunks = FileProcessor().process_file(f, index=idx)
     urls = {c.metadata.get("source_url") for c in chunks if c.metadata.get("source_url")}
-    assert any(u.startswith("https://x/home#") for u in urls)
+    assert urls == {"https://x/home"}

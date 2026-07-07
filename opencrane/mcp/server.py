@@ -781,6 +781,11 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
                     result_text += f"Metadata:\n"
                     if metadata.get("breadcrumb_path"):
                         result_text += f"  Location: {metadata['breadcrumb_path']}\n"
+                    if metadata.get("section_anchor"):
+                        result_text += (
+                            f"  Section Anchor: {metadata['section_anchor']}"
+                            f" (link to this section as Source#{metadata['section_anchor']})\n"
+                        )
                     if metadata.get("logical_parent"):
                         result_text += f"  Parent: {metadata['logical_parent']}\n"
                     neighbor_count = len(metadata.get("neighbor_chunks", []))

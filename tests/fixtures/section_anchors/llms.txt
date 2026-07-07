@@ -1,0 +1,4 @@
+# Docs
+## open-source-europe
+- [About Open Source Europe](https://docs.example.com/ose/about)
+- [Payouts](https://docs.example.com/ose/payouts)

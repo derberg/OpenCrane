@@ -1,0 +1,17 @@
+# About Open Source Europe
+Open Source Europe provides fiscal hosting for open source communities in the EU.
+
+## Who We Serve
+We serve open source projects and maintainers across Europe today.
+
+## Eligibility Requirements
+Projects must be open source and based in the European Union to qualify.
+
+# Payouts
+How and when the foundation reimburses verified projects for their costs.
+
+## Payout Schedule
+Approved reimbursements follow this timeline:
+
+- Within seven days for verified projects with complete documentation on file
+- Within fourteen days for all other requests pending a manual compliance review

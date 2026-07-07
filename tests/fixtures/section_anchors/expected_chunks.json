@@ -1,0 +1,43 @@
+{
+  "_note": "Expected output of `opencrane chunk` over this dir's llms-full.txt (joined to llms.txt), asserted through the full pipeline (chunker.main). Demonstrates section anchors: every chunk's source_url stays a clean page link, and section_anchor is the slug of the chunk's section heading. Chunks are matched by a unique content substring; chunk_id/token_count are intentionally not pinned.",
+  "chunks": [
+    {
+      "content_contains": "Open Source Europe provides fiscal hosting",
+      "chunk_type": "prose",
+      "source_url": "https://docs.example.com/ose/about",
+      "section_anchor": null,
+      "why": "page-title (H1) content -> no section anchor"
+    },
+    {
+      "content_contains": "We serve open source projects",
+      "chunk_type": "prose",
+      "source_url": "https://docs.example.com/ose/about",
+      "section_anchor": "who-we-serve"
+    },
+    {
+      "content_contains": "Projects must be open source",
+      "chunk_type": "prose",
+      "source_url": "https://docs.example.com/ose/about",
+      "section_anchor": "eligibility-requirements"
+    },
+    {
+      "content_contains": "Approved reimbursements follow this timeline",
+      "chunk_type": "prose",
+      "source_url": "https://docs.example.com/ose/payouts",
+      "section_anchor": "payout-schedule"
+    },
+    {
+      "content_contains": "Within seven days",
+      "chunk_type": "list_item",
+      "source_url": "https://docs.example.com/ose/payouts",
+      "section_anchor": "payout-schedule",
+      "why": "list_item anchor comes from the breadcrumb's last segment"
+    },
+    {
+      "content_contains": "Within fourteen days",
+      "chunk_type": "list_item",
+      "source_url": "https://docs.example.com/ose/payouts",
+      "section_anchor": "payout-schedule"
+    }
+  ]
+}

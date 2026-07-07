@@ -11,8 +11,108 @@ from unittest.mock import patch, MagicMock
 import pytest
 import yaml
 
-from opencrane.rag.chunker import _annotate_source_names, main
+from types import SimpleNamespace
+
+from opencrane.config import OpenCraneConfig
+from opencrane.rag.chunker import (
+    _annotate_section_anchors,
+    _annotate_source_names,
+    _chunk_section_heading,
+    main,
+)
 from opencrane.shared.models.chunk import Chunk
+
+
+def _stub(chunk_type, content="", metadata=None):
+    return SimpleNamespace(chunk_type=chunk_type, content=content, metadata=metadata or {})
+
+
+class TestChunkSectionHeading:
+    """The per-chunk heading used to build the section anchor."""
+
+    def test_prose_uses_first_section_heading(self):
+        c = _stub("prose", content="## Who We Serve\nbody text goes here now.")
+        assert _chunk_section_heading(c) == "Who We Serve"
+
+    def test_prose_ignores_page_title_h1(self):
+        c = _stub("prose", content="# About Page\nintro paragraph without a section.")
+        assert _chunk_section_heading(c) is None
+
+    def test_prose_non_string_content_returns_none(self):
+        assert _chunk_section_heading(_stub("prose", content={"k": "v"})) is None
+
+    def test_list_item_uses_last_breadcrumb_segment(self):
+        c = _stub("list_item", metadata={"breadcrumb_path": "About > Who We Serve"})
+        assert _chunk_section_heading(c) == "Who We Serve"
+
+    def test_list_item_single_segment_breadcrumb_returns_none(self):
+        c = _stub("list_item", metadata={"breadcrumb_path": "About"})
+        assert _chunk_section_heading(c) is None
+
+    def test_list_item_without_breadcrumb_returns_none(self):
+        assert _chunk_section_heading(_stub("list_item", metadata={})) is None
+
+    def test_structured_chunk_type_returns_none(self):
+        c = _stub("json_schema", metadata={"breadcrumb_path": "properties > config"})
+        assert _chunk_section_heading(c) is None
+
+
+class TestAnnotateSectionAnchors:
+    """The pass that records section_anchor on chunks with a source_url."""
+
+    def test_sets_anchor_from_prose_heading(self):
+        c = _stub("prose", content="## Who We Serve\nbody",
+                  metadata={"source_url": "https://x/about"})
+        _annotate_section_anchors([c], OpenCraneConfig())
+        assert c.metadata["section_anchor"] == "who-we-serve"
+
+    def test_skips_chunk_without_source_url(self):
+        c = _stub("prose", content="## Who We Serve\nbody", metadata={})
+        _annotate_section_anchors([c], OpenCraneConfig())
+        assert "section_anchor" not in c.metadata
+
+    def test_skips_page_level_prose(self):
+        c = _stub("prose", content="# About\nintro",
+                  metadata={"source_url": "https://x/about"})
+        _annotate_section_anchors([c], OpenCraneConfig())
+        assert "section_anchor" not in c.metadata
+
+    def test_style_none_sets_no_anchor(self):
+        cfg = OpenCraneConfig()
+        cfg.section_anchor_style = "none"
+        c = _stub("prose", content="## Who We Serve\nbody",
+                  metadata={"source_url": "https://x/about"})
+        _annotate_section_anchors([c], cfg)
+        assert "section_anchor" not in c.metadata
+
+
+class TestAnnotateSectionAnchorsEndToEnd:
+    """Full chunk pipeline: prose sections get per-chunk anchors, page clean."""
+
+    def test_prose_sections_get_distinct_anchors(self, tmp_path, monkeypatch):
+        llms_dir = tmp_path / "llmstxt"
+        llms_dir.mkdir()
+        (llms_dir / "llms-full.txt").write_text(
+            "# About Open Source Europe\nIntro paragraph with enough real text here.\n\n"
+            "## Who We Serve\nWe serve open source communities across Europe today.\n\n"
+            "## Eligibility Requirements\nYou must meet several requirements to qualify now.\n"
+        )
+        (llms_dir / "llms.txt").write_text(
+            "# Docs\n## ose\n- [About Open Source Europe](https://x/about)\n"
+        )
+        out = tmp_path / "chunks.json"
+        monkeypatch.setenv("AI_DOCS_LLMSTXT_DIR", str(llms_dir))
+        monkeypatch.setenv("AI_DOCS_CHUNKS_FILE", str(out))
+        main()
+
+        chunks = json.loads(out.read_text())
+        by_anchor = {c["metadata"].get("section_anchor") for c in chunks}
+        assert "who-we-serve" in by_anchor
+        assert "eligibility-requirements" in by_anchor
+        # The intro (page-title H1) chunk carries no anchor.
+        assert None in by_anchor
+        # source_url stays a clean page link (no #fragment) everywhere.
+        assert all("#" not in c["metadata"].get("source_url", "") for c in chunks)
 
 
 class TestChunkerWarnings:

@@ -5,9 +5,15 @@ This document defines the metadata schema for all chunk types. Metadata fields e
 ## Universal Metadata (All Chunk Types)
 
 ### `source_url` (string, optional)
-- **Purpose**: Link to original documentation page
+- **Purpose**: Link to original documentation page (a clean page URL, no `#fragment`)
 - **Usage**: Provide source attribution in RAG responses
 - **Example**: `"https://github.com/org/repo/blob/main/docs/config.md"`
+
+### `section_anchor` (string, optional)
+- **Purpose**: In-page anchor slug for this chunk's section, so links can point at the exact section rather than the page top
+- **Present when**: the chunk comes from a markdown sub-section (under a level ≥ 2 heading) and section anchors are enabled (default; see `section_anchor_style`)
+- **Usage**: Build a direct section link by joining it to `source_url`: `{source_url}#{section_anchor}`
+- **Example**: `source_url` `"https://docs.example.com/guide/about"` + `section_anchor` `"who-we-serve"` → `"https://docs.example.com/guide/about#who-we-serve"`
 
 ### `original_format` (string, optional)
 - **Purpose**: Original serialization format of content

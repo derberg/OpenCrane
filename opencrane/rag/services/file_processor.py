@@ -443,8 +443,8 @@ class FileProcessor:
 
                 Preserves the code-fence / ``<Tabs>`` HTML sub-splitting so
                 prose/code/yaml strategy dispatch is identical to the legacy
-                path.  Each emitted item carries ``page_url`` (optionally with a
-                per-sub-section ``#anchor`` when ``config.section_anchors``).
+                path.  Each emitted item carries ``page_url`` (section anchors
+                are added later, per chunk, by the chunker).
                 """
                 sub_sections = []
                 current_section = []
@@ -454,7 +454,7 @@ class FileProcessor:
 
                 def emit(text):
                     if text.strip():
-                        sub_sections.append((text, self._nearest_heading(text)))
+                        sub_sections.append(text)
 
                 for line in page_text.split('\n'):
                     stripped_line = line.lstrip()
@@ -486,23 +486,8 @@ class FileProcessor:
                 if current_section:
                     emit('\n'.join(current_section).strip())
 
-                items = []
-                for text, heading in sub_sections:
-                    url = page_url
-                    if url is not None and getattr(config, "section_anchors", False):
-                        url = config.anchor_for(url, heading)
-                    items.append(FakeTextItem(text, url))
+                items = [FakeTextItem(text, page_url) for text in sub_sections]
                 return items
-
-            @staticmethod
-            def _nearest_heading(text):
-                """Return the last heading text within a sub-section, or None."""
-                heading = None
-                for line in text.split('\n'):
-                    m = re.match(r'^#{1,6}\s+(.*)$', line.strip())
-                    if m and m.group(1).strip():
-                        heading = m.group(1).strip()
-                return heading
 
             def _split_into_sections(self, content):
                 """Split content into sections for independent processing.

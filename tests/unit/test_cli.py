@@ -98,6 +98,24 @@ def test_load_config_auto_discover_no_extensions_key(tmp_path, monkeypatch):
 
 
 @pytest.mark.unit
+def test_load_config_applies_section_anchor_style_from_yaml(tmp_path, monkeypatch):
+    """The section_anchor_style key in config.yaml is layered onto the config."""
+    opencrane_dir = tmp_path / ".opencrane"
+    opencrane_dir.mkdir()
+    (opencrane_dir / "config.yaml").write_text("section_anchor_style: none\n")
+    monkeypatch.chdir(tmp_path)
+    cfg = cli.load_config(None)
+    assert cfg.section_anchor_style == "none"
+
+
+@pytest.mark.unit
+def test_load_config_default_style_when_key_absent(chdir_tmp):
+    """No config.yaml -> the class default section_anchor_style stays 'generic'."""
+    cfg = cli.load_config(None)
+    assert cfg.section_anchor_style == "generic"
+
+
+@pytest.mark.unit
 def test_load_config_auto_discover_extensions_path_missing(tmp_path, monkeypatch):
     """extensions key points to a nonexistent file -> base config."""
     opencrane_dir = tmp_path / ".opencrane"

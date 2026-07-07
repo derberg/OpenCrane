@@ -256,6 +256,35 @@ class TestMCPServer:
     @patch('opencrane.mcp.server.get_embeddings_service')
     @patch('opencrane.mcp.server.get_milvus_service')
     @pytest.mark.anyio
+    async def test_search_result_includes_section_anchor(self, mock_milvus_get, mock_embeddings_get):
+        """A chunk's section_anchor is surfaced with a hint to build the section link."""
+        mock_embeddings = Mock()
+        mock_model = Mock()
+        mock_model.encode.return_value = [[0.1] * 768]
+        mock_embeddings.model = mock_model
+        mock_embeddings_get.return_value = mock_embeddings
+
+        mock_milvus = Mock()
+        mock_milvus.search.return_value = [
+            {
+                "content": "test",
+                "source_file": "file.md",
+                "chunk_type": "prose",
+                "metadata_json": '{"source_url": "https://x/about", "section_anchor": "who-we-serve"}',
+                "distance": 0.5,
+            }
+        ]
+        mock_milvus_get.return_value = mock_milvus
+
+        results = await _search_documentation_impl({
+            "query": "q", "limit": 1, "search_mode": "semantic",
+        })
+        assert "Section Anchor: who-we-serve" in results[0].text
+        assert "Source#who-we-serve" in results[0].text
+
+    @patch('opencrane.mcp.server.get_embeddings_service')
+    @patch('opencrane.mcp.server.get_milvus_service')
+    @pytest.mark.anyio
     async def test_search_documentation_with_filters(self, mock_milvus_get, mock_embeddings_get):
         """Test search with chunk type filters."""
         mock_embeddings = Mock()

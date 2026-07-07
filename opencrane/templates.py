@@ -26,6 +26,17 @@ class Config(OpenCraneConfig):
 
     # Extend or replace YAML tree walkers for structured YAML chunking.
     # yaml_tree_walkers = [*OpenCraneConfig.yaml_tree_walkers, MyCustomWalker]
+
+    # Custom section-anchor slugs. Each markdown sub-section chunk gets a
+    # `section_anchor` in its metadata; consumers link to it as
+    # `{source_url}#{section_anchor}`. Pick a built-in style with
+    # `section_anchor_style` (in config.yaml), or override this method for a
+    # rule your docs host uses. Return None to skip a chunk's anchor.
+    # def section_anchor_for(self, heading):
+    #     if not heading:
+    #         return None
+    #     # e.g. a host that keeps case and uses underscores:
+    #     return heading.strip().replace(" ", "_")
 '''
 
 CONFIG_YAML = '''\
@@ -40,6 +51,13 @@ ignore_patterns:
 # Optional: Python module with custom extensions (fence types, chunking strategies, walkers).
 # Path is relative to .opencrane/ directory.
 # extensions: extensions.py
+
+# Optional: section anchors. Each markdown sub-section chunk records a
+# `section_anchor` in its metadata (the in-page slug of its heading) so links
+# can point at the exact section via `{source_url}#{section_anchor}`.
+# `generic` (default) suits GitBook/GitHub-style slugs; `none` disables anchors.
+# For a custom slug rule, override `section_anchor_for` in extensions.py.
+# section_anchor_style: generic
 
 # Documentation sources.
 # Each entry maps a source name to its configuration.

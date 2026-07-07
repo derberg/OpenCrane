@@ -30,13 +30,16 @@ This document defines the metadata schema for all chunk types. Metadata fields e
 These fields enable tree traversal and context reconstruction:
 
 ### `breadcrumb_path` (string)
-- **Purpose**: Exact location in YAML/document tree structure
-- **Format**: Dot-separated path with array indices
+- **Purpose**: Exact location in the document/YAML tree structure
+- **Format**:
+  - Markdown chunks (prose/list_item/table_row): heading ancestry joined by ` > `, i.e. `page title > … > section`
+  - Structured YAML chunks (crd/openapi/json_schema): dot-separated data-tree path with array indices
 - **Usage**:
+  - **Location Display**: label a citation as "page › section" (the last segment is the section heading)
   - **Re-hydration**: Reconstruct complete YAML tree from chunks
-  - **Location Display**: Show users where property exists in schema
   - **Precise Lookup**: Find exact position in nested structures
 - **Examples**:
+  - Prose/list/table: `"VAT in Europe and How It Works in OCE > General Principles"`
   - CRD: `"spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.replicas"`
   - OpenAPI: `"paths./users/{id}.get"`
   - JSON Schema: `"properties.config.properties.database"`

@@ -219,6 +219,49 @@ opencrane serve [--config CLASS] [--transport stdio|http]
 | `--transport stdio` | *(default)* stdio transport for local MCP clients. Prints integration instructions for Claude Code, Cursor, Windsurf, VS Code, Zed, and Docker/Podman on startup |
 | `--transport http` | HTTP transport on port 8000 (Streamable HTTP, stateless). Used inside Docker/Podman containers. Port configurable via `MCP_HTTP_PORT` env var |
 
+##### Health endpoint (`/health`)
+
+The HTTP transport exposes `GET /health` for container liveness/readiness probes (e.g. Cloud Run). It is an **honest, query-aware** check: rather than only confirming that services are wired up, it runs a real one-result search behind a timeout, reports memory headroom from the cgroup, and reports whether the heavy in-memory chunk maps are already resident. The overall `status` is the worst of the individual checks:
+
+| `status` | HTTP code | Meaning |
+|---|---|---|
+| `healthy` | `200` | Serving queries normally |
+| `degraded` | `200` | Still serving, but a warning sign is present (slow probe, low memory headroom, or missing collection stats) |
+| `unhealthy` | `503` | Cannot serve a query (a service is down or the probe failed/timed out) |
+| `initializing` | `503` | Services are still loading at startup |
+
+Example response (`200`):
+
+```json
+{
+  "status": "healthy",
+  "checks": {
+    "embeddings_service": "healthy",
+    "milvus_service": "healthy",
+    "collection_stats": { "row_count": 1234 },
+    "heavy_maps": {
+      "chunk_index_resident": true,
+      "chunk_source_map_resident": true
+    },
+    "memory": {
+      "source": "cgroup_v2",
+      "used_bytes": 536870912,
+      "limit_bytes": 2147483648,
+      "headroom_pct": 75.0,
+      "status": "healthy"
+    },
+    "query_probe": {
+      "status": "healthy",
+      "latency_ms": 143.7
+    }
+  }
+}
+```
+
+`memory.status` is `unavailable` (and omits the byte fields) when no cgroup limit can be read, e.g. running outside a container. The same report is returned by the `health` MCP tool. The probe and memory thresholds are tunable — see the [health-check environment variables](#health-check-serve-http-transport).
+
+> **Deploying the probe:** point the platform's liveness/readiness probe at `GET /health` on port 8000. Give the startup/initial-delay enough time for the embedding model to load (until then `/health` returns `503 initializing`), and use a longer liveness period so a real search isn't run every few seconds. **Do not bind-mount the Milvus Lite database** — Milvus Lite cannot open its `.db` from a bind-mounted volume (`Open local milvus failed`); bake it into the image with `COPY` instead (the generated `Dockerfile` already does this by building the DB in a dedicated stage).
+
 #### `opencrane pack` — package for distribution
 
 ```bash
@@ -371,6 +414,17 @@ OpenCrane supports two Milvus modes. Set `MILVUS_DB_PATH` to use **Milvus Lite**
 | `MILVUS_PORT` | `19530` | Milvus server port (server mode only) |
 | `MILVUS_COLLECTION` | `ai_docs_chunks_v1` | Milvus collection name |
 | `HYBRID_ALPHA` | `0.6` | Weight of vector search vs keyword search (1.0 = pure vector, 0.0 = pure BM25) |
+
+#### Health check (`serve`, HTTP transport)
+
+Tune the [`/health`](#health-endpoint-health) probe and thresholds. All optional.
+
+| Variable | Default | Description |
+|---|---|---|
+| `OPENCRANE_HEALTH_PROBE_QUERY` | `documentation` | Query used for the functional search probe |
+| `OPENCRANE_HEALTH_PROBE_TIMEOUT` | `10` | Hard timeout (seconds) for the probe; exceeding it reports `unhealthy` |
+| `OPENCRANE_HEALTH_PROBE_BUDGET` | `2` | Soft latency budget (seconds); a slower-but-successful probe reports `degraded` |
+| `OPENCRANE_HEALTH_MEM_WARN_HEADROOM` | `0.15` | Minimum free-memory fraction; below it, memory is reported `degraded` |
 
 ### Source mapping file (`.opencrane/config.yaml`)
 

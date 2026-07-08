@@ -5,10 +5,11 @@ import pytest
 from unittest.mock import Mock, patch, AsyncMock, mock_open
 from opencrane.mcp.server import (
     search_docs, _search_documentation_impl, _build_search_tool,
-    health_check, list_tools, call_tool,
+    health_check, compute_health, list_tools, call_tool,
     get_embeddings_service, get_milvus_service, get_keyword_service,
     get_yaml_definition, get_metadata_schema, _rehydrate_to_yaml, _has_yaml_chunks,
-    _get_indexed_chunk_types, _get_source_topics, main
+    _get_indexed_chunk_types, _get_source_topics, main,
+    _worst_status, _read_cgroup_memory, _memory_health, _query_probe,
 )
 from mcp.types import TextContent
 
@@ -326,54 +327,6 @@ class TestMCPServer:
         assert len(results) == 1
         assert "Search failed:" in results[0].text
 
-    @patch('opencrane.mcp.server.get_milvus_service')
-    @patch('opencrane.mcp.server.get_embeddings_service')
-    @pytest.mark.anyio
-    async def test_health_check_success(self, mock_embeddings_get, mock_milvus_get):
-        """Test successful health check."""
-        mock_embeddings = Mock()
-        mock_embeddings.model = Mock()
-        mock_embeddings_get.return_value = mock_embeddings
-
-        mock_milvus = Mock()
-        mock_milvus.client = Mock()
-        mock_milvus.get_collection_stats.return_value = {"row_count": 100}
-        mock_milvus_get.return_value = mock_milvus
-
-        arguments = {}
-
-        results = await health_check(arguments)
-
-        assert len(results) == 1
-        health_text = results[0].text
-        assert "embeddings_service: healthy" in health_text
-        assert "milvus_service: healthy" in health_text
-        assert "collection_stats" in health_text
-
-    @patch('opencrane.mcp.server.get_milvus_service')
-    @patch('opencrane.mcp.server.get_embeddings_service')
-    @pytest.mark.anyio
-    async def test_health_check_failure(self, mock_embeddings_get, mock_milvus_get):
-        """Test health check with failures."""
-        mock_embeddings = Mock()
-        mock_embeddings.model = None
-        mock_embeddings_get.return_value = mock_embeddings
-
-        mock_milvus = Mock()
-        mock_milvus.client = None
-        mock_milvus.get_collection_stats.side_effect = Exception("Stats error")
-        mock_milvus_get.return_value = mock_milvus
-
-        arguments = {}
-
-        results = await health_check(arguments)
-
-        assert len(results) == 1
-        health_text = results[0].text
-        assert "embeddings_service: unhealthy" in health_text
-        assert "milvus_service: unhealthy" in health_text
-        assert "error: Stats error" in health_text
-
     @patch('opencrane.mcp.server.app')
     @pytest.mark.anyio
     async def test_main(self, mock_app):
@@ -466,19 +419,6 @@ class TestMCPServer:
         assert len(results) == 1
         assert "https://github.com/test/repo/blob/main/file.md" in results[0].text
 
-    @patch('opencrane.mcp.server.get_embeddings_service')
-    @patch('opencrane.mcp.server.get_milvus_service')
-    @pytest.mark.anyio
-    async def test_health_check_exception(self, mock_milvus_get, mock_embeddings_get):
-        """Test health check handles exceptions."""
-        mock_embeddings_get.side_effect = Exception("Service unavailable")
-        
-        arguments = {}
-        results = await health_check(arguments)
-        
-        assert len(results) == 1
-        assert "Health check failed" in results[0].text
-        assert "Service unavailable" in results[0].text
 
     @patch('opencrane.mcp.server.Path')
     @patch('opencrane.mcp.server.generate_chunk_id')
@@ -1107,3 +1047,362 @@ async def test_search_documentation_metadata_display_prose(mock_milvus_get, mock
     # Count occurrences of "CRD Kind" - should only appear once (in breadcrumb)
     crd_kind_count = results[1].text.count("CRD Kind")
     assert crd_kind_count == 1  # Only in breadcrumb, not in separate Metadata section
+
+
+class TestHonestHealthCheck:
+    """Tests for the honest, query-aware health check."""
+
+    # --- _worst_status ---
+
+    def test_worst_status_empty_is_healthy(self):
+        assert _worst_status([]) == "healthy"
+
+    def test_worst_status_picks_degraded_over_healthy(self):
+        assert _worst_status(["healthy", "degraded", "healthy"]) == "degraded"
+
+    def test_worst_status_picks_unhealthy(self):
+        assert _worst_status(["degraded", "unhealthy", "healthy"]) == "unhealthy"
+
+    def test_worst_status_unavailable_is_benign(self):
+        assert _worst_status(["healthy", "unavailable"]) == "healthy"
+
+    def test_worst_status_raises_on_unregistered_status(self):
+        # An unregistered status must fail loud, not silently pass as healthy.
+        with pytest.raises(KeyError):
+            _worst_status(["healthy", "bogus"])
+
+    # --- _read_cgroup_memory ---
+
+    def test_read_cgroup_memory_v2(self, tmp_path, monkeypatch):
+        current = tmp_path / "memory.current"
+        maxf = tmp_path / "memory.max"
+        current.write_text("1000")
+        maxf.write_text("4000")
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_CURRENT", str(current))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_MAX", str(maxf))
+        info = _read_cgroup_memory()
+        assert info == {"source": "cgroup_v2", "used_bytes": 1000, "limit_bytes": 4000}
+
+    def test_read_cgroup_memory_v2_unlimited(self, tmp_path, monkeypatch):
+        current = tmp_path / "memory.current"
+        maxf = tmp_path / "memory.max"
+        current.write_text("1000")
+        maxf.write_text("max")
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_CURRENT", str(current))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_MAX", str(maxf))
+        info = _read_cgroup_memory()
+        assert info["source"] == "cgroup_v2"
+        assert info["limit_bytes"] is None
+
+    def test_read_cgroup_memory_v2_corrupt_returns_none(self, tmp_path, monkeypatch):
+        current = tmp_path / "memory.current"
+        maxf = tmp_path / "memory.max"
+        current.write_text("not-a-number")
+        maxf.write_text("4000")
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_CURRENT", str(current))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_MAX", str(maxf))
+        assert _read_cgroup_memory() is None
+
+    def test_read_cgroup_memory_v1(self, tmp_path, monkeypatch):
+        usage = tmp_path / "usage_in_bytes"
+        limit = tmp_path / "limit_in_bytes"
+        usage.write_text("2048")
+        limit.write_text("8192")
+        # Force v2 lookup to miss so it falls through to v1.
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_CURRENT", str(tmp_path / "nope-current"))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_MAX", str(tmp_path / "nope-max"))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V1_USAGE", str(usage))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V1_LIMIT", str(limit))
+        info = _read_cgroup_memory()
+        assert info == {"source": "cgroup_v1", "used_bytes": 2048, "limit_bytes": 8192}
+
+    def test_read_cgroup_memory_v1_unlimited_sentinel(self, tmp_path, monkeypatch):
+        import opencrane.mcp.server as server_module
+        usage = tmp_path / "usage_in_bytes"
+        limit = tmp_path / "limit_in_bytes"
+        usage.write_text("2048")
+        limit.write_text(str(server_module._CGROUP_V1_UNLIMITED))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_CURRENT", str(tmp_path / "nope-current"))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_MAX", str(tmp_path / "nope-max"))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V1_USAGE", str(usage))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V1_LIMIT", str(limit))
+        info = _read_cgroup_memory()
+        assert info["limit_bytes"] is None
+
+    def test_read_cgroup_memory_v1_corrupt_returns_none(self, tmp_path, monkeypatch):
+        usage = tmp_path / "usage_in_bytes"
+        limit = tmp_path / "limit_in_bytes"
+        usage.write_text("not-a-number")
+        limit.write_text("8192")
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_CURRENT", str(tmp_path / "nope-current"))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_MAX", str(tmp_path / "nope-max"))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V1_USAGE", str(usage))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V1_LIMIT", str(limit))
+        assert _read_cgroup_memory() is None
+
+    def test_read_cgroup_memory_none_when_absent(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_CURRENT", str(tmp_path / "no-current"))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_MAX", str(tmp_path / "no-max"))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V1_USAGE", str(tmp_path / "no-usage"))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V1_LIMIT", str(tmp_path / "no-limit"))
+        assert _read_cgroup_memory() is None
+
+    # --- _memory_health ---
+
+    def test_memory_health_unavailable(self, monkeypatch):
+        monkeypatch.setattr("opencrane.mcp.server._read_cgroup_memory", lambda: None)
+        assert _memory_health() == {"status": "unavailable"}
+
+    def test_memory_health_healthy_with_headroom(self, monkeypatch):
+        monkeypatch.setattr(
+            "opencrane.mcp.server._read_cgroup_memory",
+            lambda: {"source": "cgroup_v2", "used_bytes": 100, "limit_bytes": 1000},
+        )
+        result = _memory_health()
+        assert result["status"] == "healthy"
+        assert result["headroom_pct"] == 90.0
+        assert result["source"] == "cgroup_v2"
+
+    def test_memory_health_degraded_when_low(self, monkeypatch):
+        monkeypatch.setattr(
+            "opencrane.mcp.server._read_cgroup_memory",
+            lambda: {"source": "cgroup_v2", "used_bytes": 950, "limit_bytes": 1000},
+        )
+        result = _memory_health()
+        assert result["status"] == "degraded"
+        assert result["headroom_pct"] == 5.0
+
+    def test_memory_health_unlimited_is_healthy(self, monkeypatch):
+        monkeypatch.setattr(
+            "opencrane.mcp.server._read_cgroup_memory",
+            lambda: {"source": "cgroup_v2", "used_bytes": 100, "limit_bytes": None},
+        )
+        result = _memory_health()
+        assert result["status"] == "healthy"
+        assert result["headroom_pct"] is None
+
+    def test_memory_health_warn_threshold_env(self, monkeypatch):
+        monkeypatch.setenv("OPENCRANE_HEALTH_MEM_WARN_HEADROOM", "0.5")
+        monkeypatch.setattr(
+            "opencrane.mcp.server._read_cgroup_memory",
+            lambda: {"source": "cgroup_v2", "used_bytes": 600, "limit_bytes": 1000},
+        )
+        result = _memory_health()
+        # 40% headroom < 50% warn threshold -> degraded
+        assert result["status"] == "degraded"
+
+    # --- _query_probe ---
+
+    @patch("opencrane.mcp.server._search_documentation_impl")
+    @pytest.mark.anyio
+    async def test_query_probe_healthy(self, mock_impl):
+        mock_impl.return_value = [TextContent(type="text", text="Result 1:\nSource: x\n")]
+        result = await _query_probe()
+        assert result["status"] == "healthy"
+        assert "latency_ms" in result
+        mock_impl.assert_awaited_once()
+
+    @patch("opencrane.mcp.server._search_documentation_impl")
+    @pytest.mark.anyio
+    async def test_query_probe_unhealthy_when_search_raises(self, mock_impl):
+        mock_impl.side_effect = RuntimeError("boom")
+        result = await _query_probe()
+        assert result["status"] == "unhealthy"
+        assert "boom" in result["error"]
+        assert "latency_ms" in result
+        # The probe must request the raising variant, not sniff a text sentinel.
+        _, kwargs = mock_impl.call_args
+        assert kwargs.get("raise_on_error") is True
+
+    @patch("opencrane.mcp.server._search_documentation_impl")
+    @pytest.mark.anyio
+    async def test_query_probe_uses_semantic_mode(self, mock_impl):
+        mock_impl.return_value = [TextContent(type="text", text="Result 1:\n")]
+        await _query_probe()
+        args, _ = mock_impl.call_args
+        assert args[0]["search_mode"] == "semantic"
+
+    @patch("opencrane.mcp.server._search_documentation_impl")
+    @pytest.mark.anyio
+    async def test_query_probe_degraded_when_slow(self, mock_impl, monkeypatch):
+        monkeypatch.setenv("OPENCRANE_HEALTH_PROBE_BUDGET", "-1")
+        mock_impl.return_value = [TextContent(type="text", text="No results found.")]
+        result = await _query_probe()
+        assert result["status"] == "degraded"
+
+    @patch("opencrane.mcp.server._search_documentation_impl")
+    @pytest.mark.anyio
+    async def test_query_probe_timeout_enforced_for_blocking_search(self, mock_impl, monkeypatch):
+        """The hard timeout must fire even when the search blocks synchronously
+        (the real semantic path does not yield to the event loop)."""
+        import time as _time
+        monkeypatch.setenv("OPENCRANE_HEALTH_PROBE_TIMEOUT", "0.05")
+
+        async def _sync_block(_args, **_kwargs):
+            _time.sleep(0.4)  # blocking, no await — mimics model.encode + Milvus search
+            return [TextContent(type="text", text="Result 1:\n")]
+
+        mock_impl.side_effect = _sync_block
+        result = await _query_probe()
+        assert result["status"] == "unhealthy"
+        assert "timeout" in result["error"].lower()
+
+    @patch("opencrane.mcp.server.get_embeddings_service")
+    @pytest.mark.anyio
+    async def test_search_impl_raise_on_error_propagates(self, mock_emb_get):
+        """With raise_on_error, serving-path failures propagate instead of being
+        swallowed into a 'Search failed:' message."""
+        mock_emb_get.side_effect = RuntimeError("embed down")
+        with pytest.raises(RuntimeError, match="embed down"):
+            await _search_documentation_impl(
+                {"query": "x", "search_mode": "semantic"}, raise_on_error=True
+            )
+
+    # --- compute_health ---
+
+    def _services(self, model=True, client=True, stats=None, stats_error=None):
+        emb = Mock()
+        emb.model = Mock() if model else None
+        milv = Mock()
+        milv.client = Mock() if client else None
+        if stats_error is not None:
+            milv.get_collection_stats.side_effect = Exception(stats_error)
+        else:
+            milv.get_collection_stats.return_value = stats or {"row_count": 10}
+        return emb, milv
+
+    @patch("opencrane.mcp.server._query_probe")
+    @patch("opencrane.mcp.server._memory_health")
+    @patch("opencrane.mcp.server.get_milvus_service")
+    @patch("opencrane.mcp.server.get_embeddings_service")
+    @pytest.mark.anyio
+    async def test_compute_health_all_healthy(
+        self, mock_emb_get, mock_milv_get, mock_mem, mock_probe, monkeypatch
+    ):
+        emb, milv = self._services()
+        mock_emb_get.return_value = emb
+        mock_milv_get.return_value = milv
+        mock_mem.return_value = {"status": "unavailable"}
+        mock_probe.return_value = {"status": "healthy", "latency_ms": 12.0}
+        monkeypatch.setattr("opencrane.mcp.server._chunk_index", None)
+        monkeypatch.setattr("opencrane.mcp.server._chunk_source_map", None)
+
+        payload = await compute_health()
+        assert payload["status"] == "healthy"
+        checks = payload["checks"]
+        assert checks["embeddings_service"] == "healthy"
+        assert checks["milvus_service"] == "healthy"
+        assert checks["collection_stats"] == {"row_count": 10}
+        assert checks["query_probe"]["status"] == "healthy"
+        assert checks["memory"]["status"] == "unavailable"
+        assert checks["heavy_maps"]["chunk_index_resident"] is False
+        assert checks["heavy_maps"]["chunk_source_map_resident"] is False
+
+    @patch("opencrane.mcp.server._query_probe")
+    @patch("opencrane.mcp.server._memory_health")
+    @patch("opencrane.mcp.server.get_milvus_service")
+    @patch("opencrane.mcp.server.get_embeddings_service")
+    @pytest.mark.anyio
+    async def test_compute_health_unhealthy_when_service_object_missing(
+        self, mock_emb_get, mock_milv_get, mock_mem, mock_probe
+    ):
+        emb, milv = self._services(model=False)
+        mock_emb_get.return_value = emb
+        mock_milv_get.return_value = milv
+        mock_mem.return_value = {"status": "unavailable"}
+        mock_probe.return_value = {"status": "healthy"}
+
+        payload = await compute_health()
+        assert payload["status"] == "unhealthy"
+        assert payload["checks"]["embeddings_service"] == "unhealthy"
+
+    @patch("opencrane.mcp.server._query_probe")
+    @patch("opencrane.mcp.server._memory_health")
+    @patch("opencrane.mcp.server.get_milvus_service")
+    @patch("opencrane.mcp.server.get_embeddings_service")
+    @pytest.mark.anyio
+    async def test_compute_health_degraded_on_stats_error(
+        self, mock_emb_get, mock_milv_get, mock_mem, mock_probe
+    ):
+        emb, milv = self._services(stats_error="Stats error")
+        mock_emb_get.return_value = emb
+        mock_milv_get.return_value = milv
+        mock_mem.return_value = {"status": "unavailable"}
+        mock_probe.return_value = {"status": "healthy"}
+
+        payload = await compute_health()
+        assert payload["status"] == "degraded"
+        assert "error: Stats error" in payload["checks"]["collection_stats"]
+
+    @patch("opencrane.mcp.server._query_probe")
+    @patch("opencrane.mcp.server._memory_health")
+    @patch("opencrane.mcp.server.get_milvus_service")
+    @patch("opencrane.mcp.server.get_embeddings_service")
+    @pytest.mark.anyio
+    async def test_compute_health_degraded_on_low_memory(
+        self, mock_emb_get, mock_milv_get, mock_mem, mock_probe
+    ):
+        emb, milv = self._services()
+        mock_emb_get.return_value = emb
+        mock_milv_get.return_value = milv
+        mock_mem.return_value = {"status": "degraded", "headroom_pct": 3.0}
+        mock_probe.return_value = {"status": "healthy"}
+
+        payload = await compute_health()
+        assert payload["status"] == "degraded"
+
+    @patch("opencrane.mcp.server._query_probe")
+    @patch("opencrane.mcp.server._memory_health")
+    @patch("opencrane.mcp.server.get_milvus_service")
+    @patch("opencrane.mcp.server.get_embeddings_service")
+    @pytest.mark.anyio
+    async def test_compute_health_unhealthy_on_probe_failure(
+        self, mock_emb_get, mock_milv_get, mock_mem, mock_probe
+    ):
+        emb, milv = self._services()
+        mock_emb_get.return_value = emb
+        mock_milv_get.return_value = milv
+        mock_mem.return_value = {"status": "unavailable"}
+        mock_probe.return_value = {"status": "unhealthy", "error": "Search failed: x"}
+
+        payload = await compute_health()
+        assert payload["status"] == "unhealthy"
+
+    @patch("opencrane.mcp.server._query_probe")
+    @patch("opencrane.mcp.server._memory_health")
+    @patch("opencrane.mcp.server.get_milvus_service")
+    @patch("opencrane.mcp.server.get_embeddings_service")
+    @pytest.mark.anyio
+    async def test_compute_health_reports_resident_maps(
+        self, mock_emb_get, mock_milv_get, mock_mem, mock_probe, monkeypatch
+    ):
+        emb, milv = self._services()
+        mock_emb_get.return_value = emb
+        mock_milv_get.return_value = milv
+        mock_mem.return_value = {"status": "unavailable"}
+        mock_probe.return_value = {"status": "healthy"}
+        monkeypatch.setattr("opencrane.mcp.server._chunk_index", {"a": {}})
+        monkeypatch.setattr("opencrane.mcp.server._chunk_source_map", {"a": "u"})
+
+        payload = await compute_health()
+        assert payload["checks"]["heavy_maps"]["chunk_index_resident"] is True
+        assert payload["checks"]["heavy_maps"]["chunk_source_map_resident"] is True
+
+    @patch("opencrane.mcp.server.get_embeddings_service")
+    @pytest.mark.anyio
+    async def test_compute_health_unhealthy_on_unexpected_exception(self, mock_emb_get):
+        mock_emb_get.side_effect = Exception("Service unavailable")
+        payload = await compute_health()
+        assert payload["status"] == "unhealthy"
+        assert "Service unavailable" in payload["error"]
+
+    # --- health_check tool wrapper ---
+
+    @patch("opencrane.mcp.server.compute_health")
+    @pytest.mark.anyio
+    async def test_health_check_returns_json_text(self, mock_compute):
+        mock_compute.return_value = {"status": "healthy", "checks": {}}
+        results = await health_check({})
+        assert len(results) == 1
+        payload = json.loads(results[0].text)
+        assert payload["status"] == "healthy"

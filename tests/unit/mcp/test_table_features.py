@@ -10,9 +10,16 @@ from opencrane.mcp.server import _group_table_row_results, _format_grouped_table
 
 
 def _milvus_members(members_by_value):
-    """Milvus service mock whose query_by_field returns the rows for a value."""
+    """Milvus service mock whose query_by_field returns the rows for a value.
+
+    Mirrors the real query: when chunk_type is passed, filtering happens in the
+    query (DB side), not in the caller.
+    """
     svc = Mock()
-    svc.query_by_field.side_effect = lambda field, value, limit=16384: members_by_value.get(value, [])
+    svc.query_by_field.side_effect = lambda field, value, chunk_type=None, limit=16384: [
+        r for r in members_by_value.get(value, [])
+        if chunk_type is None or r.get("chunk_type") == chunk_type
+    ]
     return svc
 
 

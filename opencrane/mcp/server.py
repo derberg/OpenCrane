@@ -154,9 +154,7 @@ def _member_rows(field: str, value: str, chunk_type: str) -> list[dict]:
     when rows came from the file-backed index.
     """
     rows = []
-    for row in get_milvus_service().query_by_field(field, value):
-        if row.get("chunk_type") != chunk_type:
-            continue
+    for row in get_milvus_service().query_by_field(field, value, chunk_type=chunk_type):
         meta = row.get("metadata_json")
         try:
             metadata = json.loads(meta) if isinstance(meta, str) else (meta or {})

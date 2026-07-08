@@ -57,13 +57,17 @@ class TestMilvusService:
         ]
         schema_mock.add_field.assert_has_calls(expected_calls, any_order=True)
         assert schema_mock.add_field.call_count == 11  # All fields added
-        # Verify index params
+        # Verify index params: the embedding vector index plus scalar indexes on
+        # the member-lookup fields.
         index_params_mock = mock_client.prepare_index_params.return_value
-        index_params_mock.add_index.assert_called_once_with(
+        index_params_mock.add_index.assert_any_call(
             field_name="embedding",
             index_type="AUTOINDEX",
             metric_type="COSINE"
         )
+        index_params_mock.add_index.assert_any_call(field_name="list_id", index_type="INVERTED")
+        index_params_mock.add_index.assert_any_call(field_name="table_id", index_type="INVERTED")
+        assert index_params_mock.add_index.call_count == 3
         # Verify create_collection was called
         mock_client.create_collection.assert_called_once_with(
             collection_name=service.collection_name,
@@ -427,7 +431,41 @@ class TestMilvusService:
         service = MilvusService()
         rows = service.query_by_field("list_id", "L1")
         assert [r["chunk_id"] for r in rows] == ["r1", "r2"]
+        # Sanitized value interpolated into the filter (Milvus Lite has no templating).
         assert mock_client.query.call_args[1]["filter"] == 'list_id == "L1"'
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_query_by_field_with_chunk_type(self, mock_client_class):
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        mock_client.query.return_value = []
+
+        service = MilvusService()
+        service.query_by_field("list_id", "L1", chunk_type="list_item")
+        assert mock_client.query.call_args[1]["filter"] == 'list_id == "L1" and chunk_type == "list_item"'
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_query_by_field_sanitizes_value(self, mock_client_class):
+        """A value with filter-breaking characters is stripped before interpolation."""
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        mock_client.query.return_value = []
+
+        service = MilvusService()
+        service.query_by_field("list_id", 'a" or "1"=="1')
+        # Quotes/spaces/= removed → cannot break out of or inject the filter.
+        assert mock_client.query.call_args[1]["filter"] == 'list_id == "aor11"'
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_query_by_field_warns_on_row_cap(self, mock_client_class):
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        mock_client.query.return_value = [{"chunk_id": "r"}, {"chunk_id": "r"}]
+
+        service = MilvusService()
+        # limit == number of rows returned -> the "hit the cap" warning branch
+        rows = service.query_by_field("list_id", "L1", limit=2)
+        assert len(rows) == 2
 
     @patch('opencrane.mcp.services.milvus_client.MilvusClient')
     def test_query_by_field_error_returns_empty(self, mock_client_class):

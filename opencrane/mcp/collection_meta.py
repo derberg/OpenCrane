@@ -6,8 +6,11 @@ the vector DB or loading the whole corpus into memory.
 """
 
 import json
+import logging
 import os
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def _meta_path() -> Path:
@@ -25,7 +28,12 @@ def read_chunk_types() -> set:
     """Return the distinct chunk types from the sidecar, or empty set if absent."""
     try:
         data = json.loads(_meta_path().read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, ValueError):
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        logger.warning(
+            f"Collection-meta sidecar unavailable ({_meta_path()}): {exc}. "
+            "Chunk-type-specific tools (yaml/list/table) may not be exposed; "
+            "re-run `opencrane index` to regenerate it if the collection has data."
+        )
         return set()
     types = data.get("chunk_types", [])
     return set(types) if isinstance(types, list) else set()

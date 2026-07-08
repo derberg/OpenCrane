@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from typing import List, Optional, Dict
 from pymilvus import MilvusClient, DataType
 from opencrane.shared.config import get_config
@@ -11,6 +12,28 @@ logger = logging.getLogger(__name__)
 
 # Milvus VARCHAR fields cap at 65535 chars; keep metadata within that limit.
 MAX_METADATA_LENGTH = 65535
+
+# Stored width of the list_id / table_id scalar columns. The insert path caps
+# values to this width, so the lookup path must cap by the same amount or a query
+# could miss a value the insert truncated. (Today both ids are 16-char sha256
+# digests, so this is a guard rather than a live truncation.)
+_ID_FIELD_MAX = 64
+
+# Characters not allowed in a scalar-id filter value. Milvus Lite doesn't support
+# expression templating (filter_params), so values are interpolated into the
+# filter string — this guard keeps that safe by stripping anything outside the
+# id charset, so a value can neither break the filter nor inject expression logic.
+_ID_UNSAFE = re.compile(r"[^0-9A-Za-z_-]")
+
+
+def _safe_id(value: str) -> str:
+    """Cap to the stored column width and strip to the safe id charset.
+
+    Ids (list_id/table_id) are server-generated hex-style digests, never user
+    input, so this normally changes nothing — it is defense-in-depth for the
+    interpolated filter.
+    """
+    return _ID_UNSAFE.sub("", (value or "")[:_ID_FIELD_MAX])
 
 # Fields returned for chunk lookups (get_chunk / query_by_field). Excludes the
 # embedding vector, which is large and never needed by the MCP tools.
@@ -110,8 +133,8 @@ class MilvusService:
         # list_id / table_id are lifted out of metadata into their own scalar columns
         # so get_list_members / get_table_members can query members directly instead
         # of scanning an in-memory copy of the whole corpus.
-        schema.add_field(field_name="list_id", datatype=DataType.VARCHAR, max_length=64)
-        schema.add_field(field_name="table_id", datatype=DataType.VARCHAR, max_length=64)
+        schema.add_field(field_name="list_id", datatype=DataType.VARCHAR, max_length=_ID_FIELD_MAX)
+        schema.add_field(field_name="table_id", datatype=DataType.VARCHAR, max_length=_ID_FIELD_MAX)
 
         index_params = self.client.prepare_index_params()
         index_params.add_index(
@@ -119,6 +142,14 @@ class MilvusService:
             index_type="AUTOINDEX",
             metric_type="COSINE"
         )
+        # Scalar indexes on the fields get_list_members / get_table_members filter
+        # by. Without them Milvus scans the whole collection for every member
+        # lookup — defeating the point of moving members out of the in-memory
+        # corpus. INVERTED is the general-purpose scalar index for VARCHAR equality
+        # lookups and, unlike AUTOINDEX (vector-only on Milvus Lite), is accepted
+        # by both Milvus Lite and server mode.
+        index_params.add_index(field_name="list_id", index_type="INVERTED")
+        index_params.add_index(field_name="table_id", index_type="INVERTED")
 
         try:
             self.client.create_collection(
@@ -171,8 +202,8 @@ class MilvusService:
                 "metadata_json": metadata_json,
                 "token_count": chunk.token_count,
                 "line_start": chunk.line_start if chunk.line_start is not None else 0,
-                "list_id": (chunk.list_id or "")[:64],
-                "table_id": (chunk.table_id or "")[:64],
+                "list_id": (chunk.list_id or "")[:_ID_FIELD_MAX],
+                "table_id": (chunk.table_id or "")[:_ID_FIELD_MAX],
             })
 
         try:
@@ -296,18 +327,39 @@ class MilvusService:
             logger.error(f"Failed to fetch chunk {chunk_id}: {e}")
             return None
 
-    def query_by_field(self, field: str, value: str, limit: int = 16384) -> List[Dict]:
-        """Return all chunks whose scalar ``field`` equals ``value``."""
+    def query_by_field(
+        self, field: str, value: str, chunk_type: Optional[str] = None, limit: int = 16384
+    ) -> List[Dict]:
+        """Return all chunks whose scalar ``field`` equals ``value``.
+
+        ``value`` is sanitized to the safe id charset and capped to the stored
+        column width, then interpolated into the filter — Milvus Lite (the
+        default backend) does not support expression templating (filter_params),
+        so interpolation is the portable path and the guard keeps it safe. The
+        cap also stops a lookup missing a value the insert path truncated.
+        ``field`` and ``chunk_type`` are caller-controlled (never user input), so
+        they stay in the expression directly. Pass ``chunk_type`` to constrain
+        rows in the database instead of post-filtering in Python.
+        """
+        expr = f'{field} == "{_safe_id(value)}"'
+        if chunk_type is not None:
+            expr += f' and chunk_type == "{chunk_type}"'
         try:
-            return self.client.query(
+            rows = self.client.query(
                 collection_name=self.collection_name,
-                filter=f'{field} == "{value}"',
+                filter=expr,
                 output_fields=_LOOKUP_FIELDS,
                 limit=limit,
             )
         except Exception as e:
             logger.error(f"Failed to query {field}=={value!r}: {e}")
             return []
+        if len(rows) >= limit:
+            logger.warning(
+                f"query_by_field({field}=={value!r}) returned the {limit}-row cap; "
+                "some members may be omitted."
+            )
+        return rows
 
     def field_names(self) -> set:
         """Return the set of scalar/vector field names in the existing collection."""

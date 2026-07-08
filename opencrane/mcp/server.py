@@ -978,8 +978,9 @@ async def compute_health() -> dict:
     """Build an honest health report reflecting query-serving readiness.
 
     Beyond checking that service objects exist, this runs a real query probe,
-    reports cgroup memory headroom, and reports whether the heavy in-memory maps
-    are already resident (so the first-query memory spike is visible). The
+    reports cgroup memory headroom, and reports whether the heavy in-memory
+    keyword index is already resident (so the first-query memory spike is
+    visible). The
     overall status is the worst of the components: healthy / degraded /
     unhealthy — cheap enough to remain a valid startup/liveness probe.
     """
@@ -1000,10 +1001,12 @@ async def compute_health() -> dict:
             checks["collection_stats"] = f"error: {str(exc)}"
             stats_status = "degraded"
 
-        # Capture residency BEFORE the probe, which may build these maps itself.
+        # The keyword (BM25) index is the one heavy structure still built lazily
+        # on first use (search no longer loads any chunk map into RAM). Capture its
+        # residency BEFORE the probe, which may build it itself, so the first-query
+        # memory spike stays visible.
         checks["heavy_maps"] = {
-            "chunk_index_resident": _chunk_index is not None,
-            "chunk_source_map_resident": _chunk_source_map is not None,
+            "keyword_index_resident": _keyword_service is not None,
         }
 
         checks["memory"] = _memory_health()

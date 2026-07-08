@@ -1202,8 +1202,7 @@ class TestHonestHealthCheck:
         mock_milv_get.return_value = milv
         mock_mem.return_value = {"status": "unavailable"}
         mock_probe.return_value = {"status": "healthy", "latency_ms": 12.0}
-        monkeypatch.setattr("opencrane.mcp.server._chunk_index", None)
-        monkeypatch.setattr("opencrane.mcp.server._chunk_source_map", None)
+        monkeypatch.setattr("opencrane.mcp.server._keyword_service", None)
 
         payload = await compute_health()
         assert payload["status"] == "healthy"
@@ -1213,8 +1212,7 @@ class TestHonestHealthCheck:
         assert checks["collection_stats"] == {"row_count": 10}
         assert checks["query_probe"]["status"] == "healthy"
         assert checks["memory"]["status"] == "unavailable"
-        assert checks["heavy_maps"]["chunk_index_resident"] is False
-        assert checks["heavy_maps"]["chunk_source_map_resident"] is False
+        assert checks["heavy_maps"]["keyword_index_resident"] is False
 
     @patch("opencrane.mcp.server._query_probe")
     @patch("opencrane.mcp.server._memory_health")
@@ -1291,7 +1289,7 @@ class TestHonestHealthCheck:
     @patch("opencrane.mcp.server.get_milvus_service")
     @patch("opencrane.mcp.server.get_embeddings_service")
     @pytest.mark.anyio
-    async def test_compute_health_reports_resident_maps(
+    async def test_compute_health_reports_resident_keyword_index(
         self, mock_emb_get, mock_milv_get, mock_mem, mock_probe, monkeypatch
     ):
         emb, milv = self._services()
@@ -1299,12 +1297,11 @@ class TestHonestHealthCheck:
         mock_milv_get.return_value = milv
         mock_mem.return_value = {"status": "unavailable"}
         mock_probe.return_value = {"status": "healthy"}
-        monkeypatch.setattr("opencrane.mcp.server._chunk_index", {"a": {}})
-        monkeypatch.setattr("opencrane.mcp.server._chunk_source_map", {"a": "u"})
+        # A built keyword (BM25) index is the heavy structure that becomes resident.
+        monkeypatch.setattr("opencrane.mcp.server._keyword_service", Mock())
 
         payload = await compute_health()
-        assert payload["checks"]["heavy_maps"]["chunk_index_resident"] is True
-        assert payload["checks"]["heavy_maps"]["chunk_source_map_resident"] is True
+        assert payload["checks"]["heavy_maps"]["keyword_index_resident"] is True
 
     @patch("opencrane.mcp.server.get_embeddings_service")
     @pytest.mark.anyio

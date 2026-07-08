@@ -260,6 +260,8 @@ Example response (`200`):
 
 `memory.status` is `unavailable` (and omits the byte fields) when no cgroup limit can be read, e.g. running outside a container. The same report is returned by the `health` MCP tool. The probe and memory thresholds are tunable — see the [health-check environment variables](#health-check-serve-http-transport).
 
+> **Deploying the probe:** point the platform's liveness/readiness probe at `GET /health` on port 8000. Give the startup/initial-delay enough time for the embedding model to load (until then `/health` returns `503 initializing`), and use a longer liveness period so a real search isn't run every few seconds. **Do not bind-mount the Milvus Lite database** — Milvus Lite cannot open its `.db` from a bind-mounted volume (`Open local milvus failed`); bake it into the image with `COPY` instead (the generated `Dockerfile` already does this by building the DB in a dedicated stage).
+
 #### `opencrane pack` — package for distribution
 
 ```bash

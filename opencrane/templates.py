@@ -224,6 +224,21 @@ For containerized deployment over HTTP:
 The Docker image bakes the vector database at build time for fast startup.
 Configure the embedding model via `EMBEDDING_MODEL` env var in `{container_tool}-compose.yaml`.
 
+> **Do not bind-mount the Milvus Lite database.** Milvus Lite cannot open its
+> `.db` from a bind-mounted volume (`Open local milvus failed`); the image bakes
+> it in with `COPY` (and builds it inside the container), so leave it baked —
+> don't mount a `.db` over `/app/milvus_data`.
+
+### Health checks (Cloud Run, Kubernetes, Scaleway, ...)
+
+The HTTP server exposes `GET /health` on port 8000 for liveness/readiness probes.
+It runs a real query and reports memory headroom, returning `200` when the
+instance can serve (`healthy`/`degraded`) and `503` when it cannot
+(`unhealthy`, or `initializing` while services load). Point your platform's
+probe at `/health`; give the startup/initial-delay enough headroom for the model
+to load, and prefer a longer period for liveness so a real search isn't run every
+few seconds.
+
 ### Build and publish the Docker image
 
 ```bash

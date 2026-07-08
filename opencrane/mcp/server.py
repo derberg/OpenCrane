@@ -16,6 +16,7 @@ from mcp.server.stdio import stdio_server
 from opencrane.mcp.services.embeddings import EmbeddingService
 from opencrane.mcp.services.milvus_client import MilvusService
 from opencrane.mcp.services.keyword_search import KeywordSearchService
+from opencrane.mcp.collection_meta import read_chunk_types
 from opencrane.shared.config import get_config
 
 import sys
@@ -32,7 +33,7 @@ logger = logging.getLogger(__name__)
 _embeddings_service = None
 _milvus_service = None
 _keyword_service = None
-_chunk_index: dict[str, dict] | None = None
+_chunk_types_cache: set[str] | None = None
 
 def _extract_source_url(text: str) -> str | None:
     """Extract the first http(s) URL from the chunk content, if present."""
@@ -103,24 +104,6 @@ def _rehydrate_to_yaml(content: dict | str, metadata: dict, chunk_type: str = ""
 
 
 
-def _build_chunk_index() -> dict[str, dict]:
-    """Precompute chunk_id -> chunk dict from rag-chunks.json for O(1) lookups."""
-    global _chunk_index
-    if _chunk_index is not None:
-        return _chunk_index
-
-    chunks_path = Path(os.environ.get("AI_DOCS_CHUNKS_FILE", ".opencrane/chunks.json"))
-    try:
-        chunks = json.loads(chunks_path.read_text(encoding="utf-8"))
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.warning(f"Failed to load {chunks_path} for chunk index: {exc}")
-        _chunk_index = {}
-        return _chunk_index
-
-    _chunk_index = {c.get("chunk_id"): c for c in chunks if c.get("chunk_id")}
-    logger.info(f"Built chunk index with {len(_chunk_index)} entries")
-    return _chunk_index
-
 def get_embeddings_service():
     global _embeddings_service
     if _embeddings_service is None:
@@ -162,31 +145,39 @@ def _has_table_row_chunks() -> bool:
     return "table_row" in _get_indexed_chunk_types()
 
 
+def _member_rows(field: str, value: str, chunk_type: str) -> list[dict]:
+    """Query Milvus for member chunks of a list/table and normalize each row.
+
+    Each returned row carries a parsed ``metadata`` dict (from ``metadata_json``)
+    so the formatting handlers can read metadata fields the same way they did
+    when rows came from the file-backed index.
+    """
+    rows = []
+    for row in get_milvus_service().query_by_field(field, value):
+        if row.get("chunk_type") != chunk_type:
+            continue
+        meta = row.get("metadata_json")
+        try:
+            metadata = json.loads(meta) if isinstance(meta, str) else (meta or {})
+        except (json.JSONDecodeError, TypeError, ValueError):
+            metadata = {}
+        member = dict(row)
+        member["metadata"] = metadata
+        rows.append(member)
+    return rows
+
+
 def _get_table_members(table_id: str) -> list[dict]:
     """Return all ``table_row`` chunks for a table_id, sorted by row_index."""
-    chunk_index = _build_chunk_index()
-    rows = []
-    for chunk in chunk_index.values():
-        metadata = chunk.get("metadata", {}) or {}
-        if metadata.get("table_id") != table_id:
-            continue
-        if chunk.get("chunk_type") == "table_row":
-            rows.append(chunk)
-    rows.sort(key=lambda c: c.get("metadata", {}).get("row_index", 0))
+    rows = _member_rows("table_id", table_id, "table_row")
+    rows.sort(key=lambda c: c["metadata"].get("row_index", 0))
     return rows
 
 
 def _get_list_members(list_id: str) -> list[dict]:
-    """Return all indexed chunks belonging to a given list_id, ordered by position."""
-    chunk_index = _build_chunk_index()
-    members = []
-    for chunk in chunk_index.values():
-        if chunk.get("chunk_type") != "list_item":
-            continue
-        metadata = chunk.get("metadata", {}) or {}
-        if metadata.get("list_id") == list_id:
-            members.append(chunk)
-    members.sort(key=lambda c: c.get("metadata", {}).get("position", 0))
+    """Return all ``list_item`` chunks for a list_id, ordered by position."""
+    members = _member_rows("list_id", list_id, "list_item")
+    members.sort(key=lambda c: c["metadata"].get("position", 0))
     return members
 
 
@@ -402,9 +393,15 @@ def _format_grouped_table_row(result: dict) -> str:
 
 
 def _get_indexed_chunk_types() -> set[str]:
-    """Return the set of chunk_type values present in the indexed data."""
-    chunk_index = _build_chunk_index()
-    return {c.get("chunk_type") for c in chunk_index.values() if c.get("chunk_type")}
+    """Return the set of chunk_type values present in the indexed data.
+
+    Read once from the sidecar written by the ``index`` step, so startup never
+    scans the collection or loads the corpus.
+    """
+    global _chunk_types_cache
+    if _chunk_types_cache is None:
+        _chunk_types_cache = read_chunk_types()
+    return _chunk_types_cache
 
 
 def _has_yaml_chunks() -> bool:
@@ -884,17 +881,27 @@ async def get_yaml_definition(arguments: dict) -> list[TextContent]:
     logger.info(f"   📄 get_yaml_definition: chunk_id=\"{chunk_id}\"")
 
     try:
-        chunk_index = _build_chunk_index()
-        chunk = chunk_index.get(chunk_id)
+        chunk = get_milvus_service().get_chunk(chunk_id)
 
         if not chunk:
             logger.info(f"   📄 get_yaml_definition: chunk not found")
             return [TextContent(type="text", text=f"Chunk not found: {chunk_id}")]
 
-        # Extract data
+        # Extract data. Milvus stores metadata as a JSON string and YAML content
+        # as a JSON string, so parse both back before re-hydrating.
         content = chunk.get("content", "")
         chunk_type = chunk.get("chunk_type", "")
-        metadata = chunk.get("metadata", {})
+        meta_raw = chunk.get("metadata_json")
+        try:
+            metadata = json.loads(meta_raw) if isinstance(meta_raw, str) else (meta_raw or {})
+        except (json.JSONDecodeError, TypeError, ValueError):
+            metadata = {}
+
+        if isinstance(content, str) and chunk_type in _YAML_CHUNK_TYPES:
+            try:
+                content = json.loads(content)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                pass
 
         # Re-hydrate to YAML with breadcrumb
         yaml_output = _rehydrate_to_yaml(content, metadata, chunk_type)

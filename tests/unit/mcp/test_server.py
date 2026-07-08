@@ -744,20 +744,28 @@ class TestMCPServer:
             assert "Token Count: 2073" in result[0].text
             assert "Chunk ID: chunk-123" in result[0].text
 
-    @patch('opencrane.mcp.server._build_chunk_index')
+    @staticmethod
+    def _milvus_with_chunk(chunk):
+        """Return a get_milvus_service patch target whose get_chunk yields ``chunk``."""
+        svc = Mock()
+        svc.get_chunk.return_value = chunk
+        return svc
+
+    @patch('opencrane.mcp.server.get_milvus_service')
     @pytest.mark.anyio
-    async def test_get_yaml_definition_with_many_neighbors(self, mock_build_chunk_index):
+    async def test_get_yaml_definition_with_many_neighbors(self, mock_get_milvus):
         """Test get_yaml_definition with > 5 neighbor chunks."""
-        chunk_data = {
+        # Milvus stores YAML content and metadata as JSON strings.
+        chunk_row = {
             "chunk_id": "test-123",
-            "content": {"spec": {"replicas": 3}},
+            "content": json.dumps({"spec": {"replicas": 3}}),
             "chunk_type": "crd_definition",
-            "metadata": {
+            "metadata_json": json.dumps({
                 "original_format": "yaml",
-                "neighbor_chunks": ["n1", "n2", "n3", "n4", "n5", "n6", "n7", "n8"]
-            }
+                "neighbor_chunks": ["n1", "n2", "n3", "n4", "n5", "n6", "n7", "n8"],
+            }),
         }
-        mock_build_chunk_index.return_value = {"test-123": chunk_data}
+        mock_get_milvus.return_value = self._milvus_with_chunk(chunk_row)
 
         result = await get_yaml_definition({"chunk_id": "test-123"})
 
@@ -768,23 +776,22 @@ class TestMCPServer:
         assert "n1" in result[0].text
         assert "n5" in result[0].text
 
-    @patch('builtins.open', new_callable=mock_open)
-    @patch('opencrane.mcp.server._build_chunk_index')
+    @patch('opencrane.mcp.server.get_milvus_service')
     @pytest.mark.anyio
-    async def test_get_yaml_definition_success(self, mock_build_chunk_index, mock_file):
-        """Test successful chunk retrieval and YAML re-hydration."""
-        chunk_data = {
+    async def test_get_yaml_definition_success(self, mock_get_milvus):
+        """Test successful chunk retrieval and YAML re-hydration from Milvus."""
+        chunk_row = {
             "chunk_id": "test-123",
-            "content": {"spec": {"replicas": 3}},
+            "content": json.dumps({"spec": {"replicas": 3}}),
             "chunk_type": "crd_definition",
-            "metadata": {
+            "metadata_json": json.dumps({
                 "original_format": "yaml",
                 "breadcrumb_path": "spec.properties.spec",
                 "source_url": "https://github.com/test/doc.md",
-                "neighbor_chunks": ["chunk-456", "chunk-789"]
-            }
+                "neighbor_chunks": ["chunk-456", "chunk-789"],
+            }),
         }
-        mock_build_chunk_index.return_value = {"test-123": chunk_data}
+        mock_get_milvus.return_value = self._milvus_with_chunk(chunk_row)
 
         result = await get_yaml_definition({"chunk_id": "test-123"})
 
@@ -798,40 +805,77 @@ class TestMCPServer:
         assert "# Neighbor Chunks" in result[0].text
         assert "chunk-456" in result[0].text
 
-    @patch('opencrane.mcp.server._build_chunk_index')
+    @patch('opencrane.mcp.server.get_milvus_service')
     @pytest.mark.anyio
-    async def test_get_yaml_definition_chunk_not_found(self, mock_build_chunk_index):
+    async def test_get_yaml_definition_malformed_content_and_metadata(self, mock_get_milvus):
+        """Invalid metadata JSON and un-parseable YAML content degrade gracefully."""
+        chunk_row = {
+            "chunk_id": "test-123",
+            "content": "not: [valid json",  # str, YAML type, but not JSON -> stays as-is
+            "chunk_type": "crd_definition",
+            "metadata_json": '{"invalid"',  # unparseable -> metadata treated as {}
+        }
+        mock_get_milvus.return_value = self._milvus_with_chunk(chunk_row)
+
+        result = await get_yaml_definition({"chunk_id": "test-123"})
+
+        assert len(result) == 1
+        assert "Chunk ID: test-123" in result[0].text
+        assert "not: [valid json" in result[0].text
+
+    @patch('opencrane.mcp.server.get_milvus_service')
+    @pytest.mark.anyio
+    async def test_get_yaml_definition_non_yaml_chunk(self, mock_get_milvus):
+        """A non-YAML chunk returns its content untouched (no JSON re-parse)."""
+        chunk_row = {
+            "chunk_id": "p-1",
+            "content": "just some prose",
+            "chunk_type": "prose",
+            # no metadata_json key -> metadata falls back to {}
+        }
+        mock_get_milvus.return_value = self._milvus_with_chunk(chunk_row)
+
+        result = await get_yaml_definition({"chunk_id": "p-1"})
+
+        assert len(result) == 1
+        assert "just some prose" in result[0].text
+
+    @patch('opencrane.mcp.server.get_milvus_service')
+    @pytest.mark.anyio
+    async def test_get_yaml_definition_chunk_not_found(self, mock_get_milvus):
         """Test get_yaml_definition with non-existent chunk ID."""
-        mock_build_chunk_index.return_value = {}
+        mock_get_milvus.return_value = self._milvus_with_chunk(None)
 
         result = await get_yaml_definition({"chunk_id": "nonexistent"})
 
         assert len(result) == 1
         assert "Chunk not found" in result[0].text
 
-    @patch('opencrane.mcp.server._build_chunk_index')
+    @patch('opencrane.mcp.server.get_milvus_service')
     @pytest.mark.anyio
-    async def test_get_yaml_definition_file_error(self, mock_build_chunk_index):
-        """Test get_yaml_definition with file read error."""
-        mock_build_chunk_index.side_effect = Exception("File not found")
+    async def test_get_yaml_definition_service_error(self, mock_get_milvus):
+        """Test get_yaml_definition when the Milvus lookup raises."""
+        svc = Mock()
+        svc.get_chunk.side_effect = Exception("connection lost")
+        mock_get_milvus.return_value = svc
 
         result = await get_yaml_definition({"chunk_id": "test-123"})
 
         assert len(result) == 1
         assert "Failed to fetch chunk" in result[0].text
 
-    @patch('opencrane.mcp.server._build_chunk_index')
+    @patch('opencrane.mcp.server.get_milvus_service')
     @patch('opencrane.mcp.server._rehydrate_to_yaml')
     @pytest.mark.anyio
-    async def test_get_yaml_definition_processing_error(self, mock_rehydrate, mock_build_chunk_index):
+    async def test_get_yaml_definition_processing_error(self, mock_rehydrate, mock_get_milvus):
         """Test get_yaml_definition with error during YAML re-hydration."""
-        chunk_data = {
+        chunk_row = {
             "chunk_id": "test-123",
-            "content": {"spec": {"replicas": 3}},
+            "content": json.dumps({"spec": {"replicas": 3}}),
             "chunk_type": "crd_definition",
-            "metadata": {"original_format": "yaml"}
+            "metadata_json": json.dumps({"original_format": "yaml"}),
         }
-        mock_build_chunk_index.return_value = {"test-123": chunk_data}
+        mock_get_milvus.return_value = self._milvus_with_chunk(chunk_row)
         mock_rehydrate.side_effect = Exception("YAML conversion failed")
 
         result = await get_yaml_definition({"chunk_id": "test-123"})
@@ -867,94 +911,60 @@ class TestMCPServer:
         assert "Failed to retrieve metadata schema" in result[0].text
 
 
-def test_build_chunk_index_loads_from_file(tmp_path, monkeypatch):
-    """Test _build_chunk_index loads and indexes chunks from .opencrane/chunks.json."""
-    import opencrane.mcp.server as server_module
-
-    monkeypatch.chdir(tmp_path)
-    server_module._chunk_index = None
-
-    chunks = [
-        {"chunk_id": "abc-1", "content": "hello", "chunk_type": "prose"},
-        {"chunk_id": "abc-2", "content": "world", "chunk_type": "code_snippet"},
-        {"content": "no id chunk", "chunk_type": "prose"},  # missing chunk_id
-    ]
-    (tmp_path / ".opencrane").mkdir()
-    (tmp_path / ".opencrane" / "chunks.json").write_text(json.dumps(chunks), encoding="utf-8")
-
-    result = server_module._build_chunk_index()
-
-    assert len(result) == 2
-    assert result["abc-1"]["content"] == "hello"
-    assert result["abc-2"]["content"] == "world"
-
-
-def test_build_chunk_index_caching(tmp_path, monkeypatch):
-    """Test _build_chunk_index returns cached value on second call."""
-    import opencrane.mcp.server as server_module
-
-    monkeypatch.chdir(tmp_path)
-    server_module._chunk_index = None
-
-    chunks = [{"chunk_id": "c1", "content": "data"}]
-    (tmp_path / ".opencrane").mkdir()
-    chunks_path = tmp_path / ".opencrane" / "chunks.json"
-    chunks_path.write_text(json.dumps(chunks), encoding="utf-8")
-
-    result1 = server_module._build_chunk_index()
-    assert "c1" in result1
-
-    # Remove the file — second call should still return cached result
-    chunks_path.unlink()
-    result2 = server_module._build_chunk_index()
-    assert result2 is result1
+def _write_collection_meta(tmp_path, chunk_types):
+    (tmp_path / ".opencrane").mkdir(exist_ok=True)
+    (tmp_path / ".opencrane" / "collection_meta.json").write_text(
+        json.dumps({"chunk_types": chunk_types}), encoding="utf-8"
+    )
 
 
 def test_has_yaml_chunks_true(tmp_path, monkeypatch):
-    """Test _has_yaml_chunks returns True when YAML chunks exist."""
+    """Test _has_yaml_chunks returns True when the sidecar lists a YAML type."""
     import opencrane.mcp.server as server_module
 
     monkeypatch.chdir(tmp_path)
-    server_module._chunk_index = None
-
-    chunks = [
-        {"chunk_id": "c1", "content": "prose text", "chunk_type": "prose"},
-        {"chunk_id": "c2", "content": {"spec": {}}, "chunk_type": "crd_definition"},
-    ]
-    (tmp_path / ".opencrane").mkdir()
-    (tmp_path / ".opencrane" / "chunks.json").write_text(json.dumps(chunks), encoding="utf-8")
+    server_module._chunk_types_cache = None
+    _write_collection_meta(tmp_path, ["prose", "crd_definition"])
 
     assert server_module._has_yaml_chunks() is True
 
 
 def test_has_yaml_chunks_false(tmp_path, monkeypatch):
-    """Test _has_yaml_chunks returns False when no YAML chunks exist."""
+    """Test _has_yaml_chunks returns False when the sidecar lists no YAML type."""
     import opencrane.mcp.server as server_module
 
     monkeypatch.chdir(tmp_path)
-    server_module._chunk_index = None
-
-    chunks = [
-        {"chunk_id": "c1", "content": "prose text", "chunk_type": "prose"},
-        {"chunk_id": "c2", "content": "code", "chunk_type": "code_snippet"},
-    ]
-    (tmp_path / ".opencrane").mkdir()
-    (tmp_path / ".opencrane" / "chunks.json").write_text(json.dumps(chunks), encoding="utf-8")
+    server_module._chunk_types_cache = None
+    _write_collection_meta(tmp_path, ["prose", "code_snippet"])
 
     assert server_module._has_yaml_chunks() is False
 
 
 def test_has_yaml_chunks_empty_index(tmp_path, monkeypatch):
-    """Test _has_yaml_chunks returns False when chunk index is empty."""
+    """Test _has_yaml_chunks returns False when the sidecar is empty."""
     import opencrane.mcp.server as server_module
 
     monkeypatch.chdir(tmp_path)
-    server_module._chunk_index = None
-
-    (tmp_path / ".opencrane").mkdir()
-    (tmp_path / ".opencrane" / "chunks.json").write_text("[]", encoding="utf-8")
+    server_module._chunk_types_cache = None
+    _write_collection_meta(tmp_path, [])
 
     assert server_module._has_yaml_chunks() is False
+
+
+def test_get_indexed_chunk_types_caches(tmp_path, monkeypatch):
+    """The chunk-type set is read from the sidecar once and cached."""
+    import opencrane.mcp.server as server_module
+
+    monkeypatch.chdir(tmp_path)
+    server_module._chunk_types_cache = None
+    _write_collection_meta(tmp_path, ["prose", "list_item"])
+
+    first = server_module._get_indexed_chunk_types()
+    assert first == {"prose", "list_item"}
+
+    # Remove the sidecar; a cached call must not re-read it.
+    (tmp_path / ".opencrane" / "collection_meta.json").unlink()
+    assert server_module._get_indexed_chunk_types() is first
 
 
 @pytest.mark.anyio

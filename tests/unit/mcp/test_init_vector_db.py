@@ -58,13 +58,41 @@ class TestInitVectorDb:
         mock_milvus = MagicMock()
         mock_milvus_class.return_value = mock_milvus
         mock_milvus.client.has_collection.return_value = True
+        mock_milvus.field_names.return_value = {"list_id", "table_id"}
         mock_milvus.get_collection_stats.return_value = {"row_count": 65}
-        
+
         main()
-        
+
         # Should skip initialization
         mock_milvus.create_collection.assert_not_called()
         mock_milvus.insert_chunks.assert_not_called()
+
+    @patch('opencrane.mcp.init_vector_db.setup_logging')
+    @patch('opencrane.mcp.init_vector_db.MilvusService')
+    @patch('opencrane.mcp.init_vector_db.EmbeddingService')
+    @patch('builtins.open', new_callable=mock_open, read_data='[{"content": "test", "chunk_type": "prose", "source_file": "test.md", "token_count": 10, "line_start": 1, "metadata": {}}]')
+    @patch('opencrane.mcp.init_vector_db.Path')
+    def test_main_collection_schema_upgrade(self, mock_path, mock_file, mock_embedding_class, mock_milvus_class, mock_logging):
+        """A populated collection missing the new scalar fields is dropped and rebuilt."""
+        mock_path.return_value.exists.return_value = True
+        mock_embedding_service = MagicMock()
+        mock_embedding_class.return_value = mock_embedding_service
+        mock_embeddings = MagicMock()
+        mock_embeddings.embeddings = [MagicMock(chunk_id="test_id", vector=[0.1] * 768)]
+        mock_embedding_service.load_embeddings.return_value = mock_embeddings
+
+        mock_milvus = MagicMock()
+        mock_milvus_class.return_value = mock_milvus
+        mock_milvus.client.has_collection.return_value = True
+        # Old schema: no list_id/table_id -> must rebuild even though populated.
+        mock_milvus.field_names.return_value = {"chunk_id", "content", "chunk_type"}
+        mock_milvus.get_collection_stats.return_value = {"row_count": 65}
+
+        main()
+
+        mock_milvus.client.drop_collection.assert_called_once()
+        mock_milvus.create_collection.assert_called_once()
+        mock_milvus.insert_chunks.assert_called_once()
 
     @patch('opencrane.mcp.init_vector_db.setup_logging')
     @patch('opencrane.mcp.init_vector_db.MilvusService')
@@ -87,10 +115,11 @@ class TestInitVectorDb:
         mock_milvus = MagicMock()
         mock_milvus_class.return_value = mock_milvus
         mock_milvus.client.has_collection.return_value = True
+        mock_milvus.field_names.return_value = {"list_id", "table_id"}
         mock_milvus.get_collection_stats.return_value = {"row_count": 0}
-        
+
         main()
-        
+
         # Should drop and recreate
         mock_milvus.client.drop_collection.assert_called_once()
         mock_milvus.create_collection.assert_called_once()

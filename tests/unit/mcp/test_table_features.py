@@ -9,17 +9,40 @@ from opencrane.mcp import server
 from opencrane.mcp.server import _group_table_row_results, _format_grouped_table_row
 
 
+def _milvus_members(members_by_value):
+    """Milvus service mock whose query_by_field returns the rows for a value."""
+    svc = Mock()
+    svc.query_by_field.side_effect = lambda field, value, limit=16384: members_by_value.get(value, [])
+    return svc
+
+
+def _row(chunk_id, content, metadata, chunk_type="table_row"):
+    return {"chunk_id": chunk_id, "content": content, "chunk_type": chunk_type,
+            "metadata_json": json.dumps(metadata)}
+
+
 def test_get_table_members_returns_rows_by_index(monkeypatch):
-    index = {
-        "r2": {"chunk_id": "r2", "chunk_type": "table_row", "content": "A: b.",
-               "metadata": {"table_id": "t1", "row_index": 2}},
-        "r1": {"chunk_id": "r1", "chunk_type": "table_row", "content": "A: a.",
-               "metadata": {"table_id": "t1", "row_index": 1}},
-        "x": {"chunk_id": "x", "chunk_type": "prose", "content": "nope", "metadata": {}},
-    }
-    monkeypatch.setattr(server, "_build_chunk_index", lambda: index)
+    monkeypatch.setattr(server, "get_milvus_service", lambda: _milvus_members({
+        "t1": [
+            _row("r2", "A: b.", {"table_id": "t1", "row_index": 2}),
+            _row("r1", "A: a.", {"table_id": "t1", "row_index": 1}),
+            _row("x", "nope", {}, chunk_type="prose"),  # filtered out (not table_row)
+        ],
+    }))
     members = server._get_table_members("t1")
     assert [m["chunk_id"] for m in members] == ["r1", "r2"]
+
+
+def test_get_table_members_tolerates_bad_metadata(monkeypatch):
+    """Rows with unparseable or missing metadata_json still return, with metadata={}."""
+    rows = [
+        {"chunk_id": "r1", "content": "A", "chunk_type": "table_row", "metadata_json": "{bad"},
+        {"chunk_id": "r2", "content": "B", "chunk_type": "table_row"},  # no metadata_json
+    ]
+    monkeypatch.setattr(server, "get_milvus_service", lambda: _milvus_members({"t9": rows}))
+    members = server._get_table_members("t9")
+    assert {m["chunk_id"] for m in members} == {"r1", "r2"}
+    assert all(m["metadata"] == {} for m in members)
 
 
 def test_has_table_row_chunks(monkeypatch):
@@ -32,11 +55,9 @@ def test_has_table_row_chunks(monkeypatch):
 @pytest.mark.anyio
 async def test_get_table_members_tool_formats_output(monkeypatch):
     """get_table_members tool returns rows formatted as text."""
-    index = {
-        "r1": {"chunk_id": "r1", "chunk_type": "table_row", "content": "A: x. B: y.",
-               "metadata": {"table_id": "t1", "row_index": 1}},
-    }
-    monkeypatch.setattr(server, "_build_chunk_index", lambda: index)
+    monkeypatch.setattr(server, "get_milvus_service", lambda: _milvus_members({
+        "t1": [_row("r1", "A: x. B: y.", {"table_id": "t1", "row_index": 1})],
+    }))
     result = await server.get_table_members({"table_id": "t1"})
     text = result[0].text
     assert "A: x. B: y." in text
@@ -50,7 +71,7 @@ async def test_get_table_members_missing_id_error():
 
 @pytest.mark.anyio
 async def test_get_table_members_unknown_id(monkeypatch):
-    monkeypatch.setattr(server, "_build_chunk_index", lambda: {})
+    monkeypatch.setattr(server, "get_milvus_service", lambda: _milvus_members({}))
     result = await server.get_table_members({"table_id": "nope"})
     assert "No table found" in result[0].text
 
@@ -84,12 +105,6 @@ async def test_call_tool_get_table_members_wired():
 async def test_search_docs_table_row_tip(mock_milvus_get, mock_embeddings_get, monkeypatch):
     """A table_row search result gets a get_table_members tip appended."""
     import opencrane.mcp.server as server_module
-
-    # Reset caches
-    server_module._chunk_index = None
-
-    # No chunks.json needed since we monkeypatch the index and source map
-    monkeypatch.setattr(server_module, "_build_chunk_index", lambda: {})
 
     mock_embeddings = Mock()
     mock_model = Mock()
@@ -277,9 +292,6 @@ async def test_search_docs_groups_table_rows(mock_milvus_get, mock_embeddings_ge
     """End-to-end: two table_row hits with same table_id render as one grouped result."""
     import opencrane.mcp.server as server_module
 
-    server_module._chunk_index = None
-    monkeypatch.setattr(server_module, "_build_chunk_index", lambda: {})
-
     mock_embeddings = Mock()
     mock_model = Mock()
     mock_model.encode.return_value = [[0.1] * 768]
@@ -329,9 +341,6 @@ async def test_search_docs_grouped_table_rows_show_unmatched(mock_milvus_get, mo
     """End-to-end: grouped table slot lists unmatched sibling rows under their own header."""
     import opencrane.mcp.server as server_module
 
-    server_module._chunk_index = None
-    monkeypatch.setattr(server_module, "_build_chunk_index", lambda: {})
-
     mock_embeddings = Mock()
     mock_model = Mock()
     mock_model.encode.return_value = [[0.1] * 768]
@@ -373,14 +382,10 @@ async def test_search_docs_grouped_table_rows_show_unmatched(mock_milvus_get, mo
 async def test_get_table_members_strips_breadcrumb_prefix(monkeypatch):
     """get_table_members strips the leading '# {breadcrumb}\\n' for readable display."""
     breadcrumb = "Section > Subsection"
-    index = {
-        "r1": {
-            "chunk_id": "r1", "chunk_type": "table_row",
-            "content": f"# {breadcrumb}\nA: x. B: y.",
-            "metadata": {"table_id": "t2", "row_index": 1, "breadcrumb_path": breadcrumb},
-        },
-    }
-    monkeypatch.setattr(server, "_build_chunk_index", lambda: index)
+    monkeypatch.setattr(server, "get_milvus_service", lambda: _milvus_members({
+        "t2": [_row("r1", f"# {breadcrumb}\nA: x. B: y.",
+                    {"table_id": "t2", "row_index": 1, "breadcrumb_path": breadcrumb})],
+    }))
     result = await server.get_table_members({"table_id": "t2"})
     text = result[0].text
     # Prefix must be stripped — the raw "# Section > Subsection" header must not appear
@@ -392,14 +397,9 @@ async def test_get_table_members_strips_breadcrumb_prefix(monkeypatch):
 @pytest.mark.anyio
 async def test_get_table_members_no_strip_when_no_breadcrumb(monkeypatch):
     """When content has no breadcrumb prefix, get_table_members emits content as-is (false branch)."""
-    index = {
-        "r1": {
-            "chunk_id": "r1", "chunk_type": "table_row",
-            "content": "A: x. B: y.",
-            "metadata": {"table_id": "t3", "row_index": 1},
-        },
-    }
-    monkeypatch.setattr(server, "_build_chunk_index", lambda: index)
+    monkeypatch.setattr(server, "get_milvus_service", lambda: _milvus_members({
+        "t3": [_row("r1", "A: x. B: y.", {"table_id": "t3", "row_index": 1})],
+    }))
     result = await server.get_table_members({"table_id": "t3"})
     text = result[0].text
     assert "A: x. B: y." in text

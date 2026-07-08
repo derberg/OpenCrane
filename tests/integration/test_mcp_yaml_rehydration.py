@@ -4,7 +4,7 @@ import pytest
 import json
 from pathlib import Path
 from opencrane.mcp.server import _rehydrate_to_yaml, get_yaml_definition
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 class TestMCPYAMLRehydrationIntegration:
@@ -67,17 +67,25 @@ class TestMCPYAMLRehydrationIntegration:
                 method_upper = metadata['http_method'].upper()
                 assert f"# Method: {method_upper}" in yaml_output
     
-    @patch('opencrane.mcp.server._build_chunk_index')
+    @patch('opencrane.mcp.server.get_milvus_service')
     @pytest.mark.anyio
-    async def test_get_yaml_definition_with_fixture_chunk(self, mock_build_chunk_index):
-        """Test get_yaml_definition tool with real fixture chunk."""
+    async def test_get_yaml_definition_with_fixture_chunk(self, mock_get_milvus):
+        """Test get_yaml_definition tool with real fixture chunk served from Milvus."""
         fixtures_dir = Path(__file__).parent.parent / "fixtures"
         expected_chunks = json.load(open(fixtures_dir / "expected_crd_chunks.json"))
-        
-        # Use first chunk for testing
+
+        # Use first chunk for testing. Milvus stores content and metadata as JSON strings.
         test_chunk = expected_chunks[0]
-        mock_build_chunk_index.return_value = {test_chunk["chunk_id"]: test_chunk}
-        
+        milvus_row = {
+            "chunk_id": test_chunk["chunk_id"],
+            "content": json.dumps(test_chunk["content"]),
+            "chunk_type": test_chunk["chunk_type"],
+            "metadata_json": json.dumps(test_chunk["metadata"]),
+        }
+        svc = Mock()
+        svc.get_chunk.return_value = milvus_row
+        mock_get_milvus.return_value = svc
+
         # Call the tool
         result = await get_yaml_definition({"chunk_id": test_chunk["chunk_id"]})
         

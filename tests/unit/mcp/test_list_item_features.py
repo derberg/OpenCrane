@@ -20,64 +20,71 @@ def _write_chunks(tmp_path, chunks):
     (tmp_path / ".opencrane" / "chunks.json").write_text(json.dumps(chunks), encoding="utf-8")
 
 
+def _write_meta(tmp_path, chunk_types):
+    (tmp_path / ".opencrane").mkdir(exist_ok=True)
+    (tmp_path / ".opencrane" / "collection_meta.json").write_text(
+        json.dumps({"chunk_types": chunk_types}), encoding="utf-8"
+    )
+
+
 def _reset_caches():
     import opencrane.mcp.server as server_module
-    server_module._chunk_index = None
+    server_module._chunk_types_cache = None
+
+
+def _milvus_members(members_by_value):
+    """Milvus service mock whose query_by_field returns the rows for a value."""
+    svc = Mock()
+    svc.query_by_field.side_effect = lambda field, value, limit=16384: members_by_value.get(value, [])
+    return svc
+
+
+def _list_row(chunk_id, content, metadata):
+    return {"chunk_id": chunk_id, "content": content, "chunk_type": "list_item",
+            "metadata_json": json.dumps(metadata)}
 
 
 def test_has_list_item_chunks_true(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _reset_caches()
-    _write_chunks(tmp_path, [
-        {"chunk_id": "c1", "content": "hello", "chunk_type": "prose"},
-        {"chunk_id": "c2", "content": "# H\nitem", "chunk_type": "list_item",
-         "metadata": {"list_id": "abc", "list_style": "unordered", "position": 1}},
-    ])
+    _write_meta(tmp_path, ["prose", "list_item"])
     assert _has_list_item_chunks() is True
 
 
 def test_has_list_item_chunks_false(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _reset_caches()
-    _write_chunks(tmp_path, [
-        {"chunk_id": "c1", "content": "hello", "chunk_type": "prose"},
-    ])
+    _write_meta(tmp_path, ["prose"])
     assert _has_list_item_chunks() is False
 
 
-def test_get_list_members_returns_items_in_order(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    _reset_caches()
-    _write_chunks(tmp_path, [
-        {"chunk_id": "i2", "content": "# H\nSecond", "chunk_type": "list_item",
-         "metadata": {"list_id": "lx", "position": 2}},
-        {"chunk_id": "i1", "content": "# H\nFirst", "chunk_type": "list_item",
-         "metadata": {"list_id": "lx", "position": 1}},
-        {"chunk_id": "other", "content": "# H\nOther", "chunk_type": "list_item",
-         "metadata": {"list_id": "ly", "position": 1}},
-        {"chunk_id": "p", "content": "prose", "chunk_type": "prose"},
-    ])
+@patch('opencrane.mcp.server.get_milvus_service')
+def test_get_list_members_returns_items_in_order(mock_get_milvus):
+    mock_get_milvus.return_value = _milvus_members({
+        "lx": [
+            _list_row("i2", "# H\nSecond", {"list_id": "lx", "position": 2}),
+            _list_row("i1", "# H\nFirst", {"list_id": "lx", "position": 1}),
+        ],
+        "ly": [_list_row("other", "# H\nOther", {"list_id": "ly", "position": 1})],
+    })
     members = _get_list_members("lx")
     assert [m["chunk_id"] for m in members] == ["i1", "i2"]
-    # Other lists are excluded
-    assert _get_list_members("ly") == [m for m in _get_list_members("ly")]
+    # Other lists are independent
     assert len(_get_list_members("ly")) == 1
 
 
+@patch('opencrane.mcp.server.get_milvus_service')
 @pytest.mark.anyio
-async def test_get_list_members_tool_formats_output(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    _reset_caches()
-    _write_chunks(tmp_path, [
-        {"chunk_id": "i1", "content": "# Section\nFirst", "chunk_type": "list_item",
-         "metadata": {"list_id": "lx", "list_style": "unordered",
-                      "position": 1, "depth": 0, "total_siblings": 2,
-                      "breadcrumb_path": "Section"}},
-        {"chunk_id": "i2", "content": "# Section\nSecond", "chunk_type": "list_item",
-         "metadata": {"list_id": "lx", "list_style": "unordered",
-                      "position": 2, "depth": 0, "total_siblings": 2,
-                      "breadcrumb_path": "Section"}},
-    ])
+async def test_get_list_members_tool_formats_output(mock_get_milvus):
+    meta = {"list_id": "lx", "list_style": "unordered", "position": 1,
+            "depth": 0, "total_siblings": 2, "breadcrumb_path": "Section"}
+    meta2 = {**meta, "position": 2}
+    mock_get_milvus.return_value = _milvus_members({
+        "lx": [
+            _list_row("i1", "# Section\nFirst", meta),
+            _list_row("i2", "# Section\nSecond", meta2),
+        ],
+    })
     result = await get_list_members({"list_id": "lx"})
     text = result[0].text
     assert "List (2 of 2 items" in text
@@ -92,11 +99,10 @@ async def test_get_list_members_missing_id_error():
     assert "list_id must be" in result[0].text
 
 
+@patch('opencrane.mcp.server.get_milvus_service')
 @pytest.mark.anyio
-async def test_get_list_members_unknown_id(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    _reset_caches()
-    _write_chunks(tmp_path, [])
+async def test_get_list_members_unknown_id(mock_get_milvus):
+    mock_get_milvus.return_value = _milvus_members({})
     result = await get_list_members({"list_id": "nope"})
     assert "No list found" in result[0].text
 

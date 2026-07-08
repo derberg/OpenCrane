@@ -1013,12 +1013,16 @@ async def _query_probe() -> dict:
     # query; hybrid would additionally run BM25, doubling probe cost for no gain.
     probe_args = {"query": query, "limit": 1, "search_mode": "semantic"}
 
+    def _run_probe():
+        # Run the search in a worker thread (own event loop) so the timeout below
+        # can actually preempt it: the semantic search path is synchronous
+        # (blocking encode + Milvus call) and would otherwise never yield, leaving
+        # asyncio.wait_for unable to fire and blocking the server's event loop.
+        return asyncio.run(_search_documentation_impl(probe_args, raise_on_error=True))
+
     start = time.monotonic()
     try:
-        await asyncio.wait_for(
-            _search_documentation_impl(probe_args, raise_on_error=True),
-            timeout=hard_timeout,
-        )
+        await asyncio.wait_for(asyncio.to_thread(_run_probe), timeout=hard_timeout)
     except asyncio.TimeoutError:
         return {"status": "unhealthy", "error": f"probe exceeded {hard_timeout}s timeout"}
     except Exception as exc:

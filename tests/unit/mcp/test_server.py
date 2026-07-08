@@ -1232,15 +1232,17 @@ class TestHonestHealthCheck:
 
     @patch("opencrane.mcp.server._search_documentation_impl")
     @pytest.mark.anyio
-    async def test_query_probe_unhealthy_on_timeout(self, mock_impl, monkeypatch):
-        import asyncio as _asyncio
-        monkeypatch.setenv("OPENCRANE_HEALTH_PROBE_TIMEOUT", "0.01")
+    async def test_query_probe_timeout_enforced_for_blocking_search(self, mock_impl, monkeypatch):
+        """The hard timeout must fire even when the search blocks synchronously
+        (the real semantic path does not yield to the event loop)."""
+        import time as _time
+        monkeypatch.setenv("OPENCRANE_HEALTH_PROBE_TIMEOUT", "0.05")
 
-        async def _slow(_args, **_kwargs):
-            await _asyncio.sleep(0.2)
+        async def _sync_block(_args, **_kwargs):
+            _time.sleep(0.4)  # blocking, no await — mimics model.encode + Milvus search
             return [TextContent(type="text", text="Result 1:\n")]
 
-        mock_impl.side_effect = _slow
+        mock_impl.side_effect = _sync_block
         result = await _query_probe()
         assert result["status"] == "unhealthy"
         assert "timeout" in result["error"].lower()

@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import time
 import yaml
 from pathlib import Path
 from typing import List
@@ -689,10 +690,15 @@ async def search_docs(arguments: dict) -> list[TextContent]:
     return await _search_documentation_impl(arguments)
 
 
-async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
+async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = False) -> list[TextContent]:
     """
     Internal implementation of search logic.
     This contains all the existing search_documentation code.
+
+    When ``raise_on_error`` is True, a failure in the serving path propagates as
+    an exception instead of being swallowed into a ``"Search failed:"`` message.
+    The health probe uses this so it detects failures via a real exception rather
+    than string-matching a human-facing message.
     """
     query = arguments.get("query", "")
     if not query or not query.strip():
@@ -900,37 +906,184 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
 
 
     except Exception as e:
+        if raise_on_error:
+            raise
         logger.error(f"Search failed: {e}")
         return [TextContent(type="text", text=f"Search failed: {str(e)}")]
 
-async def health_check(arguments: dict) -> list[TextContent]:
-    """Check service health."""
-    logger.info("   💓 health: checking service status")
+# Rank used to fold component statuses into one overall verdict. "unavailable"
+# (e.g. no cgroup when running outside a container) is explicitly benign (rank
+# 0). Lookup is strict: a status NOT listed here raises, so an unregistered or
+# typo'd status fails the health check loudly rather than silently passing as
+# healthy — the opposite of what an "honest" check should do.
+_HEALTH_STATUS_RANK = {"healthy": 0, "unavailable": 0, "degraded": 1, "unhealthy": 2}
+
+# cgroup memory accounting files. cgroup v2 exposes a unified hierarchy; v1 uses
+# the per-controller ``memory`` directory. Overridable as module attributes so
+# tests can point them at fixtures.
+_CGROUP_V2_CURRENT = "/sys/fs/cgroup/memory.current"
+_CGROUP_V2_MAX = "/sys/fs/cgroup/memory.max"
+_CGROUP_V1_USAGE = "/sys/fs/cgroup/memory/memory.usage_in_bytes"
+_CGROUP_V1_LIMIT = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
+# cgroup v1 reports "no limit" as a very large page-aligned sentinel rather than
+# a keyword; anything at or above this means effectively unlimited.
+_CGROUP_V1_UNLIMITED = 0x7FFFFFFFFFFFF000
+
+
+def _worst_status(statuses: list[str]) -> str:
+    """Fold a list of component statuses into the single worst one."""
+    worst = "healthy"
+    for status in statuses:
+        if _HEALTH_STATUS_RANK[status] > _HEALTH_STATUS_RANK[worst]:
+            worst = status
+    return worst
+
+
+def _read_cgroup_memory() -> dict | None:
+    """Read current memory usage and limit from the cgroup, v2 first then v1.
+
+    Returns a dict with ``source``, ``used_bytes`` and ``limit_bytes`` (the
+    latter ``None`` when the cgroup reports no limit), or ``None`` when no cgroup
+    memory files are present (e.g. running outside a container) or they are
+    unreadable/corrupt.
+    """
+    v2_current, v2_max = Path(_CGROUP_V2_CURRENT), Path(_CGROUP_V2_MAX)
+    if v2_current.exists() and v2_max.exists():
+        try:
+            used = int(v2_current.read_text().strip())
+            raw_max = v2_max.read_text().strip()
+            limit = None if raw_max == "max" else int(raw_max)
+            return {"source": "cgroup_v2", "used_bytes": used, "limit_bytes": limit}
+        except (ValueError, OSError):
+            return None
+
+    v1_usage, v1_limit = Path(_CGROUP_V1_USAGE), Path(_CGROUP_V1_LIMIT)
+    if v1_usage.exists() and v1_limit.exists():
+        try:
+            used = int(v1_usage.read_text().strip())
+            raw_limit = int(v1_limit.read_text().strip())
+            limit = None if raw_limit >= _CGROUP_V1_UNLIMITED else raw_limit
+            return {"source": "cgroup_v1", "used_bytes": used, "limit_bytes": limit}
+        except (ValueError, OSError):
+            return None
+
+    return None
+
+
+def _memory_health() -> dict:
+    """Report memory headroom from the cgroup.
+
+    ``degraded`` when free headroom drops below
+    ``OPENCRANE_HEALTH_MEM_WARN_HEADROOM`` (fraction, default 0.15), so
+    "healthy" reflects available RAM rather than just live objects. Returns
+    ``{"status": "unavailable"}`` when no cgroup limit can be read.
+    """
+    info = _read_cgroup_memory()
+    if info is None:
+        return {"status": "unavailable"}
+
+    used, limit = info["used_bytes"], info["limit_bytes"]
+    result = dict(info)
+    if not limit:  # None (v2 "max") or 0 => no enforceable limit
+        result["status"] = "healthy"
+        result["headroom_pct"] = None
+        return result
+
+    headroom_pct = round((1 - used / limit) * 100, 1)
+    warn_pct = float(os.environ.get("OPENCRANE_HEALTH_MEM_WARN_HEADROOM", "0.15")) * 100
+    result["headroom_pct"] = headroom_pct
+    result["status"] = "degraded" if headroom_pct < warn_pct else "healthy"
+    return result
+
+
+async def _query_probe() -> dict:
+    """Run a trivial real search behind a timeout to prove query-ability.
+
+    This exercises the actual serving path (embed → search → format), unlike a
+    liveness ping that only checks that objects exist. ``unhealthy`` when the
+    search errors or exceeds ``OPENCRANE_HEALTH_PROBE_TIMEOUT`` (seconds, default
+    10); ``degraded`` when it succeeds but exceeds the soft
+    ``OPENCRANE_HEALTH_PROBE_BUDGET`` (seconds, default 2).
+    """
+    query = os.environ.get("OPENCRANE_HEALTH_PROBE_QUERY", "documentation")
+    hard_timeout = float(os.environ.get("OPENCRANE_HEALTH_PROBE_TIMEOUT", "10"))
+    soft_budget = float(os.environ.get("OPENCRANE_HEALTH_PROBE_BUDGET", "2"))
+
+    # Semantic mode exercises the heavy path (embed + vector search) with a single
+    # query; hybrid would additionally run BM25, doubling probe cost for no gain.
+    probe_args = {"query": query, "limit": 1, "search_mode": "semantic"}
+
+    start = time.monotonic()
     try:
-        # Check if services are initialized
+        await asyncio.wait_for(
+            _search_documentation_impl(probe_args, raise_on_error=True),
+            timeout=hard_timeout,
+        )
+    except asyncio.TimeoutError:
+        return {"status": "unhealthy", "error": f"probe exceeded {hard_timeout}s timeout"}
+    except Exception as exc:
+        latency_ms = round((time.monotonic() - start) * 1000, 1)
+        return {"status": "unhealthy", "latency_ms": latency_ms, "error": str(exc)}
+
+    elapsed = time.monotonic() - start
+    latency_ms = round(elapsed * 1000, 1)
+    status = "degraded" if elapsed > soft_budget else "healthy"
+    return {"status": status, "latency_ms": latency_ms}
+
+
+async def compute_health() -> dict:
+    """Build an honest health report reflecting query-serving readiness.
+
+    Beyond checking that service objects exist, this runs a real query probe,
+    reports cgroup memory headroom, and reports whether the heavy in-memory maps
+    are already resident (so the first-query memory spike is visible). The
+    overall status is the worst of the components: healthy / degraded /
+    unhealthy — cheap enough to remain a valid startup/liveness probe.
+    """
+    logger.info("   💓 health: computing honest health report")
+    try:
         embeddings_service = get_embeddings_service()
         milvus_service = get_milvus_service()
-        health_status = {
+
+        checks: dict = {
             "embeddings_service": "healthy" if embeddings_service.model else "unhealthy",
-            "milvus_service": "healthy" if milvus_service.client else "unhealthy"
+            "milvus_service": "healthy" if milvus_service.client else "unhealthy",
         }
 
-        # Try to get collection stats
         try:
-            stats = milvus_service.get_collection_stats()
-            health_status["collection_stats"] = stats
-        except Exception as e:
-            health_status["collection_stats"] = f"error: {str(e)}"
+            checks["collection_stats"] = milvus_service.get_collection_stats()
+            stats_status = "healthy"
+        except Exception as exc:
+            checks["collection_stats"] = f"error: {str(exc)}"
+            stats_status = "degraded"
 
-        health_text = "Health Check Results:\n"
-        for component, status in health_status.items():
-            health_text += f"- {component}: {status}\n"
+        # Capture residency BEFORE the probe, which may build these maps itself.
+        checks["heavy_maps"] = {
+            "chunk_index_resident": _chunk_index is not None,
+            "chunk_source_map_resident": _chunk_source_map is not None,
+        }
 
-        return [TextContent(type="text", text=health_text)]
+        checks["memory"] = _memory_health()
+        checks["query_probe"] = await _query_probe()
 
-    except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        return [TextContent(type="text", text=f"Health check failed: {str(e)}")]
+        overall = _worst_status([
+            checks["embeddings_service"],
+            checks["milvus_service"],
+            stats_status,
+            checks["memory"]["status"],
+            checks["query_probe"]["status"],
+        ])
+        return {"status": overall, "checks": checks}
+
+    except Exception as exc:
+        logger.error(f"Health check failed: {exc}")
+        return {"status": "unhealthy", "error": str(exc)}
+
+
+async def health_check(arguments: dict) -> list[TextContent]:
+    """Check service health, reporting honest query-serving readiness as JSON."""
+    payload = await compute_health()
+    return [TextContent(type="text", text=json.dumps(payload, indent=2))]
 
 async def get_yaml_definition(arguments: dict) -> list[TextContent]:
     """Fetch a chunk by ID and re-hydrate to YAML with breadcrumb comments.

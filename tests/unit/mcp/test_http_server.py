@@ -73,25 +73,34 @@ class TestRootHandler:
 
 class TestHealthHandler:
     @pytest.mark.anyio
-    async def test_health_ready_with_stats(self):
+    async def test_health_ready_delegates_to_compute_health(self):
+        """When services are ready, the honest compute_health payload is returned."""
         http_server._services_ready = True
-        http_server._milvus_stats = {"row_count": 7}
-        response = await health_handler(Mock())
+        payload = {"status": "healthy", "checks": {"query_probe": {"status": "healthy"}}}
+        with patch("opencrane.mcp.server.compute_health", new=AsyncMock(return_value=payload)):
+            response = await health_handler(Mock())
         assert response.status_code == 200
-        data = _body(response)
-        assert data["status"] == "ok"
-        assert data["services"] == "ready"
-        assert data["vectors"] == 7
+        assert _body(response) == payload
 
     @pytest.mark.anyio
-    async def test_health_ready_without_stats(self):
-        """Ready but no stats falls back to 0 vectors."""
+    async def test_health_degraded_still_returns_200(self):
+        """A degraded instance is still serving, so the probe stays 200."""
         http_server._services_ready = True
-        http_server._milvus_stats = None
-        response = await health_handler(Mock())
+        payload = {"status": "degraded", "checks": {}}
+        with patch("opencrane.mcp.server.compute_health", new=AsyncMock(return_value=payload)):
+            response = await health_handler(Mock())
         assert response.status_code == 200
-        data = _body(response)
-        assert data["vectors"] == 0
+        assert _body(response)["status"] == "degraded"
+
+    @pytest.mark.anyio
+    async def test_health_unhealthy_returns_503(self):
+        """An unhealthy instance cannot serve queries, so the probe fails."""
+        http_server._services_ready = True
+        payload = {"status": "unhealthy", "checks": {}}
+        with patch("opencrane.mcp.server.compute_health", new=AsyncMock(return_value=payload)):
+            response = await health_handler(Mock())
+        assert response.status_code == 503
+        assert _body(response)["status"] == "unhealthy"
 
     @pytest.mark.anyio
     async def test_health_initializing(self):

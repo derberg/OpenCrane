@@ -401,9 +401,8 @@ class TestMCPServer:
 
     @patch('opencrane.mcp.server.get_embeddings_service')
     @patch('opencrane.mcp.server.get_milvus_service')
-    @patch('opencrane.mcp.server._build_chunk_source_map')
     @pytest.mark.anyio
-    async def test_search_with_numpy_array_conversion(self, mock_build_map, mock_milvus_get, mock_embeddings_get):
+    async def test_search_with_numpy_array_conversion(self, mock_milvus_get, mock_embeddings_get):
         """Test search when model returns numpy array."""
         import numpy as np
 
@@ -426,7 +425,6 @@ class TestMCPServer:
             }
         ]
         mock_milvus_get.return_value = mock_milvus
-        mock_build_map.return_value = {}
 
         arguments = {"query": "test", "limit": 5, "search_mode": "semantic"}
         results = await _search_documentation_impl(arguments)
@@ -436,10 +434,9 @@ class TestMCPServer:
 
     @patch('opencrane.mcp.server.get_embeddings_service')
     @patch('opencrane.mcp.server.get_milvus_service')
-    @patch('opencrane.mcp.server._build_chunk_source_map')
     @pytest.mark.anyio
-    async def test_search_with_source_map_fallback(self, mock_build_map, mock_milvus_get, mock_embeddings_get):
-        """Test search falls back to source_map for URL."""
+    async def test_search_falls_back_to_source_file(self, mock_milvus_get, mock_embeddings_get):
+        """When no URL is in metadata or content, source falls back to source_file."""
         mock_embeddings = Mock()
         mock_model = Mock()
         mock_model.encode.return_value = [[0.1] * 768]
@@ -458,13 +455,12 @@ class TestMCPServer:
             }
         ]
         mock_milvus_get.return_value = mock_milvus
-        mock_build_map.return_value = {"test_id_123": "https://github.com/test/repo/blob/main/file.md"}
 
         arguments = {"query": "test", "limit": 5, "search_mode": "semantic"}
         results = await _search_documentation_impl(arguments)
 
         assert len(results) == 1
-        assert "https://github.com/test/repo/blob/main/file.md" in results[0].text
+        assert "Source: llmstxt/product-docs/llms-full.txt" in results[0].text
 
     @patch('opencrane.mcp.server.get_embeddings_service')
     @patch('opencrane.mcp.server.get_milvus_service')
@@ -479,55 +475,6 @@ class TestMCPServer:
         assert len(results) == 1
         assert "Health check failed" in results[0].text
         assert "Service unavailable" in results[0].text
-
-    @patch('opencrane.mcp.server.Path')
-    @patch('opencrane.mcp.server.generate_chunk_id')
-    def test_build_chunk_source_map_with_exception(self, mock_gen_id, mock_path):
-        """Test building source map skips chunks that fail ID generation."""
-        from opencrane.mcp.server import _build_chunk_source_map
-        import opencrane.mcp.server as server_module
-        
-        # Reset cache
-        server_module._chunk_source_map = None
-        
-        mock_file = Mock()
-        mock_file.exists.return_value = True
-        mock_file.read_text.return_value = '[{"content": "test", "source_file": "test.md", "chunk_type": "prose"}]'
-        mock_path.return_value = mock_file
-        
-        # Make generate_chunk_id raise exception
-        mock_gen_id.side_effect = Exception("ID generation failed")
-        
-        result = _build_chunk_source_map()
-        
-        # Should return empty map since all chunks failed
-        assert result == {}
-
-    @patch('opencrane.mcp.server.Path')
-    def test_build_chunk_source_map_caching(self, mock_path):
-        """Test that source map is cached and returns early on second call."""
-        from opencrane.mcp.server import _build_chunk_source_map
-        import opencrane.mcp.server as server_module
-        
-        # Reset cache
-        server_module._chunk_source_map = None
-        
-        mock_file = Mock()
-        mock_file.exists.return_value = True
-        mock_file.read_text.return_value = '[{"content": "test content", "source_file": "test.md", "chunk_type": "prose"}]'
-        mock_path.return_value = mock_file
-        
-        # First call - should load from file
-        result1 = _build_chunk_source_map()
-        assert isinstance(result1, dict)
-        
-        # Second call - should return cached value (line 87)
-        # Mock file should not be read again
-        mock_file.read_text.side_effect = Exception("Should not be called")
-        result2 = _build_chunk_source_map()
-        
-        # Should return the same cached object
-        assert result2 is result1
 
     def test_rehydrate_to_yaml_with_dict_content(self):
         """Test YAML re-hydration with dict content and full metadata."""
@@ -639,9 +586,8 @@ class TestMCPServer:
         assert "type: string" in result
         assert "format: email" in result
 
-    @patch('opencrane.mcp.server._build_chunk_source_map', return_value={})
     @pytest.mark.anyio
-    async def test_search_documentation_metadata_parse_error(self, mock_source_map):
+    async def test_search_documentation_metadata_parse_error(self):
         """Test search when metadata JSON parsing fails."""
         from opencrane.mcp.server import _search_documentation_impl
 
@@ -674,9 +620,8 @@ class TestMCPServer:
             assert len(result) > 0
             assert "test content" in result[0].text
 
-    @patch('opencrane.mcp.server._build_chunk_source_map', return_value={})
     @pytest.mark.anyio
-    async def test_search_documentation_long_content_truncation(self, mock_source_map):
+    async def test_search_documentation_long_content_truncation(self):
         """Test that long content is truncated in search results."""
         from opencrane.mcp.server import _search_documentation_impl
 
@@ -714,9 +659,8 @@ class TestMCPServer:
             assert "get_yaml_definition" in result[0].text
             assert "chunk_id='test-123'" in result[0].text
 
-    @patch('opencrane.mcp.server._build_chunk_source_map', return_value={})
     @pytest.mark.anyio
-    async def test_search_documentation_yaml_chunk_hint(self, mock_source_map):
+    async def test_search_documentation_yaml_chunk_hint(self):
         """Test that YAML chunks show hint to use get_yaml_definition."""
         from opencrane.mcp.server import _search_documentation_impl
 
@@ -765,26 +709,15 @@ class TestMCPServer:
         assert len(result) == 1
         assert "Error: query must be a non-empty string." in result[0].text
 
-    @patch('opencrane.mcp.server._build_chunk_source_map', return_value={})
-    @patch('opencrane.mcp.server._build_chunk_index')
     @pytest.mark.anyio
-    async def test_search_documentation_exposes_token_count(self, mock_chunk_index, mock_source_map):
-        """Test that search results include token_count from chunk index."""
+    async def test_search_documentation_exposes_token_count(self):
+        """Test that search results include token_count carried on the search result."""
         from opencrane.mcp.server import _search_documentation_impl
 
         # Setup mock services
         mock_milvus = Mock()
         mock_embeddings = Mock()
         mock_embeddings.model.encode.return_value = [[0.1] * 768]
-
-        # Mock chunk index with token_count data
-        mock_chunk_index.return_value = {
-            "chunk-123": {
-                "chunk_id": "chunk-123",
-                "content": "test content",
-                "token_count": 2073
-            }
-        }
 
         with patch('opencrane.mcp.server.get_milvus_service', return_value=mock_milvus), \
              patch('opencrane.mcp.server.get_embeddings_service', return_value=mock_embeddings):
@@ -795,6 +728,7 @@ class TestMCPServer:
                     "content": "test content",
                     "chunk_type": "prose",
                     "metadata_json": '{}',
+                    "token_count": 2073,
                     "distance": 0.9
                 }
             ]
@@ -1023,31 +957,6 @@ def test_has_yaml_chunks_empty_index(tmp_path, monkeypatch):
     assert server_module._has_yaml_chunks() is False
 
 
-def test_build_chunk_source_map_from_rag_chunks(tmp_path, monkeypatch):
-    """Cover chunk source map building via .opencrane/chunks.json."""
-    import opencrane.mcp.server as server_module
-
-    monkeypatch.chdir(tmp_path)
-    server_module._chunk_source_map = None
-
-    url = "https://github.com/my-org/proj/blob/main/docs/a.md"
-    source_file = "llmstxt/product-docs/llms-full.txt"
-    chunk = {
-        "content": "Some unique content",
-        "source_file": source_file,
-        "chunk_type": "prose",
-        "line_start": None,
-        "metadata": {"source_url": url},
-    }
-    (tmp_path / ".opencrane").mkdir()
-    chunks_path = tmp_path / ".opencrane" / "chunks.json"
-    chunks_path.write_text(json.dumps([chunk]), encoding="utf-8")
-
-    mapping = server_module._build_chunk_source_map()
-    expected_id = server_module.generate_chunk_id(source_file, "prose", None, "Some unique content")
-    assert mapping.get(expected_id) == url
-
-
 @pytest.mark.anyio
 @patch('opencrane.mcp.server.get_embeddings_service')
 @patch('opencrane.mcp.server.get_milvus_service')
@@ -1091,7 +1000,6 @@ async def test_search_documentation_metadata_display_prose(mock_milvus_get, mock
     ]
 
     mock_milvus_get.return_value = mock_milvus
-    monkeypatch.setattr(server_module, "_build_chunk_source_map", lambda: {})
 
     results = await server_module._search_documentation_impl({"query": "test", "search_mode": "semantic"})
 

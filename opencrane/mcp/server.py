@@ -17,7 +17,6 @@ from opencrane.mcp.services.embeddings import EmbeddingService
 from opencrane.mcp.services.milvus_client import MilvusService
 from opencrane.mcp.services.keyword_search import KeywordSearchService
 from opencrane.shared.config import get_config
-from opencrane.shared.models.vector_chunk import generate_chunk_id
 
 import sys
 
@@ -33,7 +32,6 @@ logger = logging.getLogger(__name__)
 _embeddings_service = None
 _milvus_service = None
 _keyword_service = None
-_chunk_source_map: dict[str, str] | None = None
 _chunk_index: dict[str, dict] | None = None
 
 def _extract_source_url(text: str) -> str | None:
@@ -104,56 +102,6 @@ def _rehydrate_to_yaml(content: dict | str, metadata: dict, chunk_type: str = ""
 
 
 
-
-def _build_chunk_source_map() -> dict[str, str]:
-    """Precompute chunk_id -> source_url map from rag-chunks.json with heuristics.
-
-    This map lets us attach better source URLs even when chunks were built from
-    the flattened llms-full.txt file.
-    """
-    global _chunk_source_map
-    if _chunk_source_map is not None:
-        return _chunk_source_map
-
-    chunks_path = Path(os.environ.get("AI_DOCS_CHUNKS_FILE", ".opencrane/chunks.json"))
-    try:
-        chunks = json.loads(chunks_path.read_text(encoding="utf-8"))
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.warning(f"Failed to load {chunks_path}: {exc}")
-        _chunk_source_map = {}
-        return _chunk_source_map
-
-    mapping: dict[str, str] = {}
-    for chunk in chunks:
-        # Use chunk_id from chunk data instead of regenerating
-        chunk_id = chunk.get("chunk_id")
-        if not chunk_id:
-            # Fallback to generation only if missing (shouldn't happen)
-            try:
-                chunk_id = generate_chunk_id(
-                    chunk.get("source_file", ""),
-                    chunk.get("chunk_type", ""),
-                    chunk.get("line_start"),
-                    chunk.get("content", ""),
-                )
-            except Exception:
-                continue
-
-        # All chunks are guaranteed to have a source_url in metadata
-        metadata = chunk.get("metadata", {})
-        url = metadata.get("source_url") if isinstance(metadata, dict) else None
-
-        if not url:
-            url = _extract_source_url(chunk.get("content", ""))
-        if not url:
-            url = _extract_source_url(json.dumps(metadata) if isinstance(metadata, dict) else str(metadata))
-
-        if url:
-            mapping[chunk_id] = url
-
-    logger.info(f"Built chunk source map with {len(mapping)} entries")
-    _chunk_source_map = mapping
-    return _chunk_source_map
 
 def _build_chunk_index() -> dict[str, dict]:
     """Precompute chunk_id -> chunk dict from rag-chunks.json for O(1) lookups."""
@@ -297,7 +245,7 @@ def _group_list_item_results(results: list[dict]) -> list[dict]:
     return merged
 
 
-def _format_grouped_list_item(result: dict, chunk_index: dict) -> str:
+def _format_grouped_list_item(result: dict) -> str:
     """Format a grouped list_item result slot showing all matched members inline."""
     members = result["_grouped_items"]
     try:
@@ -405,7 +353,7 @@ def _group_table_row_results(results: list[dict]) -> list[dict]:
     return merged
 
 
-def _format_grouped_table_row(result: dict, chunk_index: dict) -> str:
+def _format_grouped_table_row(result: dict) -> str:
     """Format a grouped table_row result slot showing all matched members inline."""
     members = result["_grouped_items"]
     try:
@@ -721,16 +669,14 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
             results = _group_table_row_results(results)
             logger.info(f"   📖 search: {len(results)} results found (after list grouping)")
 
-            source_map = _build_chunk_source_map()
-            chunk_index = _build_chunk_index()
             formatted: list[TextContent] = []
             for i, result in enumerate(results, 1):
                 if result.get("_grouped"):
-                    grouped_body = _format_grouped_list_item(result, chunk_index)
+                    grouped_body = _format_grouped_list_item(result)
                     formatted.append(TextContent(type="text", text=f"Result {i}:\n{grouped_body}"))
                     continue
                 elif result.get("_grouped_table"):
-                    grouped_body = _format_grouped_table_row(result, chunk_index)
+                    grouped_body = _format_grouped_table_row(result)
                     formatted.append(TextContent(type="text", text=f"Result {i}:\n{grouped_body}"))
                     continue
                 content = result.get("content", "")
@@ -740,12 +686,9 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
                 metadata_json = result.get("metadata_json", "{}")
                 score = result.get("distance", 0)
 
-                # Get token_count from chunk index
-                token_count = None
-                if chunk_id and chunk_index:
-                    chunk_data = chunk_index.get(chunk_id)
-                    if chunk_data:
-                        token_count = chunk_data.get("token_count")
+                # token_count comes directly with the search result (Milvus column /
+                # keyword doc) — no need to load the whole corpus to look it up.
+                token_count = result.get("token_count")
 
                 # Parse metadata JSON
                 try:
@@ -756,12 +699,11 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
                 # Re-hydrate YAML chunks with breadcrumb comments
                 display_content = _rehydrate_to_yaml(content, metadata, chunk_type)
 
-                # Extract source URL
+                # Extract source URL (with section anchor) straight from the result's
+                # metadata; fall back to any URL embedded in the content, then the file.
                 source_url = metadata.get("source_url")
                 if not source_url:
                     source_url = _extract_source_url(str(content))
-                if not source_url and chunk_id and source_map:
-                    source_url = source_map.get(chunk_id)
                 if not source_url:
                     source_url = source_file
 

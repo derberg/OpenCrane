@@ -41,8 +41,6 @@ def list_item_index(tmp_path, monkeypatch):
     monkeypatch.setenv("AI_DOCS_CHUNKS_FILE", str(chunks_path))
     monkeypatch.setenv("MILVUS_DB_PATH", str(db_path))
 
-    # conftest resets most MCP caches; also reset _chunk_source_map which conftest misses.
-    monkeypatch.setattr("opencrane.mcp.server._chunk_source_map", None)
 
     # 1. Chunk
     chunks = FileProcessor().process_file(FIXTURE)

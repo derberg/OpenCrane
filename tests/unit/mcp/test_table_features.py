@@ -87,11 +87,9 @@ async def test_search_docs_table_row_tip(mock_milvus_get, mock_embeddings_get, m
 
     # Reset caches
     server_module._chunk_index = None
-    server_module._chunk_source_map = None
 
     # No chunks.json needed since we monkeypatch the index and source map
     monkeypatch.setattr(server_module, "_build_chunk_index", lambda: {})
-    monkeypatch.setattr(server_module, "_build_chunk_source_map", lambda: {})
 
     mock_embeddings = Mock()
     mock_model = Mock()
@@ -212,7 +210,7 @@ def test_format_grouped_table_row_basic_output():
     meta2 = {"chunk_id": "r2", "table_id": "tbl1", "row_index": 2, "total_rows": 2,
               "breadcrumb_path": "Features", "sibling_ids": [], "sibling_previews": []}
     result = _make_grouped_table_result([meta1, meta2], ["Col: a.", "Col: b."], [0.8, 0.85])
-    text = _format_grouped_table_row(result, {})
+    text = _format_grouped_table_row(result)
     assert "Matched Table (2 of 2 rows):" in text
     assert "Location: Features" in text
     assert "Table ID: tbl1" in text
@@ -232,7 +230,7 @@ def test_format_grouped_table_row_unmatched_previews():
               "breadcrumb_path": "Section",
               "sibling_ids": ["r1", "r3"], "sibling_previews": ["Row A", "Row C"]}
     result = _make_grouped_table_result([meta1, meta2], ["Row A", "Row B"], [0.8, 0.85])
-    text = _format_grouped_table_row(result, {})
+    text = _format_grouped_table_row(result)
     assert "Matched Table (2 of 3 rows):" in text
     assert "Other rows in table (not matched):" in text
     assert "  - Row C" in text
@@ -248,7 +246,7 @@ def test_format_grouped_table_row_no_unmatched_previews():
     meta2 = {"chunk_id": "r2", "table_id": "tbl1", "row_index": 2, "total_rows": 2,
               "sibling_ids": ["r1"], "sibling_previews": ["Row A"]}
     result = _make_grouped_table_result([meta1, meta2], ["Row A", "Row B"], [0.8, 0.85])
-    text = _format_grouped_table_row(result, {})
+    text = _format_grouped_table_row(result)
     assert "Other rows in table (not matched):" not in text
 
 
@@ -263,7 +261,7 @@ def test_format_grouped_table_row_no_breadcrumb():
         {"chunk_id": "r1", "chunk_type": "table_row", "content": "Row A",
          "distance": 0.7, "metadata_json": json.dumps(meta1)}
     ]
-    text = _format_grouped_table_row(result, {})
+    text = _format_grouped_table_row(result)
     assert "Location:" not in text
     assert "Table ID: tbl2" in text
 
@@ -280,9 +278,7 @@ async def test_search_docs_groups_table_rows(mock_milvus_get, mock_embeddings_ge
     import opencrane.mcp.server as server_module
 
     server_module._chunk_index = None
-    server_module._chunk_source_map = None
     monkeypatch.setattr(server_module, "_build_chunk_index", lambda: {})
-    monkeypatch.setattr(server_module, "_build_chunk_source_map", lambda: {})
 
     mock_embeddings = Mock()
     mock_model = Mock()
@@ -334,9 +330,7 @@ async def test_search_docs_grouped_table_rows_show_unmatched(mock_milvus_get, mo
     import opencrane.mcp.server as server_module
 
     server_module._chunk_index = None
-    server_module._chunk_source_map = None
     monkeypatch.setattr(server_module, "_build_chunk_index", lambda: {})
-    monkeypatch.setattr(server_module, "_build_chunk_source_map", lambda: {})
 
     mock_embeddings = Mock()
     mock_model = Mock()
@@ -428,7 +422,7 @@ def test_format_grouped_table_row_strips_breadcrumb_prefix():
         [content_with_prefix, "Col: other."],
         [0.8, 0.85],
     )
-    text = _format_grouped_table_row(result, {})
+    text = _format_grouped_table_row(result)
     # Breadcrumb prefix must be stripped from the matched row display
     assert f"# {breadcrumb}" not in text
     # Row body must remain
@@ -448,5 +442,5 @@ def test_format_grouped_table_row_no_strip_when_content_has_no_prefix():
          "content": "Plain content, no prefix.", "distance": 0.7,
          "metadata_json": json.dumps(meta1)}
     ]
-    text = _format_grouped_table_row(result, {})
+    text = _format_grouped_table_row(result)
     assert "Plain content, no prefix." in text

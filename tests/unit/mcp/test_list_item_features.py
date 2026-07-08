@@ -23,7 +23,6 @@ def _write_chunks(tmp_path, chunks):
 def _reset_caches():
     import opencrane.mcp.server as server_module
     server_module._chunk_index = None
-    server_module._chunk_source_map = None
 
 
 def test_has_list_item_chunks_true(tmp_path, monkeypatch):

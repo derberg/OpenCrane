@@ -579,8 +579,23 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
     chunk_types = arguments.get("chunk_types")
     source_names = arguments.get("source_names")
     # --- Layer 2: content authorization ---
-    from opencrane.mcp.auth.runtime import current_scopes, get_access_policy
-    decision = get_access_policy().authorize(current_scopes(), source_names)
+    from opencrane.mcp.auth.runtime import (
+        current_allowed_sources,
+        current_scopes,
+        get_access_policy,
+    )
+    allowed = current_allowed_sources()
+    if allowed is not None:
+        # A project middleware declared the permitted sources for this request —
+        # highest precedence. Narrow-only: intersect with any client-supplied
+        # source_names (the client can restrict, never expand).
+        allowed_set = set(allowed)
+        if source_names is not None:
+            decision = [s for s in source_names if s in allowed_set]
+        else:
+            decision = list(allowed)
+    else:
+        decision = get_access_policy().authorize(current_scopes(), source_names)
     # SECURITY: an empty allowlist means zero permitted sources — short-circuit,
     # because passing [] to the search backends is falsy and would DISABLE the
     # source filter (leaking all sources). None = no restriction (AllowAll).

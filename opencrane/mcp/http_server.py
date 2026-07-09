@@ -229,6 +229,21 @@ def build_asgi_app():
         from opencrane.mcp.auth.optional_auth import OptionalAuthMiddleware
 
         asgi_app = OptionalAuthMiddleware(asgi_app, build_token_verifier(auth_config))
+
+    # Apply project-supplied ASGI middleware as the OUTERMOST layers, so they run
+    # first and can call set_allowed_sources() before the tool executes. The first
+    # entry becomes the outermost wrapper. A missing/empty list is a no-op, and a
+    # config-load failure must not break the default (unwrapped) path.
+    try:
+        from opencrane.cli import load_config
+
+        middleware = getattr(load_config(None), "middleware", []) or []
+    except Exception as exc:
+        logger.warning(f"Failed to load project middleware: {exc} — skipping")
+        middleware = []
+    for mw in reversed(middleware):
+        asgi_app = mw(asgi_app)
+
     return asgi_app
 
 

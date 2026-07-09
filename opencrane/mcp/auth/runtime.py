@@ -22,6 +22,13 @@ _optional_scopes: ContextVar[tuple[str, ...] | None] = ContextVar(
     "opencrane_optional_scopes", default=None
 )
 
+# Per-request allowed source names set by a project-supplied middleware. None
+# means "not set" — the search path then falls back to the scope->sources access
+# policy. When set, it takes precedence over the policy (see current_allowed_sources).
+_allowed_sources: ContextVar[tuple[str, ...] | None] = ContextVar(
+    "opencrane_allowed_sources", default=None
+)
+
 
 def set_optional_scopes(scopes: tuple[str, ...]) -> None:
     """Record the caller's scopes for this request (optional-auth mode).
@@ -51,6 +58,27 @@ def current_scopes() -> tuple[str, ...]:
     if token is None:
         return ()
     return tuple(token.scopes)
+
+
+def set_allowed_sources(names) -> None:
+    """Record the allowed source names for this request (generic middleware hook).
+
+    A project-supplied middleware (registered via ``OpenCraneConfig.middleware``)
+    calls this to declare which source names the current request may access. The
+    search path gives this value the highest precedence, above the scope->sources
+    access policy. An empty iterable means "no sources permitted" and short-circuits
+    the search to zero results.
+    """
+    _allowed_sources.set(tuple(names))
+
+
+def current_allowed_sources() -> tuple[str, ...] | None:
+    """Return the middleware-declared allowed source names, or ``None`` if unset.
+
+    ``None`` means no middleware set an override for this request, so the search
+    path falls back to the scope->sources access policy.
+    """
+    return _allowed_sources.get()
 
 
 def get_access_policy() -> "AllowAllPolicy | ScopeSourcesPolicy":
@@ -98,3 +126,4 @@ def reset_auth_runtime() -> None:
     global _access_policy
     _access_policy = None
     _optional_scopes.set(None)
+    _allowed_sources.set(None)

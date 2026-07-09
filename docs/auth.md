@@ -199,6 +199,41 @@ If neither hook is set, `custom` type is treated as open (no auth) — this lets
 
 ---
 
+## `middleware` hook — custom request middleware / authorizer
+
+For authorization logic that config-driven `scope_sources` cannot express (e.g. resolving allowed sources from an external service, a custom header, or a JWT claim), register your own ASGI middleware on your `OpenCraneConfig` subclass. Each entry is a callable `(app) -> asgi_app` — typically a class that stores the wrapped app and implements `async __call__(self, scope, receive, send)`.
+
+Entries are applied as the **outermost** layers of the HTTP MCP app (the first entry is outermost and runs first), so they execute before the tool handler. A middleware declares the request's permitted source names by calling `set_allowed_sources(...)`:
+
+```python
+# .opencrane/extensions.py
+from opencrane import OpenCraneConfig
+from opencrane.mcp.auth.runtime import set_allowed_sources
+
+class SourceAuthorizer:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http":
+            # ... derive the caller's permitted sources however you like ...
+            set_allowed_sources(["cgw", "npp"])   # () means "no sources permitted"
+        await self.app(scope, receive, send)
+
+class Config(OpenCraneConfig):
+    middleware = [SourceAuthorizer]
+```
+
+At search time `set_allowed_sources` takes **highest precedence** — above the `scope_sources` access policy:
+
+- If a middleware set an allowed set, that set is used; any client-supplied `source_names` is intersected narrow-only (the client can restrict, never expand).
+- An empty allowed set **short-circuits to zero results** (never disables the filter).
+- If no middleware sets an override, authorization falls back to the `scope_sources` policy exactly as before.
+
+`middleware` defaults to an empty list (no-op). This is generic plumbing — OpenCrane ships no built-in middleware.
+
+---
+
 ## stdio transport
 
 The stdio transport is always unauthenticated. OAuth applies to the HTTP transport only. When running `opencrane serve --transport stdio`, the server trusts the process's environment for credentials (per the MCP specification) and Layer-2 scope enforcement is bypassed (all sources are accessible).

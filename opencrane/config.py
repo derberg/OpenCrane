@@ -61,3 +61,12 @@ class OpenCraneConfig:
     # authorization-server mode).  Both default to ``None`` (open — no auth).
     token_verifier = None
     auth_provider = None
+
+    # ASGI middleware applied around the HTTP MCP app (Layer-1/Layer-2 escape hatch).
+    # Each entry is a callable ``(app) -> asgi_app`` — typically a class whose
+    # ``__init__(self, app)`` stores the wrapped app and which implements
+    # ``async __call__(self, scope, receive, send)``. Entries are applied as the
+    # outermost layers (first entry is outermost, so it runs first) and may call
+    # ``opencrane.mcp.auth.runtime.set_allowed_sources(...)`` to declare the
+    # request's permitted source names before the tool executes. Default empty.
+    middleware: list = []

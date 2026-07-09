@@ -22,7 +22,6 @@ async def test__search_documentation_impl_keyword_mode(mock_get_keyword, monkeyp
     mock_get_keyword.return_value = DummyKeyword()
 
     # Avoid loading large maps in test
-    monkeypatch.setattr(mcp_server, "_build_chunk_source_map", lambda: {})
 
     res = await mcp_server._search_documentation_impl({
         "query": "test",
@@ -74,7 +73,6 @@ async def test__search_documentation_impl_hybrid_mode(mock_get_embed, mock_get_m
     mock_get_embed.return_value = DummyEmbeddings()
     mock_get_milvus.return_value = DummyMilvus()
     mock_get_keyword.return_value = DummyKeyword()
-    monkeypatch.setattr(mcp_server, "_build_chunk_source_map", lambda: {})
 
     res = await mcp_server._search_documentation_impl({
         "query": "test hybrid",
@@ -99,7 +97,6 @@ async def test__search_documentation_impl_invalid_mode(monkeypatch):
         model = DummyModel()
 
     monkeypatch.setattr(mcp_server, "get_embeddings_service", lambda: DummyEmbeddings())
-    monkeypatch.setattr(mcp_server, "_build_chunk_source_map", lambda: {})
 
     res = await mcp_server._search_documentation_impl({
         "query": "test",
@@ -134,7 +131,6 @@ async def test__search_documentation_impl_hybrid_empty_results(mock_get_embed, m
     mock_get_embed.return_value = DummyEmbeddings()
     mock_get_milvus.return_value = DummyMilvus()
     mock_get_keyword.return_value = DummyKeyword()
-    monkeypatch.setattr(mcp_server, "_build_chunk_source_map", lambda: {})
 
     res = await mcp_server._search_documentation_impl({
         "query": "test empty",
@@ -164,7 +160,6 @@ async def test__search_documentation_impl_semantic_none_results(mock_get_embed, 
 
     mock_get_embed.return_value = DummyEmbeddings()
     mock_get_milvus.return_value = DummyMilvus()
-    monkeypatch.setattr(mcp_server, "_build_chunk_source_map", lambda: {})
 
     res = await mcp_server._search_documentation_impl({
         "query": "test",
@@ -186,7 +181,6 @@ async def test__search_documentation_impl_keyword_none_results(mock_get_keyword,
             return None  # Simulate error returning None
 
     mock_get_keyword.return_value = DummyKeyword()
-    monkeypatch.setattr(mcp_server, "_build_chunk_source_map", lambda: {})
 
     res = await mcp_server._search_documentation_impl({
         "query": "test",
@@ -222,7 +216,6 @@ async def test__search_documentation_impl_hybrid_none_results(mock_get_embed, mo
     mock_get_embed.return_value = DummyEmbeddings()
     mock_get_milvus.return_value = DummyMilvus()
     mock_get_keyword.return_value = DummyKeyword()
-    monkeypatch.setattr(mcp_server, "_build_chunk_source_map", lambda: {})
 
     res = await mcp_server._search_documentation_impl({
         "query": "test",

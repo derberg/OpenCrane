@@ -44,7 +44,7 @@ def isolate_outputs(monkeypatch, setup_session_temp_root):
     # Reset global state before each test
     monkeypatch.setattr('opencrane.rag.generate_llms_txt._source_mapping', None)
     monkeypatch.setattr('opencrane.mcp.server._keyword_service', None)
-    monkeypatch.setattr('opencrane.mcp.server._chunk_index', None)
+    monkeypatch.setattr('opencrane.mcp.server._chunk_types_cache', None)
     monkeypatch.setattr('opencrane.mcp.server._milvus_service', None)
     monkeypatch.setattr('opencrane.mcp.server._embeddings_service', None)
 
@@ -62,6 +62,6 @@ def isolate_outputs(monkeypatch, setup_session_temp_root):
     # Reset global state after each test
     monkeypatch.setattr('opencrane.rag.generate_llms_txt._source_mapping', None)
     monkeypatch.setattr('opencrane.mcp.server._keyword_service', None)
-    monkeypatch.setattr('opencrane.mcp.server._chunk_index', None)
+    monkeypatch.setattr('opencrane.mcp.server._chunk_types_cache', None)
     monkeypatch.setattr('opencrane.mcp.server._milvus_service', None)
     monkeypatch.setattr('opencrane.mcp.server._embeddings_service', None)

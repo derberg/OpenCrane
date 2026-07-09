@@ -52,16 +52,22 @@ class TestMilvusService:
             call(field_name='metadata_json', datatype=ANY, max_length=65535),
             call(field_name='token_count', datatype=ANY),
             call(field_name='line_start', datatype=ANY),
+            call(field_name='list_id', datatype=ANY, max_length=64),
+            call(field_name='table_id', datatype=ANY, max_length=64),
         ]
         schema_mock.add_field.assert_has_calls(expected_calls, any_order=True)
-        assert schema_mock.add_field.call_count == 9  # All fields added
-        # Verify index params
+        assert schema_mock.add_field.call_count == 11  # All fields added
+        # Verify index params: the embedding vector index plus scalar indexes on
+        # the member-lookup fields.
         index_params_mock = mock_client.prepare_index_params.return_value
-        index_params_mock.add_index.assert_called_once_with(
+        index_params_mock.add_index.assert_any_call(
             field_name="embedding",
             index_type="AUTOINDEX",
             metric_type="COSINE"
         )
+        index_params_mock.add_index.assert_any_call(field_name="list_id", index_type="INVERTED")
+        index_params_mock.add_index.assert_any_call(field_name="table_id", index_type="INVERTED")
+        assert index_params_mock.add_index.call_count == 3
         # Verify create_collection was called
         mock_client.create_collection.assert_called_once_with(
             collection_name=service.collection_name,
@@ -131,10 +137,11 @@ class TestMilvusService:
                 embedding=[0.1] * 768,
                 content="content1",
                 source_file="file1.md",
-                chunk_type="prose",
+                chunk_type="list_item",
                 metadata_json='{"key": "value"}',
                 token_count=10,
-                line_start=1
+                line_start=1,
+                list_id="L1",
             )
         ]
 
@@ -144,7 +151,11 @@ class TestMilvusService:
         call_args = mock_client.insert.call_args
         assert call_args[1]['collection_name'] == service.collection_name
         assert len(call_args[1]['data']) == 1
-        assert call_args[1]['data'][0]['chunk_id'] == "id1"
+        row = call_args[1]['data'][0]
+        assert row['chunk_id'] == "id1"
+        # list_id/table_id are lifted into their own columns (empty string when absent)
+        assert row['list_id'] == "L1"
+        assert row['table_id'] == ""
 
     @patch('opencrane.mcp.services.milvus_client.MilvusClient')
     def test_search_without_filter(self, mock_client_class):
@@ -382,3 +393,194 @@ class TestMilvusService:
         assert service.port == 12345
         assert service.uri == "http://myhost:12345"
         mock_client_class.assert_called_once_with(uri="http://myhost:12345")
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_get_chunk_found(self, mock_client_class):
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        mock_client.get.return_value = [{"chunk_id": "c1", "content": "hi"}]
+
+        service = MilvusService()
+        assert service.get_chunk("c1") == {"chunk_id": "c1", "content": "hi"}
+        mock_client.get.assert_called_once()
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_get_chunk_missing_returns_none(self, mock_client_class):
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        mock_client.get.return_value = []
+
+        service = MilvusService()
+        assert service.get_chunk("nope") is None
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_get_chunk_error_returns_none(self, mock_client_class):
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        mock_client.get.side_effect = Exception("boom")
+
+        service = MilvusService()
+        assert service.get_chunk("c1") is None
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_query_by_field(self, mock_client_class):
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        mock_client.query.return_value = [{"chunk_id": "r1"}, {"chunk_id": "r2"}]
+
+        service = MilvusService()
+        rows = service.query_by_field("list_id", "L1")
+        assert [r["chunk_id"] for r in rows] == ["r1", "r2"]
+        # Sanitized value interpolated into the filter (Milvus Lite has no templating).
+        assert mock_client.query.call_args[1]["filter"] == 'list_id == "L1"'
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_query_by_field_with_chunk_type(self, mock_client_class):
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        mock_client.query.return_value = []
+
+        service = MilvusService()
+        service.query_by_field("list_id", "L1", chunk_type="list_item")
+        assert mock_client.query.call_args[1]["filter"] == 'list_id == "L1" and chunk_type == "list_item"'
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_query_by_field_sanitizes_value(self, mock_client_class):
+        """A value with filter-breaking characters is stripped before interpolation."""
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        mock_client.query.return_value = []
+
+        service = MilvusService()
+        service.query_by_field("list_id", 'a" or "1"=="1')
+        # Quotes/spaces/= removed → cannot break out of or inject the filter.
+        assert mock_client.query.call_args[1]["filter"] == 'list_id == "aor11"'
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_query_by_field_warns_on_row_cap(self, mock_client_class):
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        mock_client.query.return_value = [{"chunk_id": "r"}, {"chunk_id": "r"}]
+
+        service = MilvusService()
+        # limit == number of rows returned -> the "hit the cap" warning branch
+        rows = service.query_by_field("list_id", "L1", limit=2)
+        assert len(rows) == 2
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_query_by_field_error_returns_empty(self, mock_client_class):
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        mock_client.query.side_effect = Exception("boom")
+
+        service = MilvusService()
+        assert service.query_by_field("list_id", "L1") == []
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_field_names(self, mock_client_class):
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        mock_client.describe_collection.return_value = {
+            "fields": [{"name": "chunk_id"}, {"name": "list_id"}, {"name": "table_id"}]
+        }
+
+        service = MilvusService()
+        assert service.field_names() == {"chunk_id", "list_id", "table_id"}
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_field_names_error_returns_empty(self, mock_client_class):
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        mock_client.describe_collection.side_effect = Exception("boom")
+
+        service = MilvusService()
+        assert service.field_names() == set()
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_distinct_chunk_types(self, mock_client_class):
+        """Pages through the iterator, dedupes, and drops empty values; closes it."""
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        iterator = Mock()
+        # Two batches then an empty batch signalling the end.
+        iterator.next.side_effect = [
+            [{"chunk_type": "prose"}, {"chunk_type": "list_item"}],
+            [{"chunk_type": "prose"}, {"chunk_type": ""}, {"chunk_type": "table_row"}],
+            [],
+        ]
+        mock_client.query_iterator.return_value = iterator
+
+        service = MilvusService()
+        assert service.distinct_chunk_types() == {"prose", "list_item", "table_row"}
+        # Only the small chunk_type column is pulled, never the corpus.
+        assert mock_client.query_iterator.call_args[1]["output_fields"] == ["chunk_type"]
+        iterator.close.assert_called_once()
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_distinct_chunk_types_iterator_creation_error(self, mock_client_class):
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        mock_client.query_iterator.side_effect = Exception("boom")
+
+        service = MilvusService()
+        assert service.distinct_chunk_types() == set()
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_distinct_chunk_types_degrades_on_mid_iteration_error(self, mock_client_class):
+        """A failure mid-iteration returns the partial set, closes the iterator, no raise."""
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        iterator = Mock()
+        # First batch succeeds, then iteration blows up.
+        iterator.next.side_effect = [[{"chunk_type": "prose"}], Exception("mid-iteration boom")]
+        mock_client.query_iterator.return_value = iterator
+
+        service = MilvusService()
+        assert service.distinct_chunk_types() == {"prose"}
+        iterator.close.assert_called_once()
+
+
+class TestTruncateMetadata:
+    """The metadata truncator must always emit valid JSON within the field limit."""
+
+    def test_within_limit_passes_through(self):
+        from opencrane.mcp.services.milvus_client import _truncate_metadata
+        meta = '{"source_url": "https://example.com"}'
+        assert _truncate_metadata(meta) == meta
+
+    def test_drops_heavy_fields_to_fit(self):
+        from opencrane.mcp.services.milvus_client import _truncate_metadata, MAX_METADATA_LENGTH
+        import json as _json
+        big_neighbors = ["n" * 100 for _ in range(2000)]  # far over the limit
+        meta = _json.dumps({"source_url": "u", "neighbor_chunks": big_neighbors})
+        assert len(meta) > MAX_METADATA_LENGTH
+        out = _truncate_metadata(meta)
+        parsed = _json.loads(out)  # must be valid JSON
+        assert parsed["source_url"] == "u"
+        assert parsed["truncated"] is True
+        assert "neighbor_chunks" not in parsed
+        assert len(out) <= MAX_METADATA_LENGTH
+
+    def test_falls_back_to_scalars_only(self):
+        from opencrane.mcp.services.milvus_client import _truncate_metadata, MAX_METADATA_LENGTH
+        import json as _json
+        # A single non-heavy list field that alone overflows the limit.
+        meta = _json.dumps({"src": "u", "other_list": ["x" * 100 for _ in range(2000)]})
+        assert len(meta) > MAX_METADATA_LENGTH
+        out = _truncate_metadata(meta)
+        parsed = _json.loads(out)
+        assert parsed["src"] == "u"
+        assert "other_list" not in parsed  # dropped by the scalar-only fallback
+        assert len(out) <= MAX_METADATA_LENGTH
+
+    def test_invalid_json_yields_minimal_marker(self):
+        from opencrane.mcp.services.milvus_client import _truncate_metadata, MAX_METADATA_LENGTH
+        junk = "x" * (MAX_METADATA_LENGTH + 10)  # over-limit and not JSON
+        assert _truncate_metadata(junk) == '{"truncated": true}'
+
+    def test_scalar_value_still_too_large_yields_minimal(self):
+        from opencrane.mcp.services.milvus_client import _truncate_metadata, MAX_METADATA_LENGTH
+        import json as _json
+        # A single scalar string that itself exceeds the limit — even scalar-only can't fit.
+        meta = _json.dumps({"huge": "y" * (MAX_METADATA_LENGTH + 10)})
+        assert _truncate_metadata(meta) == '{"truncated": true}'

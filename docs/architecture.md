@@ -70,7 +70,9 @@ The `opencrane embed` command generates a vector embedding for each chunk in `.o
 
 ### Index
 
-The `opencrane index` command loads `.opencrane/embeddings.json` into a Milvus vector database. It creates a collection with an Hierarchical Navigable Small World (HNSW) index on the embedding vectors and uses cosine similarity as the distance metric.
+The `opencrane index` command loads `.opencrane/embeddings.json` into a Milvus vector database. It creates a collection with a vector index on the embeddings (cosine similarity as the distance metric) and `INVERTED` scalar indexes on the `list_id` and `table_id` columns, so `get_list_members` and `get_table_members` are served by an indexed lookup rather than an in-memory scan of the corpus. `INVERTED` is used rather than `AUTOINDEX` because Milvus Lite accepts `AUTOINDEX` only on vector fields.
+
+Because `list_id` and `table_id` are dedicated columns, a collection built by an older OpenCrane version that predates them is dropped and rebuilt automatically on the next `index` run (a one-time re-index on upgrade, surfaced in the logs).
 
 Two deployment modes are available:
 
@@ -142,12 +144,13 @@ Tree walkers live in `opencrane/rag/services/chunking_strategies/` and handle st
 
 ### MCP server (`opencrane/mcp/`)
 
-The server initializes its backing services lazily on the first tool call, so startup is fast. At initialization time it precomputes two lookup structures for O(1) access:
+The server initializes its backing services lazily on the first tool call, so startup is fast. It holds **no in-memory copy of the corpus** — every tool reads from the vector database:
 
-- A **chunk source map** for chunk-ID lookups used by `get_yaml_definition`.
-- A **chunk index** for list membership queries used by `get_list_members` and table membership queries used by `get_table_members`.
+- `get_yaml_definition` fetches a single chunk by its primary key.
+- `get_list_members` and `get_table_members` query the indexed `list_id` / `table_id` columns (constrained to the relevant `chunk_type`) for a list's or table's members.
+- Search reads `token_count` and each chunk's `source_url` straight from the query result rather than re-deriving them.
 
-The two backing services are:
+Which tools are exposed is decided at startup by asking Milvus which `chunk_type` values the collection contains — a light column-only scan (via `query_iterator`, pulling just the `chunk_type` field, never the corpus) whose result is cached for the process. This keeps the tool list correct for any corpus, including custom chunk types, without a separate sidecar file that could get separated from the database. The two backing services are:
 
 - **`opencrane/mcp/services/milvus_client.py`** — Manages the Milvus connection and loads the collection into memory at startup for low-latency vector search.
 - **`opencrane/mcp/services/keyword_search.py`** — Builds a Best Match 25 (BM25) index lazily from `chunks.json` on the first keyword or hybrid query.

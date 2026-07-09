@@ -41,14 +41,13 @@ def list_item_index(tmp_path, monkeypatch):
     monkeypatch.setenv("AI_DOCS_CHUNKS_FILE", str(chunks_path))
     monkeypatch.setenv("MILVUS_DB_PATH", str(db_path))
 
-    # conftest resets most MCP caches; also reset _chunk_source_map which conftest misses.
-    monkeypatch.setattr("opencrane.mcp.server._chunk_source_map", None)
-
     # 1. Chunk
     chunks = FileProcessor().process_file(FIXTURE)
     ChunkSerializer.serialize_chunks(chunks, chunks_path)
 
-    # 2. Embed + insert into temp Milvus Lite
+    # 2. Embed + insert into temp Milvus Lite (mirrors the real index step:
+    #    list_id/table_id lifted into their own columns). Chunk-type detection is
+    #    served straight from this collection at query time.
     embedder = EmbeddingService()
     milvus = MilvusService()
     milvus.create_collection()
@@ -66,6 +65,8 @@ def list_item_index(tmp_path, monkeypatch):
             metadata_json=json.dumps(chunk.metadata) if chunk.metadata else "{}",
             token_count=chunk.token_count,
             line_start=chunk.line_start or 0,
+            list_id=(chunk.metadata or {}).get("list_id"),
+            table_id=(chunk.metadata or {}).get("table_id"),
         ))
     milvus.insert_chunks(vector_chunks)
     milvus.client.flush(milvus.collection_name)

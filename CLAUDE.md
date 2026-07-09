@@ -135,6 +135,7 @@ Config is auto-discovered from `.opencrane/extensions.py:Config` or set via `--c
 - **Token-based YAML splitting** — recursive split when chunks exceed 800 tokens
 - **Hybrid search scoring** — `HYBRID_ALPHA * vector + (1 - HYBRID_ALPHA) * BM25` (default 0.6)
 - **Prose chunks split at heading boundaries only** — preserves complete sections for semantic coherence, no token-based splitting within sections
+- **MCP server is fully vector-DB-backed** — search, `get_yaml_definition`, `get_list_members`, and `get_table_members` all read from Milvus (chunk lookups by primary key, members by `list_id`/`table_id` scalar columns, `INVERTED`-indexed so lookups don't scan the corpus — `AUTOINDEX` is rejected for scalar fields on Milvus Lite); the server holds no in-memory copy of the corpus. Member queries interpolate a sanitized, width-capped id into the filter (Milvus Lite has no `filter_params` templating). `list_id`/`table_id` are lifted into their own columns at index time; adding them is a schema change, so a collection built by an older version is dropped and rebuilt on the next `index` run
 - **Per-page `source_url` via companion `llms.txt`** — `llms-full.txt` stays clean (no URLs injected into headings); each chunk's page URL is recovered by joining the clean content to the standard `llms.txt` index, matched positionally per source and validated by H1 title. External `llmstxt` sources contribute their fetched companion `llms.txt` (real per-page URLs) or a synthesized index from their `docs_url`
 
 ## CI/CD

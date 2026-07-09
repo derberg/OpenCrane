@@ -18,7 +18,6 @@ from opencrane.mcp.services.embeddings import EmbeddingService
 from opencrane.mcp.services.milvus_client import MilvusService
 from opencrane.mcp.services.keyword_search import KeywordSearchService
 from opencrane.shared.config import get_config
-from opencrane.shared.models.vector_chunk import generate_chunk_id
 
 import sys
 
@@ -34,8 +33,7 @@ logger = logging.getLogger(__name__)
 _embeddings_service = None
 _milvus_service = None
 _keyword_service = None
-_chunk_source_map: dict[str, str] | None = None
-_chunk_index: dict[str, dict] | None = None
+_chunk_types_cache: set[str] | None = None
 
 def _extract_source_url(text: str) -> str | None:
     """Extract the first http(s) URL from the chunk content, if present."""
@@ -106,74 +104,6 @@ def _rehydrate_to_yaml(content: dict | str, metadata: dict, chunk_type: str = ""
 
 
 
-def _build_chunk_source_map() -> dict[str, str]:
-    """Precompute chunk_id -> source_url map from rag-chunks.json with heuristics.
-
-    This map lets us attach better source URLs even when chunks were built from
-    the flattened llms-full.txt file.
-    """
-    global _chunk_source_map
-    if _chunk_source_map is not None:
-        return _chunk_source_map
-
-    chunks_path = Path(os.environ.get("AI_DOCS_CHUNKS_FILE", ".opencrane/chunks.json"))
-    try:
-        chunks = json.loads(chunks_path.read_text(encoding="utf-8"))
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.warning(f"Failed to load {chunks_path}: {exc}")
-        _chunk_source_map = {}
-        return _chunk_source_map
-
-    mapping: dict[str, str] = {}
-    for chunk in chunks:
-        # Use chunk_id from chunk data instead of regenerating
-        chunk_id = chunk.get("chunk_id")
-        if not chunk_id:
-            # Fallback to generation only if missing (shouldn't happen)
-            try:
-                chunk_id = generate_chunk_id(
-                    chunk.get("source_file", ""),
-                    chunk.get("chunk_type", ""),
-                    chunk.get("line_start"),
-                    chunk.get("content", ""),
-                )
-            except Exception:
-                continue
-
-        # All chunks are guaranteed to have a source_url in metadata
-        metadata = chunk.get("metadata", {})
-        url = metadata.get("source_url") if isinstance(metadata, dict) else None
-
-        if not url:
-            url = _extract_source_url(chunk.get("content", ""))
-        if not url:
-            url = _extract_source_url(json.dumps(metadata) if isinstance(metadata, dict) else str(metadata))
-
-        if url:
-            mapping[chunk_id] = url
-
-    logger.info(f"Built chunk source map with {len(mapping)} entries")
-    _chunk_source_map = mapping
-    return _chunk_source_map
-
-def _build_chunk_index() -> dict[str, dict]:
-    """Precompute chunk_id -> chunk dict from rag-chunks.json for O(1) lookups."""
-    global _chunk_index
-    if _chunk_index is not None:
-        return _chunk_index
-
-    chunks_path = Path(os.environ.get("AI_DOCS_CHUNKS_FILE", ".opencrane/chunks.json"))
-    try:
-        chunks = json.loads(chunks_path.read_text(encoding="utf-8"))
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.warning(f"Failed to load {chunks_path} for chunk index: {exc}")
-        _chunk_index = {}
-        return _chunk_index
-
-    _chunk_index = {c.get("chunk_id"): c for c in chunks if c.get("chunk_id")}
-    logger.info(f"Built chunk index with {len(_chunk_index)} entries")
-    return _chunk_index
-
 def get_embeddings_service():
     global _embeddings_service
     if _embeddings_service is None:
@@ -215,31 +145,37 @@ def _has_table_row_chunks() -> bool:
     return "table_row" in _get_indexed_chunk_types()
 
 
+def _member_rows(field: str, value: str, chunk_type: str) -> list[dict]:
+    """Query Milvus for member chunks of a list/table and normalize each row.
+
+    Each returned row carries a parsed ``metadata`` dict (from ``metadata_json``)
+    so the formatting handlers can read metadata fields the same way they did
+    when rows came from the file-backed index.
+    """
+    rows = []
+    for row in get_milvus_service().query_by_field(field, value, chunk_type=chunk_type):
+        meta = row.get("metadata_json")
+        try:
+            metadata = json.loads(meta) if isinstance(meta, str) else (meta or {})
+        except (json.JSONDecodeError, TypeError, ValueError):
+            metadata = {}
+        member = dict(row)
+        member["metadata"] = metadata
+        rows.append(member)
+    return rows
+
+
 def _get_table_members(table_id: str) -> list[dict]:
     """Return all ``table_row`` chunks for a table_id, sorted by row_index."""
-    chunk_index = _build_chunk_index()
-    rows = []
-    for chunk in chunk_index.values():
-        metadata = chunk.get("metadata", {}) or {}
-        if metadata.get("table_id") != table_id:
-            continue
-        if chunk.get("chunk_type") == "table_row":
-            rows.append(chunk)
-    rows.sort(key=lambda c: c.get("metadata", {}).get("row_index", 0))
+    rows = _member_rows("table_id", table_id, "table_row")
+    rows.sort(key=lambda c: c["metadata"].get("row_index", 0))
     return rows
 
 
 def _get_list_members(list_id: str) -> list[dict]:
-    """Return all indexed chunks belonging to a given list_id, ordered by position."""
-    chunk_index = _build_chunk_index()
-    members = []
-    for chunk in chunk_index.values():
-        if chunk.get("chunk_type") != "list_item":
-            continue
-        metadata = chunk.get("metadata", {}) or {}
-        if metadata.get("list_id") == list_id:
-            members.append(chunk)
-    members.sort(key=lambda c: c.get("metadata", {}).get("position", 0))
+    """Return all ``list_item`` chunks for a list_id, ordered by position."""
+    members = _member_rows("list_id", list_id, "list_item")
+    members.sort(key=lambda c: c["metadata"].get("position", 0))
     return members
 
 
@@ -298,7 +234,7 @@ def _group_list_item_results(results: list[dict]) -> list[dict]:
     return merged
 
 
-def _format_grouped_list_item(result: dict, chunk_index: dict) -> str:
+def _format_grouped_list_item(result: dict) -> str:
     """Format a grouped list_item result slot showing all matched members inline."""
     members = result["_grouped_items"]
     try:
@@ -406,7 +342,7 @@ def _group_table_row_results(results: list[dict]) -> list[dict]:
     return merged
 
 
-def _format_grouped_table_row(result: dict, chunk_index: dict) -> str:
+def _format_grouped_table_row(result: dict) -> str:
     """Format a grouped table_row result slot showing all matched members inline."""
     members = result["_grouped_items"]
     try:
@@ -455,9 +391,17 @@ def _format_grouped_table_row(result: dict, chunk_index: dict) -> str:
 
 
 def _get_indexed_chunk_types() -> set[str]:
-    """Return the set of chunk_type values present in the indexed data."""
-    chunk_index = _build_chunk_index()
-    return {c.get("chunk_type") for c in chunk_index.values() if c.get("chunk_type")}
+    """Return the set of chunk_type values present in the indexed data.
+
+    Queried once from Milvus at startup (pulling only the tiny ``chunk_type``
+    column, never the corpus) and cached, so the server can tailor its tool list
+    without loading chunks into memory and without depending on a sidecar file
+    that could get separated from the database.
+    """
+    global _chunk_types_cache
+    if _chunk_types_cache is None:
+        _chunk_types_cache = get_milvus_service().distinct_chunk_types()
+    return _chunk_types_cache
 
 
 def _has_yaml_chunks() -> bool:
@@ -727,16 +671,14 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
             results = _group_table_row_results(results)
             logger.info(f"   📖 search: {len(results)} results found (after list grouping)")
 
-            source_map = _build_chunk_source_map()
-            chunk_index = _build_chunk_index()
             formatted: list[TextContent] = []
             for i, result in enumerate(results, 1):
                 if result.get("_grouped"):
-                    grouped_body = _format_grouped_list_item(result, chunk_index)
+                    grouped_body = _format_grouped_list_item(result)
                     formatted.append(TextContent(type="text", text=f"Result {i}:\n{grouped_body}"))
                     continue
                 elif result.get("_grouped_table"):
-                    grouped_body = _format_grouped_table_row(result, chunk_index)
+                    grouped_body = _format_grouped_table_row(result)
                     formatted.append(TextContent(type="text", text=f"Result {i}:\n{grouped_body}"))
                     continue
                 content = result.get("content", "")
@@ -746,12 +688,9 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
                 metadata_json = result.get("metadata_json", "{}")
                 score = result.get("distance", 0)
 
-                # Get token_count from chunk index
-                token_count = None
-                if chunk_id and chunk_index:
-                    chunk_data = chunk_index.get(chunk_id)
-                    if chunk_data:
-                        token_count = chunk_data.get("token_count")
+                # token_count comes directly with the search result (Milvus column /
+                # keyword doc) — no need to load the whole corpus to look it up.
+                token_count = result.get("token_count")
 
                 # Parse metadata JSON
                 try:
@@ -762,12 +701,11 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
                 # Re-hydrate YAML chunks with breadcrumb comments
                 display_content = _rehydrate_to_yaml(content, metadata, chunk_type)
 
-                # Extract source URL
+                # Extract source URL (with section anchor) straight from the result's
+                # metadata; fall back to any URL embedded in the content, then the file.
                 source_url = metadata.get("source_url")
                 if not source_url:
                     source_url = _extract_source_url(str(content))
-                if not source_url and chunk_id and source_map:
-                    source_url = source_map.get(chunk_id)
                 if not source_url:
                     source_url = source_file
 
@@ -1039,8 +977,9 @@ async def compute_health() -> dict:
     """Build an honest health report reflecting query-serving readiness.
 
     Beyond checking that service objects exist, this runs a real query probe,
-    reports cgroup memory headroom, and reports whether the heavy in-memory maps
-    are already resident (so the first-query memory spike is visible). The
+    reports cgroup memory headroom, and reports whether the heavy in-memory
+    keyword index is already resident (so the first-query memory spike is
+    visible). The
     overall status is the worst of the components: healthy / degraded /
     unhealthy — cheap enough to remain a valid startup/liveness probe.
     """
@@ -1061,10 +1000,12 @@ async def compute_health() -> dict:
             checks["collection_stats"] = f"error: {str(exc)}"
             stats_status = "degraded"
 
-        # Capture residency BEFORE the probe, which may build these maps itself.
+        # The keyword (BM25) index is the one heavy structure still built lazily
+        # on first use (search no longer loads any chunk map into RAM). Capture its
+        # residency BEFORE the probe, which may build it itself, so the first-query
+        # memory spike stays visible.
         checks["heavy_maps"] = {
-            "chunk_index_resident": _chunk_index is not None,
-            "chunk_source_map_resident": _chunk_source_map is not None,
+            "keyword_index_resident": _keyword_service is not None,
         }
 
         checks["memory"] = _memory_health()
@@ -1099,17 +1040,27 @@ async def get_yaml_definition(arguments: dict) -> list[TextContent]:
     logger.info(f"   📄 get_yaml_definition: chunk_id=\"{chunk_id}\"")
 
     try:
-        chunk_index = _build_chunk_index()
-        chunk = chunk_index.get(chunk_id)
+        chunk = get_milvus_service().get_chunk(chunk_id)
 
         if not chunk:
             logger.info(f"   📄 get_yaml_definition: chunk not found")
             return [TextContent(type="text", text=f"Chunk not found: {chunk_id}")]
 
-        # Extract data
+        # Extract data. Milvus stores metadata as a JSON string and YAML content
+        # as a JSON string, so parse both back before re-hydrating.
         content = chunk.get("content", "")
         chunk_type = chunk.get("chunk_type", "")
-        metadata = chunk.get("metadata", {})
+        meta_raw = chunk.get("metadata_json")
+        try:
+            metadata = json.loads(meta_raw) if isinstance(meta_raw, str) else (meta_raw or {})
+        except (json.JSONDecodeError, TypeError, ValueError):
+            metadata = {}
+
+        if isinstance(content, str) and chunk_type in _YAML_CHUNK_TYPES:
+            try:
+                content = json.loads(content)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                pass
 
         # Re-hydrate to YAML with breadcrumb
         yaml_output = _rehydrate_to_yaml(content, metadata, chunk_type)

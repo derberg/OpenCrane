@@ -154,7 +154,6 @@ All outputs go to `.opencrane/` directory:
 - `.opencrane/embeddings.json` — embedding vectors
 - `.opencrane/config.yaml` — source mapping and project configuration
 - `.opencrane/milvus.db` — Milvus Lite database
-- `.opencrane/collection_meta.json` — sidecar written by the `index` step recording the distinct chunk types present, so the MCP server can tailor its tool list at startup without scanning the collection (override path via `AI_DOCS_COLLECTION_META_FILE`)
 
 ## Documentation Maintenance
 

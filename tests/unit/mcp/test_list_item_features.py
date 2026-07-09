@@ -20,11 +20,14 @@ def _write_chunks(tmp_path, chunks):
     (tmp_path / ".opencrane" / "chunks.json").write_text(json.dumps(chunks), encoding="utf-8")
 
 
-def _write_meta(tmp_path, chunk_types):
-    (tmp_path / ".opencrane").mkdir(exist_ok=True)
-    (tmp_path / ".opencrane" / "collection_meta.json").write_text(
-        json.dumps({"chunk_types": chunk_types}), encoding="utf-8"
-    )
+def _mock_milvus_types(monkeypatch, chunk_types):
+    """Point the server's Milvus service at a mock reporting the given chunk types."""
+    import opencrane.mcp.server as server_module
+
+    svc = Mock()
+    svc.distinct_chunk_types.return_value = set(chunk_types)
+    monkeypatch.setattr(server_module, "get_milvus_service", lambda: svc)
+    return svc
 
 
 def _reset_caches():
@@ -51,17 +54,15 @@ def _list_row(chunk_id, content, metadata):
             "metadata_json": json.dumps(metadata)}
 
 
-def test_has_list_item_chunks_true(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
+def test_has_list_item_chunks_true(monkeypatch):
     _reset_caches()
-    _write_meta(tmp_path, ["prose", "list_item"])
+    _mock_milvus_types(monkeypatch, ["prose", "list_item"])
     assert _has_list_item_chunks() is True
 
 
-def test_has_list_item_chunks_false(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
+def test_has_list_item_chunks_false(monkeypatch):
     _reset_caches()
-    _write_meta(tmp_path, ["prose"])
+    _mock_milvus_types(monkeypatch, ["prose"])
     assert _has_list_item_chunks() is False
 
 

@@ -851,60 +851,59 @@ class TestMCPServer:
         assert "Failed to retrieve metadata schema" in result[0].text
 
 
-def _write_collection_meta(tmp_path, chunk_types):
-    (tmp_path / ".opencrane").mkdir(exist_ok=True)
-    (tmp_path / ".opencrane" / "collection_meta.json").write_text(
-        json.dumps({"chunk_types": chunk_types}), encoding="utf-8"
-    )
-
-
-def test_has_yaml_chunks_true(tmp_path, monkeypatch):
-    """Test _has_yaml_chunks returns True when the sidecar lists a YAML type."""
+def _mock_milvus_types(monkeypatch, chunk_types):
+    """Point the server's Milvus service at a mock reporting the given chunk types."""
     import opencrane.mcp.server as server_module
 
-    monkeypatch.chdir(tmp_path)
+    svc = Mock()
+    svc.distinct_chunk_types.return_value = set(chunk_types)
+    monkeypatch.setattr(server_module, "get_milvus_service", lambda: svc)
+    return svc
+
+
+def test_has_yaml_chunks_true(monkeypatch):
+    """Test _has_yaml_chunks returns True when Milvus reports a YAML type."""
+    import opencrane.mcp.server as server_module
+
     server_module._chunk_types_cache = None
-    _write_collection_meta(tmp_path, ["prose", "crd_definition"])
+    _mock_milvus_types(monkeypatch, ["prose", "crd_definition"])
 
     assert server_module._has_yaml_chunks() is True
 
 
-def test_has_yaml_chunks_false(tmp_path, monkeypatch):
-    """Test _has_yaml_chunks returns False when the sidecar lists no YAML type."""
+def test_has_yaml_chunks_false(monkeypatch):
+    """Test _has_yaml_chunks returns False when Milvus reports no YAML type."""
     import opencrane.mcp.server as server_module
 
-    monkeypatch.chdir(tmp_path)
     server_module._chunk_types_cache = None
-    _write_collection_meta(tmp_path, ["prose", "code_snippet"])
+    _mock_milvus_types(monkeypatch, ["prose", "code_snippet"])
 
     assert server_module._has_yaml_chunks() is False
 
 
-def test_has_yaml_chunks_empty_index(tmp_path, monkeypatch):
-    """Test _has_yaml_chunks returns False when the sidecar is empty."""
+def test_has_yaml_chunks_empty_index(monkeypatch):
+    """Test _has_yaml_chunks returns False when Milvus reports no chunk types."""
     import opencrane.mcp.server as server_module
 
-    monkeypatch.chdir(tmp_path)
     server_module._chunk_types_cache = None
-    _write_collection_meta(tmp_path, [])
+    _mock_milvus_types(monkeypatch, [])
 
     assert server_module._has_yaml_chunks() is False
 
 
-def test_get_indexed_chunk_types_caches(tmp_path, monkeypatch):
-    """The chunk-type set is read from the sidecar once and cached."""
+def test_get_indexed_chunk_types_caches(monkeypatch):
+    """The chunk-type set is queried from Milvus once and cached."""
     import opencrane.mcp.server as server_module
 
-    monkeypatch.chdir(tmp_path)
     server_module._chunk_types_cache = None
-    _write_collection_meta(tmp_path, ["prose", "list_item"])
+    svc = _mock_milvus_types(monkeypatch, ["prose", "list_item"])
 
     first = server_module._get_indexed_chunk_types()
     assert first == {"prose", "list_item"}
 
-    # Remove the sidecar; a cached call must not re-read it.
-    (tmp_path / ".opencrane" / "collection_meta.json").unlink()
+    # A cached call must not query Milvus again.
     assert server_module._get_indexed_chunk_types() is first
+    assert svc.distinct_chunk_types.call_count == 1
 
 
 @pytest.mark.anyio

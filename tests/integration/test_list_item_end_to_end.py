@@ -20,7 +20,6 @@ import pytest
 pytestmark = pytest.mark.integration
 
 from opencrane.mcp import server as mcp_server
-from opencrane.mcp.collection_meta import write_chunk_types
 from opencrane.mcp.services.embeddings import EmbeddingService
 from opencrane.mcp.services.milvus_client import MilvusService
 from opencrane.rag.services.chunk_serializer import ChunkSerializer
@@ -41,14 +40,14 @@ def list_item_index(tmp_path, monkeypatch):
 
     monkeypatch.setenv("AI_DOCS_CHUNKS_FILE", str(chunks_path))
     monkeypatch.setenv("MILVUS_DB_PATH", str(db_path))
-    monkeypatch.setenv("AI_DOCS_COLLECTION_META_FILE", str(tmp_path / "collection_meta.json"))
 
     # 1. Chunk
     chunks = FileProcessor().process_file(FIXTURE)
     ChunkSerializer.serialize_chunks(chunks, chunks_path)
 
     # 2. Embed + insert into temp Milvus Lite (mirrors the real index step:
-    #    list_id/table_id lifted into columns, chunk-type sidecar written).
+    #    list_id/table_id lifted into their own columns). Chunk-type detection is
+    #    served straight from this collection at query time.
     embedder = EmbeddingService()
     milvus = MilvusService()
     milvus.create_collection()
@@ -72,7 +71,6 @@ def list_item_index(tmp_path, monkeypatch):
     milvus.insert_chunks(vector_chunks)
     milvus.client.flush(milvus.collection_name)
     milvus.load_collection()
-    write_chunk_types(c.chunk_type for c in chunks)
 
     return chunks
 

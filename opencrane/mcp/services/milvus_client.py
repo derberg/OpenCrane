@@ -369,3 +369,38 @@ class MilvusService:
         except Exception as e:
             logger.error(f"Failed to describe collection: {e}")
             return set()
+
+    def distinct_chunk_types(self, batch_size: int = 1000) -> set:
+        """Return the distinct ``chunk_type`` values present in the collection.
+
+        Pages through the collection with ``query_iterator`` pulling only the
+        small ``chunk_type`` column (never content/metadata), so it discovers
+        every type — including custom ones emitted by extension chunking
+        strategies — without loading the corpus into memory and without the
+        per-query row cap. Called once at server startup to tailor the tool list;
+        the caller caches the result.
+        """
+        types: set = set()
+        try:
+            iterator = self.client.query_iterator(
+                collection_name=self.collection_name,
+                filter="",
+                output_fields=["chunk_type"],
+                batch_size=batch_size,
+            )
+        except Exception as e:
+            logger.error(f"Failed to enumerate chunk types: {e}")
+            return types
+        try:
+            while True:
+                batch = iterator.next()
+                if not batch:
+                    break
+                types.update(row["chunk_type"] for row in batch if row.get("chunk_type"))
+        except Exception as e:
+            # Degrade gracefully rather than crash tool listing at startup; return
+            # whatever was gathered before the failure.
+            logger.error(f"Failed while enumerating chunk types: {e}")
+        finally:
+            iterator.close()
+        return types

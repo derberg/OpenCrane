@@ -496,6 +496,49 @@ class TestMilvusService:
         service = MilvusService()
         assert service.field_names() == set()
 
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_distinct_chunk_types(self, mock_client_class):
+        """Pages through the iterator, dedupes, and drops empty values; closes it."""
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        iterator = Mock()
+        # Two batches then an empty batch signalling the end.
+        iterator.next.side_effect = [
+            [{"chunk_type": "prose"}, {"chunk_type": "list_item"}],
+            [{"chunk_type": "prose"}, {"chunk_type": ""}, {"chunk_type": "table_row"}],
+            [],
+        ]
+        mock_client.query_iterator.return_value = iterator
+
+        service = MilvusService()
+        assert service.distinct_chunk_types() == {"prose", "list_item", "table_row"}
+        # Only the small chunk_type column is pulled, never the corpus.
+        assert mock_client.query_iterator.call_args[1]["output_fields"] == ["chunk_type"]
+        iterator.close.assert_called_once()
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_distinct_chunk_types_iterator_creation_error(self, mock_client_class):
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        mock_client.query_iterator.side_effect = Exception("boom")
+
+        service = MilvusService()
+        assert service.distinct_chunk_types() == set()
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_distinct_chunk_types_degrades_on_mid_iteration_error(self, mock_client_class):
+        """A failure mid-iteration returns the partial set, closes the iterator, no raise."""
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        iterator = Mock()
+        # First batch succeeds, then iteration blows up.
+        iterator.next.side_effect = [[{"chunk_type": "prose"}], Exception("mid-iteration boom")]
+        mock_client.query_iterator.return_value = iterator
+
+        service = MilvusService()
+        assert service.distinct_chunk_types() == {"prose"}
+        iterator.close.assert_called_once()
+
 
 class TestTruncateMetadata:
     """The metadata truncator must always emit valid JSON within the field limit."""

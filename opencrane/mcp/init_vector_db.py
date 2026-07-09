@@ -8,7 +8,6 @@ import os
 from pathlib import Path
 from opencrane.mcp.services.milvus_client import MilvusService
 from opencrane.mcp.services.embeddings import EmbeddingService
-from opencrane.mcp.collection_meta import write_chunk_types
 from opencrane.shared.models.vector_chunk import VectorChunk
 from opencrane.shared.logging_config import setup_logging
 
@@ -91,10 +90,6 @@ def main():
 
     logger.info(f"Inserting {len(vector_chunks)} vectors into Milvus...")
     milvus.insert_chunks(vector_chunks)
-
-    # Record which chunk types are present so the MCP server can tailor its tool
-    # list at startup without scanning the collection.
-    write_chunk_types(vc.chunk_type for vc in vector_chunks)
 
     logger.info("Flushing collection to ensure data persistence...")
     milvus.client.flush(milvus.collection_name)

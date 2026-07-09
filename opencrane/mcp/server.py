@@ -17,7 +17,6 @@ from mcp.server.stdio import stdio_server
 from opencrane.mcp.services.embeddings import EmbeddingService
 from opencrane.mcp.services.milvus_client import MilvusService
 from opencrane.mcp.services.keyword_search import KeywordSearchService
-from opencrane.mcp.collection_meta import read_chunk_types
 from opencrane.shared.config import get_config
 
 import sys
@@ -394,12 +393,14 @@ def _format_grouped_table_row(result: dict) -> str:
 def _get_indexed_chunk_types() -> set[str]:
     """Return the set of chunk_type values present in the indexed data.
 
-    Read once from the sidecar written by the ``index`` step, so startup never
-    scans the collection or loads the corpus.
+    Queried once from Milvus at startup (pulling only the tiny ``chunk_type``
+    column, never the corpus) and cached, so the server can tailor its tool list
+    without loading chunks into memory and without depending on a sidecar file
+    that could get separated from the database.
     """
     global _chunk_types_cache
     if _chunk_types_cache is None:
-        _chunk_types_cache = read_chunk_types()
+        _chunk_types_cache = get_milvus_service().distinct_chunk_types()
     return _chunk_types_cache
 
 

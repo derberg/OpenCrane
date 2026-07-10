@@ -239,3 +239,27 @@ class TestMain:
         mock_uvicorn.Config.assert_called_once_with(
             app, host="0.0.0.0", port=8000
         )
+
+    @pytest.mark.anyio
+    async def test_main_logs_each_named_endpoint(self, tmp_path, monkeypatch, caplog):
+        """With a named auth map, main() logs one MCP endpoint line per name."""
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text(
+            "auth:\n  public:\n    type: none\n  private:\n    type: none\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("MAPPING_FILE", str(cfg))
+
+        mock_server = Mock()
+        mock_server.serve = AsyncMock()
+        mock_uvicorn = Mock()
+        mock_uvicorn.Config.return_value = Mock()
+        mock_uvicorn.Server.return_value = mock_server
+
+        with patch.dict("sys.modules", {"uvicorn": mock_uvicorn}), \
+                caplog.at_level("INFO", logger="opencrane.mcp.http_server"):
+            await main()
+
+        logged = " ".join(caplog.messages)
+        assert "/mcp/public" in logged
+        assert "/mcp/private" in logged

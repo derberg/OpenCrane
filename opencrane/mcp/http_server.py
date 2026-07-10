@@ -154,6 +154,135 @@ def _load_auth_config():
     return parse_auth_config(data, set(_get_source_keys()))
 
 
+def _load_auth_endpoints():
+    """Read the ``auth`` block as a map of endpoint name -> AuthConfig.
+
+    Same file-reading contract as :func:`_load_auth_config`, but returns the
+    multi-endpoint view (``{"": cfg}`` for absent/flat auth, one entry per name
+    for a named map).
+    """
+    from opencrane.mcp.auth.config_model import parse_auth_endpoints
+    from opencrane.mcp.server import _get_source_keys
+
+    mapping_file = Path(os.environ.get("MAPPING_FILE", ".opencrane/config.yaml"))
+    data: dict = {}
+    if mapping_file.exists():
+        try:
+            import yaml as _yaml
+
+            data = _yaml.safe_load(mapping_file.read_text(encoding="utf-8")) or {}
+        except Exception as exc:  # pragma: no cover - defensive parity with runtime.py
+            logger.warning(f"Failed to parse {mapping_file}: {exc} — treating auth as none")
+            data = {}
+
+    return parse_auth_endpoints(data, set(_get_source_keys()))
+
+
+class _EndpointRoutingMiddleware:
+    """Record which named endpoint serves each request (multi-endpoint mode).
+
+    Reads the request path and sets the current endpoint name via
+    ``set_current_endpoint`` so the search path resolves that endpoint's own
+    access policy. Matches the longest ``/mcp/<name>`` prefix; anything else
+    (``/health``, well-known metadata, unmatched) resolves to the root ``""``.
+    """
+
+    def __init__(self, app, endpoint_names):
+        self.app = app
+        # Longest names first so e.g. "team-a" is preferred over a shorter prefix.
+        self._names = sorted((n for n in endpoint_names if n), key=len, reverse=True)
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            from opencrane.mcp.auth.runtime import set_current_endpoint
+
+            path = scope.get("path", "")
+            name = ""
+            for candidate in self._names:
+                if path == f"/mcp/{candidate}" or path.startswith(f"/mcp/{candidate}/"):
+                    name = candidate
+                    break
+            set_current_endpoint(name)
+        await self.app(scope, receive, send)
+
+
+def _combined_lifespan(mcps):
+    """Lifespan that initializes services once and runs every endpoint's session manager."""
+
+    @contextlib.asynccontextmanager
+    async def _life(_app):
+        await init_services()
+        async with contextlib.AsyncExitStack() as stack:
+            for mcp in mcps:
+                await stack.enter_async_context(mcp.session_manager.run())
+            yield
+
+    return _life
+
+
+def _build_multi_endpoint_app(endpoints):
+    """Compose one ASGI app serving each named endpoint at ``/mcp/<name>``.
+
+    Each endpoint gets its own FastMCP instance (its own auth wiring, so a
+    ``type: oauth`` endpoint issues a 401 challenge while a ``type: none`` one
+    stays open). Their routes and middleware are merged into a single Starlette
+    app — FastMCP emits absolute route paths (including RFC 9728 well-known
+    metadata), so merging keeps every path consistent, whereas mounting would
+    double the prefix. A combined lifespan runs each endpoint's session manager,
+    and ``_EndpointRoutingMiddleware`` tags each request with its endpoint name.
+    """
+    from starlette.applications import Starlette
+    from starlette.routing import Route
+
+    from opencrane.mcp.auth.config_model import AuthConfigError
+
+    mcps = []
+    routes = []
+    middleware = []
+    authenticated = []  # endpoints whose auth is a GLOBAL (app-level) middleware
+    for name, cfg in endpoints.items():
+        if cfg.type == "oauth" and cfg.allow_anonymous:
+            raise AuthConfigError(
+                f"auth endpoint {name!r}: allow_anonymous is not supported for named "
+                "endpoints — use a 'type: none' endpoint for open access and a strict "
+                "'type: oauth' endpoint for authenticated access"
+            )
+        path = f"/mcp/{name}"
+        mcp, _ = _build_mcp(cfg, path, _noop_lifespan, resource_url_suffix=path)
+        sub_app = mcp.streamable_http_app()
+        routes.extend(sub_app.routes)
+        # An authenticating endpoint (oauth resource server, or local/custom self-
+        # hosted auth) contributes app-level AuthenticationMiddleware; the 401 gate
+        # itself is per-route. Such endpoints also register fixed auth routes.
+        if sub_app.user_middleware:
+            authenticated.append(name)
+            middleware.extend(sub_app.user_middleware)
+        mcps.append(mcp)
+
+    # FastMCP attaches authentication as GLOBAL middleware that Starlette runs on
+    # every route; it cannot be scoped per-endpoint once routes are merged. With two
+    # such endpoints the last-declared verifier would reject the others' valid tokens,
+    # and self-hosted modes would also collide on their fixed auth routes. So only one
+    # authenticated endpoint (oauth/local/custom) is supported per deployment.
+    if len(authenticated) > 1:
+        raise AuthConfigError(
+            f"multiple authenticated endpoints {authenticated} each need per-request "
+            "authentication, which cannot be isolated when endpoints share one deployment "
+            "— expose at most one authenticated endpoint (e.g. one 'type: oauth') and pair "
+            "it with 'type: none' endpoints for open access"
+        )
+
+    # Single open readiness probe, shared across endpoints.
+    routes.append(Route("/health", health_handler, methods=["GET"]))
+
+    parent = Starlette(
+        routes=routes,
+        middleware=middleware,
+        lifespan=_combined_lifespan(mcps),
+    )
+    return _EndpointRoutingMiddleware(parent, list(endpoints))
+
+
 def _register_login_route(mcp, provider, method):
     """Mount the ``/login`` GET (form) + POST (credential submit) custom route."""
     from opencrane.mcp.auth.local_provider import render_login_form
@@ -187,24 +316,36 @@ async def lifespan(_mcp: FastMCP) -> AsyncIterator[None]:
     yield
 
 
-def build_app() -> FastMCP:
-    """Build a FastMCP app with the OpenCrane tools registered and a /health route.
+@contextlib.asynccontextmanager
+async def _noop_lifespan(_mcp: FastMCP) -> AsyncIterator[None]:
+    """Lifespan that does nothing.
 
-    The auth mode is read from config.yaml and merged into the FastMCP constructor.
-    In ``local`` mode a self-hosted OAuth authorization server plus a ``/login`` form
-    are mounted and the MCP endpoint is wrapped in a 401 challenge.
+    Used for per-endpoint FastMCP apps in multi-endpoint mode, where service
+    initialization is run once by the parent app's combined lifespan instead of
+    once per endpoint.
+    """
+    yield
+
+
+def _build_mcp(auth_config, streamable_http_path, life, resource_url_suffix=""):
+    """Construct a FastMCP instance with tools + auth for one endpoint.
+
+    Returns ``(mcp, auth_kwargs)``. ``auth_kwargs`` lets callers tell whether a
+    self-hosted auth provider (``/login``) was mounted. ``streamable_http_path``
+    is where this endpoint's MCP transport is served; ``resource_url_suffix`` is
+    passed through to the OAuth wiring so the resource identifier matches the path.
     """
     from opencrane.mcp.auth.wiring import build_fastmcp_auth
 
-    auth_config = _load_auth_config()
-    auth_kwargs = build_fastmcp_auth(auth_config)
-    logger.info(f"MCP HTTP auth mode: {auth_config.type}")
+    auth_kwargs = build_fastmcp_auth(auth_config, resource_url_suffix=resource_url_suffix)
+    logger.info(f"MCP HTTP auth mode ({streamable_http_path}): {auth_config.type}")
 
     mcp = FastMCP(
         "opencrane",
         stateless_http=True,
         json_response=False,
-        lifespan=lifespan,
+        lifespan=life,
+        streamable_http_path=streamable_http_path,
         **auth_kwargs,
     )
     _register_tools(mcp)
@@ -214,6 +355,23 @@ def build_app() -> FastMCP:
             mcp, auth_kwargs["auth_server_provider"], auth_config.local_method
         )
 
+    return mcp, auth_kwargs
+
+
+def build_app() -> FastMCP:
+    """Build a FastMCP app with the OpenCrane tools registered and a /health route.
+
+    The auth mode is read from config.yaml and merged into the FastMCP constructor.
+    In ``local`` mode a self-hosted OAuth authorization server plus a ``/login`` form
+    are mounted and the MCP endpoint is wrapped in a 401 challenge.
+
+    This is the single-endpoint app served at ``/mcp`` (the default, and the shape
+    for a legacy flat ``auth:`` block). Multi-endpoint deployments compose several
+    per-endpoint apps in :func:`build_asgi_app` instead.
+    """
+    auth_config = _load_auth_config()
+    mcp, _ = _build_mcp(auth_config, "/mcp", lifespan)
+
     # Open, unauthenticated readiness probe — uses the honest compute_health check.
     mcp.custom_route("/health", methods=["GET"])(health_handler)
 
@@ -221,22 +379,32 @@ def build_app() -> FastMCP:
 
 
 def build_asgi_app():
-    """Build the ASGI app, adding optional-auth middleware when configured.
+    """Build the ASGI app for the configured MCP endpoint(s).
 
-    For ``oauth`` mode with ``allow_anonymous: true`` the FastMCP app is left
-    open (no ``RequireAuthMiddleware``) and wrapped in
-    :class:`OptionalAuthMiddleware`, which validates a bearer token if present
-    but never rejects a tokenless request. Every other mode returns the FastMCP
-    app unchanged.
+    A single root endpoint (absent or flat ``auth:`` block) is served at ``/mcp``,
+    exactly as before: for ``oauth`` mode with ``allow_anonymous: true`` the app is
+    left open (no ``RequireAuthMiddleware``) and wrapped in
+    :class:`OptionalAuthMiddleware`, which validates a bearer token if present but
+    never rejects a tokenless request.
+
+    A named ``auth`` map produces one endpoint per name at ``/mcp/<name>``, composed
+    by :func:`_build_multi_endpoint_app`.
+
+    In both shapes, project-supplied ASGI middleware from ``OpenCraneConfig.middleware``
+    is applied as the outermost layers.
     """
-    mcp = build_app()
-    asgi_app = mcp.streamable_http_app()
-    auth_config = _load_auth_config()
-    if auth_config.type == "oauth" and auth_config.allow_anonymous:
-        from opencrane.mcp.auth.oauth_verifier import build_token_verifier
-        from opencrane.mcp.auth.optional_auth import OptionalAuthMiddleware
+    endpoints = _load_auth_endpoints()
+    if set(endpoints) == {""}:
+        mcp = build_app()
+        asgi_app = mcp.streamable_http_app()
+        auth_config = endpoints[""]
+        if auth_config.type == "oauth" and auth_config.allow_anonymous:
+            from opencrane.mcp.auth.oauth_verifier import build_token_verifier
+            from opencrane.mcp.auth.optional_auth import OptionalAuthMiddleware
 
-        asgi_app = OptionalAuthMiddleware(asgi_app, build_token_verifier(auth_config))
+            asgi_app = OptionalAuthMiddleware(asgi_app, build_token_verifier(auth_config))
+    else:
+        asgi_app = _build_multi_endpoint_app(endpoints)
 
     # Apply project-supplied ASGI middleware as the OUTERMOST layers, so they run
     # first and can call set_allowed_sources() before the tool executes. The first
@@ -264,7 +432,9 @@ async def main():
     port = int(os.environ.get("MCP_HTTP_PORT", 8000))
     host = os.environ.get("MCP_HTTP_HOST", "0.0.0.0")
     logger.info(f"Starting MCP HTTP server on http://{host}:{port}")
-    logger.info(f"  MCP endpoint:  http://{host}:{port}/mcp")
+    for name in _load_auth_endpoints():
+        mcp_path = "/mcp" if name == "" else f"/mcp/{name}"
+        logger.info(f"  MCP endpoint:  http://{host}:{port}{mcp_path}")
     logger.info(f"  Health check:  http://{host}:{port}/health")
     config = uvicorn.Config(app, host=host, port=port)
     server = uvicorn.Server(config)

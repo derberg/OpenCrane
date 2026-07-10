@@ -258,3 +258,83 @@ async def test_unparseable_mapping_file_treated_as_allow_all(tmp_path, monkeypat
 
     assert recording.calls, "backend must have been called (AllowAll fallback)"
     assert recording.calls[0] is None
+
+
+# ---------------------------------------------------------------------------
+# Per-endpoint access policy (named auth map)
+# ---------------------------------------------------------------------------
+
+_MULTI_ENDPOINT_CONFIG = (
+    "sources:\n"
+    "  cgw:\n"
+    "    url: https://github.com/org/cgw\n"
+    "  glossary:\n"
+    "    url: https://github.com/org/glossary\n"
+    "auth:\n"
+    "  public:\n"
+    "    type: none\n"
+    "    scope_sources:\n"
+    "      docs:public:\n"
+    "        - glossary\n"
+    "  private:\n"
+    "    type: none\n"
+    "    scope_sources:\n"
+    "      docs:tp:\n"
+    "        - cgw\n"
+)
+
+
+@pytest.mark.anyio
+async def test_named_endpoints_resolve_distinct_policies(tmp_path, monkeypatch):
+    """get_access_policy() returns the policy of the endpoint set for the request."""
+    config_yaml = tmp_path / "config.yaml"
+    _write_config(config_yaml, _MULTI_ENDPOINT_CONFIG)
+    monkeypatch.setenv("MAPPING_FILE", str(config_yaml))
+    reset_auth_runtime()
+
+    from opencrane.mcp.auth.runtime import get_access_policy, set_current_endpoint
+
+    set_current_endpoint("public")
+    public_policy = get_access_policy()
+    set_current_endpoint("private")
+    private_policy = get_access_policy()
+
+    assert public_policy is not private_policy
+    # Each endpoint maps its own scope to its own sources.
+    assert public_policy.authorize(("docs:public",), None) == ["glossary"]
+    assert private_policy.authorize(("docs:tp",), None) == ["cgw"]
+    # Cached: re-selecting an endpoint returns the same policy object.
+    set_current_endpoint("public")
+    assert get_access_policy() is public_policy
+
+
+@pytest.mark.anyio
+async def test_unknown_endpoint_denies_all_and_caches(tmp_path, monkeypatch):
+    """An endpoint with no configured policy fails CLOSED (deny all), cached."""
+    config_yaml = tmp_path / "config.yaml"
+    _write_config(config_yaml, _MULTI_ENDPOINT_CONFIG)
+    monkeypatch.setenv("MAPPING_FILE", str(config_yaml))
+    reset_auth_runtime()
+
+    from opencrane.mcp.auth.policies import ScopeSourcesPolicy
+    from opencrane.mcp.auth.runtime import get_access_policy, set_current_endpoint
+
+    set_current_endpoint("ghost")
+    policy = get_access_policy()
+    assert isinstance(policy, ScopeSourcesPolicy)
+    # Deny-all: no source is ever permitted, regardless of scopes or request.
+    assert policy.authorize(("docs:tp",), None) == []
+    assert policy.authorize(("docs:tp",), ["cgw"]) == []
+    assert get_access_policy() is policy  # cached on the miss key
+
+
+@pytest.mark.anyio
+async def test_reset_clears_current_endpoint(tmp_path, monkeypatch):
+    """reset_auth_runtime() restores the default ("") endpoint selection."""
+    from opencrane.mcp.auth.runtime import reset_auth_runtime as _reset
+    from opencrane.mcp.auth.runtime import _current_endpoint, set_current_endpoint
+
+    set_current_endpoint("private")
+    assert _current_endpoint.get() == "private"
+    _reset()
+    assert _current_endpoint.get() == ""

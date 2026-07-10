@@ -6,6 +6,13 @@ from dataclasses import dataclass, field
 ALLOWED_TYPES = frozenset({"none", "local", "oauth", "custom"})
 ALLOWED_LOCAL_METHODS = frozenset({"token", "password"})
 
+# Keys that only appear inside a single (flat) auth block. Their presence at the
+# top level of the ``auth`` mapping marks it as one endpoint's config rather than
+# a map of named endpoints. Endpoint names must therefore avoid these words.
+_FLAT_AUTH_KEYS = frozenset(
+    {"type", "allow_anonymous", "scope_sources", "default_sources", "oidc", "local"}
+)
+
 
 class AuthConfigError(Exception):
     """Raised when the auth block in config.yaml is invalid."""
@@ -48,7 +55,10 @@ class AuthConfig:
 
 
 def parse_auth_config(data: dict, known_sources: set[str]) -> AuthConfig:
-    """Parse and validate the auth block from a parsed config.yaml dict.
+    """Parse and validate a single flat ``auth:`` block from config.yaml.
+
+    Kept for backward compatibility and single-endpoint callers. Multi-endpoint
+    callers should use :func:`parse_auth_endpoints`.
 
     Args:
         data: The full parsed config.yaml as a dict.
@@ -62,8 +72,55 @@ def parse_auth_config(data: dict, known_sources: set[str]) -> AuthConfig:
     Raises:
         AuthConfigError: On any validation failure (fail-closed).
     """
-    auth = data.get("auth") or {}
+    return _parse_auth_entry(data.get("auth") or {}, known_sources)
 
+
+def parse_auth_endpoints(data: dict, known_sources: set[str]) -> dict[str, AuthConfig]:
+    """Parse ``auth`` into a map of endpoint name -> :class:`AuthConfig`.
+
+    Three shapes are supported:
+
+    * **No ``auth`` block (or empty):** ``{"": AuthConfig(type="none")}`` — one
+      open endpoint at the root MCP path.
+    * **Flat block** (contains any single-block key such as ``type``,
+      ``scope_sources``, ``default_sources``, ``oidc`` …): ``{"": <parsed>}`` —
+      one endpoint at the root MCP path (unchanged legacy behavior).
+    * **Named map** (e.g. ``{public: {...}, private: {...}}``): one entry per
+      name, each becoming an endpoint served at ``<root>/<name>``.
+
+    The ``""`` key denotes the root MCP endpoint (single-endpoint modes).
+    Endpoint names must not collide with the reserved single-block keys
+    (``type``, ``allow_anonymous``, ``scope_sources``, ``default_sources``,
+    ``oidc``, ``local``); such a name makes the block parse as flat instead.
+
+    Raises:
+        AuthConfigError: On any validation failure, including invalid endpoint
+            names or non-mapping entries (fail-closed).
+    """
+    auth = data.get("auth") or {}
+    if not auth:
+        return {"": AuthConfig()}
+    if _FLAT_AUTH_KEYS & set(auth):
+        return {"": _parse_auth_entry(auth, known_sources)}
+
+    endpoints: dict[str, AuthConfig] = {}
+    for name, entry in auth.items():
+        if not isinstance(name, str) or not name or not all(
+            c.isalnum() or c in "-_" for c in name
+        ):
+            raise AuthConfigError(
+                f"invalid auth endpoint name {name!r}: use letters, digits, '-' or '_'"
+            )
+        if not isinstance(entry, dict):
+            raise AuthConfigError(
+                f"auth endpoint {name!r} must be a mapping, got {type(entry).__name__}"
+            )
+        endpoints[name] = _parse_auth_entry(entry, known_sources)
+    return endpoints
+
+
+def _parse_auth_entry(auth: dict, known_sources: set[str]) -> AuthConfig:
+    """Parse and validate one auth block dict into an :class:`AuthConfig`."""
     auth_type = auth.get("type", "none")
     if auth_type not in ALLOWED_TYPES:
         raise AuthConfigError(f"unknown auth type: {auth_type!r}. Allowed: {sorted(ALLOWED_TYPES)}")

@@ -1,6 +1,11 @@
 """MCP auth package — config model, parser, access policies, and runtime helpers."""
 
-from opencrane.mcp.auth.config_model import AuthConfig, AuthConfigError, parse_auth_config
+from opencrane.mcp.auth.config_model import (
+    AuthConfig,
+    AuthConfigError,
+    parse_auth_config,
+    parse_auth_endpoints,
+)
 from opencrane.mcp.auth.local_provider import (
     OpenCraneAuthProvider,
     load_local_credentials,
@@ -15,6 +20,7 @@ from opencrane.mcp.auth.runtime import (
     get_access_policy,
     reset_auth_runtime,
     set_allowed_sources,
+    set_current_endpoint,
 )
 from opencrane.mcp.auth.wiring import build_fastmcp_auth
 
@@ -33,8 +39,10 @@ __all__ = [
     "get_access_policy",
     "load_local_credentials",
     "parse_auth_config",
+    "parse_auth_endpoints",
     "render_login_form",
     "reset_auth_runtime",
     "set_allowed_sources",
+    "set_current_endpoint",
     "verify_credentials",
 ]

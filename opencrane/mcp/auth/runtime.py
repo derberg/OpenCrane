@@ -13,8 +13,15 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Module-level policy cache; cleared by reset_auth_runtime().
-_access_policy: "AllowAllPolicy | ScopeSourcesPolicy | None" = None
+# Module-level per-endpoint policy cache; cleared by reset_auth_runtime().
+# Maps endpoint name -> policy. The "" key is the root /mcp endpoint (single-
+# endpoint modes); named keys correspond to /mcp/<name> endpoints.
+_access_policies: "dict[str, AllowAllPolicy | ScopeSourcesPolicy] | None" = None
+
+# The endpoint name that is serving the current request, set by the per-endpoint
+# middleware in http_server. Defaults to "" (the root /mcp endpoint), so single-
+# endpoint deployments and stdio need no wiring.
+_current_endpoint: ContextVar[str] = ContextVar("opencrane_current_endpoint", default="")
 
 # Per-request scopes set by the optional-auth middleware (oauth allow_anonymous).
 # None means "not set" — current_scopes() then falls back to the SDK access token.
@@ -81,22 +88,24 @@ def current_allowed_sources() -> tuple[str, ...] | None:
     return _allowed_sources.get()
 
 
-def get_access_policy() -> "AllowAllPolicy | ScopeSourcesPolicy":
-    """Build and cache the access policy from the project's config.yaml.
+def set_current_endpoint(name: str) -> None:
+    """Record which named MCP endpoint is serving the current request.
 
-    The policy is derived from the ``auth`` block in config.yaml (read from the
-    path in the ``MAPPING_FILE`` env var, defaulting to ``.opencrane/config.yaml``).
-    If the file is missing or unparseable, the config is treated as empty and an
-    ``AllowAllPolicy`` is returned.
-
-    The result is cached in a module global until ``reset_auth_runtime()`` is
-    called (useful for tests and re-initialisation).
+    Called by the per-endpoint middleware in http_server. ``get_access_policy()``
+    uses this to pick the endpoint's own policy; the default ``""`` is the root
+    /mcp endpoint.
     """
-    global _access_policy
-    if _access_policy is not None:
-        return _access_policy
+    _current_endpoint.set(name)
 
-    from opencrane.mcp.auth.config_model import parse_auth_config
+
+def _build_access_policies() -> "dict[str, AllowAllPolicy | ScopeSourcesPolicy]":
+    """Parse config.yaml and build one access policy per configured endpoint.
+
+    Reads the ``auth`` block from config.yaml (path in ``MAPPING_FILE``, default
+    ``.opencrane/config.yaml``). A missing or unparseable file is treated as empty
+    config, yielding a single root endpoint with an ``AllowAllPolicy``.
+    """
+    from opencrane.mcp.auth.config_model import parse_auth_endpoints
     from opencrane.mcp.auth.policies import build_access_policy
     from opencrane.mcp.server import _get_source_keys
 
@@ -112,18 +121,48 @@ def get_access_policy() -> "AllowAllPolicy | ScopeSourcesPolicy":
             data = {}
 
     known_sources = set(_get_source_keys())
-    auth_config = parse_auth_config(data, known_sources)
-    _access_policy = build_access_policy(auth_config)
-    return _access_policy
+    endpoints = parse_auth_endpoints(data, known_sources)
+    return {name: build_access_policy(cfg) for name, cfg in endpoints.items()}
+
+
+def get_access_policy() -> "AllowAllPolicy | ScopeSourcesPolicy":
+    """Return the access policy for the endpoint serving the current request.
+
+    Policies for every configured endpoint are built and cached on first use
+    (keyed by endpoint name) until ``reset_auth_runtime()`` is called. The
+    endpoint is chosen from the per-request contextvar set by ``set_current_endpoint``
+    (default ``""``, the root /mcp endpoint). If the current endpoint has no
+    configured policy (defensive — should not happen in practice), an
+    ``AllowAllPolicy`` is returned.
+    """
+    global _access_policies
+    if _access_policies is None:
+        _access_policies = _build_access_policies()
+
+    name = _current_endpoint.get()
+    policy = _access_policies.get(name)
+    if policy is None:
+        # Defensive: a request resolved to an endpoint with no configured policy.
+        # This should not happen (tool calls always arrive via a configured
+        # /mcp/<name>), so fail CLOSED — deny every source rather than leak all.
+        from opencrane.mcp.auth.policies import ScopeSourcesPolicy
+
+        logger.warning(
+            f"No access policy for endpoint {name!r} — denying all sources (fail-closed)"
+        )
+        policy = ScopeSourcesPolicy({}, ())
+        _access_policies[name] = policy
+    return policy
 
 
 def reset_auth_runtime() -> None:
-    """Clear the cached access policy.
+    """Clear the cached access policies and per-request auth state.
 
     Call this in tests (via fixture teardown or explicit reset) and whenever
     the project configuration changes at runtime.
     """
-    global _access_policy
-    _access_policy = None
+    global _access_policies
+    _access_policies = None
     _optional_scopes.set(None)
     _allowed_sources.set(None)
+    _current_endpoint.set("")

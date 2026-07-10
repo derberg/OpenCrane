@@ -3,7 +3,12 @@
 from dataclasses import FrozenInstanceError
 
 import pytest
-from opencrane.mcp.auth import AuthConfig, AuthConfigError, parse_auth_config
+from opencrane.mcp.auth import (
+    AuthConfig,
+    AuthConfigError,
+    parse_auth_config,
+    parse_auth_endpoints,
+)
 
 
 class TestNoAuthBlock:
@@ -344,3 +349,108 @@ class TestAudienceParsing:
     def test_missing_audience_raises(self):
         with pytest.raises(AuthConfigError):
             parse_auth_config(self._oauth(None), known_sources=set())
+
+
+class TestParseAuthEndpoints:
+    """Tests for parse_auth_endpoints — the named-endpoint map parser.
+
+    The `""` key denotes the root MCP endpoint (single-endpoint modes);
+    named keys become endpoints served under `<root>/<name>`.
+    """
+
+    def test_absent_auth_gives_single_root_none_endpoint(self):
+        """No auth block → one open endpoint at the root path."""
+        endpoints = parse_auth_endpoints({}, known_sources=set())
+        assert set(endpoints) == {""}
+        assert endpoints[""] == AuthConfig()
+        assert endpoints[""].type == "none"
+
+    def test_empty_auth_block_gives_single_root_none_endpoint(self):
+        """auth: {} → one open endpoint at the root path."""
+        endpoints = parse_auth_endpoints({"auth": {}}, known_sources=set())
+        assert set(endpoints) == {""}
+        assert endpoints[""].type == "none"
+
+    def test_flat_block_gives_single_root_endpoint(self):
+        """A flat auth block (top-level `type`) → one endpoint at the root path."""
+        data = {
+            "auth": {
+                "type": "oauth",
+                "oidc": {"issuer": "https://idp.example.com", "audience": "myapp"},
+            }
+        }
+        endpoints = parse_auth_endpoints(data, known_sources=set())
+        assert set(endpoints) == {""}
+        assert endpoints[""].type == "oauth"
+        assert endpoints[""].oidc_issuer == "https://idp.example.com"
+
+    def test_flat_block_type_none_gives_single_root_endpoint(self):
+        """A flat `type: none` block → single root endpoint (legacy behavior)."""
+        data = {"auth": {"type": "none", "default_sources": ["docs"]}}
+        endpoints = parse_auth_endpoints(data, known_sources={"docs"})
+        assert set(endpoints) == {""}
+        assert endpoints[""].default_sources == ("docs",)
+
+    def test_flat_block_without_type_key_is_still_flat(self):
+        """A flat block that omits `type` (e.g. only scope_sources) stays a single
+        root endpoint — it must not be mistaken for a named map."""
+        data = {
+            "auth": {
+                "scope_sources": {"docs:tp": ["cgw"]},
+                "default_sources": ["cgw"],
+            }
+        }
+        endpoints = parse_auth_endpoints(data, known_sources={"cgw"})
+        assert set(endpoints) == {""}
+        assert endpoints[""].type == "none"
+        assert endpoints[""].scope_sources == {"docs:tp": ("cgw",)}
+
+    def test_named_map_gives_endpoint_per_name(self):
+        """A named map → one AuthConfig per name, each parsed independently."""
+        data = {
+            "auth": {
+                "public": {"type": "none", "default_sources": ["glossary"]},
+                "private": {
+                    "type": "oauth",
+                    "oidc": {"issuer": "https://idp.example.com", "audience": "priv"},
+                },
+            }
+        }
+        endpoints = parse_auth_endpoints(data, known_sources={"glossary"})
+        assert set(endpoints) == {"public", "private"}
+        assert endpoints["public"].type == "none"
+        assert endpoints["public"].default_sources == ("glossary",)
+        assert endpoints["private"].type == "oauth"
+        assert endpoints["private"].oidc_issuer == "https://idp.example.com"
+        assert endpoints["private"].oidc_audiences == ("priv",)
+
+    def test_named_entry_not_mapping_raises(self):
+        """A named entry that is not a mapping raises AuthConfigError."""
+        with pytest.raises(AuthConfigError, match="must be a mapping"):
+            parse_auth_endpoints({"auth": {"public": "nope"}}, known_sources=set())
+
+    def test_invalid_endpoint_name_raises(self):
+        """An endpoint name with path-unsafe characters raises AuthConfigError."""
+        with pytest.raises(AuthConfigError, match="invalid auth endpoint name"):
+            parse_auth_endpoints(
+                {"auth": {"bad/name": {"type": "none"}}}, known_sources=set()
+            )
+
+    def test_named_entry_validation_error_propagates(self):
+        """A per-entry validation failure (bad type) propagates as AuthConfigError."""
+        with pytest.raises(AuthConfigError, match="unknown auth type"):
+            parse_auth_endpoints(
+                {"auth": {"x": {"type": "bogus"}}}, known_sources=set()
+            )
+
+    def test_named_entry_known_sources_enforced(self):
+        """Per-entry default_sources are validated against known_sources."""
+        data = {"auth": {"pub": {"type": "none", "default_sources": ["ghost"]}}}
+        with pytest.raises(AuthConfigError, match="unknown source"):
+            parse_auth_endpoints(data, known_sources={"docs"})
+
+    def test_endpoint_name_with_hyphen_and_underscore_allowed(self):
+        """Names of letters, digits, '-' and '_' are accepted."""
+        data = {"auth": {"team_a-1": {"type": "none"}}}
+        endpoints = parse_auth_endpoints(data, known_sources=set())
+        assert set(endpoints) == {"team_a-1"}

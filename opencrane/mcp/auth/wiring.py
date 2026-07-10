@@ -36,11 +36,17 @@ from opencrane.mcp.auth.oauth_verifier import build_token_verifier
 logger = logging.getLogger(__name__)
 
 
-def build_fastmcp_auth(auth_config: AuthConfig) -> dict:
+def build_fastmcp_auth(auth_config: AuthConfig, resource_url_suffix: str = "") -> dict:
     """Return the ``FastMCP(...)`` kwargs implementing ``auth_config`` (fail-closed).
 
     Args:
         auth_config: The parsed auth configuration.
+        resource_url_suffix: Path appended to ``PUBLIC_URL`` to form the OAuth
+            resource-server identifier for this endpoint (e.g. ``/mcp/private``).
+            Empty for a single root endpoint (the resource is ``PUBLIC_URL``
+            itself). Only meaningful for ``oauth`` mode; named multi-endpoint
+            deployments pass the endpoint's mount path so its RFC 9728 protected-
+            resource metadata and ``WWW-Authenticate`` challenge are scoped to it.
 
     Returns:
         A dict of kwargs to splat into ``FastMCP(...)``. Empty for open modes.
@@ -131,12 +137,15 @@ def build_fastmcp_auth(auth_config: AuthConfig) -> dict:
             "oauth auth requires PUBLIC_URL to be set to this server's public "
             "base URL (used as the OAuth resource-server identifier)"
         )
+    resource_server_url = (
+        public_url.rstrip("/") + resource_url_suffix if resource_url_suffix else public_url
+    )
     return {
         "token_verifier": build_token_verifier(auth_config),
         "auth": AuthSettings(
-            # issuer_url is the external IdP; resource_server_url is THIS server.
+            # issuer_url is the external IdP; resource_server_url is THIS endpoint.
             issuer_url=auth_config.oidc_issuer,
-            resource_server_url=public_url,
+            resource_server_url=resource_server_url,
             # No transport-level required_scopes: Layer-2 scope->sources handles
             # content authorization; requiring scopes here would over-restrict.
             required_scopes=None,

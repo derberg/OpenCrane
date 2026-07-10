@@ -301,6 +301,39 @@ At search time `set_allowed_sources` takes **highest precedence** — above the 
 
 ---
 
+## Multiple endpoints — a named `auth:` map
+
+By default the `auth:` block is a single **flat** block and produces one MCP endpoint at `/mcp`. To serve **several endpoints from one deployment**, each with its own authentication, make `auth:` a **map of named entries**. Each key becomes an endpoint served at `/mcp/<name>`; each value is a full auth block (the same keys documented above — `type`, `oidc`, `scope_sources`, `default_sources`, …).
+
+```yaml
+# .opencrane/config.yaml
+auth:
+  public:              # served at /mcp/public
+    type: none         # open, no login — anonymous callers welcome
+    default_sources:
+      - handbook
+      - glossary
+  private:             # served at /mcp/private
+    type: oauth        # requires a valid token; issues a 401 challenge so
+    oidc:              # MCP clients discover the IdP and log in
+      issuer: https://idp.example.com
+      audience: https://docs.example.com/mcp/private
+```
+
+This runs **one process** that exposes both `/mcp/public` and `/mcp/private`. A common split is an open endpoint for public docs plus an authenticated endpoint for everything a signed-in user may additionally see. Each endpoint resolves its **own** Layer-2 policy: `scope_sources`/`default_sources` are read from that endpoint's entry, and a custom `middleware` (above) can tell which endpoint served the request from the path (`/mcp/public` vs `/mcp/private`) and authorize accordingly.
+
+For a `type: oauth` endpoint, its RFC 9728 protected-resource metadata and `WWW-Authenticate` challenge are scoped to its own path — `PUBLIC_URL` is combined with the mount path (e.g. `https://docs.example.com/mcp/private`) as the OAuth resource identifier, so set `oidc.audience` to that same value.
+
+**Rules and limits:**
+
+- **Backward compatible.** No `auth:` block, or a flat block with a top-level `type:` (or any single-block key such as `scope_sources`), still means a single endpoint at `/mcp`. Nothing changes for existing configs.
+- **Endpoint names** may contain letters, digits, `-` and `_`. They must not collide with the reserved single-block keys (`type`, `allow_anonymous`, `scope_sources`, `default_sources`, `oidc`, `local`) — such a name would make the block parse as a single flat endpoint instead.
+- **`allow_anonymous` is not supported for named endpoints.** Model open access as a `type: none` endpoint and authenticated access as a strict `type: oauth` endpoint; mixing the two on one path is exactly what the optional-auth mode was a single-endpoint workaround for. Setting it on a named entry fails closed at startup.
+- **At most one authenticated endpoint.** Because the SDK applies token verification as app-level middleware across the merged routes, a deployment may expose only one authenticating endpoint (`oauth`, `local`, or `custom`); pair it with any number of `type: none` endpoints. Two authenticated endpoints fail closed at startup. (A single open + single authenticated endpoint — the common public/private split — is fully supported.)
+- **Shared `/health`.** All endpoints share one readiness probe at `/health`.
+
+---
+
 ## stdio transport
 
 The stdio transport is always unauthenticated. OAuth applies to the HTTP transport only. When running `opencrane serve --transport stdio`, the server trusts the process's environment for credentials (per the MCP specification) and Layer-2 scope enforcement is bypassed (all sources are accessible).

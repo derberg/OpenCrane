@@ -313,6 +313,226 @@ class TestLocalPasswordModeApp:
         assert "code=" in resp.headers["location"]
 
 
+class TestMultiEndpointApp:
+    """A named ``auth`` map produces one MCP endpoint per name at /mcp/<name>."""
+
+    def _write_two_open_endpoints(self, tmp_path, monkeypatch):
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text(
+            "auth:\n"
+            "  public:\n"
+            "    type: none\n"
+            "  docs:\n"
+            "    type: none\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("MAPPING_FILE", str(cfg))
+        return cfg
+
+    def test_route_composition_one_endpoint_per_name(self, tmp_path, monkeypatch):
+        """Each named endpoint gets its own /mcp/<name> route; one shared /health; no root /mcp."""
+        self._write_two_open_endpoints(tmp_path, monkeypatch)
+        app = http_server.build_asgi_app()
+        parent = app.app  # unwrap _EndpointRoutingMiddleware
+        paths = {getattr(r, "path", None) for r in parent.routes}
+        assert {"/mcp/public", "/mcp/docs", "/health"} <= paths
+        assert "/mcp" not in paths
+
+    def test_serves_each_endpoint_and_health(self, tmp_path, monkeypatch):
+        """Both endpoints route (not 404) and stay open (not 401); /health is 200; unknown path 404."""
+        self._write_two_open_endpoints(tmp_path, monkeypatch)
+        app = http_server.build_asgi_app()
+        with patch("opencrane.mcp.http_server.init_services", new=AsyncMock()):
+            with TestClient(app) as client:
+                health = client.get("/health")
+                assert health.status_code in (200, 503)
+                for name in ("public", "docs"):
+                    resp = client.post(
+                        f"/mcp/{name}",
+                        json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+                        headers={"Accept": "application/json, text/event-stream"},
+                    )
+                    assert resp.status_code != 404  # route matched
+                    assert resp.status_code != 401  # open, no auth challenge
+                missing = client.post(
+                    "/mcp/nope",
+                    json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+                    headers={"Accept": "application/json, text/event-stream"},
+                )
+                assert missing.status_code == 404
+
+    def test_named_oauth_endpoint_challenges_while_public_stays_open(self, tmp_path, monkeypatch):
+        """public=none stays open; private=oauth issues a 401 with its own scoped PRM."""
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text(
+            "auth:\n"
+            "  public:\n"
+            "    type: none\n"
+            "  private:\n"
+            "    type: oauth\n"
+            "    oidc:\n"
+            "      issuer: https://idp.example.com\n"
+            "      audience: https://docs.example.com/mcp/private\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("MAPPING_FILE", str(cfg))
+        monkeypatch.setenv("PUBLIC_URL", "https://docs.example.com")
+
+        class StubVerifier:
+            async def verify_token(self, token):
+                return None
+
+        monkeypatch.setattr(
+            "opencrane.mcp.auth.wiring.build_token_verifier",
+            lambda c: StubVerifier(),
+        )
+        app = http_server.build_asgi_app()
+        parent = app.app
+        paths = {getattr(r, "path", None) for r in parent.routes}
+        # RFC 9728 metadata for the private endpoint is scoped to its own path.
+        assert "/.well-known/oauth-protected-resource/mcp/private" in paths
+
+        client = TestClient(app)
+        challenge = client.post(
+            "/mcp/private",
+            json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+            headers={"Accept": "application/json, text/event-stream"},
+        )
+        assert challenge.status_code == 401
+        meta = client.get("/.well-known/oauth-protected-resource/mcp/private")
+        assert meta.status_code == 200
+        assert meta.json()["resource"].rstrip("/") == "https://docs.example.com/mcp/private"
+
+    def test_two_authenticated_endpoints_rejected(self, tmp_path, monkeypatch):
+        """Only one token-verifier endpoint is supported; a second fails closed."""
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text(
+            "auth:\n"
+            "  first:\n"
+            "    type: oauth\n"
+            "    oidc:\n"
+            "      issuer: https://idp.example.com\n"
+            "      audience: a\n"
+            "  second:\n"
+            "    type: oauth\n"
+            "    oidc:\n"
+            "      issuer: https://idp2.example.com\n"
+            "      audience: b\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("MAPPING_FILE", str(cfg))
+        monkeypatch.setenv("PUBLIC_URL", "https://docs.example.com")
+
+        class StubVerifier:
+            async def verify_token(self, token):
+                return None
+
+        monkeypatch.setattr(
+            "opencrane.mcp.auth.wiring.build_token_verifier",
+            lambda c: StubVerifier(),
+        )
+        with pytest.raises(AuthConfigError, match="multiple authenticated endpoints"):
+            http_server.build_asgi_app()
+
+    def test_two_local_endpoints_rejected(self, tmp_path, monkeypatch):
+        """Two 'type: local' endpoints also count as authenticated → rejected."""
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text(
+            "auth:\n"
+            "  one:\n"
+            "    type: local\n"
+            "    local:\n"
+            "      method: token\n"
+            "  two:\n"
+            "    type: local\n"
+            "    local:\n"
+            "      method: token\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("MAPPING_FILE", str(cfg))
+        monkeypatch.setenv("PUBLIC_URL", "https://docs.example.com")
+        monkeypatch.setenv("OPENCRANE_ACCESS_TOKEN", "s3cret-token")
+        with pytest.raises(AuthConfigError, match="multiple authenticated endpoints"):
+            http_server.build_asgi_app()
+
+    def test_named_allow_anonymous_is_rejected(self, tmp_path, monkeypatch):
+        """allow_anonymous is unsupported for named endpoints — fail closed at build."""
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text(
+            "auth:\n"
+            "  public:\n"
+            "    type: none\n"
+            "  loose:\n"
+            "    type: oauth\n"
+            "    allow_anonymous: true\n"
+            "    oidc:\n"
+            "      issuer: https://idp.example.com\n"
+            "      audience: x\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("MAPPING_FILE", str(cfg))
+        with pytest.raises(AuthConfigError, match="allow_anonymous is not supported"):
+            http_server.build_asgi_app()
+
+
+class TestEndpointRoutingMiddleware:
+    """The routing middleware tags each request with its endpoint name."""
+
+    @pytest.mark.anyio
+    async def test_sets_endpoint_name_from_path(self, monkeypatch):
+        captured = {}
+        monkeypatch.setattr(
+            "opencrane.mcp.auth.runtime.set_current_endpoint",
+            lambda name: captured.setdefault("names", []).append(name),
+        )
+
+        async def inner(scope, receive, send):
+            captured.setdefault("reached", []).append(scope.get("path"))
+
+        mw = http_server._EndpointRoutingMiddleware(inner, ["public", "private"])
+
+        async def recv():
+            return {}
+
+        async def send(_m):
+            return None
+
+        for path, expected in [
+            ("/mcp/private", "private"),
+            ("/mcp/public/sub", "public"),
+            ("/health", ""),
+            ("/.well-known/oauth-protected-resource/mcp/private", ""),
+        ]:
+            await mw({"type": "http", "path": path}, recv, send)
+        assert captured["names"] == ["private", "public", "", ""]
+        # All requests still reached the inner app.
+        assert len(captured["reached"]) == 4
+
+    @pytest.mark.anyio
+    async def test_non_http_scope_passes_through_without_tagging(self, monkeypatch):
+        called = {"set": 0}
+        monkeypatch.setattr(
+            "opencrane.mcp.auth.runtime.set_current_endpoint",
+            lambda name: called.__setitem__("set", called["set"] + 1),
+        )
+        reached = {"ok": False}
+
+        async def inner(scope, receive, send):
+            reached["ok"] = True
+
+        mw = http_server._EndpointRoutingMiddleware(inner, ["public"])
+        await mw({"type": "lifespan"}, None, None)
+        assert reached["ok"] is True
+        assert called["set"] == 0
+
+
+class TestNoopLifespan:
+    @pytest.mark.anyio
+    async def test_noop_lifespan_yields(self):
+        async with http_server._noop_lifespan(object()):
+            pass
+
+
 class TestBuildAppMissingPublicUrl:
     def test_local_without_public_url_raises(self, tmp_path, monkeypatch):
         cfg = tmp_path / "config.yaml"

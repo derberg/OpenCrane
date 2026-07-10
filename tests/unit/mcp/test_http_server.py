@@ -1,21 +1,27 @@
-"""Unit tests for the HTTP MCP server transport (fully mocked, no real server)."""
+"""Unit tests for the FastMCP-based HTTP MCP server transport (fully mocked)."""
 
 import json
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
 
+from starlette.testclient import TestClient
+from mcp.types import TextContent
+
 import opencrane.mcp.http_server as http_server
 from opencrane.mcp.http_server import (
     init_services,
-    root_handler,
-    health_handler,
-    get_session_manager,
-    http_handler,
-    mcp_handler,
-    _AlreadySentResponse,
+    build_app,
     lifespan,
     main,
+    app,
+    health_handler,
 )
+from opencrane.mcp import server as s
+
+
+def _body(response):
+    """Decode a Starlette JSONResponse body to a dict."""
+    return json.loads(response.body)
 
 
 @pytest.fixture(autouse=True)
@@ -23,16 +29,9 @@ def reset_module_globals():
     """Reset module-level state before and after each test for isolation."""
     http_server._services_ready = False
     http_server._milvus_stats = None
-    http_server._session_manager = None
     yield
     http_server._services_ready = False
     http_server._milvus_stats = None
-    http_server._session_manager = None
-
-
-def _body(response):
-    """Decode a Starlette JSONResponse body into a dict."""
-    return json.loads(response.body.decode())
 
 
 class TestInitServices:
@@ -60,18 +59,109 @@ class TestInitServices:
         assert http_server._services_ready is False
 
 
-class TestRootHandler:
+class TestLifespan:
     @pytest.mark.anyio
-    async def test_root_handler(self):
-        response = await root_handler(Mock())
-        data = _body(response)
-        assert data["name"] == "opencrane"
-        assert data["mcp_endpoint"] == "/http"
-        assert data["health_endpoint"] == "/health"
-        assert data["stateless"] is True
+    async def test_lifespan_runs_init_services(self):
+        """The FastMCP lifespan invokes init_services on startup."""
+        mcp = build_app()
+        with patch("opencrane.mcp.http_server.init_services", new=AsyncMock()) as mock_init:
+            async with lifespan(mcp):
+                pass
+        mock_init.assert_awaited_once()
 
 
-class TestHealthHandler:
+class TestRegisteredTools:
+    """The bridge registers the existing server.py handlers with their schemas."""
+
+    @pytest.mark.anyio
+    async def test_base_tools_always_advertised(self):
+        with patch.object(s, "_has_yaml_chunks", return_value=False), \
+                patch.object(s, "_has_list_item_chunks", return_value=False):
+            mcp = build_app()
+            tools = await mcp.list_tools()
+        names = {t.name for t in tools}
+        assert names == {"search_docs", "health"}
+
+    @pytest.mark.anyio
+    async def test_search_docs_schema_matches_source_of_truth(self):
+        """search_docs advertises exactly server._build_search_tool().inputSchema."""
+        with patch.object(s, "_has_yaml_chunks", return_value=False), \
+                patch.object(s, "_has_list_item_chunks", return_value=False):
+            mcp = build_app()
+            tools = await mcp.list_tools()
+        search = next(t for t in tools if t.name == "search_docs")
+        assert search.inputSchema == s._build_search_tool().inputSchema
+        assert search.description == s._build_search_tool().description
+
+    @pytest.mark.anyio
+    async def test_list_members_tool_appears_when_predicate_true(self):
+        with patch.object(s, "_has_yaml_chunks", return_value=False), \
+                patch.object(s, "_has_list_item_chunks", return_value=True):
+            mcp = build_app()
+            tools = await mcp.list_tools()
+        names = {t.name for t in tools}
+        assert "get_list_members" in names
+        # get_metadata_schema also gated on list-item OR yaml
+        assert "get_metadata_schema" in names
+        assert "get_yaml_definition" not in names
+        gm = next(t for t in tools if t.name == "get_list_members")
+        assert gm.inputSchema == s.GET_LIST_MEMBERS_TOOL_SCHEMA
+        assert gm.description == s.GET_LIST_MEMBERS_TOOL_DESCRIPTION
+
+    @pytest.mark.anyio
+    async def test_yaml_tools_appear_when_predicate_true(self):
+        with patch.object(s, "_has_yaml_chunks", return_value=True), \
+                patch.object(s, "_has_list_item_chunks", return_value=False):
+            mcp = build_app()
+            tools = await mcp.list_tools()
+        names = {t.name for t in tools}
+        assert "get_yaml_definition" in names
+        assert "get_metadata_schema" in names
+        assert "get_list_members" not in names
+        gy = next(t for t in tools if t.name == "get_yaml_definition")
+        assert gy.inputSchema == s.GET_YAML_DEFINITION_TOOL_SCHEMA
+        assert gy.description == s.GET_YAML_DEFINITION_TOOL_DESCRIPTION
+        gm = next(t for t in tools if t.name == "get_metadata_schema")
+        assert gm.inputSchema == s.GET_METADATA_SCHEMA_TOOL_SCHEMA
+        assert gm.description == s.GET_METADATA_SCHEMA_TOOL_DESCRIPTION
+
+    @pytest.mark.anyio
+    async def test_call_tool_search_docs_reaches_handler(self):
+        """call_tool bridges arguments dict to the existing handler and returns list[TextContent]."""
+        fake_embeddings = Mock()
+        encoded = Mock()
+        encoded.tolist.return_value = [[0.1, 0.2]]
+        fake_embeddings.model.encode.return_value = encoded
+
+        fake_milvus = Mock()
+        fake_milvus.search.return_value = [
+            {
+                "content": "hello world",
+                "source_file": "docs/x.md",
+                "chunk_type": "prose",
+                "chunk_id": "abc",
+                "metadata_json": "{}",
+                "distance": 0.9,
+                "source_name": "topic",
+            }
+        ]
+
+        with patch.object(s, "_has_yaml_chunks", return_value=False), \
+                patch.object(s, "_has_list_item_chunks", return_value=False), \
+                patch.object(s, "_get_indexed_chunk_types", return_value=set()), \
+                patch.object(s, "get_embeddings_service", return_value=fake_embeddings), \
+                patch.object(s, "get_milvus_service", return_value=fake_milvus):
+            mcp = build_app()
+            result = await mcp.call_tool(
+                "search_docs", {"query": "hi", "search_mode": "semantic"}
+            )
+
+        assert isinstance(result, list)
+        assert all(isinstance(c, TextContent) for c in result)
+        assert "hello world" in result[0].text
+
+
+class TestHealthEndpoint:
     @pytest.mark.anyio
     async def test_health_ready_delegates_to_compute_health(self):
         """When services are ready, the honest compute_health payload is returned."""
@@ -102,96 +192,14 @@ class TestHealthHandler:
         assert response.status_code == 503
         assert _body(response)["status"] == "unhealthy"
 
-    @pytest.mark.anyio
-    async def test_health_initializing(self):
+    def test_health_initializing(self):
         http_server._services_ready = False
-        response = await health_handler(Mock())
-        assert response.status_code == 503
-        data = _body(response)
+        client = TestClient(build_app().streamable_http_app())
+        resp = client.get("/health")
+        assert resp.status_code == 503
+        data = resp.json()
         assert data["status"] == "initializing"
         assert data["services"] == "loading"
-
-
-class TestSessionManager:
-    def test_get_session_manager_lazy_init_and_cached(self):
-        sentinel = object()
-        with patch("opencrane.mcp.http_server.StreamableHTTPSessionManager", return_value=sentinel) as mock_mgr, \
-                patch("opencrane.mcp.server.app", new=Mock()):
-            first = get_session_manager()
-            second = get_session_manager()
-
-        assert first is sentinel
-        assert second is sentinel
-        # Constructed only once (cached on second call).
-        mock_mgr.assert_called_once()
-        _, kwargs = mock_mgr.call_args
-        assert kwargs["stateless"] is True
-        assert kwargs["json_response"] is False
-
-
-class TestHttpHandlers:
-    @pytest.mark.anyio
-    async def test_http_handler(self):
-        mock_manager = Mock()
-        mock_manager.handle_request = AsyncMock()
-        request = Mock()
-        request.scope = {"scope": True}
-        request.receive = Mock()
-        request._send = Mock()
-
-        with patch("opencrane.mcp.http_server.get_session_manager", return_value=mock_manager):
-            result = await http_handler(request)
-
-        mock_manager.handle_request.assert_awaited_once_with(
-            request.scope, request.receive, request._send
-        )
-        assert isinstance(result, _AlreadySentResponse)
-
-    @pytest.mark.anyio
-    async def test_mcp_handler(self):
-        mock_manager = Mock()
-        mock_manager.handle_request = AsyncMock()
-        request = Mock()
-        request.scope = {"scope": True}
-        request.receive = Mock()
-        request._send = Mock()
-
-        with patch("opencrane.mcp.http_server.get_session_manager", return_value=mock_manager):
-            result = await mcp_handler(request)
-
-        mock_manager.handle_request.assert_awaited_once_with(
-            request.scope, request.receive, request._send
-        )
-        assert isinstance(result, _AlreadySentResponse)
-
-
-class TestAlreadySentResponse:
-    @pytest.mark.anyio
-    async def test_already_sent_response_is_noop(self):
-        response = _AlreadySentResponse()
-        # Should be awaitable and do nothing without raising.
-        assert await response(Mock(), Mock(), Mock()) is None
-
-
-class TestLifespan:
-    @pytest.mark.anyio
-    async def test_lifespan_initializes_and_runs_session_manager(self):
-        run_cm = Mock()
-        run_cm.__aenter__ = AsyncMock(return_value=None)
-        run_cm.__aexit__ = AsyncMock(return_value=None)
-
-        mock_manager = Mock()
-        mock_manager.run.return_value = run_cm
-
-        with patch("opencrane.mcp.http_server.init_services", new=AsyncMock()) as mock_init, \
-                patch("opencrane.mcp.http_server.get_session_manager", return_value=mock_manager):
-            async with lifespan(Mock()):
-                pass
-
-        mock_init.assert_awaited_once()
-        mock_manager.run.assert_called_once()
-        run_cm.__aenter__.assert_awaited_once()
-        run_cm.__aexit__.assert_awaited_once()
 
 
 class TestMain:
@@ -210,7 +218,7 @@ class TestMain:
             await main()
 
         mock_uvicorn.Config.assert_called_once_with(
-            http_server.app, host="127.0.0.1", port=1234
+            app, host="127.0.0.1", port=1234
         )
         mock_uvicorn.Server.assert_called_once_with(mock_config)
         mock_server.serve.assert_awaited_once()
@@ -229,5 +237,5 @@ class TestMain:
             await main()
 
         mock_uvicorn.Config.assert_called_once_with(
-            http_server.app, host="0.0.0.0", port=8000
+            app, host="0.0.0.0", port=8000
         )

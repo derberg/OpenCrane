@@ -359,11 +359,11 @@ def serve(config_path, transport):
             port = __import__("os").environ.get("MCP_HTTP_PORT", "8000")
             click.secho("OpenCrane MCP server starting (HTTP transport)...", fg="cyan", bold=True, err=True)
             click.echo("", err=True)
-            _info(f"  MCP endpoint:  http://localhost:{port}/http", err=True)
+            _info(f"  MCP endpoint:  http://localhost:{port}/mcp", err=True)
             _info(f"  Health check:  http://localhost:{port}/health", err=True)
             click.echo("", err=True)
             _info("  Claude Code (HTTP):", err=True)
-            click.secho(f"    claude mcp add myopencranemcp --transport http http://localhost:{port}/http", fg="bright_white", err=True)
+            click.secho(f"    claude mcp add myopencranemcp --transport http http://localhost:{port}/mcp", fg="bright_white", err=True)
             click.echo("", err=True)
             from opencrane.mcp.http_server import main as http_main
             asyncio.run(http_main())

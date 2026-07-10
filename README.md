@@ -608,6 +608,18 @@ class TerraformTreeWalker(YamlTreeWalker):
         ...
 ```
 
+## Authentication & Authorization
+
+The HTTP transport (`opencrane serve --transport http`) supports OAuth 2.1 authentication and scope-based content authorization. The stdio transport is always open (per the MCP spec).
+
+- **`local` mode** — OpenCrane acts as its own authorization server. An MCP client is redirected to a browser login form where the consumer pastes a token or enters a username/password. No external identity provider needed. Configure via `auth.type: local` and set `PUBLIC_URL` + `OPENCRANE_ACCESS_TOKEN` (or `OPENCRANE_LOGIN_USER`/`OPENCRANE_LOGIN_PASS`).
+- **`oauth` mode** — OpenCrane is an OAuth resource server; token issuance is handled by an external IdP (Keycloak, Auth0, Entra, …). Requires `pip install 'opencrane[auth]'`. Configure via `auth.type: oauth` with `oidc.issuer` and `oidc.audience`.
+- **Scope-based source gating** — `scope_sources` maps OAuth scopes to sets of documentation sources. Callers only retrieve content from sources their token's scopes permit.
+- **`middleware` hook** — for authorization that config cannot express, register a custom ASGI middleware on your `OpenCraneConfig` subclass and call `set_allowed_sources(...)` to declare a request's permitted sources (e.g. resolve them from an external permissions service). Keeps project-specific auth logic out of OpenCrane.
+- **`custom` mode** — supply your own `token_verifier` or `auth_provider` on `OpenCraneConfig` for full control over token validation or the authorization server.
+
+See [docs/auth.md](docs/auth.md) for the full configuration reference, environment variables, and worked examples (including a complete external-permissions middleware).
+
 ## Development
 
 ```bash

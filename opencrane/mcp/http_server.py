@@ -1,18 +1,28 @@
 """
 HTTP MCP Server for OpenCrane.
 
-Uses Streamable HTTP transport with stateless mode,
-so clients can call tools immediately without initialization handshake.
+Uses FastMCP's Streamable HTTP transport in stateless mode, so clients can call
+tools immediately without an initialization handshake. The existing stdio tool
+handlers and hand-built JSON schemas from ``opencrane.mcp.server`` are reused
+verbatim via a thin bridge that registers ``Tool`` objects directly into the
+FastMCP tool manager (preserving ``inputSchema`` and the
+``(arguments: dict) -> list[TextContent]`` handler signature).
+
+Authentication is selected from the ``auth`` block in config.yaml: ``none`` leaves
+the app open, ``local`` mounts a self-hosted OAuth authorization server (with a
+``/login`` form) and wraps the MCP endpoint in a 401 challenge.
 """
 import contextlib
 import os
 import logging
+from pathlib import Path
 from collections.abc import AsyncIterator
 
-from starlette.applications import Starlette
-from starlette.routing import Route
-from starlette.responses import JSONResponse
-from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+from starlette.responses import JSONResponse, HTMLResponse, RedirectResponse
+from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp.tools.base import Tool
+from mcp.server.fastmcp.utilities.func_metadata import FuncMetadata, ArgModelBase
+from pydantic import ConfigDict
 
 logger = logging.getLogger(__name__)
 
@@ -50,15 +60,33 @@ async def init_services():
         _services_ready = False
 
 
-async def root_handler(_request):
-    """Root endpoint — server info and endpoint discovery."""
-    return JSONResponse({
-        "name": "opencrane",
-        "mcp_endpoint": "/http",
-        "health_endpoint": "/health",
-        "protocol": "MCP 2024-11-05 (Streamable HTTP)",
-        "stateless": True,
-    })
+class _PassthroughArgModel(ArgModelBase):
+    """Arg model that passes the raw call arguments through as a single ``arguments`` dict.
+
+    OpenCrane's handlers have the signature ``async def h(arguments: dict)``. FastMCP
+    normally derives an arg model from a function signature; here we bypass that so the
+    hand-built JSON schemas advertised via ``Tool.parameters`` are the source of truth
+    and the untouched handlers receive the arguments dict verbatim.
+    """
+    model_config = ConfigDict(extra="allow")
+
+    def model_dump_one_level(self):
+        return {"arguments": dict(self.__pydantic_extra__ or {})}
+
+
+def _register(mcp, name, description, input_schema, handler):
+    """Register an existing handler + hand-built schema as a FastMCP tool."""
+    mcp._tool_manager._tools[name] = Tool(
+        fn=handler,
+        name=name,
+        title=None,
+        description=description,
+        parameters=input_schema,
+        fn_metadata=FuncMetadata(arg_model=_PassthroughArgModel),
+        is_async=True,
+        context_kwarg=None,
+        annotations=None,
+    )
 
 
 async def health_handler(_request):
@@ -80,57 +108,155 @@ async def health_handler(_request):
     return JSONResponse(payload, status_code=status_code)
 
 
-_session_manager = None
+def _register_tools(mcp):
+    """Register the same tool set the stdio transport advertises via list_tools()."""
+    from opencrane.mcp import server as s
+
+    search_tool = s._build_search_tool()
+    _register(mcp, "search_docs", search_tool.description,
+              search_tool.inputSchema, s.search_docs)
+    _register(mcp, "health", s.HEALTH_TOOL_DESCRIPTION,
+              s.HEALTH_TOOL_SCHEMA, s.health_check)
+
+    if s._has_list_item_chunks():
+        _register(mcp, "get_list_members", s.GET_LIST_MEMBERS_TOOL_DESCRIPTION,
+                  s.GET_LIST_MEMBERS_TOOL_SCHEMA, s.get_list_members)
+
+    if s._has_yaml_chunks():
+        _register(mcp, "get_yaml_definition", s.GET_YAML_DEFINITION_TOOL_DESCRIPTION,
+                  s.GET_YAML_DEFINITION_TOOL_SCHEMA, s.get_yaml_definition)
+
+    if s._has_yaml_chunks() or s._has_list_item_chunks():
+        _register(mcp, "get_metadata_schema", s.GET_METADATA_SCHEMA_TOOL_DESCRIPTION,
+                  s.GET_METADATA_SCHEMA_TOOL_SCHEMA, s.get_metadata_schema)
 
 
-def get_session_manager():
-    global _session_manager
-    if _session_manager is None:
-        from opencrane.mcp.server import app as mcp_app
-        _session_manager = StreamableHTTPSessionManager(
-            app=mcp_app,
-            stateless=True,
-            json_response=False,
-        )
-    return _session_manager
+def _load_auth_config():
+    """Read the ``auth`` block from config.yaml the same way runtime.py does.
+
+    Reads the path in ``MAPPING_FILE`` (default ``.opencrane/config.yaml``); a
+    missing or unparseable file is treated as empty config (open app).
+    """
+    from opencrane.mcp.auth.config_model import parse_auth_config
+    from opencrane.mcp.server import _get_source_keys
+
+    mapping_file = Path(os.environ.get("MAPPING_FILE", ".opencrane/config.yaml"))
+    data: dict = {}
+    if mapping_file.exists():
+        try:
+            import yaml as _yaml
+
+            data = _yaml.safe_load(mapping_file.read_text(encoding="utf-8")) or {}
+        except Exception as exc:  # pragma: no cover - defensive parity with runtime.py
+            logger.warning(f"Failed to parse {mapping_file}: {exc} — treating auth as none")
+            data = {}
+
+    return parse_auth_config(data, set(_get_source_keys()))
 
 
-async def http_handler(request):
-    """Main Streamable HTTP endpoint (MCP 2024-11-05+, stateless mode)."""
-    session_manager = get_session_manager()
-    await session_manager.handle_request(request.scope, request.receive, request._send)
-    return _AlreadySentResponse()
+def _register_login_route(mcp, provider, method):
+    """Mount the ``/login`` GET (form) + POST (credential submit) custom route."""
+    from opencrane.mcp.auth.local_provider import render_login_form
 
+    @mcp.custom_route("/login", methods=["GET", "POST"])
+    async def _login(request):
+        if request.method == "GET":
+            request_id = request.query_params.get("request_id", "")
+            return HTMLResponse(render_login_form(request_id, method))
 
-async def mcp_handler(request):
-    """Legacy endpoint kept for backwards compatibility — use /http instead."""
-    session_manager = get_session_manager()
-    await session_manager.handle_request(request.scope, request.receive, request._send)
-    return _AlreadySentResponse()
-
-
-class _AlreadySentResponse:
-    async def __call__(self, scope, receive, send):
-        pass
+        form = await request.form()
+        request_id = form.get("request_id", "")
+        if method == "token":
+            submitted = form.get("token", "")
+        else:
+            submitted = (form.get("username", ""), form.get("password", ""))
+        try:
+            redirect_url = provider.complete_login(request_id, submitted)
+        except ValueError as exc:
+            return HTMLResponse(
+                render_login_form(request_id, method, error=str(exc)),
+                status_code=401,
+            )
+        return RedirectResponse(redirect_url, status_code=302)
 
 
 @contextlib.asynccontextmanager
-async def lifespan(app: Starlette) -> AsyncIterator[None]:
+async def lifespan(_mcp: FastMCP) -> AsyncIterator[None]:
+    """FastMCP lifespan: initialize services on startup."""
     await init_services()
-    session_manager = get_session_manager()
-    async with session_manager.run():
-        yield
+    yield
 
 
-app = Starlette(
-    routes=[
-        Route("/", endpoint=root_handler, methods=["GET"]),
-        Route("/health", endpoint=health_handler, methods=["GET"]),
-        Route("/http", endpoint=http_handler, methods=["GET", "POST", "DELETE"]),
-        Route("/mcp", endpoint=mcp_handler, methods=["GET", "POST", "DELETE"]),
-    ],
-    lifespan=lifespan,
-)
+def build_app() -> FastMCP:
+    """Build a FastMCP app with the OpenCrane tools registered and a /health route.
+
+    The auth mode is read from config.yaml and merged into the FastMCP constructor.
+    In ``local`` mode a self-hosted OAuth authorization server plus a ``/login`` form
+    are mounted and the MCP endpoint is wrapped in a 401 challenge.
+    """
+    from opencrane.mcp.auth.wiring import build_fastmcp_auth
+
+    auth_config = _load_auth_config()
+    auth_kwargs = build_fastmcp_auth(auth_config)
+    logger.info(f"MCP HTTP auth mode: {auth_config.type}")
+
+    mcp = FastMCP(
+        "opencrane",
+        stateless_http=True,
+        json_response=False,
+        lifespan=lifespan,
+        **auth_kwargs,
+    )
+    _register_tools(mcp)
+
+    if "auth_server_provider" in auth_kwargs:
+        _register_login_route(
+            mcp, auth_kwargs["auth_server_provider"], auth_config.local_method
+        )
+
+    # Open, unauthenticated readiness probe — uses the honest compute_health check.
+    mcp.custom_route("/health", methods=["GET"])(health_handler)
+
+    return mcp
+
+
+def build_asgi_app():
+    """Build the ASGI app, adding optional-auth middleware when configured.
+
+    For ``oauth`` mode with ``allow_anonymous: true`` the FastMCP app is left
+    open (no ``RequireAuthMiddleware``) and wrapped in
+    :class:`OptionalAuthMiddleware`, which validates a bearer token if present
+    but never rejects a tokenless request. Every other mode returns the FastMCP
+    app unchanged.
+    """
+    mcp = build_app()
+    asgi_app = mcp.streamable_http_app()
+    auth_config = _load_auth_config()
+    if auth_config.type == "oauth" and auth_config.allow_anonymous:
+        from opencrane.mcp.auth.oauth_verifier import build_token_verifier
+        from opencrane.mcp.auth.optional_auth import OptionalAuthMiddleware
+
+        asgi_app = OptionalAuthMiddleware(asgi_app, build_token_verifier(auth_config))
+
+    # Apply project-supplied ASGI middleware as the OUTERMOST layers, so they run
+    # first and can call set_allowed_sources() before the tool executes. The first
+    # entry becomes the outermost wrapper. A missing/empty list is a no-op, and a
+    # config-load failure must not break the default (unwrapped) path.
+    try:
+        from opencrane.cli import load_config
+
+        middleware = getattr(load_config(None), "middleware", []) or []
+    except Exception as exc:
+        logger.warning(f"Failed to load project middleware: {exc} — skipping")
+        middleware = []
+    for mw in reversed(middleware):
+        asgi_app = mw(asgi_app)
+
+    return asgi_app
+
+
+# Module-level Starlette ASGI app served by main().
+app = build_asgi_app()
 
 
 async def main():
@@ -138,7 +264,7 @@ async def main():
     port = int(os.environ.get("MCP_HTTP_PORT", 8000))
     host = os.environ.get("MCP_HTTP_HOST", "0.0.0.0")
     logger.info(f"Starting MCP HTTP server on http://{host}:{port}")
-    logger.info(f"  MCP endpoint:  http://{host}:{port}/http")
+    logger.info(f"  MCP endpoint:  http://{host}:{port}/mcp")
     logger.info(f"  Health check:  http://{host}:{port}/health")
     config = uvicorn.Config(app, host=host, port=port)
     server = uvicorn.Server(config)

@@ -1,0 +1,49 @@
+{
+  "_note": "Expected output of `opencrane chunk` over this dir's llms-full.txt (joined to llms.txt), asserted through the full pipeline (chunker.main). Demonstrates section anchors + breadcrumbs: source_url stays a clean page link, section_anchor is the slug of the chunk's section heading, and breadcrumb_path is 'page title > section' (page title only for page-level prose). Chunks are matched by a unique content substring; chunk_id/token_count are intentionally not pinned.",
+  "chunks": [
+    {
+      "content_contains": "Open Source Europe provides fiscal hosting",
+      "chunk_type": "prose",
+      "source_url": "https://docs.example.com/ose/about",
+      "section_anchor": null,
+      "breadcrumb_path": "About Open Source Europe",
+      "why": "page-title (H1) content -> page-title breadcrumb, no section anchor"
+    },
+    {
+      "content_contains": "We serve open source projects",
+      "chunk_type": "prose",
+      "source_url": "https://docs.example.com/ose/about",
+      "section_anchor": "who-we-serve",
+      "breadcrumb_path": "About Open Source Europe > Who We Serve"
+    },
+    {
+      "content_contains": "Projects must be open source",
+      "chunk_type": "prose",
+      "source_url": "https://docs.example.com/ose/about",
+      "section_anchor": "eligibility-requirements",
+      "breadcrumb_path": "About Open Source Europe > Eligibility Requirements"
+    },
+    {
+      "content_contains": "Approved reimbursements follow this timeline",
+      "chunk_type": "prose",
+      "source_url": "https://docs.example.com/ose/payouts",
+      "section_anchor": "payout-schedule",
+      "breadcrumb_path": "Payouts > Payout Schedule"
+    },
+    {
+      "content_contains": "Within seven days",
+      "chunk_type": "list_item",
+      "source_url": "https://docs.example.com/ose/payouts",
+      "section_anchor": "payout-schedule",
+      "breadcrumb_path": "Payouts > Payout Schedule",
+      "why": "list_item anchor + breadcrumb come from the list chunker's own heading stack"
+    },
+    {
+      "content_contains": "Within fourteen days",
+      "chunk_type": "list_item",
+      "source_url": "https://docs.example.com/ose/payouts",
+      "section_anchor": "payout-schedule",
+      "breadcrumb_path": "Payouts > Payout Schedule"
+    }
+  ]
+}

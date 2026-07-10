@@ -30,8 +30,47 @@ def _hint(msg: str) -> None:
     click.secho(msg, fg="bright_white")
 
 
+def _read_config_yaml() -> dict:
+    """Parse ``.opencrane/config.yaml`` into a dict; ``{}`` if missing/unreadable."""
+    from pathlib import Path
+
+    config_yaml = Path(".opencrane/config.yaml")
+    if not config_yaml.exists():
+        return {}
+    import yaml
+
+    try:
+        return yaml.safe_load(config_yaml.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return {}
+
+
+def _apply_config_yaml_settings(cfg) -> None:
+    """Apply plain-data settings from ``.opencrane/config.yaml`` onto *cfg*.
+
+    Currently just ``section_anchor_style`` — so anchors can be tuned (or turned
+    off with ``none``) from config.yaml without writing a Config subclass. A
+    missing file/key leaves the class default in place.
+    """
+    style = _read_config_yaml().get("section_anchor_style")
+    if style is not None:
+        cfg.section_anchor_style = str(style)
+
+
 def load_config(config_arg: str | None):
-    """Load OpenCraneConfig from a module:Class string, or auto-discover from config.yaml.
+    """Load an ``OpenCraneConfig`` instance and apply config.yaml settings.
+
+    The config class is resolved by :func:`_resolve_config`; plain-data settings
+    from ``.opencrane/config.yaml`` (e.g. ``section_anchor_style``) are then
+    layered on so they apply regardless of how the class was loaded.
+    """
+    cfg = _resolve_config(config_arg)
+    _apply_config_yaml_settings(cfg)
+    return cfg
+
+
+def _resolve_config(config_arg: str | None):
+    """Resolve the OpenCraneConfig class from a module:Class string, or auto-discover from config.yaml.
 
     Resolution order:
     1. Explicit ``--config`` flag or ``OPENCRANE_CONFIG`` env var
@@ -47,25 +86,18 @@ def load_config(config_arg: str | None):
     # Auto-discover extensions from .opencrane/config.yaml
     if config_arg is None:
         from pathlib import Path
-        config_yaml = Path(".opencrane/config.yaml")
-        if config_yaml.exists():
-            import yaml
-            try:
-                data = yaml.safe_load(config_yaml.read_text(encoding="utf-8")) or {}
-            except Exception:
-                data = {}
-            extensions = data.get("extensions")
-            if extensions:
-                ext_path = config_yaml.parent / extensions
-                if ext_path.exists():
-                    import importlib.util
-                    opencrane_dir = str(ext_path.parent.resolve())
-                    if opencrane_dir not in sys.path:
-                        sys.path.insert(0, opencrane_dir)
-                    spec = importlib.util.spec_from_file_location("_opencrane_extensions", ext_path.resolve())
-                    module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(module)
-                    return getattr(module, "Config")()
+        extensions = _read_config_yaml().get("extensions")
+        if extensions:
+            ext_path = Path(".opencrane") / extensions
+            if ext_path.exists():
+                import importlib.util
+                opencrane_dir = str(ext_path.parent.resolve())
+                if opencrane_dir not in sys.path:
+                    sys.path.insert(0, opencrane_dir)
+                spec = importlib.util.spec_from_file_location("_opencrane_extensions", ext_path.resolve())
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                return getattr(module, "Config")()
         return OpenCraneConfig()
 
     if ":" in config_arg:

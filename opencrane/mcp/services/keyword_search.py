@@ -34,6 +34,7 @@ class KeywordDoc:
     source_name: str
     chunk_type: str
     metadata_json: str
+    token_count: int = 0
 
 
 class KeywordSearchService:
@@ -68,7 +69,8 @@ class KeywordSearchService:
                 chunk_type = ch.get("chunk_type", "")
                 metadata = ch.get("metadata") or {}
                 metadata_json = json.dumps(metadata, ensure_ascii=False)
-                docs.append(KeywordDoc(chunk_id, content, source_file, source_name, chunk_type, metadata_json))
+                token_count = ch.get("token_count") or 0
+                docs.append(KeywordDoc(chunk_id, content, source_file, source_name, chunk_type, metadata_json, token_count))
             except Exception:  # pragma: no cover - skip malformed
                 continue
 
@@ -122,6 +124,7 @@ class KeywordSearchService:
                 "source_name": doc.source_name,
                 "chunk_type": doc.chunk_type,
                 "metadata_json": doc.metadata_json,
+                "token_count": doc.token_count,
                 # Use a unified key name for score compatibility with vector results
                 "distance": float(scores[i]),
             })

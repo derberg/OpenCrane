@@ -346,3 +346,12 @@ def test_build_previews_empty_returns_empty_list():
     """_build_previews returns [] when there are no sibling items."""
     strategy = ListChunkingStrategy()
     assert strategy._build_previews([]) == []
+
+
+def test_process_seeds_breadcrumb_from_heading_ancestry():
+    strategy = ListChunkingStrategy()
+    node = _mk_node("## Sub\n\n- alpha\n- beta\n")
+    node.heading_ancestry = [(1, "Root")]
+    chunks = strategy.process(node, Path("doc.md"))
+    items = [c for c in chunks if c.chunk_type == "list_item"]
+    assert items and all(c.metadata["breadcrumb_path"] == "Root > Sub" for c in items)

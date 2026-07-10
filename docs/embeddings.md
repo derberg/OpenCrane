@@ -21,7 +21,7 @@ When loaded into Milvus, each chunk becomes a vector with fields:
 - `embedding` (FLOAT_VECTOR, dimensions match embedding model)
 - `content` (VARCHAR, up to 65KB)
 - `source_file` (VARCHAR)
-- `chunk_type` (VARCHAR: prose/code_snippet/crd_definition/openapi_spec)
+- `chunk_type` (VARCHAR: prose/code_snippet/crd_definition/openapi_spec/json_schema/yaml_content/list_item/table_row)
 - `metadata_json` (VARCHAR)
 - `token_count` (INT64)
 - `line_start` (INT64)

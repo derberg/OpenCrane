@@ -56,8 +56,6 @@ def _wire_backend(monkeypatch):
     recording = RecordingMilvus()
     monkeypatch.setattr(mcp_server, "get_milvus_service", lambda: recording)
     monkeypatch.setattr(mcp_server, "get_embeddings_service", lambda: DummyEmbeddings())
-    monkeypatch.setattr(mcp_server, "_build_chunk_source_map", lambda: {})
-    monkeypatch.setattr(mcp_server, "_build_chunk_index", lambda: {})
     return recording
 
 

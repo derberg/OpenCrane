@@ -28,6 +28,7 @@ A standalone, extensible RAG/MCP pipeline for building AI-powered documentation 
   - [Source mapping file](#source-mapping-file-opencraneonfigyaml)
 - [Extending OpenCrane](#extending-opencrane)
   - [Extension points](#extension-points)
+  - [Section anchors](#section-anchors)
   - [Built-in fence types](#built-in-fence-types)
   - [Built-in YAML tree walkers](#built-in-yaml-tree-walkers)
   - [Writing a custom fence type](#writing-a-custom-fence-type)
@@ -40,6 +41,7 @@ A standalone, extensible RAG/MCP pipeline for building AI-powered documentation 
 - **Flexible RAG pipeline**: run the full flow (fetch → generate llms-full.txt → chunk → embed → index → serve) or use only the steps you need
 - **MCP server**: exposes search tools consumable by Claude, Cursor, and any MCP-compatible client
 - **Extensible**: subclass `OpenCraneConfig` to add custom fence types, chunking strategies, and YAML tree walkers; `openapi`, `asyncapi`, `crd`, and `json-schema` fence types are built in
+- **Section anchors**: chunks record a `section_anchor` so citations link straight to the exact doc section (`{source_url}#{section_anchor}`); on by default, style-selectable, and overridable per project
 - **CLI**: every pipeline step is a subcommand; works in CI/CD and non-Python projects
 
 
@@ -118,7 +120,7 @@ opencrane add
 Interactively add documentation sources to your project. The command loops, asking for each source:
 
 1. **GitHub repository** — adds an entry to `.opencrane/config.yaml` with the repo URL, docs path, and optional published docs URL. The `fetch` step will clone it on the next `opencrane build`.
-2. **Existing llms.txt file** — provide a URL or local file path. OpenCrane downloads/copies it into `.opencrane/llmstxt/<name>/llms-full.txt`, ready for chunking. No `fetch` or `llms` step needed for these sources.
+2. **Existing llms.txt file** — provide a URL or local file path. OpenCrane downloads/copies it into `.opencrane/llmstxt/<name>/llms-full.txt`, and (when available) fetches the upstream companion `llms.txt` next to it for real per-page source URLs. The `llms` step merges it into the combined index and the `chunk` step assigns per-page `source_url`.
 
 After each source, you're asked whether to add another or finish.
 
@@ -155,6 +157,8 @@ opencrane fetch [--config CLASS] [--org NAME] [--repo PATH_KEY]
 opencrane llms [--config CLASS] [--sources-dir PATH]... [--llmstxt-dir PATH] [--force]
 ```
 
+Emits a clean `llms-full.txt` (no URLs injected into headings) plus a companion `llms.txt` index (page title → page URL) next to it. The `chunk` step reads both to assign each chunk its specific page `source_url`. See [docs/llms-generation.md](docs/llms-generation.md).
+
 | Flag | Description |
 |---|---|
 | `--sources-dir PATH` | Source directory to process; repeat for multiple dirs (overrides `AI_DOCS_SOURCES_DIRS` env var) |
@@ -180,9 +184,11 @@ opencrane chunk [--config CLASS] [--llmstxt-dir PATH] [--chunks-file PATH]
 
 > Authoring docs that will be chunked? See [docs/authoring-guide.md](docs/authoring-guide.md) for how to structure markdown so chunks are high quality and retrievable.
 
+Reads the companion `llms.txt` index (when present) alongside `llms-full.txt` to assign each chunk its specific page `source_url`; falls back to legacy inline-marker extraction for older bundles without an index.
+
 | Flag | Description |
 |---|---|
-| `--llmstxt-dir PATH` | Directory containing llms-full.txt (overrides `AI_DOCS_LLMSTXT_DIR` env var) |
+| `--llmstxt-dir PATH` | Directory containing llms-full.txt and its companion llms.txt (overrides `AI_DOCS_LLMSTXT_DIR` env var) |
 | `--chunks-file PATH` | Output path for chunks JSON (overrides `AI_DOCS_CHUNKS_FILE` env var) |
 
 #### `opencrane embed` — generate embeddings
@@ -212,6 +218,49 @@ opencrane serve [--config CLASS] [--transport stdio|http]
 |---|---|
 | `--transport stdio` | *(default)* stdio transport for local MCP clients. Prints integration instructions for Claude Code, Cursor, Windsurf, VS Code, Zed, and Docker/Podman on startup |
 | `--transport http` | HTTP transport on port 8000 (Streamable HTTP, stateless). Used inside Docker/Podman containers. Port configurable via `MCP_HTTP_PORT` env var |
+
+##### Health endpoint (`/health`)
+
+The HTTP transport exposes `GET /health` for container liveness/readiness probes (e.g. Cloud Run). It is an **honest, query-aware** check: rather than only confirming that services are wired up, it runs a real one-result search behind a timeout, reports memory headroom from the cgroup, and reports whether the heavy in-memory chunk maps are already resident. The overall `status` is the worst of the individual checks:
+
+| `status` | HTTP code | Meaning |
+|---|---|---|
+| `healthy` | `200` | Serving queries normally |
+| `degraded` | `200` | Still serving, but a warning sign is present (slow probe, low memory headroom, or missing collection stats) |
+| `unhealthy` | `503` | Cannot serve a query (a service is down or the probe failed/timed out) |
+| `initializing` | `503` | Services are still loading at startup |
+
+Example response (`200`):
+
+```json
+{
+  "status": "healthy",
+  "checks": {
+    "embeddings_service": "healthy",
+    "milvus_service": "healthy",
+    "collection_stats": { "row_count": 1234 },
+    "heavy_maps": {
+      "chunk_index_resident": true,
+      "chunk_source_map_resident": true
+    },
+    "memory": {
+      "source": "cgroup_v2",
+      "used_bytes": 536870912,
+      "limit_bytes": 2147483648,
+      "headroom_pct": 75.0,
+      "status": "healthy"
+    },
+    "query_probe": {
+      "status": "healthy",
+      "latency_ms": 143.7
+    }
+  }
+}
+```
+
+`memory.status` is `unavailable` (and omits the byte fields) when no cgroup limit can be read, e.g. running outside a container. The same report is returned by the `health` MCP tool. The probe and memory thresholds are tunable — see the [health-check environment variables](#health-check-serve-http-transport).
+
+> **Deploying the probe:** point the platform's liveness/readiness probe at `GET /health` on port 8000. Give the startup/initial-delay enough time for the embedding model to load (until then `/health` returns `503 initializing`), and use a longer liveness period so a real search isn't run every few seconds. **Do not bind-mount the Milvus Lite database** — Milvus Lite cannot open its `.db` from a bind-mounted volume (`Open local milvus failed`); bake it into the image with `COPY` instead (the generated `Dockerfile` already does this by building the DB in a dedicated stage).
 
 #### `opencrane pack` — package for distribution
 
@@ -312,7 +361,7 @@ CLI flags take precedence over environment variables. Use env vars for persisten
 
 | Variable | Default | Description |
 |---|---|---|
-| `MAPPING_FILE` | `.opencrane/config.yaml` | Path to the source mapping file used by `fetch` (to record cloned repos) and `llms` (to embed source links) |
+| `MAPPING_FILE` | `.opencrane/config.yaml` | Path to the source mapping file used by `fetch` (to record cloned repos) and `llms` (to build per-page source URLs in the companion `llms.txt` index) |
 
 **`fetch` step** — only needed if you use `opencrane fetch` to pull docs from GitHub:
 
@@ -366,17 +415,28 @@ OpenCrane supports two Milvus modes. Set `MILVUS_DB_PATH` to use **Milvus Lite**
 | `MILVUS_COLLECTION` | `ai_docs_chunks_v1` | Milvus collection name |
 | `HYBRID_ALPHA` | `0.6` | Weight of vector search vs keyword search (1.0 = pure vector, 0.0 = pure BM25) |
 
+#### Health check (`serve`, HTTP transport)
+
+Tune the [`/health`](#health-endpoint-health) probe and thresholds. All optional.
+
+| Variable | Default | Description |
+|---|---|---|
+| `OPENCRANE_HEALTH_PROBE_QUERY` | `documentation` | Query used for the functional search probe |
+| `OPENCRANE_HEALTH_PROBE_TIMEOUT` | `10` | Hard timeout (seconds) for the probe; exceeding it reports `unhealthy` |
+| `OPENCRANE_HEALTH_PROBE_BUDGET` | `2` | Soft latency budget (seconds); a slower-but-successful probe reports `degraded` |
+| `OPENCRANE_HEALTH_MEM_WARN_HEADROOM` | `0.15` | Minimum free-memory fraction; below it, memory is reported `degraded` |
+
 ### Source mapping file (`.opencrane/config.yaml`)
 
-OpenCrane maintains a file called `.opencrane/config.yaml` that records where each documentation source lives and where its content can be found online. It is used by the `fetch` step (to track cloned repos) and by the `llms` step (to embed source links in llms-full.txt). The `fetch` step populates it automatically; for manually managed sources you can edit it directly.
+OpenCrane maintains a file called `.opencrane/config.yaml` that records where each documentation source lives and where its content can be found online. It is used by the `fetch` step (to track cloned repos) and by the `llms` step (to build the companion `llms.txt` index of per-page source URLs). The `fetch` step populates it automatically; for manually managed sources you can edit it directly.
 
 Each entry supports the following fields:
 
 | Field | Required | Description |
 |---|---|---|
-| `url` | Yes (for `fetch`) | GitHub repository URL — used by `opencrane fetch` to clone the repo and as a fallback source link in llms-full.txt |
+| `url` | Yes (for `fetch`) | GitHub repository URL — used by `opencrane fetch` to clone the repo and to build per-page GitHub source URLs in the companion `llms.txt` index |
 | `docs_path` | No | Path within the repo where docs are stored (e.g. `docs`) |
-| `docs_url` | No | Base URL of the published documentation site (e.g. `https://docs.example.com/product`). When set, this is used instead of `url` when embedding source links in llms-full.txt — lets AI agents point users to rendered docs rather than raw GitHub files. If neither is set, no source links are embedded. |
+| `docs_url` | No | Base URL of the published documentation site (e.g. `https://docs.example.com/product`). When set, per-page URLs are built from it instead of `url` — lets AI agents point users to rendered docs rather than raw GitHub files. For external `llmstxt` sources with no companion `llms.txt`, `docs_url` is used as the base URL for every page in that bundle. If neither is set, chunks from that source get no `source_url`. |
 | `manual` | No | When `true`, the entry is user-managed and will not be overwritten by `opencrane fetch` auto-discovery |
 | `branch` | No | Pin to a specific branch (e.g. `develop`) |
 | `tag` | No | Pin to a specific git tag (e.g. `v2.1.0`) |
@@ -441,6 +501,40 @@ opencrane build --config myproject.config:MyConfig
 | `fence_types` | `llms` | Register custom fence language identifiers and control how matching blocks are transformed during llms-full.txt generation |
 | `chunking_strategies` | `chunk` | Add or replace chunking strategies for different content types |
 | `yaml_tree_walkers` | `chunk` | Add walkers for custom YAML document formats |
+| `section_anchor_for` | `chunk` | Build the in-page anchor slug recorded in each chunk's `section_anchor` metadata |
+
+### Section anchors
+
+Each markdown sub-section chunk records a **`section_anchor`** in its metadata — the in-page anchor slug of its nearest section heading (level ≥ 2; the page-title H1 is skipped). `source_url` stays a clean page link, and consumers build a direct section link by joining the two:
+
+```
+{source_url}#{section_anchor}
+```
+
+For example a chunk under the "Who We Serve" heading of the About page gets `source_url: https://docs.example.com/guide/about` and `section_anchor: who-we-serve`, i.e. `https://docs.example.com/guide/about#who-we-serve`. The `search_docs` results expose it on a `Section Anchor:` line, and `get_metadata_schema` documents it.
+
+**Choosing a style** — set `section_anchor_style` in `.opencrane/config.yaml` (no subclass needed):
+
+```yaml
+section_anchor_style: generic   # default — GitBook/GitHub-style slugs
+# section_anchor_style: none    # disable section anchors entirely
+```
+
+**Writing a custom anchor builder** — when your docs host slugs headings differently, override `section_anchor_for` in your config subclass (`.opencrane/extensions.py:Config`). It receives the nearest heading and returns the fragment slug (no `#`), or `None` to skip:
+
+```python
+from opencrane import OpenCraneConfig
+
+
+class Config(OpenCraneConfig):
+    def section_anchor_for(self, heading):
+        if not heading:
+            return None
+        # Example: a host that lowercases and uses underscores instead of hyphens
+        return heading.strip().lower().replace(" ", "_")
+```
+
+An override takes precedence over `section_anchor_style`.
 
 ### Built-in fence types
 

@@ -115,18 +115,20 @@ NOT generated:
   llmstxt/external-sources/my-project/releases/llms-full.txt  ✗
 ```
 
-## Building GitHub URLs
+## Building page URLs
 
-The `url` field is used to construct source attribution URLs in the generated content. Every heading in `llms-full.txt` includes the full GitHub URL to its source.
+The `url` and `docs_url` fields are used to construct per-page source URLs. These URLs are **not** injected into `llms-full.txt` headings — the bundle stays clean. Instead, they are written to the companion `llms.txt` index (one `- [title](page_url)` link per page) and joined back to each chunk during chunking. See [Generating bundles](llms-generation.md) and [Chunking](chunking.md).
 
-URL Construction:
+**`url` (GitHub) URL construction:**
 1. Take `url`: `https://github.com/my-org/my-project`
 2. Add Git ref: `/blob/main`
 3. Add `docs_path` if present: `/docs`
 4. Add file's relative path from mapped directory: `/guides/setup.md`
 5. Result: `https://github.com/my-org/my-project/blob/main/docs/guides/setup.md`
 
-This ensures every piece of content is traceable back to its source repository and file.
+**`docs_url` (rendered docs site):** when set, `docs_url` takes precedence over `url` and produces a per-page URL on the published docs site (e.g. `https://docs.example.com/product/guides/setup`), so agents can point users to rendered docs rather than raw GitHub files.
+
+This ensures every piece of content is traceable back to its source page.
 
 Mapping:
 ```yaml
@@ -137,12 +139,18 @@ external-sources/my-project:
 
 File location: `external-sources/my-project/guides/setup.md`
 
-Generated URL in llms-full.txt:
+Generated entry in `llms.txt`:
 ```markdown
-### https://github.com/my-org/my-project/blob/main/docs/guides/setup.md
-
-# https://github.com/my-org/my-project/blob/main/docs/guides/setup.md Setup Guide
+## external-sources/my-project
+- [Setup Guide](https://github.com/my-org/my-project/blob/main/docs/guides/setup.md)
 ```
+
+### `docs_url` for external `llmstxt` sources
+
+For a pre-existing external `llmstxt` bundle, `docs_url` plays a different role depending on whether a companion `llms.txt` was fetched (see [Fetching](fetching.md)):
+
+- **With a companion `llms.txt`**: the companion's real per-page URLs are used; `docs_url` is not needed for URL resolution.
+- **Without a companion `llms.txt`**: the `llms` step synthesizes one index entry per H1 page, all carrying the base `docs_url` (the same URL repeated for every page). If no `docs_url` is set, those chunks get no `source_url`.
 
 ## Source Types
 

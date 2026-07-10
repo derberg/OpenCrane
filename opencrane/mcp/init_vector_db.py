@@ -11,6 +11,11 @@ from opencrane.mcp.services.embeddings import EmbeddingService
 from opencrane.shared.models.vector_chunk import VectorChunk
 from opencrane.shared.logging_config import setup_logging
 
+# Scalar columns added so the MCP server can serve chunk lookups from Milvus
+# instead of an in-memory copy of the corpus. Collections created before these
+# existed must be rebuilt.
+_REQUIRED_FIELDS = {"list_id", "table_id"}
+
 logger = logging.getLogger(__name__)
 
 
@@ -49,8 +54,16 @@ def main():
     if milvus.client.has_collection(milvus.collection_name):
         logger.info(f"Collection '{milvus.collection_name}' already exists")
 
+        missing_fields = _REQUIRED_FIELDS - milvus.field_names()
+
         if drop_existing:
             logger.info("DROP_EXISTING=true: Dropping existing collection to ensure fresh data...")
+            milvus.client.drop_collection(milvus.collection_name)
+        elif missing_fields:
+            logger.info(
+                f"Collection is missing fields {sorted(missing_fields)} (schema upgrade); "
+                "dropping and rebuilding so member/definition lookups work."
+            )
             milvus.client.drop_collection(milvus.collection_name)
         else:
             stats = milvus.get_collection_stats()

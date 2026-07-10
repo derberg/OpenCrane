@@ -17,7 +17,7 @@ GitHub repositories
       ↓  add / fetch
 .opencrane/sources/
       ↓  llms
-.opencrane/llmstxt/  (hierarchical llms-full.txt bundles)
+.opencrane/llmstxt/  (hierarchical llms-full.txt bundles + companion llms.txt index)
       ↓  chunk
 .opencrane/chunks.json
       ↓  embed
@@ -46,21 +46,23 @@ The command fetches repositories concurrently. It auto-removes stale sources (re
 The `opencrane llms` command flattens the cloned Markdown files into a hierarchy of `llms-full.txt` bundles under `.opencrane/llmstxt/`: a top-level combined bundle, plus per-source, per-project, and per-subproject bundles. For each bundle it:
 
 - Processes Markdown files recursively.
-- Adds URL markers (`### https://...`) so chunks carry a source URL.
-- Adds visual separators (`-----`) between files.
+- Emits **clean** content — no URLs are injected into headings.
+- Adds separators (a `<!-- opencrane:page -->` sentinel between files within a source, `======` between sources) and normalizes each page to lead with a single `# {title}` H1 (title precedence: frontmatter `title` → first heading → filename). The page separator is a collision-proof HTML comment so markdown thematic breaks (`---`) in content are not mistaken for page boundaries.
 - Rewrites relative links to work in the flattened output.
 - Invokes fence type handlers for structured content such as OpenAPI specs and Kubernetes CRDs embedded as fenced code blocks.
+- Writes a companion `llms.txt` index next to each `llms-full.txt`: a `# {project}` H1 with one `## {source}` section per source and a `- [title](page_url)` link per page, in the same order as the bundle. This index is how the `chunk` step recovers each chunk's specific page `source_url`. For external `llmstxt` sources, a fetched companion `llms.txt` (real per-page URLs) is merged, or an index is synthesized from the source's `docs_url` when no companion exists.
 
 ### Chunk
 
-The `opencrane chunk` command splits each `llms-full.txt` bundle into typed semantic chunks and writes them to `.opencrane/chunks.json`. Four chunking strategies run in priority order — the first strategy that matches a document fragment handles it:
+The `opencrane chunk` command splits each `llms-full.txt` bundle into typed semantic chunks and writes them to `.opencrane/chunks.json`. It reads the companion `llms.txt` index alongside the bundle and assigns each chunk its specific page `source_url` by joining the clean content to the index positionally per source, validated by the page's H1 title (falling back to the legacy inline-marker path when no companion index is present). Chunking strategies run in priority order — the first strategy that matches a document fragment handles it:
 
 1. **YAML strategy:** Handles YAML content. Delegates structured specs (CRDs, OpenAPI, JSON Schema) to tree walkers. Falls back to a generic `yaml_content` chunk for unrecognized YAML.
 2. **Code strategy:** Handles fenced code blocks. Detects the language and, for structured YAML specs embedded in code fences, invokes tree walkers.
-3. **List strategy:** Handles Markdown lists. Produces one chunk per top-level list item and attaches sibling previews and breadcrumb paths.
-4. **Prose strategy:** The fallback. Splits at heading boundaries (`#`, `##`, `###`). Preserves complete sections — does not split within a section by token count.
+3. **Table strategy:** Handles Markdown tables. Produces one `table_row` chunk per data row, rendered as natural-language `Column: value.` lines and self-linked via `table_id` and `sibling_ids`. Delegates non-table regions to the list and prose strategies.
+4. **List strategy:** Handles Markdown lists. Produces one chunk per top-level list item and attaches sibling previews and breadcrumb paths.
+5. **Prose strategy:** The fallback. Splits at heading boundaries (`#`, `##`, `###`). Preserves complete sections — does not split within a section by token count.
 
-Each chunk carries a `chunk_type` field (`prose`, `code_snippet`, `crd_definition`, `openapi_spec`, `json_schema`, `yaml_content`, or `list_item`) and type-specific metadata fields. See [Chunk metadata schema](metadata-schema.md) for the full field reference.
+Each chunk carries a `chunk_type` field (`prose`, `code_snippet`, `crd_definition`, `openapi_spec`, `json_schema`, `yaml_content`, `list_item`, or `table_row`) and type-specific metadata fields. See [Chunk metadata schema](metadata-schema.md) for the full field reference.
 
 ### Embed
 
@@ -68,7 +70,9 @@ The `opencrane embed` command generates a vector embedding for each chunk in `.o
 
 ### Index
 
-The `opencrane index` command loads `.opencrane/embeddings.json` into a Milvus vector database. It creates a collection with an Hierarchical Navigable Small World (HNSW) index on the embedding vectors and uses cosine similarity as the distance metric.
+The `opencrane index` command loads `.opencrane/embeddings.json` into a Milvus vector database. It creates a collection with a vector index on the embeddings (cosine similarity as the distance metric) and `INVERTED` scalar indexes on the `list_id` and `table_id` columns, so `get_list_members` and `get_table_members` are served by an indexed lookup rather than an in-memory scan of the corpus. `INVERTED` is used rather than `AUTOINDEX` because Milvus Lite accepts `AUTOINDEX` only on vector fields.
+
+Because `list_id` and `table_id` are dedicated columns, a collection built by an older OpenCrane version that predates them is dropped and rebuilt automatically on the next `index` run (a one-time re-index on upgrade, surfaced in the logs).
 
 Two deployment modes are available:
 
@@ -84,7 +88,7 @@ The `opencrane serve` command starts the MCP server backed by the indexed data. 
 
 ## MCP tools
 
-The server exposes up to five tools. The set of tools adapts to the content of the index — `get_yaml_definition`, `get_metadata_schema`, and `get_list_members` appear only when the index contains the relevant chunk types.
+The server exposes up to six tools. The set of tools adapts to the content of the index — `get_yaml_definition`, `get_metadata_schema`, `get_list_members`, and `get_table_members` appear only when the index contains the relevant chunk types.
 
 | Tool | Condition | Description |
 |---|---|---|
@@ -92,6 +96,7 @@ The server exposes up to five tools. The set of tools adapts to the content of t
 | `get_yaml_definition` | YAML chunks indexed | Retrieve a complete YAML document by chunk ID, with breadcrumb comments showing its location |
 | `get_metadata_schema` | YAML chunks indexed | Reference documentation for all chunk metadata fields |
 | `get_list_members` | List chunks indexed | Retrieve all items in a list by list ID |
+| `get_table_members` | Table row chunks indexed | Retrieve all rows of a table by table ID |
 | `health` | Always present | Service status, Milvus connection state, and collection stats |
 
 ### Search modes
@@ -124,7 +129,8 @@ The CLI auto-discovers a custom `OpenCraneConfig` subclass from `.opencrane/exte
 This package contains the implementation of all pipeline stages. The key modules are:
 
 - **`opencrane/rag/fetch_docs.py`** — GitHub repository fetching, source discovery, and stale-source cleanup.
-- **`opencrane/rag/generate_llms_txt.py`** — `llms-full.txt` bundle generation, fence type dispatch, and link rewriting.
+- **`opencrane/rag/generate_llms_txt.py`** — `llms-full.txt` bundle generation, companion `llms.txt` index emission, fence type dispatch, and link rewriting.
+- **`opencrane/rag/services/llms_index.py`** — parses and renders the `llms.txt` index (`LlmsIndex`, `render_llms_txt`) used to join clean content to per-page URLs.
 - **`opencrane/rag/chunker.py`** — Top-level chunking orchestration. Loads bundles, resolves source names, and writes `chunks.json`.
 - **`opencrane/rag/services/file_processor.py`** — Strategy-pattern chunking. Evaluates strategies in order; the first match handles the fragment.
 - **`opencrane/rag/generate_embeddings.py`** — Batch embedding generation.
@@ -138,12 +144,13 @@ Tree walkers live in `opencrane/rag/services/chunking_strategies/` and handle st
 
 ### MCP server (`opencrane/mcp/`)
 
-The server initializes its backing services lazily on the first tool call, so startup is fast. At initialization time it precomputes two lookup structures for O(1) access:
+The server initializes its backing services lazily on the first tool call, so startup is fast. It holds **no in-memory copy of the corpus** — every tool reads from the vector database:
 
-- A **chunk source map** for chunk-ID lookups used by `get_yaml_definition`.
-- A **chunk index** for list membership queries used by `get_list_members`.
+- `get_yaml_definition` fetches a single chunk by its primary key.
+- `get_list_members` and `get_table_members` query the indexed `list_id` / `table_id` columns (constrained to the relevant `chunk_type`) for a list's or table's members.
+- Search reads `token_count` and each chunk's `source_url` straight from the query result rather than re-deriving them.
 
-The two backing services are:
+Which tools are exposed is decided at startup by asking Milvus which `chunk_type` values the collection contains — a light column-only scan (via `query_iterator`, pulling just the `chunk_type` field, never the corpus) whose result is cached for the process. This keeps the tool list correct for any corpus, including custom chunk types, without a separate sidecar file that could get separated from the database. The two backing services are:
 
 - **`opencrane/mcp/services/milvus_client.py`** — Manages the Milvus connection and loads the collection into memory at startup for low-latency vector search.
 - **`opencrane/mcp/services/keyword_search.py`** — Builds a Best Match 25 (BM25) index lazily from `chunks.json` on the first keyword or hybrid query.
@@ -226,7 +233,7 @@ The `Chunk` model (`opencrane/shared/models/chunk.py`) is the core data structur
 | **content** | `str` or `dict` or `list` | String for prose and code; dict or list for YAML |
 | **source_file** | `str` | Relative path from the workspace root |
 | **source_name** | `str` or `None` | Resolved from **source_url**; `None` if no mapping exists |
-| **chunk_type** | `str` | One of the seven chunk type literals |
+| **chunk_type** | `str` | One of the chunk type literals (see the Chunk step above) |
 | **metadata** | `dict` | Type-specific metadata fields |
 | **token_count** | `int` | Token count using `cl100k_base` encoding |
 | **line_start** | `int` or `None` | Reserved for future line-level source tracking; currently always `None` |

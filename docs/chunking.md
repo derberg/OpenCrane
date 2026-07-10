@@ -10,34 +10,48 @@ opencrane chunk --config yourproject.config:YourConfig
 
 This generates `./rag-chunks.json` with RAG-ready chunks.
 
-## How Document Boundaries are Handled
+## How Document Boundaries and `source_url` are Handled
 
-The chunker intelligently processes llms-full.txt files:
+The chunker reads **both** the clean `llms-full.txt` bundle and its companion `llms.txt` index (see [Generating bundles](llms-generation.md)). Because `llms-full.txt` no longer carries URLs in its headings, each chunk's page `source_url` is recovered by joining the clean content back to the index:
 
-1. Boundary markers are ignored: The `-----` separators and `### https://github.com/...` H3 markers are treated as document boundaries, not content
-2. URL prefixes are captured: Each heading's text (including GitHub URL) is tracked for context
+1. **Split into source blocks** — `llms-full.txt` is split on `======` separators. The Nth block aligns with the Nth `## {source}` section in `llms.txt`.
+2. **Split into pages** — within a source block, pages are split on the `<!-- opencrane:page -->` sentinel when present, otherwise on `#` H1 lines (fence-aware, so a `#` comment inside a fenced code block is not mistaken for a page boundary). The separator is a collision-proof HTML comment, not a dash rule, so a markdown thematic break (`---`, `-----`) in page content never mis-splits the page.
+3. **Positional, title-validated join** — each page's URL is taken from the next entry in that source's index list, and validated against the page's leading H1 title (case-insensitive, whitespace-normalized). On a mismatch the join scans ahead within the same source's remaining entries for a matching title and realigns; if no match is found, `source_url` is left unset and a warning is logged.
+4. **Assign to sub-chunks** — the resolved page URL is attached to every chunk produced from that page.
 
-Example of how a document is chunked:
+Because matching is scoped per source, duplicate page titles across sources are harmless — each page resolves to its own source's URL.
+
+Example:
 ```
-Input (llms-full.txt):
-  ### https://github.com/.../file.md          ← Ignored (boundary marker)
-
-  # https://github.com/.../file.md Title      ← Content
-  Paragraph content...                        ← Chunk content
-  ## https://github.com/.../file.md Section   ← Subheading
-  More content...                             ← Another chunk
+Input (llms-full.txt):          Input (llms.txt):
+  # Setup Guide                   ## my-source
+  Paragraph content...            - [Setup Guide](https://docs.example.com/setup)
+  ## Prerequisites
+  More content...
 
 Output (rag-chunks.json):
   {
     "chunk_type": "prose",
     "metadata": {
-      "source_url": "https://github.com/.../file.md"
+      "source_url": "https://docs.example.com/setup"
     },
     "content": "More content..."
   }
 ```
 
+**Legacy fallback.** When no companion `llms.txt` is present (an older bundle that still has inline URL markers, or a bundle without an index), the chunker falls back to the previous marker-based behavior: `### https://...` boundary markers are treated as document boundaries and the source URL is extracted from the injected markers. This keeps old bundles resolvable until the next `build`.
+
 This design ensures that each chunk maintains full context through its header hierarchy while document boundaries remain clear for processing.
+
+## Tables
+
+Every Markdown table becomes one `table_row` chunk per data row, rendered as natural-language `Column: value.` lines. Each row chunk carries the section heading and lead-in sentence from the source so it is independently retrievable. Rows self-organize via a shared `table_id` field and `sibling_ids` (full list_item parity) — no separate overview chunk is produced.
+
+To fetch the full table from a row chunk, call `get_table_members(table_id=...)` using the `table_id` field in the row chunk's metadata. This returns all sibling row chunks ordered by `row_index`.
+
+A table with no heading or lead-in sentence in the source still produces `table_row` chunks, but the heading and description fields will be empty. Add a heading and a lead-in sentence in the source to make those chunks retrievable by semantic search.
+
+The fixture pair `tests/fixtures/markdown_with_table.md` and `tests/fixtures/expected_table_chunks.json` is a generated baseline that shows the chunks produced for a representative table document. Regenerate `expected_table_chunks.json` with `ChunkSerializer.serialize_chunks` when chunking behavior changes intentionally.
 
 ## Architecture
 
@@ -47,7 +61,9 @@ Available Strategies:
 1. **YamlChunkingStrategy** - Detects and processes YAML content; delegates structured YAML specs (e.g., CRDs, OpenAPI) to tree walkers for structured chunking, falls back to generic yaml_content type for other YAML
 2. **TabsChunkingStrategy** - HTML tab components (`<Tabs>`/`<Tab>`) for parallel instructions; processes each tab separately as prose
 3. **CodeChunkingStrategy** - Fenced code blocks with language detection; auto-detects structured YAML specs in YAML code blocks and delegates to tree walkers
-4. **ProseChunkingStrategy** - Markdown/text with hierarchical headers (fallback strategy)
+4. **TableChunkingStrategy** - Markdown tables; emits one `table_row` chunk per data row (natural-language rendered, self-linked via `table_id` + `sibling_ids`), and delegates non-table regions to the list and prose strategies
+5. **ListChunkingStrategy** - Markdown lists; emits one chunk per list item
+6. **ProseChunkingStrategy** - Markdown/text with hierarchical headers (fallback strategy)
 
 Strategies are evaluated in order; first match wins.
 
@@ -70,7 +86,10 @@ Strategies are evaluated in order; first match wins.
   - `"code_snippet"` - Fenced code blocks with language detection
   - `"crd_definition"` - Kubernetes Custom Resource Definition properties
   - `"openapi_spec"` - OpenAPI specification elements
+  - `"json_schema"` - JSON Schema definition properties
   - `"yaml_content"` - Generic YAML configuration (not a recognized structured format)
+  - `"list_item"` - A single Markdown list item
+  - `"table_row"` - A single Markdown table data row
 - Usage: Route chunks to appropriate processing logic and templates
 
 ##### `content` (string or object)
@@ -104,11 +123,11 @@ All chunks include a `metadata` object with type-specific fields:
 ##### Universal Metadata (all chunk types)
 
 ###### `source_url` (string, URL, optional)
-- Purpose: Link back to original documentation page
-- Format: Full URL from markdown heading (e.g., `### https://...`)
-- Example: `"https://github.com/org/repo/blob/main/docs/configuration.md"`
+- Purpose: Link back to the specific documentation page the chunk came from
+- Format: The page URL resolved via the `llms.txt` index join (see [How Document Boundaries and `source_url` are Handled](#how-document-boundaries-and-source_url-are-handled))
+- Example: `"https://github.com/org/repo/blob/main/docs/configuration.md"` or a rendered docs-site page URL such as `"https://docs.example.com/configuration"`
 - Usage: Provide users with source documentation link in RAG responses
-- Present in: All chunk types when source URL is available
+- Present in: All chunk types when a page URL can be resolved
 
 ###### `original_format` (string, optional)
 - Purpose: Original serialization format of content

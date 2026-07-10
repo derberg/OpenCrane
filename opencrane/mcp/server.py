@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import time
 import yaml
 from pathlib import Path
 from typing import List
@@ -17,7 +18,6 @@ from opencrane.mcp.services.embeddings import EmbeddingService
 from opencrane.mcp.services.milvus_client import MilvusService
 from opencrane.mcp.services.keyword_search import KeywordSearchService
 from opencrane.shared.config import get_config
-from opencrane.shared.models.vector_chunk import generate_chunk_id
 
 import sys
 
@@ -33,8 +33,7 @@ logger = logging.getLogger(__name__)
 _embeddings_service = None
 _milvus_service = None
 _keyword_service = None
-_chunk_source_map: dict[str, str] | None = None
-_chunk_index: dict[str, dict] | None = None
+_chunk_types_cache: set[str] | None = None
 
 def _extract_source_url(text: str) -> str | None:
     """Extract the first http(s) URL from the chunk content, if present."""
@@ -105,74 +104,6 @@ def _rehydrate_to_yaml(content: dict | str, metadata: dict, chunk_type: str = ""
 
 
 
-def _build_chunk_source_map() -> dict[str, str]:
-    """Precompute chunk_id -> source_url map from rag-chunks.json with heuristics.
-
-    This map lets us attach better source URLs even when chunks were built from
-    the flattened llms-full.txt file.
-    """
-    global _chunk_source_map
-    if _chunk_source_map is not None:
-        return _chunk_source_map
-
-    chunks_path = Path(os.environ.get("AI_DOCS_CHUNKS_FILE", ".opencrane/chunks.json"))
-    try:
-        chunks = json.loads(chunks_path.read_text(encoding="utf-8"))
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.warning(f"Failed to load {chunks_path}: {exc}")
-        _chunk_source_map = {}
-        return _chunk_source_map
-
-    mapping: dict[str, str] = {}
-    for chunk in chunks:
-        # Use chunk_id from chunk data instead of regenerating
-        chunk_id = chunk.get("chunk_id")
-        if not chunk_id:
-            # Fallback to generation only if missing (shouldn't happen)
-            try:
-                chunk_id = generate_chunk_id(
-                    chunk.get("source_file", ""),
-                    chunk.get("chunk_type", ""),
-                    chunk.get("line_start"),
-                    chunk.get("content", ""),
-                )
-            except Exception:
-                continue
-
-        # All chunks are guaranteed to have a source_url in metadata
-        metadata = chunk.get("metadata", {})
-        url = metadata.get("source_url") if isinstance(metadata, dict) else None
-
-        if not url:
-            url = _extract_source_url(chunk.get("content", ""))
-        if not url:
-            url = _extract_source_url(json.dumps(metadata) if isinstance(metadata, dict) else str(metadata))
-
-        if url:
-            mapping[chunk_id] = url
-
-    logger.info(f"Built chunk source map with {len(mapping)} entries")
-    _chunk_source_map = mapping
-    return _chunk_source_map
-
-def _build_chunk_index() -> dict[str, dict]:
-    """Precompute chunk_id -> chunk dict from rag-chunks.json for O(1) lookups."""
-    global _chunk_index
-    if _chunk_index is not None:
-        return _chunk_index
-
-    chunks_path = Path(os.environ.get("AI_DOCS_CHUNKS_FILE", ".opencrane/chunks.json"))
-    try:
-        chunks = json.loads(chunks_path.read_text(encoding="utf-8"))
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.warning(f"Failed to load {chunks_path} for chunk index: {exc}")
-        _chunk_index = {}
-        return _chunk_index
-
-    _chunk_index = {c.get("chunk_id"): c for c in chunks if c.get("chunk_id")}
-    logger.info(f"Built chunk index with {len(_chunk_index)} entries")
-    return _chunk_index
-
 def get_embeddings_service():
     global _embeddings_service
     if _embeddings_service is None:
@@ -202,6 +133,7 @@ _CHUNK_TYPE_LABELS = {
     "openapi_spec": "openapi_spec (OpenAPI specification endpoints/schemas)",
     "json_schema": "json_schema (JSON Schema definitions)",
     "list_item": "list_item (individual markdown list items)",
+    "table_row": "table_row (individual markdown table rows)",
 }
 
 
@@ -209,17 +141,41 @@ def _has_list_item_chunks() -> bool:
     return "list_item" in _get_indexed_chunk_types()
 
 
+def _has_table_row_chunks() -> bool:
+    return "table_row" in _get_indexed_chunk_types()
+
+
+def _member_rows(field: str, value: str, chunk_type: str) -> list[dict]:
+    """Query Milvus for member chunks of a list/table and normalize each row.
+
+    Each returned row carries a parsed ``metadata`` dict (from ``metadata_json``)
+    so the formatting handlers can read metadata fields the same way they did
+    when rows came from the file-backed index.
+    """
+    rows = []
+    for row in get_milvus_service().query_by_field(field, value, chunk_type=chunk_type):
+        meta = row.get("metadata_json")
+        try:
+            metadata = json.loads(meta) if isinstance(meta, str) else (meta or {})
+        except (json.JSONDecodeError, TypeError, ValueError):
+            metadata = {}
+        member = dict(row)
+        member["metadata"] = metadata
+        rows.append(member)
+    return rows
+
+
+def _get_table_members(table_id: str) -> list[dict]:
+    """Return all ``table_row`` chunks for a table_id, sorted by row_index."""
+    rows = _member_rows("table_id", table_id, "table_row")
+    rows.sort(key=lambda c: c["metadata"].get("row_index", 0))
+    return rows
+
+
 def _get_list_members(list_id: str) -> list[dict]:
-    """Return all indexed chunks belonging to a given list_id, ordered by position."""
-    chunk_index = _build_chunk_index()
-    members = []
-    for chunk in chunk_index.values():
-        if chunk.get("chunk_type") != "list_item":
-            continue
-        metadata = chunk.get("metadata", {}) or {}
-        if metadata.get("list_id") == list_id:
-            members.append(chunk)
-    members.sort(key=lambda c: c.get("metadata", {}).get("position", 0))
+    """Return all ``list_item`` chunks for a list_id, ordered by position."""
+    members = _member_rows("list_id", list_id, "list_item")
+    members.sort(key=lambda c: c["metadata"].get("position", 0))
     return members
 
 
@@ -278,7 +234,7 @@ def _group_list_item_results(results: list[dict]) -> list[dict]:
     return merged
 
 
-def _format_grouped_list_item(result: dict, chunk_index: dict) -> str:
+def _format_grouped_list_item(result: dict) -> str:
     """Format a grouped list_item result slot showing all matched members inline."""
     members = result["_grouped_items"]
     try:
@@ -332,10 +288,120 @@ def _format_grouped_list_item(result: dict, chunk_index: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _group_table_row_results(results: list[dict]) -> list[dict]:
+    """Collapse consecutive result slots that share a table_id into a grouped slot.
+
+    When two or more table_row hits share the same table_id, combine them into a
+    single result dict tagged with ``_grouped_table=True`` and containing a
+    ``_grouped_items`` list preserving per-row score, row_index, and content.
+    The grouped slot inherits the max score of its members. Non table_row
+    results (including already-grouped list slots) pass through untouched.
+    """
+    groups: dict = {}
+    order: list = []
+    for r in results:
+        if r.get("chunk_type") != "table_row":
+            order.append(("single", id(r)))
+            groups[("single", id(r))] = [r]
+            continue
+        metadata_json = r.get("metadata_json", "{}")
+        try:
+            metadata = json.loads(metadata_json) if isinstance(metadata_json, str) else metadata_json
+        except (json.JSONDecodeError, TypeError, ValueError):  # pragma: no cover - defensive
+            metadata = {}  # pragma: no cover
+        table_id = metadata.get("table_id")
+        if not table_id:  # pragma: no cover - validated table_row chunks always carry table_id
+            order.append(("single", id(r)))
+            groups[("single", id(r))] = [r]
+            continue
+        key = ("table", table_id)
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(r)
+
+    merged: list[dict] = []
+    for key in order:
+        members = groups[key]
+        if key[0] == "single" or len(members) == 1:
+            merged.append(members[0])
+            continue
+        # Grouped slot — sort members by row_index, inherit the max score
+        def _row_idx(rec):
+            try:
+                return json.loads(rec.get("metadata_json") or "{}").get("row_index", 0)
+            except Exception:  # pragma: no cover
+                return 0
+        members_sorted = sorted(members, key=_row_idx)
+        max_score = max(float(m.get("distance", 0.0)) for m in members_sorted)
+        head = dict(members_sorted[0])
+        head["distance"] = max_score
+        head["_grouped_table"] = True
+        head["_grouped_items"] = members_sorted
+        merged.append(head)
+    return merged
+
+
+def _format_grouped_table_row(result: dict) -> str:
+    """Format a grouped table_row result slot showing all matched members inline."""
+    members = result["_grouped_items"]
+    try:
+        head_meta = json.loads(members[0].get("metadata_json") or "{}")
+    except Exception:  # pragma: no cover
+        head_meta = {}
+    breadcrumb = head_meta.get("breadcrumb_path", "")
+    table_id = head_meta.get("table_id", "")
+    total = head_meta.get("total_rows", len(members))
+
+    lines = [
+        f"Matched Table ({len(members)} of {total} rows):",
+    ]
+    if breadcrumb:
+        lines.append(f"Location: {breadcrumb}")
+    lines.append(f"Table ID: {table_id}")
+    lines.append("Matched rows:")
+    for m in members:
+        try:
+            mm = json.loads(m.get("metadata_json") or "{}")
+        except Exception:  # pragma: no cover
+            mm = {}
+        row_index = mm.get("row_index")
+        content = m.get("content", "")
+        # Drop breadcrumb header prefix when displaying inline for readability
+        if breadcrumb and content.startswith(f"# {breadcrumb}\n"):
+            content = content[len(breadcrumb) + 3:].lstrip("\n")
+        lines.append(f"  [{row_index}] {content}")
+
+    unmatched_previews = head_meta.get("sibling_previews") or []
+    unmatched = []
+    if unmatched_previews:
+        # sibling_previews excludes self; map via sibling_ids to detect matched ones.
+        sibling_ids = head_meta.get("sibling_ids") or []
+        member_ids = {m.get("chunk_id") for m in members}
+        for sid, preview in zip(sibling_ids, unmatched_previews):
+            if sid not in member_ids:
+                unmatched.append(preview)
+        if unmatched:
+            lines.append("Other rows in table (not matched):")
+            for p in unmatched:
+                lines.append(f"  - {p}")
+
+    lines.append(f"💡 Tip: Use get_table_members(table_id='{table_id}') for the full table.")
+    return "\n".join(lines) + "\n"
+
+
 def _get_indexed_chunk_types() -> set[str]:
-    """Return the set of chunk_type values present in the indexed data."""
-    chunk_index = _build_chunk_index()
-    return {c.get("chunk_type") for c in chunk_index.values() if c.get("chunk_type")}
+    """Return the set of chunk_type values present in the indexed data.
+
+    Queried once from Milvus at startup (pulling only the tiny ``chunk_type``
+    column, never the corpus) and cached, so the server can tailor its tool list
+    without loading chunks into memory and without depending on a sidecar file
+    that could get separated from the database.
+    """
+    global _chunk_types_cache
+    if _chunk_types_cache is None:
+        _chunk_types_cache = get_milvus_service().distinct_chunk_types()
+    return _chunk_types_cache
 
 
 def _has_yaml_chunks() -> bool:
@@ -484,7 +550,7 @@ GET_YAML_DEFINITION_TOOL_SCHEMA = {
     "required": ["chunk_id"]
 }
 
-GET_METADATA_SCHEMA_TOOL_DESCRIPTION = "Retrieve comprehensive documentation of all metadata fields available in chunks. Use this when you need to understand what metadata fields mean (breadcrumb_path, logical_parent, neighbor_chunks, list_id, sibling_ids, etc.) and how to use them programmatically for navigation, context expansion, and re-hydration. Pass chunk_type to get only the section for a specific type (e.g., 'list_item' returns the list_item metadata fields plus the universal fields)."
+GET_METADATA_SCHEMA_TOOL_DESCRIPTION = "Retrieve comprehensive documentation of all metadata fields available in chunks. Use this when you need to understand what metadata fields mean (breadcrumb_path, logical_parent, neighbor_chunks, list_id, sibling_ids, table_id, row_index, etc.) and how to use them programmatically for navigation, context expansion, and re-hydration. Pass chunk_type to get only the section for a specific type (e.g., 'list_item' returns the list_item metadata fields plus the universal fields; 'table_row' returns the table_row metadata fields)."
 GET_METADATA_SCHEMA_TOOL_SCHEMA = {
     "type": "object",
     "properties": {
@@ -518,6 +584,22 @@ async def list_tools() -> list[Tool]:
             inputSchema=GET_LIST_MEMBERS_TOOL_SCHEMA,
         ))
 
+    if _has_table_row_chunks():
+        tools.append(Tool(
+            name="get_table_members",
+            description="Fetch all row chunks for a markdown table sharing a table_id, ordered by row_index. Use when a search returned one or more table_row chunks and you need the whole table.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "table_id": {
+                        "type": "string",
+                        "description": "The table_id from a table_row chunk's metadata."
+                    }
+                },
+                "required": ["table_id"],
+            },
+        ))
+
     if _has_yaml_chunks():
         tools.append(Tool(
             name="get_yaml_definition",
@@ -525,7 +607,7 @@ async def list_tools() -> list[Tool]:
             inputSchema=GET_YAML_DEFINITION_TOOL_SCHEMA,
         ))
 
-    if _has_yaml_chunks() or _has_list_item_chunks():
+    if _has_yaml_chunks() or _has_list_item_chunks() or _has_table_row_chunks():
         tools.append(Tool(
             name="get_metadata_schema",
             description=GET_METADATA_SCHEMA_TOOL_DESCRIPTION,
@@ -549,6 +631,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         "get_yaml_definition": get_yaml_definition,
         "get_metadata_schema": get_metadata_schema,
         "get_list_members": get_list_members,
+        "get_table_members": get_table_members,
     }
 
     handler = _TOOL_HANDLERS.get(name)
@@ -567,10 +650,15 @@ async def search_docs(arguments: dict) -> list[TextContent]:
     return await _search_documentation_impl(arguments)
 
 
-async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
+async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = False) -> list[TextContent]:
     """
     Internal implementation of search logic.
     This contains all the existing search_documentation code.
+
+    When ``raise_on_error`` is True, a failure in the serving path propagates as
+    an exception instead of being swallowed into a ``"Search failed:"`` message.
+    The health probe uses this so it detects failures via a real exception rather
+    than string-matching a human-facing message.
     """
     query = arguments.get("query", "")
     if not query or not query.strip():
@@ -621,14 +709,18 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
 
             # Collapse list_item hits that share a list_id into one slot each.
             results = _group_list_item_results(results)
+            # Collapse table_row hits that share a table_id into one slot each.
+            results = _group_table_row_results(results)
             logger.info(f"   📖 search: {len(results)} results found (after list grouping)")
 
-            source_map = _build_chunk_source_map()
-            chunk_index = _build_chunk_index()
             formatted: list[TextContent] = []
             for i, result in enumerate(results, 1):
                 if result.get("_grouped"):
-                    grouped_body = _format_grouped_list_item(result, chunk_index)
+                    grouped_body = _format_grouped_list_item(result)
+                    formatted.append(TextContent(type="text", text=f"Result {i}:\n{grouped_body}"))
+                    continue
+                elif result.get("_grouped_table"):
+                    grouped_body = _format_grouped_table_row(result)
                     formatted.append(TextContent(type="text", text=f"Result {i}:\n{grouped_body}"))
                     continue
                 content = result.get("content", "")
@@ -638,12 +730,9 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
                 metadata_json = result.get("metadata_json", "{}")
                 score = result.get("distance", 0)
 
-                # Get token_count from chunk index
-                token_count = None
-                if chunk_id and chunk_index:
-                    chunk_data = chunk_index.get(chunk_id)
-                    if chunk_data:
-                        token_count = chunk_data.get("token_count")
+                # token_count comes directly with the search result (Milvus column /
+                # keyword doc) — no need to load the whole corpus to look it up.
+                token_count = result.get("token_count")
 
                 # Parse metadata JSON
                 try:
@@ -654,12 +743,11 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
                 # Re-hydrate YAML chunks with breadcrumb comments
                 display_content = _rehydrate_to_yaml(content, metadata, chunk_type)
 
-                # Extract source URL
+                # Extract source URL (with section anchor) straight from the result's
+                # metadata; fall back to any URL embedded in the content, then the file.
                 source_url = metadata.get("source_url")
                 if not source_url:
                     source_url = _extract_source_url(str(content))
-                if not source_url and chunk_id and source_map:
-                    source_url = source_map.get(chunk_id)
                 if not source_url:
                     source_url = source_file
 
@@ -679,6 +767,11 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
                     result_text += f"Metadata:\n"
                     if metadata.get("breadcrumb_path"):
                         result_text += f"  Location: {metadata['breadcrumb_path']}\n"
+                    if metadata.get("section_anchor"):
+                        result_text += (
+                            f"  Section Anchor: {metadata['section_anchor']}"
+                            f" (link to this section as Source#{metadata['section_anchor']})\n"
+                        )
                     if metadata.get("logical_parent"):
                         result_text += f"  Parent: {metadata['logical_parent']}\n"
                     neighbor_count = len(metadata.get("neighbor_chunks", []))
@@ -691,6 +784,10 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
                     result_text += f"💡 Tip: Use get_yaml_definition tool with chunk_id='{chunk_id}' to retrieve the complete definition with breadcrumb comments.\n"
                 elif chunk_type in ("crd_definition", "openapi_spec", "json_schema"):
                     result_text += f"💡 Tip: Use get_yaml_definition(chunk_id='{chunk_id}') to see this with breadcrumb comments showing its location in the YAML tree and neighbor chunks.\n"
+                if chunk_type == "table_row":
+                    table_id = (metadata or {}).get("table_id")
+                    if table_id:
+                        result_text += f"\n💡 Tip: Use get_table_members(table_id='{table_id}') for the full table.\n"
                 result_text += f"Score: {score}\n\n"
 
                 formatted.append(TextContent(type="text", text=result_text))
@@ -789,37 +886,191 @@ async def _search_documentation_impl(arguments: dict) -> list[TextContent]:
 
 
     except Exception as e:
+        if raise_on_error:
+            raise
         logger.error(f"Search failed: {e}")
         return [TextContent(type="text", text=f"Search failed: {str(e)}")]
 
-async def health_check(arguments: dict) -> list[TextContent]:
-    """Check service health."""
-    logger.info("   💓 health: checking service status")
+# Rank used to fold component statuses into one overall verdict. "unavailable"
+# (e.g. no cgroup when running outside a container) is explicitly benign (rank
+# 0). Lookup is strict: a status NOT listed here raises, so an unregistered or
+# typo'd status fails the health check loudly rather than silently passing as
+# healthy — the opposite of what an "honest" check should do.
+_HEALTH_STATUS_RANK = {"healthy": 0, "unavailable": 0, "degraded": 1, "unhealthy": 2}
+
+# cgroup memory accounting files. cgroup v2 exposes a unified hierarchy; v1 uses
+# the per-controller ``memory`` directory. Overridable as module attributes so
+# tests can point them at fixtures.
+_CGROUP_V2_CURRENT = "/sys/fs/cgroup/memory.current"
+_CGROUP_V2_MAX = "/sys/fs/cgroup/memory.max"
+_CGROUP_V1_USAGE = "/sys/fs/cgroup/memory/memory.usage_in_bytes"
+_CGROUP_V1_LIMIT = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
+# cgroup v1 reports "no limit" as a very large page-aligned sentinel rather than
+# a keyword; anything at or above this means effectively unlimited.
+_CGROUP_V1_UNLIMITED = 0x7FFFFFFFFFFFF000
+
+
+def _worst_status(statuses: list[str]) -> str:
+    """Fold a list of component statuses into the single worst one."""
+    worst = "healthy"
+    for status in statuses:
+        if _HEALTH_STATUS_RANK[status] > _HEALTH_STATUS_RANK[worst]:
+            worst = status
+    return worst
+
+
+def _read_cgroup_memory() -> dict | None:
+    """Read current memory usage and limit from the cgroup, v2 first then v1.
+
+    Returns a dict with ``source``, ``used_bytes`` and ``limit_bytes`` (the
+    latter ``None`` when the cgroup reports no limit), or ``None`` when no cgroup
+    memory files are present (e.g. running outside a container) or they are
+    unreadable/corrupt.
+    """
+    v2_current, v2_max = Path(_CGROUP_V2_CURRENT), Path(_CGROUP_V2_MAX)
+    if v2_current.exists() and v2_max.exists():
+        try:
+            used = int(v2_current.read_text().strip())
+            raw_max = v2_max.read_text().strip()
+            limit = None if raw_max == "max" else int(raw_max)
+            return {"source": "cgroup_v2", "used_bytes": used, "limit_bytes": limit}
+        except (ValueError, OSError):
+            return None
+
+    v1_usage, v1_limit = Path(_CGROUP_V1_USAGE), Path(_CGROUP_V1_LIMIT)
+    if v1_usage.exists() and v1_limit.exists():
+        try:
+            used = int(v1_usage.read_text().strip())
+            raw_limit = int(v1_limit.read_text().strip())
+            limit = None if raw_limit >= _CGROUP_V1_UNLIMITED else raw_limit
+            return {"source": "cgroup_v1", "used_bytes": used, "limit_bytes": limit}
+        except (ValueError, OSError):
+            return None
+
+    return None
+
+
+def _memory_health() -> dict:
+    """Report memory headroom from the cgroup.
+
+    ``degraded`` when free headroom drops below
+    ``OPENCRANE_HEALTH_MEM_WARN_HEADROOM`` (fraction, default 0.15), so
+    "healthy" reflects available RAM rather than just live objects. Returns
+    ``{"status": "unavailable"}`` when no cgroup limit can be read.
+    """
+    info = _read_cgroup_memory()
+    if info is None:
+        return {"status": "unavailable"}
+
+    used, limit = info["used_bytes"], info["limit_bytes"]
+    result = dict(info)
+    if not limit:  # None (v2 "max") or 0 => no enforceable limit
+        result["status"] = "healthy"
+        result["headroom_pct"] = None
+        return result
+
+    headroom_pct = round((1 - used / limit) * 100, 1)
+    warn_pct = float(os.environ.get("OPENCRANE_HEALTH_MEM_WARN_HEADROOM", "0.15")) * 100
+    result["headroom_pct"] = headroom_pct
+    result["status"] = "degraded" if headroom_pct < warn_pct else "healthy"
+    return result
+
+
+async def _query_probe() -> dict:
+    """Run a trivial real search behind a timeout to prove query-ability.
+
+    This exercises the actual serving path (embed → search → format), unlike a
+    liveness ping that only checks that objects exist. ``unhealthy`` when the
+    search errors or exceeds ``OPENCRANE_HEALTH_PROBE_TIMEOUT`` (seconds, default
+    10); ``degraded`` when it succeeds but exceeds the soft
+    ``OPENCRANE_HEALTH_PROBE_BUDGET`` (seconds, default 2).
+    """
+    query = os.environ.get("OPENCRANE_HEALTH_PROBE_QUERY", "documentation")
+    hard_timeout = float(os.environ.get("OPENCRANE_HEALTH_PROBE_TIMEOUT", "10"))
+    soft_budget = float(os.environ.get("OPENCRANE_HEALTH_PROBE_BUDGET", "2"))
+
+    # Semantic mode exercises the heavy path (embed + vector search) with a single
+    # query; hybrid would additionally run BM25, doubling probe cost for no gain.
+    probe_args = {"query": query, "limit": 1, "search_mode": "semantic"}
+
+    def _run_probe():
+        # Run the search in a worker thread (own event loop) so the timeout below
+        # can actually preempt it: the semantic search path is synchronous
+        # (blocking encode + Milvus call) and would otherwise never yield, leaving
+        # asyncio.wait_for unable to fire and blocking the server's event loop.
+        return asyncio.run(_search_documentation_impl(probe_args, raise_on_error=True))
+
+    start = time.monotonic()
     try:
-        # Check if services are initialized
+        await asyncio.wait_for(asyncio.to_thread(_run_probe), timeout=hard_timeout)
+    except asyncio.TimeoutError:
+        return {"status": "unhealthy", "error": f"probe exceeded {hard_timeout}s timeout"}
+    except Exception as exc:
+        latency_ms = round((time.monotonic() - start) * 1000, 1)
+        return {"status": "unhealthy", "latency_ms": latency_ms, "error": str(exc)}
+
+    elapsed = time.monotonic() - start
+    latency_ms = round(elapsed * 1000, 1)
+    status = "degraded" if elapsed > soft_budget else "healthy"
+    return {"status": status, "latency_ms": latency_ms}
+
+
+async def compute_health() -> dict:
+    """Build an honest health report reflecting query-serving readiness.
+
+    Beyond checking that service objects exist, this runs a real query probe,
+    reports cgroup memory headroom, and reports whether the heavy in-memory
+    keyword index is already resident (so the first-query memory spike is
+    visible). The
+    overall status is the worst of the components: healthy / degraded /
+    unhealthy — cheap enough to remain a valid startup/liveness probe.
+    """
+    logger.info("   💓 health: computing honest health report")
+    try:
         embeddings_service = get_embeddings_service()
         milvus_service = get_milvus_service()
-        health_status = {
+
+        checks: dict = {
             "embeddings_service": "healthy" if embeddings_service.model else "unhealthy",
-            "milvus_service": "healthy" if milvus_service.client else "unhealthy"
+            "milvus_service": "healthy" if milvus_service.client else "unhealthy",
         }
 
-        # Try to get collection stats
         try:
-            stats = milvus_service.get_collection_stats()
-            health_status["collection_stats"] = stats
-        except Exception as e:
-            health_status["collection_stats"] = f"error: {str(e)}"
+            checks["collection_stats"] = milvus_service.get_collection_stats()
+            stats_status = "healthy"
+        except Exception as exc:
+            checks["collection_stats"] = f"error: {str(exc)}"
+            stats_status = "degraded"
 
-        health_text = "Health Check Results:\n"
-        for component, status in health_status.items():
-            health_text += f"- {component}: {status}\n"
+        # The keyword (BM25) index is the one heavy structure still built lazily
+        # on first use (search no longer loads any chunk map into RAM). Capture its
+        # residency BEFORE the probe, which may build it itself, so the first-query
+        # memory spike stays visible.
+        checks["heavy_maps"] = {
+            "keyword_index_resident": _keyword_service is not None,
+        }
 
-        return [TextContent(type="text", text=health_text)]
+        checks["memory"] = _memory_health()
+        checks["query_probe"] = await _query_probe()
 
-    except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        return [TextContent(type="text", text=f"Health check failed: {str(e)}")]
+        overall = _worst_status([
+            checks["embeddings_service"],
+            checks["milvus_service"],
+            stats_status,
+            checks["memory"]["status"],
+            checks["query_probe"]["status"],
+        ])
+        return {"status": overall, "checks": checks}
+
+    except Exception as exc:
+        logger.error(f"Health check failed: {exc}")
+        return {"status": "unhealthy", "error": str(exc)}
+
+
+async def health_check(arguments: dict) -> list[TextContent]:
+    """Check service health, reporting honest query-serving readiness as JSON."""
+    payload = await compute_health()
+    return [TextContent(type="text", text=json.dumps(payload, indent=2))]
 
 async def get_yaml_definition(arguments: dict) -> list[TextContent]:
     """Fetch a chunk by ID and re-hydrate to YAML with breadcrumb comments.
@@ -831,17 +1082,27 @@ async def get_yaml_definition(arguments: dict) -> list[TextContent]:
     logger.info(f"   📄 get_yaml_definition: chunk_id=\"{chunk_id}\"")
 
     try:
-        chunk_index = _build_chunk_index()
-        chunk = chunk_index.get(chunk_id)
+        chunk = get_milvus_service().get_chunk(chunk_id)
 
         if not chunk:
             logger.info(f"   📄 get_yaml_definition: chunk not found")
             return [TextContent(type="text", text=f"Chunk not found: {chunk_id}")]
 
-        # Extract data
+        # Extract data. Milvus stores metadata as a JSON string and YAML content
+        # as a JSON string, so parse both back before re-hydrating.
         content = chunk.get("content", "")
         chunk_type = chunk.get("chunk_type", "")
-        metadata = chunk.get("metadata", {})
+        meta_raw = chunk.get("metadata_json")
+        try:
+            metadata = json.loads(meta_raw) if isinstance(meta_raw, str) else (meta_raw or {})
+        except (json.JSONDecodeError, TypeError, ValueError):
+            metadata = {}
+
+        if isinstance(content, str) and chunk_type in _YAML_CHUNK_TYPES:
+            try:
+                content = json.loads(content)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                pass
 
         # Re-hydrate to YAML with breadcrumb
         yaml_output = _rehydrate_to_yaml(content, metadata, chunk_type)
@@ -869,6 +1130,7 @@ async def get_yaml_definition(arguments: dict) -> list[TextContent]:
 
 _CHUNK_TYPE_SECTION_HEADINGS = {
     "list_item": "List Item Metadata",
+    "table_row": "Table Row Metadata",
     "crd_definition": "CRD-Specific Metadata",
     "openapi_spec": "OpenAPI-Specific Metadata",
     "json_schema": "JSON Schema-Specific Metadata",
@@ -966,6 +1228,29 @@ async def get_list_members(arguments: dict) -> list[TextContent]:
         lines.append(f"{indent}[{pos}] {content}")
 
     return [TextContent(type="text", text="\n".join(lines) + "\n")]
+
+
+async def get_table_members(arguments: dict) -> list[TextContent]:
+    """Return all row chunks for the given table_id, ordered by row_index."""
+    table_id = arguments.get("table_id")
+    logger.info(f"   📊 get_table_members: table_id={table_id!r}")
+    if not table_id:
+        return [TextContent(type="text", text="Error: table_id must be a non-empty string.")]
+    members = _get_table_members(table_id)
+    if not members:
+        return [TextContent(type="text", text=f"No table found for table_id={table_id!r}.")]
+    first_meta = members[0].get("metadata", {}) or {}
+    breadcrumb = first_meta.get("breadcrumb_path", "")
+    lines = []
+    for m in members:
+        content = m.get("content", "")
+        # Strip breadcrumb header for readable inline display
+        if breadcrumb and content.startswith(f"# {breadcrumb}\n"):
+            content = content[len(breadcrumb) + 3:].lstrip("\n")
+        lines.append(content)
+        lines.append("")
+    return [TextContent(type="text", text="\n".join(lines).strip() + "\n")]
+
 
 async def main():
     """Main entry point for the MCP server."""

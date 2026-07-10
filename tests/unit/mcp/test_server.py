@@ -5,10 +5,11 @@ import pytest
 from unittest.mock import Mock, patch, AsyncMock, mock_open
 from opencrane.mcp.server import (
     search_docs, _search_documentation_impl, _build_search_tool,
-    health_check, list_tools, call_tool,
+    health_check, compute_health, list_tools, call_tool,
     get_embeddings_service, get_milvus_service, get_keyword_service,
     get_yaml_definition, get_metadata_schema, _rehydrate_to_yaml, _has_yaml_chunks,
-    _get_indexed_chunk_types, _get_source_topics, main
+    _get_indexed_chunk_types, _get_source_topics, main,
+    _worst_status, _read_cgroup_memory, _memory_health, _query_probe,
 )
 from mcp.types import TextContent
 
@@ -256,6 +257,35 @@ class TestMCPServer:
     @patch('opencrane.mcp.server.get_embeddings_service')
     @patch('opencrane.mcp.server.get_milvus_service')
     @pytest.mark.anyio
+    async def test_search_result_includes_section_anchor(self, mock_milvus_get, mock_embeddings_get):
+        """A chunk's section_anchor is surfaced with a hint to build the section link."""
+        mock_embeddings = Mock()
+        mock_model = Mock()
+        mock_model.encode.return_value = [[0.1] * 768]
+        mock_embeddings.model = mock_model
+        mock_embeddings_get.return_value = mock_embeddings
+
+        mock_milvus = Mock()
+        mock_milvus.search.return_value = [
+            {
+                "content": "test",
+                "source_file": "file.md",
+                "chunk_type": "prose",
+                "metadata_json": '{"source_url": "https://x/about", "section_anchor": "who-we-serve"}',
+                "distance": 0.5,
+            }
+        ]
+        mock_milvus_get.return_value = mock_milvus
+
+        results = await _search_documentation_impl({
+            "query": "q", "limit": 1, "search_mode": "semantic",
+        })
+        assert "Section Anchor: who-we-serve" in results[0].text
+        assert "Source#who-we-serve" in results[0].text
+
+    @patch('opencrane.mcp.server.get_embeddings_service')
+    @patch('opencrane.mcp.server.get_milvus_service')
+    @pytest.mark.anyio
     async def test_search_documentation_with_filters(self, mock_milvus_get, mock_embeddings_get):
         """Test search with chunk type filters."""
         mock_embeddings = Mock()
@@ -297,54 +327,6 @@ class TestMCPServer:
         assert len(results) == 1
         assert "Search failed:" in results[0].text
 
-    @patch('opencrane.mcp.server.get_milvus_service')
-    @patch('opencrane.mcp.server.get_embeddings_service')
-    @pytest.mark.anyio
-    async def test_health_check_success(self, mock_embeddings_get, mock_milvus_get):
-        """Test successful health check."""
-        mock_embeddings = Mock()
-        mock_embeddings.model = Mock()
-        mock_embeddings_get.return_value = mock_embeddings
-
-        mock_milvus = Mock()
-        mock_milvus.client = Mock()
-        mock_milvus.get_collection_stats.return_value = {"row_count": 100}
-        mock_milvus_get.return_value = mock_milvus
-
-        arguments = {}
-
-        results = await health_check(arguments)
-
-        assert len(results) == 1
-        health_text = results[0].text
-        assert "embeddings_service: healthy" in health_text
-        assert "milvus_service: healthy" in health_text
-        assert "collection_stats" in health_text
-
-    @patch('opencrane.mcp.server.get_milvus_service')
-    @patch('opencrane.mcp.server.get_embeddings_service')
-    @pytest.mark.anyio
-    async def test_health_check_failure(self, mock_embeddings_get, mock_milvus_get):
-        """Test health check with failures."""
-        mock_embeddings = Mock()
-        mock_embeddings.model = None
-        mock_embeddings_get.return_value = mock_embeddings
-
-        mock_milvus = Mock()
-        mock_milvus.client = None
-        mock_milvus.get_collection_stats.side_effect = Exception("Stats error")
-        mock_milvus_get.return_value = mock_milvus
-
-        arguments = {}
-
-        results = await health_check(arguments)
-
-        assert len(results) == 1
-        health_text = results[0].text
-        assert "embeddings_service: unhealthy" in health_text
-        assert "milvus_service: unhealthy" in health_text
-        assert "error: Stats error" in health_text
-
     @patch('opencrane.mcp.server.app')
     @pytest.mark.anyio
     async def test_main(self, mock_app):
@@ -372,9 +354,8 @@ class TestMCPServer:
 
     @patch('opencrane.mcp.server.get_embeddings_service')
     @patch('opencrane.mcp.server.get_milvus_service')
-    @patch('opencrane.mcp.server._build_chunk_source_map')
     @pytest.mark.anyio
-    async def test_search_with_numpy_array_conversion(self, mock_build_map, mock_milvus_get, mock_embeddings_get):
+    async def test_search_with_numpy_array_conversion(self, mock_milvus_get, mock_embeddings_get):
         """Test search when model returns numpy array."""
         import numpy as np
 
@@ -397,7 +378,6 @@ class TestMCPServer:
             }
         ]
         mock_milvus_get.return_value = mock_milvus
-        mock_build_map.return_value = {}
 
         arguments = {"query": "test", "limit": 5, "search_mode": "semantic"}
         results = await _search_documentation_impl(arguments)
@@ -407,10 +387,9 @@ class TestMCPServer:
 
     @patch('opencrane.mcp.server.get_embeddings_service')
     @patch('opencrane.mcp.server.get_milvus_service')
-    @patch('opencrane.mcp.server._build_chunk_source_map')
     @pytest.mark.anyio
-    async def test_search_with_source_map_fallback(self, mock_build_map, mock_milvus_get, mock_embeddings_get):
-        """Test search falls back to source_map for URL."""
+    async def test_search_falls_back_to_source_file(self, mock_milvus_get, mock_embeddings_get):
+        """When no URL is in metadata or content, source falls back to source_file."""
         mock_embeddings = Mock()
         mock_model = Mock()
         mock_model.encode.return_value = [[0.1] * 768]
@@ -429,76 +408,13 @@ class TestMCPServer:
             }
         ]
         mock_milvus_get.return_value = mock_milvus
-        mock_build_map.return_value = {"test_id_123": "https://github.com/test/repo/blob/main/file.md"}
 
         arguments = {"query": "test", "limit": 5, "search_mode": "semantic"}
         results = await _search_documentation_impl(arguments)
 
         assert len(results) == 1
-        assert "https://github.com/test/repo/blob/main/file.md" in results[0].text
+        assert "Source: llmstxt/product-docs/llms-full.txt" in results[0].text
 
-    @patch('opencrane.mcp.server.get_embeddings_service')
-    @patch('opencrane.mcp.server.get_milvus_service')
-    @pytest.mark.anyio
-    async def test_health_check_exception(self, mock_milvus_get, mock_embeddings_get):
-        """Test health check handles exceptions."""
-        mock_embeddings_get.side_effect = Exception("Service unavailable")
-        
-        arguments = {}
-        results = await health_check(arguments)
-        
-        assert len(results) == 1
-        assert "Health check failed" in results[0].text
-        assert "Service unavailable" in results[0].text
-
-    @patch('opencrane.mcp.server.Path')
-    @patch('opencrane.mcp.server.generate_chunk_id')
-    def test_build_chunk_source_map_with_exception(self, mock_gen_id, mock_path):
-        """Test building source map skips chunks that fail ID generation."""
-        from opencrane.mcp.server import _build_chunk_source_map
-        import opencrane.mcp.server as server_module
-        
-        # Reset cache
-        server_module._chunk_source_map = None
-        
-        mock_file = Mock()
-        mock_file.exists.return_value = True
-        mock_file.read_text.return_value = '[{"content": "test", "source_file": "test.md", "chunk_type": "prose"}]'
-        mock_path.return_value = mock_file
-        
-        # Make generate_chunk_id raise exception
-        mock_gen_id.side_effect = Exception("ID generation failed")
-        
-        result = _build_chunk_source_map()
-        
-        # Should return empty map since all chunks failed
-        assert result == {}
-
-    @patch('opencrane.mcp.server.Path')
-    def test_build_chunk_source_map_caching(self, mock_path):
-        """Test that source map is cached and returns early on second call."""
-        from opencrane.mcp.server import _build_chunk_source_map
-        import opencrane.mcp.server as server_module
-        
-        # Reset cache
-        server_module._chunk_source_map = None
-        
-        mock_file = Mock()
-        mock_file.exists.return_value = True
-        mock_file.read_text.return_value = '[{"content": "test content", "source_file": "test.md", "chunk_type": "prose"}]'
-        mock_path.return_value = mock_file
-        
-        # First call - should load from file
-        result1 = _build_chunk_source_map()
-        assert isinstance(result1, dict)
-        
-        # Second call - should return cached value (line 87)
-        # Mock file should not be read again
-        mock_file.read_text.side_effect = Exception("Should not be called")
-        result2 = _build_chunk_source_map()
-        
-        # Should return the same cached object
-        assert result2 is result1
 
     def test_rehydrate_to_yaml_with_dict_content(self):
         """Test YAML re-hydration with dict content and full metadata."""
@@ -610,9 +526,8 @@ class TestMCPServer:
         assert "type: string" in result
         assert "format: email" in result
 
-    @patch('opencrane.mcp.server._build_chunk_source_map', return_value={})
     @pytest.mark.anyio
-    async def test_search_documentation_metadata_parse_error(self, mock_source_map):
+    async def test_search_documentation_metadata_parse_error(self):
         """Test search when metadata JSON parsing fails."""
         from opencrane.mcp.server import _search_documentation_impl
 
@@ -645,9 +560,8 @@ class TestMCPServer:
             assert len(result) > 0
             assert "test content" in result[0].text
 
-    @patch('opencrane.mcp.server._build_chunk_source_map', return_value={})
     @pytest.mark.anyio
-    async def test_search_documentation_long_content_truncation(self, mock_source_map):
+    async def test_search_documentation_long_content_truncation(self):
         """Test that long content is truncated in search results."""
         from opencrane.mcp.server import _search_documentation_impl
 
@@ -685,9 +599,8 @@ class TestMCPServer:
             assert "get_yaml_definition" in result[0].text
             assert "chunk_id='test-123'" in result[0].text
 
-    @patch('opencrane.mcp.server._build_chunk_source_map', return_value={})
     @pytest.mark.anyio
-    async def test_search_documentation_yaml_chunk_hint(self, mock_source_map):
+    async def test_search_documentation_yaml_chunk_hint(self):
         """Test that YAML chunks show hint to use get_yaml_definition."""
         from opencrane.mcp.server import _search_documentation_impl
 
@@ -736,26 +649,15 @@ class TestMCPServer:
         assert len(result) == 1
         assert "Error: query must be a non-empty string." in result[0].text
 
-    @patch('opencrane.mcp.server._build_chunk_source_map', return_value={})
-    @patch('opencrane.mcp.server._build_chunk_index')
     @pytest.mark.anyio
-    async def test_search_documentation_exposes_token_count(self, mock_chunk_index, mock_source_map):
-        """Test that search results include token_count from chunk index."""
+    async def test_search_documentation_exposes_token_count(self):
+        """Test that search results include token_count carried on the search result."""
         from opencrane.mcp.server import _search_documentation_impl
 
         # Setup mock services
         mock_milvus = Mock()
         mock_embeddings = Mock()
         mock_embeddings.model.encode.return_value = [[0.1] * 768]
-
-        # Mock chunk index with token_count data
-        mock_chunk_index.return_value = {
-            "chunk-123": {
-                "chunk_id": "chunk-123",
-                "content": "test content",
-                "token_count": 2073
-            }
-        }
 
         with patch('opencrane.mcp.server.get_milvus_service', return_value=mock_milvus), \
              patch('opencrane.mcp.server.get_embeddings_service', return_value=mock_embeddings):
@@ -766,6 +668,7 @@ class TestMCPServer:
                     "content": "test content",
                     "chunk_type": "prose",
                     "metadata_json": '{}',
+                    "token_count": 2073,
                     "distance": 0.9
                 }
             ]
@@ -781,20 +684,28 @@ class TestMCPServer:
             assert "Token Count: 2073" in result[0].text
             assert "Chunk ID: chunk-123" in result[0].text
 
-    @patch('opencrane.mcp.server._build_chunk_index')
+    @staticmethod
+    def _milvus_with_chunk(chunk):
+        """Return a get_milvus_service patch target whose get_chunk yields ``chunk``."""
+        svc = Mock()
+        svc.get_chunk.return_value = chunk
+        return svc
+
+    @patch('opencrane.mcp.server.get_milvus_service')
     @pytest.mark.anyio
-    async def test_get_yaml_definition_with_many_neighbors(self, mock_build_chunk_index):
+    async def test_get_yaml_definition_with_many_neighbors(self, mock_get_milvus):
         """Test get_yaml_definition with > 5 neighbor chunks."""
-        chunk_data = {
+        # Milvus stores YAML content and metadata as JSON strings.
+        chunk_row = {
             "chunk_id": "test-123",
-            "content": {"spec": {"replicas": 3}},
+            "content": json.dumps({"spec": {"replicas": 3}}),
             "chunk_type": "crd_definition",
-            "metadata": {
+            "metadata_json": json.dumps({
                 "original_format": "yaml",
-                "neighbor_chunks": ["n1", "n2", "n3", "n4", "n5", "n6", "n7", "n8"]
-            }
+                "neighbor_chunks": ["n1", "n2", "n3", "n4", "n5", "n6", "n7", "n8"],
+            }),
         }
-        mock_build_chunk_index.return_value = {"test-123": chunk_data}
+        mock_get_milvus.return_value = self._milvus_with_chunk(chunk_row)
 
         result = await get_yaml_definition({"chunk_id": "test-123"})
 
@@ -805,23 +716,22 @@ class TestMCPServer:
         assert "n1" in result[0].text
         assert "n5" in result[0].text
 
-    @patch('builtins.open', new_callable=mock_open)
-    @patch('opencrane.mcp.server._build_chunk_index')
+    @patch('opencrane.mcp.server.get_milvus_service')
     @pytest.mark.anyio
-    async def test_get_yaml_definition_success(self, mock_build_chunk_index, mock_file):
-        """Test successful chunk retrieval and YAML re-hydration."""
-        chunk_data = {
+    async def test_get_yaml_definition_success(self, mock_get_milvus):
+        """Test successful chunk retrieval and YAML re-hydration from Milvus."""
+        chunk_row = {
             "chunk_id": "test-123",
-            "content": {"spec": {"replicas": 3}},
+            "content": json.dumps({"spec": {"replicas": 3}}),
             "chunk_type": "crd_definition",
-            "metadata": {
+            "metadata_json": json.dumps({
                 "original_format": "yaml",
                 "breadcrumb_path": "spec.properties.spec",
                 "source_url": "https://github.com/test/doc.md",
-                "neighbor_chunks": ["chunk-456", "chunk-789"]
-            }
+                "neighbor_chunks": ["chunk-456", "chunk-789"],
+            }),
         }
-        mock_build_chunk_index.return_value = {"test-123": chunk_data}
+        mock_get_milvus.return_value = self._milvus_with_chunk(chunk_row)
 
         result = await get_yaml_definition({"chunk_id": "test-123"})
 
@@ -835,40 +745,77 @@ class TestMCPServer:
         assert "# Neighbor Chunks" in result[0].text
         assert "chunk-456" in result[0].text
 
-    @patch('opencrane.mcp.server._build_chunk_index')
+    @patch('opencrane.mcp.server.get_milvus_service')
     @pytest.mark.anyio
-    async def test_get_yaml_definition_chunk_not_found(self, mock_build_chunk_index):
+    async def test_get_yaml_definition_malformed_content_and_metadata(self, mock_get_milvus):
+        """Invalid metadata JSON and un-parseable YAML content degrade gracefully."""
+        chunk_row = {
+            "chunk_id": "test-123",
+            "content": "not: [valid json",  # str, YAML type, but not JSON -> stays as-is
+            "chunk_type": "crd_definition",
+            "metadata_json": '{"invalid"',  # unparseable -> metadata treated as {}
+        }
+        mock_get_milvus.return_value = self._milvus_with_chunk(chunk_row)
+
+        result = await get_yaml_definition({"chunk_id": "test-123"})
+
+        assert len(result) == 1
+        assert "Chunk ID: test-123" in result[0].text
+        assert "not: [valid json" in result[0].text
+
+    @patch('opencrane.mcp.server.get_milvus_service')
+    @pytest.mark.anyio
+    async def test_get_yaml_definition_non_yaml_chunk(self, mock_get_milvus):
+        """A non-YAML chunk returns its content untouched (no JSON re-parse)."""
+        chunk_row = {
+            "chunk_id": "p-1",
+            "content": "just some prose",
+            "chunk_type": "prose",
+            # no metadata_json key -> metadata falls back to {}
+        }
+        mock_get_milvus.return_value = self._milvus_with_chunk(chunk_row)
+
+        result = await get_yaml_definition({"chunk_id": "p-1"})
+
+        assert len(result) == 1
+        assert "just some prose" in result[0].text
+
+    @patch('opencrane.mcp.server.get_milvus_service')
+    @pytest.mark.anyio
+    async def test_get_yaml_definition_chunk_not_found(self, mock_get_milvus):
         """Test get_yaml_definition with non-existent chunk ID."""
-        mock_build_chunk_index.return_value = {}
+        mock_get_milvus.return_value = self._milvus_with_chunk(None)
 
         result = await get_yaml_definition({"chunk_id": "nonexistent"})
 
         assert len(result) == 1
         assert "Chunk not found" in result[0].text
 
-    @patch('opencrane.mcp.server._build_chunk_index')
+    @patch('opencrane.mcp.server.get_milvus_service')
     @pytest.mark.anyio
-    async def test_get_yaml_definition_file_error(self, mock_build_chunk_index):
-        """Test get_yaml_definition with file read error."""
-        mock_build_chunk_index.side_effect = Exception("File not found")
+    async def test_get_yaml_definition_service_error(self, mock_get_milvus):
+        """Test get_yaml_definition when the Milvus lookup raises."""
+        svc = Mock()
+        svc.get_chunk.side_effect = Exception("connection lost")
+        mock_get_milvus.return_value = svc
 
         result = await get_yaml_definition({"chunk_id": "test-123"})
 
         assert len(result) == 1
         assert "Failed to fetch chunk" in result[0].text
 
-    @patch('opencrane.mcp.server._build_chunk_index')
+    @patch('opencrane.mcp.server.get_milvus_service')
     @patch('opencrane.mcp.server._rehydrate_to_yaml')
     @pytest.mark.anyio
-    async def test_get_yaml_definition_processing_error(self, mock_rehydrate, mock_build_chunk_index):
+    async def test_get_yaml_definition_processing_error(self, mock_rehydrate, mock_get_milvus):
         """Test get_yaml_definition with error during YAML re-hydration."""
-        chunk_data = {
+        chunk_row = {
             "chunk_id": "test-123",
-            "content": {"spec": {"replicas": 3}},
+            "content": json.dumps({"spec": {"replicas": 3}}),
             "chunk_type": "crd_definition",
-            "metadata": {"original_format": "yaml"}
+            "metadata_json": json.dumps({"original_format": "yaml"}),
         }
-        mock_build_chunk_index.return_value = {"test-123": chunk_data}
+        mock_get_milvus.return_value = self._milvus_with_chunk(chunk_row)
         mock_rehydrate.side_effect = Exception("YAML conversion failed")
 
         result = await get_yaml_definition({"chunk_id": "test-123"})
@@ -904,119 +851,59 @@ class TestMCPServer:
         assert "Failed to retrieve metadata schema" in result[0].text
 
 
-def test_build_chunk_index_loads_from_file(tmp_path, monkeypatch):
-    """Test _build_chunk_index loads and indexes chunks from .opencrane/chunks.json."""
+def _mock_milvus_types(monkeypatch, chunk_types):
+    """Point the server's Milvus service at a mock reporting the given chunk types."""
     import opencrane.mcp.server as server_module
 
-    monkeypatch.chdir(tmp_path)
-    server_module._chunk_index = None
-
-    chunks = [
-        {"chunk_id": "abc-1", "content": "hello", "chunk_type": "prose"},
-        {"chunk_id": "abc-2", "content": "world", "chunk_type": "code_snippet"},
-        {"content": "no id chunk", "chunk_type": "prose"},  # missing chunk_id
-    ]
-    (tmp_path / ".opencrane").mkdir()
-    (tmp_path / ".opencrane" / "chunks.json").write_text(json.dumps(chunks), encoding="utf-8")
-
-    result = server_module._build_chunk_index()
-
-    assert len(result) == 2
-    assert result["abc-1"]["content"] == "hello"
-    assert result["abc-2"]["content"] == "world"
+    svc = Mock()
+    svc.distinct_chunk_types.return_value = set(chunk_types)
+    monkeypatch.setattr(server_module, "get_milvus_service", lambda: svc)
+    return svc
 
 
-def test_build_chunk_index_caching(tmp_path, monkeypatch):
-    """Test _build_chunk_index returns cached value on second call."""
+def test_has_yaml_chunks_true(monkeypatch):
+    """Test _has_yaml_chunks returns True when Milvus reports a YAML type."""
     import opencrane.mcp.server as server_module
 
-    monkeypatch.chdir(tmp_path)
-    server_module._chunk_index = None
-
-    chunks = [{"chunk_id": "c1", "content": "data"}]
-    (tmp_path / ".opencrane").mkdir()
-    chunks_path = tmp_path / ".opencrane" / "chunks.json"
-    chunks_path.write_text(json.dumps(chunks), encoding="utf-8")
-
-    result1 = server_module._build_chunk_index()
-    assert "c1" in result1
-
-    # Remove the file — second call should still return cached result
-    chunks_path.unlink()
-    result2 = server_module._build_chunk_index()
-    assert result2 is result1
-
-
-def test_has_yaml_chunks_true(tmp_path, monkeypatch):
-    """Test _has_yaml_chunks returns True when YAML chunks exist."""
-    import opencrane.mcp.server as server_module
-
-    monkeypatch.chdir(tmp_path)
-    server_module._chunk_index = None
-
-    chunks = [
-        {"chunk_id": "c1", "content": "prose text", "chunk_type": "prose"},
-        {"chunk_id": "c2", "content": {"spec": {}}, "chunk_type": "crd_definition"},
-    ]
-    (tmp_path / ".opencrane").mkdir()
-    (tmp_path / ".opencrane" / "chunks.json").write_text(json.dumps(chunks), encoding="utf-8")
+    server_module._chunk_types_cache = None
+    _mock_milvus_types(monkeypatch, ["prose", "crd_definition"])
 
     assert server_module._has_yaml_chunks() is True
 
 
-def test_has_yaml_chunks_false(tmp_path, monkeypatch):
-    """Test _has_yaml_chunks returns False when no YAML chunks exist."""
+def test_has_yaml_chunks_false(monkeypatch):
+    """Test _has_yaml_chunks returns False when Milvus reports no YAML type."""
     import opencrane.mcp.server as server_module
 
-    monkeypatch.chdir(tmp_path)
-    server_module._chunk_index = None
-
-    chunks = [
-        {"chunk_id": "c1", "content": "prose text", "chunk_type": "prose"},
-        {"chunk_id": "c2", "content": "code", "chunk_type": "code_snippet"},
-    ]
-    (tmp_path / ".opencrane").mkdir()
-    (tmp_path / ".opencrane" / "chunks.json").write_text(json.dumps(chunks), encoding="utf-8")
+    server_module._chunk_types_cache = None
+    _mock_milvus_types(monkeypatch, ["prose", "code_snippet"])
 
     assert server_module._has_yaml_chunks() is False
 
 
-def test_has_yaml_chunks_empty_index(tmp_path, monkeypatch):
-    """Test _has_yaml_chunks returns False when chunk index is empty."""
+def test_has_yaml_chunks_empty_index(monkeypatch):
+    """Test _has_yaml_chunks returns False when Milvus reports no chunk types."""
     import opencrane.mcp.server as server_module
 
-    monkeypatch.chdir(tmp_path)
-    server_module._chunk_index = None
-
-    (tmp_path / ".opencrane").mkdir()
-    (tmp_path / ".opencrane" / "chunks.json").write_text("[]", encoding="utf-8")
+    server_module._chunk_types_cache = None
+    _mock_milvus_types(monkeypatch, [])
 
     assert server_module._has_yaml_chunks() is False
 
 
-def test_build_chunk_source_map_from_rag_chunks(tmp_path, monkeypatch):
-    """Cover chunk source map building via .opencrane/chunks.json."""
+def test_get_indexed_chunk_types_caches(monkeypatch):
+    """The chunk-type set is queried from Milvus once and cached."""
     import opencrane.mcp.server as server_module
 
-    monkeypatch.chdir(tmp_path)
-    server_module._chunk_source_map = None
+    server_module._chunk_types_cache = None
+    svc = _mock_milvus_types(monkeypatch, ["prose", "list_item"])
 
-    url = "https://github.com/my-org/proj/blob/main/docs/a.md"
-    source_file = "llmstxt/product-docs/llms-full.txt"
-    chunk = {
-        "content": "Some unique content",
-        "source_file": source_file,
-        "chunk_type": "prose",
-        "line_start": None,
-        "metadata": {"source_url": url},
-    }
-    (tmp_path / ".opencrane").mkdir()
-    chunks_path = tmp_path / ".opencrane" / "chunks.json"
-    chunks_path.write_text(json.dumps([chunk]), encoding="utf-8")
+    first = server_module._get_indexed_chunk_types()
+    assert first == {"prose", "list_item"}
 
-    mapping = server_module._build_chunk_source_map()
-    expected_id = server_module.generate_chunk_id(source_file, "prose", None, "Some unique content")
-    assert mapping.get(expected_id) == url
+    # A cached call must not query Milvus again.
+    assert server_module._get_indexed_chunk_types() is first
+    assert svc.distinct_chunk_types.call_count == 1
 
 
 @pytest.mark.anyio
@@ -1062,7 +949,6 @@ async def test_search_documentation_metadata_display_prose(mock_milvus_get, mock
     ]
 
     mock_milvus_get.return_value = mock_milvus
-    monkeypatch.setattr(server_module, "_build_chunk_source_map", lambda: {})
 
     results = await server_module._search_documentation_impl({"query": "test", "search_mode": "semantic"})
 
@@ -1078,3 +964,359 @@ async def test_search_documentation_metadata_display_prose(mock_milvus_get, mock
     # Count occurrences of "CRD Kind" - should only appear once (in breadcrumb)
     crd_kind_count = results[1].text.count("CRD Kind")
     assert crd_kind_count == 1  # Only in breadcrumb, not in separate Metadata section
+
+
+class TestHonestHealthCheck:
+    """Tests for the honest, query-aware health check."""
+
+    # --- _worst_status ---
+
+    def test_worst_status_empty_is_healthy(self):
+        assert _worst_status([]) == "healthy"
+
+    def test_worst_status_picks_degraded_over_healthy(self):
+        assert _worst_status(["healthy", "degraded", "healthy"]) == "degraded"
+
+    def test_worst_status_picks_unhealthy(self):
+        assert _worst_status(["degraded", "unhealthy", "healthy"]) == "unhealthy"
+
+    def test_worst_status_unavailable_is_benign(self):
+        assert _worst_status(["healthy", "unavailable"]) == "healthy"
+
+    def test_worst_status_raises_on_unregistered_status(self):
+        # An unregistered status must fail loud, not silently pass as healthy.
+        with pytest.raises(KeyError):
+            _worst_status(["healthy", "bogus"])
+
+    # --- _read_cgroup_memory ---
+
+    def test_read_cgroup_memory_v2(self, tmp_path, monkeypatch):
+        current = tmp_path / "memory.current"
+        maxf = tmp_path / "memory.max"
+        current.write_text("1000")
+        maxf.write_text("4000")
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_CURRENT", str(current))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_MAX", str(maxf))
+        info = _read_cgroup_memory()
+        assert info == {"source": "cgroup_v2", "used_bytes": 1000, "limit_bytes": 4000}
+
+    def test_read_cgroup_memory_v2_unlimited(self, tmp_path, monkeypatch):
+        current = tmp_path / "memory.current"
+        maxf = tmp_path / "memory.max"
+        current.write_text("1000")
+        maxf.write_text("max")
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_CURRENT", str(current))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_MAX", str(maxf))
+        info = _read_cgroup_memory()
+        assert info["source"] == "cgroup_v2"
+        assert info["limit_bytes"] is None
+
+    def test_read_cgroup_memory_v2_corrupt_returns_none(self, tmp_path, monkeypatch):
+        current = tmp_path / "memory.current"
+        maxf = tmp_path / "memory.max"
+        current.write_text("not-a-number")
+        maxf.write_text("4000")
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_CURRENT", str(current))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_MAX", str(maxf))
+        assert _read_cgroup_memory() is None
+
+    def test_read_cgroup_memory_v1(self, tmp_path, monkeypatch):
+        usage = tmp_path / "usage_in_bytes"
+        limit = tmp_path / "limit_in_bytes"
+        usage.write_text("2048")
+        limit.write_text("8192")
+        # Force v2 lookup to miss so it falls through to v1.
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_CURRENT", str(tmp_path / "nope-current"))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_MAX", str(tmp_path / "nope-max"))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V1_USAGE", str(usage))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V1_LIMIT", str(limit))
+        info = _read_cgroup_memory()
+        assert info == {"source": "cgroup_v1", "used_bytes": 2048, "limit_bytes": 8192}
+
+    def test_read_cgroup_memory_v1_unlimited_sentinel(self, tmp_path, monkeypatch):
+        import opencrane.mcp.server as server_module
+        usage = tmp_path / "usage_in_bytes"
+        limit = tmp_path / "limit_in_bytes"
+        usage.write_text("2048")
+        limit.write_text(str(server_module._CGROUP_V1_UNLIMITED))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_CURRENT", str(tmp_path / "nope-current"))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_MAX", str(tmp_path / "nope-max"))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V1_USAGE", str(usage))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V1_LIMIT", str(limit))
+        info = _read_cgroup_memory()
+        assert info["limit_bytes"] is None
+
+    def test_read_cgroup_memory_v1_corrupt_returns_none(self, tmp_path, monkeypatch):
+        usage = tmp_path / "usage_in_bytes"
+        limit = tmp_path / "limit_in_bytes"
+        usage.write_text("not-a-number")
+        limit.write_text("8192")
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_CURRENT", str(tmp_path / "nope-current"))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_MAX", str(tmp_path / "nope-max"))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V1_USAGE", str(usage))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V1_LIMIT", str(limit))
+        assert _read_cgroup_memory() is None
+
+    def test_read_cgroup_memory_none_when_absent(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_CURRENT", str(tmp_path / "no-current"))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V2_MAX", str(tmp_path / "no-max"))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V1_USAGE", str(tmp_path / "no-usage"))
+        monkeypatch.setattr("opencrane.mcp.server._CGROUP_V1_LIMIT", str(tmp_path / "no-limit"))
+        assert _read_cgroup_memory() is None
+
+    # --- _memory_health ---
+
+    def test_memory_health_unavailable(self, monkeypatch):
+        monkeypatch.setattr("opencrane.mcp.server._read_cgroup_memory", lambda: None)
+        assert _memory_health() == {"status": "unavailable"}
+
+    def test_memory_health_healthy_with_headroom(self, monkeypatch):
+        monkeypatch.setattr(
+            "opencrane.mcp.server._read_cgroup_memory",
+            lambda: {"source": "cgroup_v2", "used_bytes": 100, "limit_bytes": 1000},
+        )
+        result = _memory_health()
+        assert result["status"] == "healthy"
+        assert result["headroom_pct"] == 90.0
+        assert result["source"] == "cgroup_v2"
+
+    def test_memory_health_degraded_when_low(self, monkeypatch):
+        monkeypatch.setattr(
+            "opencrane.mcp.server._read_cgroup_memory",
+            lambda: {"source": "cgroup_v2", "used_bytes": 950, "limit_bytes": 1000},
+        )
+        result = _memory_health()
+        assert result["status"] == "degraded"
+        assert result["headroom_pct"] == 5.0
+
+    def test_memory_health_unlimited_is_healthy(self, monkeypatch):
+        monkeypatch.setattr(
+            "opencrane.mcp.server._read_cgroup_memory",
+            lambda: {"source": "cgroup_v2", "used_bytes": 100, "limit_bytes": None},
+        )
+        result = _memory_health()
+        assert result["status"] == "healthy"
+        assert result["headroom_pct"] is None
+
+    def test_memory_health_warn_threshold_env(self, monkeypatch):
+        monkeypatch.setenv("OPENCRANE_HEALTH_MEM_WARN_HEADROOM", "0.5")
+        monkeypatch.setattr(
+            "opencrane.mcp.server._read_cgroup_memory",
+            lambda: {"source": "cgroup_v2", "used_bytes": 600, "limit_bytes": 1000},
+        )
+        result = _memory_health()
+        # 40% headroom < 50% warn threshold -> degraded
+        assert result["status"] == "degraded"
+
+    # --- _query_probe ---
+
+    @patch("opencrane.mcp.server._search_documentation_impl")
+    @pytest.mark.anyio
+    async def test_query_probe_healthy(self, mock_impl):
+        mock_impl.return_value = [TextContent(type="text", text="Result 1:\nSource: x\n")]
+        result = await _query_probe()
+        assert result["status"] == "healthy"
+        assert "latency_ms" in result
+        mock_impl.assert_awaited_once()
+
+    @patch("opencrane.mcp.server._search_documentation_impl")
+    @pytest.mark.anyio
+    async def test_query_probe_unhealthy_when_search_raises(self, mock_impl):
+        mock_impl.side_effect = RuntimeError("boom")
+        result = await _query_probe()
+        assert result["status"] == "unhealthy"
+        assert "boom" in result["error"]
+        assert "latency_ms" in result
+        # The probe must request the raising variant, not sniff a text sentinel.
+        _, kwargs = mock_impl.call_args
+        assert kwargs.get("raise_on_error") is True
+
+    @patch("opencrane.mcp.server._search_documentation_impl")
+    @pytest.mark.anyio
+    async def test_query_probe_uses_semantic_mode(self, mock_impl):
+        mock_impl.return_value = [TextContent(type="text", text="Result 1:\n")]
+        await _query_probe()
+        args, _ = mock_impl.call_args
+        assert args[0]["search_mode"] == "semantic"
+
+    @patch("opencrane.mcp.server._search_documentation_impl")
+    @pytest.mark.anyio
+    async def test_query_probe_degraded_when_slow(self, mock_impl, monkeypatch):
+        monkeypatch.setenv("OPENCRANE_HEALTH_PROBE_BUDGET", "-1")
+        mock_impl.return_value = [TextContent(type="text", text="No results found.")]
+        result = await _query_probe()
+        assert result["status"] == "degraded"
+
+    @patch("opencrane.mcp.server._search_documentation_impl")
+    @pytest.mark.anyio
+    async def test_query_probe_timeout_enforced_for_blocking_search(self, mock_impl, monkeypatch):
+        """The hard timeout must fire even when the search blocks synchronously
+        (the real semantic path does not yield to the event loop)."""
+        import time as _time
+        monkeypatch.setenv("OPENCRANE_HEALTH_PROBE_TIMEOUT", "0.05")
+
+        async def _sync_block(_args, **_kwargs):
+            _time.sleep(0.4)  # blocking, no await — mimics model.encode + Milvus search
+            return [TextContent(type="text", text="Result 1:\n")]
+
+        mock_impl.side_effect = _sync_block
+        result = await _query_probe()
+        assert result["status"] == "unhealthy"
+        assert "timeout" in result["error"].lower()
+
+    @patch("opencrane.mcp.server.get_embeddings_service")
+    @pytest.mark.anyio
+    async def test_search_impl_raise_on_error_propagates(self, mock_emb_get):
+        """With raise_on_error, serving-path failures propagate instead of being
+        swallowed into a 'Search failed:' message."""
+        mock_emb_get.side_effect = RuntimeError("embed down")
+        with pytest.raises(RuntimeError, match="embed down"):
+            await _search_documentation_impl(
+                {"query": "x", "search_mode": "semantic"}, raise_on_error=True
+            )
+
+    # --- compute_health ---
+
+    def _services(self, model=True, client=True, stats=None, stats_error=None):
+        emb = Mock()
+        emb.model = Mock() if model else None
+        milv = Mock()
+        milv.client = Mock() if client else None
+        if stats_error is not None:
+            milv.get_collection_stats.side_effect = Exception(stats_error)
+        else:
+            milv.get_collection_stats.return_value = stats or {"row_count": 10}
+        return emb, milv
+
+    @patch("opencrane.mcp.server._query_probe")
+    @patch("opencrane.mcp.server._memory_health")
+    @patch("opencrane.mcp.server.get_milvus_service")
+    @patch("opencrane.mcp.server.get_embeddings_service")
+    @pytest.mark.anyio
+    async def test_compute_health_all_healthy(
+        self, mock_emb_get, mock_milv_get, mock_mem, mock_probe, monkeypatch
+    ):
+        emb, milv = self._services()
+        mock_emb_get.return_value = emb
+        mock_milv_get.return_value = milv
+        mock_mem.return_value = {"status": "unavailable"}
+        mock_probe.return_value = {"status": "healthy", "latency_ms": 12.0}
+        monkeypatch.setattr("opencrane.mcp.server._keyword_service", None)
+
+        payload = await compute_health()
+        assert payload["status"] == "healthy"
+        checks = payload["checks"]
+        assert checks["embeddings_service"] == "healthy"
+        assert checks["milvus_service"] == "healthy"
+        assert checks["collection_stats"] == {"row_count": 10}
+        assert checks["query_probe"]["status"] == "healthy"
+        assert checks["memory"]["status"] == "unavailable"
+        assert checks["heavy_maps"]["keyword_index_resident"] is False
+
+    @patch("opencrane.mcp.server._query_probe")
+    @patch("opencrane.mcp.server._memory_health")
+    @patch("opencrane.mcp.server.get_milvus_service")
+    @patch("opencrane.mcp.server.get_embeddings_service")
+    @pytest.mark.anyio
+    async def test_compute_health_unhealthy_when_service_object_missing(
+        self, mock_emb_get, mock_milv_get, mock_mem, mock_probe
+    ):
+        emb, milv = self._services(model=False)
+        mock_emb_get.return_value = emb
+        mock_milv_get.return_value = milv
+        mock_mem.return_value = {"status": "unavailable"}
+        mock_probe.return_value = {"status": "healthy"}
+
+        payload = await compute_health()
+        assert payload["status"] == "unhealthy"
+        assert payload["checks"]["embeddings_service"] == "unhealthy"
+
+    @patch("opencrane.mcp.server._query_probe")
+    @patch("opencrane.mcp.server._memory_health")
+    @patch("opencrane.mcp.server.get_milvus_service")
+    @patch("opencrane.mcp.server.get_embeddings_service")
+    @pytest.mark.anyio
+    async def test_compute_health_degraded_on_stats_error(
+        self, mock_emb_get, mock_milv_get, mock_mem, mock_probe
+    ):
+        emb, milv = self._services(stats_error="Stats error")
+        mock_emb_get.return_value = emb
+        mock_milv_get.return_value = milv
+        mock_mem.return_value = {"status": "unavailable"}
+        mock_probe.return_value = {"status": "healthy"}
+
+        payload = await compute_health()
+        assert payload["status"] == "degraded"
+        assert "error: Stats error" in payload["checks"]["collection_stats"]
+
+    @patch("opencrane.mcp.server._query_probe")
+    @patch("opencrane.mcp.server._memory_health")
+    @patch("opencrane.mcp.server.get_milvus_service")
+    @patch("opencrane.mcp.server.get_embeddings_service")
+    @pytest.mark.anyio
+    async def test_compute_health_degraded_on_low_memory(
+        self, mock_emb_get, mock_milv_get, mock_mem, mock_probe
+    ):
+        emb, milv = self._services()
+        mock_emb_get.return_value = emb
+        mock_milv_get.return_value = milv
+        mock_mem.return_value = {"status": "degraded", "headroom_pct": 3.0}
+        mock_probe.return_value = {"status": "healthy"}
+
+        payload = await compute_health()
+        assert payload["status"] == "degraded"
+
+    @patch("opencrane.mcp.server._query_probe")
+    @patch("opencrane.mcp.server._memory_health")
+    @patch("opencrane.mcp.server.get_milvus_service")
+    @patch("opencrane.mcp.server.get_embeddings_service")
+    @pytest.mark.anyio
+    async def test_compute_health_unhealthy_on_probe_failure(
+        self, mock_emb_get, mock_milv_get, mock_mem, mock_probe
+    ):
+        emb, milv = self._services()
+        mock_emb_get.return_value = emb
+        mock_milv_get.return_value = milv
+        mock_mem.return_value = {"status": "unavailable"}
+        mock_probe.return_value = {"status": "unhealthy", "error": "Search failed: x"}
+
+        payload = await compute_health()
+        assert payload["status"] == "unhealthy"
+
+    @patch("opencrane.mcp.server._query_probe")
+    @patch("opencrane.mcp.server._memory_health")
+    @patch("opencrane.mcp.server.get_milvus_service")
+    @patch("opencrane.mcp.server.get_embeddings_service")
+    @pytest.mark.anyio
+    async def test_compute_health_reports_resident_keyword_index(
+        self, mock_emb_get, mock_milv_get, mock_mem, mock_probe, monkeypatch
+    ):
+        emb, milv = self._services()
+        mock_emb_get.return_value = emb
+        mock_milv_get.return_value = milv
+        mock_mem.return_value = {"status": "unavailable"}
+        mock_probe.return_value = {"status": "healthy"}
+        # A built keyword (BM25) index is the heavy structure that becomes resident.
+        monkeypatch.setattr("opencrane.mcp.server._keyword_service", Mock())
+
+        payload = await compute_health()
+        assert payload["checks"]["heavy_maps"]["keyword_index_resident"] is True
+
+    @patch("opencrane.mcp.server.get_embeddings_service")
+    @pytest.mark.anyio
+    async def test_compute_health_unhealthy_on_unexpected_exception(self, mock_emb_get):
+        mock_emb_get.side_effect = Exception("Service unavailable")
+        payload = await compute_health()
+        assert payload["status"] == "unhealthy"
+        assert "Service unavailable" in payload["error"]
+
+    # --- health_check tool wrapper ---
+
+    @patch("opencrane.mcp.server.compute_health")
+    @pytest.mark.anyio
+    async def test_health_check_returns_json_text(self, mock_compute):
+        mock_compute.return_value = {"status": "healthy", "checks": {}}
+        results = await health_check({})
+        assert len(results) == 1
+        payload = json.loads(results[0].text)
+        assert payload["status"] == "healthy"

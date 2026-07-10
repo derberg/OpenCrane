@@ -1,12 +1,85 @@
 """Milvus client service for vector database operations."""
 
+import json
 import logging
+import re
 from typing import List, Optional, Dict
 from pymilvus import MilvusClient, DataType
 from opencrane.shared.config import get_config
 from opencrane.shared.models.vector_chunk import VectorChunk
 
 logger = logging.getLogger(__name__)
+
+# Milvus VARCHAR fields cap at 65535 chars; keep metadata within that limit.
+MAX_METADATA_LENGTH = 65535
+
+# Stored width of the list_id / table_id scalar columns. The insert path caps
+# values to this width, so the lookup path must cap by the same amount or a query
+# could miss a value the insert truncated. (Today both ids are 16-char sha256
+# digests, so this is a guard rather than a live truncation.)
+_ID_FIELD_MAX = 64
+
+# Characters not allowed in a scalar-id filter value. Milvus Lite doesn't support
+# expression templating (filter_params), so values are interpolated into the
+# filter string — this guard keeps that safe by stripping anything outside the
+# id charset, so a value can neither break the filter nor inject expression logic.
+_ID_UNSAFE = re.compile(r"[^0-9A-Za-z_-]")
+
+
+def _safe_id(value: str) -> str:
+    """Cap to the stored column width and strip to the safe id charset.
+
+    Ids (list_id/table_id) are server-generated hex-style digests, never user
+    input, so this normally changes nothing — it is defense-in-depth for the
+    interpolated filter.
+    """
+    return _ID_UNSAFE.sub("", (value or "")[:_ID_FIELD_MAX])
+
+# Fields returned for chunk lookups (get_chunk / query_by_field). Excludes the
+# embedding vector, which is large and never needed by the MCP tools.
+_LOOKUP_FIELDS = [
+    "chunk_id",
+    "content",
+    "source_file",
+    "source_name",
+    "chunk_type",
+    "metadata_json",
+    "token_count",
+    "line_start",
+    "list_id",
+    "table_id",
+]
+
+# Heaviest metadata fields, dropped first when metadata would overflow the column.
+_HEAVY_METADATA_FIELDS = ("neighbor_chunks", "sibling_ids", "sibling_previews")
+
+
+def _truncate_metadata(metadata_json: str) -> str:
+    """Keep metadata within MAX_METADATA_LENGTH while always emitting valid JSON.
+
+    Drops the largest list-valued fields first, then falls back to scalar-only
+    metadata, then to a minimal marker — never a corrupt/half-cut JSON string.
+    """
+    if len(metadata_json) <= MAX_METADATA_LENGTH:
+        return metadata_json
+    try:
+        meta = json.loads(metadata_json)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return '{"truncated": true}'
+
+    for field in _HEAVY_METADATA_FIELDS:
+        meta.pop(field, None)
+    meta["truncated"] = True
+    reduced = json.dumps(meta)
+    if len(reduced) <= MAX_METADATA_LENGTH:
+        return reduced
+
+    scalars = {k: v for k, v in meta.items() if isinstance(v, (str, int, float, bool))}
+    scalars["truncated"] = True
+    reduced = json.dumps(scalars)
+    if len(reduced) <= MAX_METADATA_LENGTH:
+        return reduced
+    return '{"truncated": true}'
 
 
 class MilvusService:
@@ -57,6 +130,11 @@ class MilvusService:
         schema.add_field(field_name="metadata_json", datatype=DataType.VARCHAR, max_length=65535)
         schema.add_field(field_name="token_count", datatype=DataType.INT64)
         schema.add_field(field_name="line_start", datatype=DataType.INT64)
+        # list_id / table_id are lifted out of metadata into their own scalar columns
+        # so get_list_members / get_table_members can query members directly instead
+        # of scanning an in-memory copy of the whole corpus.
+        schema.add_field(field_name="list_id", datatype=DataType.VARCHAR, max_length=_ID_FIELD_MAX)
+        schema.add_field(field_name="table_id", datatype=DataType.VARCHAR, max_length=_ID_FIELD_MAX)
 
         index_params = self.client.prepare_index_params()
         index_params.add_index(
@@ -64,6 +142,14 @@ class MilvusService:
             index_type="AUTOINDEX",
             metric_type="COSINE"
         )
+        # Scalar indexes on the fields get_list_members / get_table_members filter
+        # by. Without them Milvus scans the whole collection for every member
+        # lookup — defeating the point of moving members out of the in-memory
+        # corpus. INVERTED is the general-purpose scalar index for VARCHAR equality
+        # lookups and, unlike AUTOINDEX (vector-only on Milvus Lite), is accepted
+        # by both Milvus Lite and server mode.
+        index_params.add_index(field_name="list_id", index_type="INVERTED")
+        index_params.add_index(field_name="table_id", index_type="INVERTED")
 
         try:
             self.client.create_collection(
@@ -93,7 +179,6 @@ class MilvusService:
         # Milvus has a 65535 character limit for VARCHAR fields
         MAX_CONTENT_LENGTH = 65535
         MAX_SOURCE_FILE_LENGTH = 1024
-        MAX_METADATA_LENGTH = 8192
 
         data = []
         for chunk in vector_chunks:
@@ -105,9 +190,7 @@ class MilvusService:
 
             # Truncate other fields if needed
             source_file = (chunk.source_file or "")[:MAX_SOURCE_FILE_LENGTH]
-            metadata_json = chunk.metadata_json or "{}"
-            if len(metadata_json) > MAX_METADATA_LENGTH:
-                metadata_json = metadata_json[:MAX_METADATA_LENGTH - 30] + '{"truncated": true}'
+            metadata_json = _truncate_metadata(chunk.metadata_json or "{}")
 
             data.append({
                 "chunk_id": chunk.chunk_id,
@@ -119,6 +202,8 @@ class MilvusService:
                 "metadata_json": metadata_json,
                 "token_count": chunk.token_count,
                 "line_start": chunk.line_start if chunk.line_start is not None else 0,
+                "list_id": (chunk.list_id or "")[:_ID_FIELD_MAX],
+                "table_id": (chunk.table_id or "")[:_ID_FIELD_MAX],
             })
 
         try:
@@ -228,3 +313,94 @@ class MilvusService:
         except Exception as e:
             logger.error(f"Failed to get collection stats: {e}")
             raise
+
+    def get_chunk(self, chunk_id: str) -> Optional[Dict]:
+        """Fetch a single chunk by its primary key, or None if absent."""
+        try:
+            rows = self.client.get(
+                collection_name=self.collection_name,
+                ids=[chunk_id],
+                output_fields=_LOOKUP_FIELDS,
+            )
+            return rows[0] if rows else None
+        except Exception as e:
+            logger.error(f"Failed to fetch chunk {chunk_id}: {e}")
+            return None
+
+    def query_by_field(
+        self, field: str, value: str, chunk_type: Optional[str] = None, limit: int = 16384
+    ) -> List[Dict]:
+        """Return all chunks whose scalar ``field`` equals ``value``.
+
+        ``value`` is sanitized to the safe id charset and capped to the stored
+        column width, then interpolated into the filter — Milvus Lite (the
+        default backend) does not support expression templating (filter_params),
+        so interpolation is the portable path and the guard keeps it safe. The
+        cap also stops a lookup missing a value the insert path truncated.
+        ``field`` and ``chunk_type`` are caller-controlled (never user input), so
+        they stay in the expression directly. Pass ``chunk_type`` to constrain
+        rows in the database instead of post-filtering in Python.
+        """
+        expr = f'{field} == "{_safe_id(value)}"'
+        if chunk_type is not None:
+            expr += f' and chunk_type == "{chunk_type}"'
+        try:
+            rows = self.client.query(
+                collection_name=self.collection_name,
+                filter=expr,
+                output_fields=_LOOKUP_FIELDS,
+                limit=limit,
+            )
+        except Exception as e:
+            logger.error(f"Failed to query {field}=={value!r}: {e}")
+            return []
+        if len(rows) >= limit:
+            logger.warning(
+                f"query_by_field({field}=={value!r}) returned the {limit}-row cap; "
+                "some members may be omitted."
+            )
+        return rows
+
+    def field_names(self) -> set:
+        """Return the set of scalar/vector field names in the existing collection."""
+        try:
+            desc = self.client.describe_collection(collection_name=self.collection_name)
+            return {f["name"] for f in desc.get("fields", [])}
+        except Exception as e:
+            logger.error(f"Failed to describe collection: {e}")
+            return set()
+
+    def distinct_chunk_types(self, batch_size: int = 1000) -> set:
+        """Return the distinct ``chunk_type`` values present in the collection.
+
+        Pages through the collection with ``query_iterator`` pulling only the
+        small ``chunk_type`` column (never content/metadata), so it discovers
+        every type — including custom ones emitted by extension chunking
+        strategies — without loading the corpus into memory and without the
+        per-query row cap. Called once at server startup to tailor the tool list;
+        the caller caches the result.
+        """
+        types: set = set()
+        try:
+            iterator = self.client.query_iterator(
+                collection_name=self.collection_name,
+                filter="",
+                output_fields=["chunk_type"],
+                batch_size=batch_size,
+            )
+        except Exception as e:
+            logger.error(f"Failed to enumerate chunk types: {e}")
+            return types
+        try:
+            while True:
+                batch = iterator.next()
+                if not batch:
+                    break
+                types.update(row["chunk_type"] for row in batch if row.get("chunk_type"))
+        except Exception as e:
+            # Degrade gracefully rather than crash tool listing at startup; return
+            # whatever was gathered before the failure.
+            logger.error(f"Failed while enumerating chunk types: {e}")
+        finally:
+            iterator.close()
+        return types

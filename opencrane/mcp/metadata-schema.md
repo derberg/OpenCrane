@@ -5,9 +5,15 @@ This document defines the metadata schema for all chunk types. Metadata fields e
 ## Universal Metadata (All Chunk Types)
 
 ### `source_url` (string, optional)
-- **Purpose**: Link to original documentation page
+- **Purpose**: Link to original documentation page (a clean page URL, no `#fragment`)
 - **Usage**: Provide source attribution in RAG responses
 - **Example**: `"https://github.com/org/repo/blob/main/docs/config.md"`
+
+### `section_anchor` (string, optional)
+- **Purpose**: In-page anchor slug for this chunk's section, so links can point at the exact section rather than the page top
+- **Present when**: the chunk comes from a markdown sub-section (under a level ≥ 2 heading) and section anchors are enabled (default; see `section_anchor_style`)
+- **Usage**: Build a direct section link by joining it to `source_url`: `{source_url}#{section_anchor}`
+- **Example**: `source_url` `"https://docs.example.com/guide/about"` + `section_anchor` `"who-we-serve"` → `"https://docs.example.com/guide/about#who-we-serve"`
 
 ### `original_format` (string, optional)
 - **Purpose**: Original serialization format of content
@@ -24,13 +30,16 @@ This document defines the metadata schema for all chunk types. Metadata fields e
 These fields enable tree traversal and context reconstruction:
 
 ### `breadcrumb_path` (string)
-- **Purpose**: Exact location in YAML/document tree structure
-- **Format**: Dot-separated path with array indices
+- **Purpose**: Exact location in the document/YAML tree structure
+- **Format**:
+  - Markdown chunks (prose/list_item/table_row): heading ancestry joined by ` > `, i.e. `page title > … > section`
+  - Structured YAML chunks (crd/openapi/json_schema): dot-separated data-tree path with array indices
 - **Usage**:
+  - **Location Display**: label a citation as "page › section" (the last segment is the section heading)
   - **Re-hydration**: Reconstruct complete YAML tree from chunks
-  - **Location Display**: Show users where property exists in schema
   - **Precise Lookup**: Find exact position in nested structures
 - **Examples**:
+  - Prose/list/table: `"VAT in Europe and How It Works in OCE > General Principles"`
   - CRD: `"spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.replicas"`
   - OpenAPI: `"paths./users/{id}.get"`
   - JSON Schema: `"properties.config.properties.database"`
@@ -246,6 +255,79 @@ the MCP `search_docs` tool **auto-groups them into a single result slot** with
 all matched items inline. Unmatched items appear as `sibling_previews` in the
 grouped output. This prevents duplicate content from consuming multiple result
 slots. No agent action needed — the grouping is automatic.
+
+## Table Row Metadata (`chunk_type: "table_row"`)
+
+A `table_row` chunk represents a single data row of a markdown table. Each row
+is indexed as its own chunk so semantic search can match individual rows
+precisely. Metadata links each row back to its table so the full table can be
+reconstructed when needed.
+
+### `table_id` (string)
+- **Purpose**: Stable identifier shared by all `table_row` chunks of the same table (used by `get_table_members`)
+- **Usage**:
+  - Pass to `get_table_members(table_id=...)` to fetch the whole table
+  - Detect when multiple search hits belong to the same table
+
+### `columns` (array of strings)
+- **Purpose**: Ordered list of column header names, repeated on every row chunk
+- **Usage**: Interpret the row's field values so a row's values can be interpreted without fetching sibling rows
+
+### `row_index` (integer, 1-indexed)
+- **Purpose**: Position of this row within the table
+- **Example**: `1` for the first data row
+- **Usage**: Reconstruct the table in order; render "row N of M" displays
+
+### `total_rows` (integer)
+- **Purpose**: Total number of data rows in the table
+- **Usage**: Show "row 3 of 12" context; decide whether to fetch the full table
+
+### `row_key` (string)
+- **Purpose**: Value of the first column for this row, used as a concise label
+- **Example**: `"replicas"` (if the first column is "Field")
+- **Usage**: Quick identification without parsing the full row content
+
+### `sibling_ids` (array of chunk_id strings)
+- **Purpose**: chunk_ids of every OTHER row in the same table, in row order
+- **Length**: Always `total_rows - 1` (self excluded)
+- **Usage**: Follow these to fetch specific sibling row chunks. For bulk fetch,
+  use `get_table_members(table_id=...)` instead — it is one call.
+
+### `sibling_previews` (array of strings)
+- **Purpose**: Short text previews of other rows in the same table, in row order
+- **Format**: Preview capped at 30 display characters; `…` appended when
+  truncated
+- **Cap**: 15 entries maximum
+  - If fewer than 15 siblings: one preview per sibling (length matches `sibling_ids`)
+  - If more than 15 siblings: first 15 previews + a 16th entry literally
+    `"... +N more"` where N is the overflow count
+- **Usage**: Give the agent an at-a-glance summary of other rows so it can
+  decide whether to call `get_table_members` without a follow-up tool call
+
+### `breadcrumb_path` (string, optional)
+- **Purpose**: Heading ancestry of the table, joined by ` > ` (for example `DIAMETER Support > AVP types`)
+- **Presence**: Set only when the table sits under one or more headings; omitted otherwise
+- **Usage**: Prefixed to the row content as `# {breadcrumb_path}` so each row is self-locating
+
+### `table_caption` (string, optional)
+- **Purpose**: The table's lead-in sentence, the last non-blank line before the table (for example `The following AVP types are used:`)
+- **Presence**: Set only when a lead-in sentence precedes the table; omitted otherwise
+- **Usage**: Included in the row content so a row embeds with the sentence that introduces the table
+
+### Rehydration Tool
+
+Use `get_table_members(table_id=...)` to fetch all `table_row` chunks for a
+given `table_id`, returned in `row_index` order.
+The MCP `search_docs` tool appends a tip automatically when a result is a
+`table_row` chunk.
+
+### When Multiple Table Rows Match One Query
+
+When top-K search results contain two or more rows sharing the same `table_id`,
+the MCP `search_docs` tool **auto-groups them into a single result slot** with
+all matched rows inline. Unmatched rows appear as `sibling_previews` in the
+grouped output. This prevents duplicate content from consuming multiple result
+slots. Use `get_table_members(table_id=...)` to retrieve the full table.
 
 ## Programmatic Usage Examples
 

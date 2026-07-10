@@ -35,6 +35,8 @@ class VectorChunk(BaseModel):
     metadata_json: Optional[str] = Field(None, description="JSON string of metadata")
     token_count: int = Field(..., description="Token count")
     line_start: Optional[int] = Field(None, description="Starting line number")
+    list_id: Optional[str] = Field(None, description="list_id from metadata (list_item chunks)")
+    table_id: Optional[str] = Field(None, description="table_id from metadata (table_row chunks)")
 
     @classmethod
     def from_chunk_and_embedding(cls, chunk, embedding_record):
@@ -46,6 +48,8 @@ class VectorChunk(BaseModel):
         if isinstance(chunk.content, (dict, list)):
             content_str = json.dumps(chunk.content)
 
+        metadata = getattr(chunk, "metadata", None) or {}
+
         return cls(
             chunk_id=embedding_record.chunk_id,
             embedding=embedding_record.vector,
@@ -56,6 +60,8 @@ class VectorChunk(BaseModel):
             metadata_json=json.dumps(chunk.metadata) if chunk.metadata else None,
             token_count=chunk.token_count,
             line_start=chunk.line_start,
+            list_id=metadata.get("list_id"),
+            table_id=metadata.get("table_id"),
         )
 
 

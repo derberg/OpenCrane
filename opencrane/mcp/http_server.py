@@ -89,6 +89,25 @@ def _register(mcp, name, description, input_schema, handler):
     )
 
 
+async def health_handler(_request):
+    """Readiness probe reflecting whether the instance can actually serve a query.
+
+    Until services finish loading, report ``initializing`` (503). Once ready,
+    delegate to the honest ``compute_health`` check: ``unhealthy`` fails the
+    probe (503); ``degraded`` still serves, so it stays 200.
+    """
+    if not _services_ready:
+        return JSONResponse(
+            {"status": "initializing", "services": "loading"},
+            status_code=503,
+        )
+
+    from opencrane.mcp.server import compute_health
+    payload = await compute_health()
+    status_code = 503 if payload["status"] == "unhealthy" else 200
+    return JSONResponse(payload, status_code=status_code)
+
+
 def _register_tools(mcp):
     """Register the same tool set the stdio transport advertises via list_tools()."""
     from opencrane.mcp import server as s
@@ -195,19 +214,8 @@ def build_app() -> FastMCP:
             mcp, auth_kwargs["auth_server_provider"], auth_config.local_method
         )
 
-    @mcp.custom_route("/health", methods=["GET"])
-    async def _health(_request):
-        """Health check endpoint for liveness probes (open, unauthenticated)."""
-        if _services_ready:
-            return JSONResponse({
-                "status": "ok",
-                "services": "ready",
-                "vectors": _milvus_stats.get("row_count", 0) if _milvus_stats else 0,
-            })
-        return JSONResponse(
-            {"status": "initializing", "services": "loading"},
-            status_code=503,
-        )
+    # Open, unauthenticated readiness probe — uses the honest compute_health check.
+    mcp.custom_route("/health", methods=["GET"])(health_handler)
 
     return mcp
 

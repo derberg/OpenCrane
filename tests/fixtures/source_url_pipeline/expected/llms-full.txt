@@ -1,0 +1,79 @@
+# Home
+
+Welcome to the home page. This is the primary landing page for the documentation.
+
+## Overview
+
+This documentation covers installation, setup, and usage of the product.
+
+
+<!-- opencrane:page -->
+
+# No Heading
+
+This page has no heading at all. It contains plain prose without any markdown headings.
+
+The title should be derived from the filename: "no-heading" becomes "No Heading".
+A synthetic H1 will be prepended to this content during llms-full.txt generation.
+
+
+<!-- opencrane:page -->
+
+# Overview
+
+This is the overview page for source-alpha. It introduces the core concepts.
+
+## Architecture
+
+The system uses a pipeline architecture with modular components.
+
+
+<!-- opencrane:page -->
+
+# Setup Guide
+
+# Installation Instructions
+
+This page walks through the full installation process step by step.
+
+## Prerequisites
+
+You will need Python 3.11 or later installed on your system.
+
+## Steps
+
+Run the following command to install:
+
+```bash
+pip install mypackage
+```
+
+
+======
+
+# Overview
+
+This is the overview page for source-beta. It is a DIFFERENT page with the same title as source-alpha/overview.
+
+## Key Features
+
+Source beta provides complementary functionality to source alpha.
+
+
+======
+
+# Standalone Page
+
+This external bundle has no companion llms.txt, so per-page source URLs cannot be resolved.
+Chunks from this content will have no source_url (or inherit the base docs_url if configured).
+
+
+======
+
+# External Home
+
+Welcome to the external documentation home page. This is page one of the external bundle.
+
+# External Reference
+
+This is the API reference section of the external documentation bundle.

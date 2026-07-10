@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opencrane"
-version = "0.18.9"
+version = "0.23.0"
 description = "A standalone, extensible RAG/MCP library for building AI-powered documentation search."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -24,19 +24,27 @@ dependencies = [
     "sentence-transformers>=2.0",
     "pymilvus[milvus_lite]>=2.5,<2.6",
     "milvus-lite>=2.4.0,<3.0.0",
-    # RAG pipeline dependencies
-    "PyGithub>=1.57",
-    "requests>=2.31",
-    "tiktoken>=0.5.0",
-    "docling>=0.1.0",
     "click>=8.0",
 ]
 
 [project.optional-dependencies]
+# RAG pipeline dependencies — needed only to BUILD the index (fetch/llms/chunk/embed),
+# not to serve it. Kept out of the base install so a serve-only consumer (e.g. a packed
+# `opencrane pack` MCP wheel installed via `uvx`) does not pull docling/torch-via-docling,
+# PyGithub, or tiktoken. Their imports in opencrane are all lazy, so the base install can
+# still `import opencrane` and run `opencrane serve` without these present.
+pipeline = [
+    "PyGithub>=1.57",
+    "requests>=2.31",
+    "tiktoken>=0.5.0",
+    "docling>=0.1.0",
+]
 dev = [
     "pytest>=7.0",
     "pytest-mock>=3.10",
     "pytest-cov>=4.0",
+    # Pipeline deps so the full test suite (fetch/chunk/token-count) runs.
+    "opencrane[pipeline]",
     # Viz deps included in dev so the visualize tests can run without extras.
     "plotly>=5.20",
     "scikit-learn>=1.3",

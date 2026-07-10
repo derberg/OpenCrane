@@ -1,0 +1,17 @@
+# Documentation
+
+## source-alpha
+- [Home](https://alpha.example.com/docs/home)
+- [No Heading](https://alpha.example.com/docs/no-heading)
+- [Overview](https://alpha.example.com/docs/overview)
+- [Setup Guide](https://alpha.example.com/docs/setup)
+
+## source-beta
+- [Overview](https://beta.example.com/docs/overview)
+
+## external-no-companion
+- [Standalone Page](https://nocompanion.example.com/docs)
+
+## external-with-companion
+- [External Home](https://external.example.com/docs/home)
+- [External Reference](https://external.example.com/docs/reference)

@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 from opencrane.rag.services.file_processor import FileProcessor
@@ -11,6 +12,93 @@ from opencrane.rag.services.source_resolver import SourceResolver
 from opencrane.shared.config import get_config
 
 logger = logging.getLogger(__name__)
+
+
+# First level>=2 heading in a prose chunk's content — the chunk's own section
+# (the page-title H1 is level 1 and ignored, so page-level chunks match nothing).
+_SECTION_HEADING_RE = re.compile(r"^#{2,6}[ \t]+(.+?)[ \t]*$", re.MULTILINE)
+
+
+def _prose_section_heading(content) -> str | None:
+    """The first level>=2 heading in prose content, or None."""
+    if isinstance(content, str):
+        match = _SECTION_HEADING_RE.search(content)
+        if match:
+            return match.group(1).strip()
+    return None
+
+
+def _chunk_section_heading(chunk) -> str | None:
+    """Return the documentation section heading a chunk lives under, or None.
+
+    - ``prose``: the first level>=2 heading in the chunk content.
+    - ``list_item`` / ``table_row``: the last ``breadcrumb_path`` segment, but
+      only when the breadcrumb has more than the page title (a real section).
+    - other (structured YAML) chunk types: None — their breadcrumb is a
+      data-tree path, not a documentation heading, and has no page anchor.
+    """
+    chunk_type = chunk.chunk_type
+    if chunk_type == "prose":
+        return _prose_section_heading(chunk.content)
+    if chunk_type in ("list_item", "table_row"):
+        breadcrumb = (chunk.metadata or {}).get("breadcrumb_path")
+        if breadcrumb:
+            segments = [s.strip() for s in breadcrumb.split(">") if s.strip()]
+            if len(segments) >= 2:
+                return segments[-1]
+    return None
+
+
+def _annotate_breadcrumb_paths(chunks, index) -> None:
+    """Give prose chunks a ``"page title > section"`` breadcrumb_path.
+
+    Unlike list_item/table_row (which build their own breadcrumb), prose chunks
+    carry none, so consumers can't label them "Page – Section". The page title
+    comes from the llms.txt index (properly capitalised, keyed by the chunk's
+    source_url); the section from the chunk's own content heading. Page-level
+    prose (no section heading) gets just the page title. No-op without an index
+    (legacy marker path) or for chunks whose source_url isn't in the index.
+    """
+    if index is None:
+        return
+    url_to_title = {
+        entry.url: entry.title
+        for source in index.sources()
+        for entry in index.entries_for(source)
+    }
+    for chunk in chunks:
+        if chunk.chunk_type != "prose":
+            continue
+        metadata = chunk.metadata
+        if not metadata:
+            continue
+        title = url_to_title.get(metadata.get("source_url"))
+        if not title:
+            continue
+        section = _prose_section_heading(chunk.content)
+        metadata["breadcrumb_path"] = f"{title} > {section}" if section else title
+
+
+def _annotate_section_anchors(chunks, config) -> None:
+    """Record a ``section_anchor`` on each markdown chunk from its section
+    heading, so consumers can link to ``{source_url}#{section_anchor}`` while
+    ``source_url`` stays a clean page link.
+
+    Only chunks that have a ``source_url`` (something to anchor against) and a
+    section heading are annotated; the slug comes from ``config.section_anchor_for``
+    (so the style/override is honoured). Page-level and structured chunks are
+    left without an anchor.
+    """
+    for chunk in chunks:
+        metadata = chunk.metadata
+        if not metadata or not metadata.get("source_url"):
+            continue
+        heading = _chunk_section_heading(chunk)
+        if not heading:
+            continue
+        anchor = config.section_anchor_for(heading)
+        if anchor:
+            metadata["section_anchor"] = anchor
 
 
 def _annotate_source_names(chunks, mapping_file: Path) -> None:
@@ -48,7 +136,24 @@ def main(config=None, llmstxt_dir=None, chunks_file=None):
 
     try:
         processor = FileProcessor(config=config)
-        chunks = processor.process_file(input_file)
+
+        # Load the companion llms.txt index (if present) so page URLs are
+        # assigned by joining clean content to the index instead of inline
+        # markers. Absent index → legacy marker-based behavior.
+        index = None
+        index_file = llmstxt_dir / "llms.txt"
+        if index_file.exists():
+            from opencrane.rag.services.llms_index import LlmsIndex
+            index = LlmsIndex.parse(index_file.read_text())
+            logger.info(f"Loaded llms.txt index with {len(index.sources())} source section(s)")
+            chunks = processor.process_file(input_file, index=index)
+        else:
+            chunks = processor.process_file(input_file)
+
+        _annotate_breadcrumb_paths(chunks, index)
+
+        from opencrane.config import OpenCraneConfig
+        _annotate_section_anchors(chunks, config if config is not None else OpenCraneConfig())
 
         mapping_file = get_config().mapping_file
         if not mapping_file.is_absolute():

@@ -26,6 +26,17 @@ class Config(OpenCraneConfig):
 
     # Extend or replace YAML tree walkers for structured YAML chunking.
     # yaml_tree_walkers = [*OpenCraneConfig.yaml_tree_walkers, MyCustomWalker]
+
+    # Custom section-anchor slugs. Each markdown sub-section chunk gets a
+    # `section_anchor` in its metadata; consumers link to it as
+    # `{source_url}#{section_anchor}`. Pick a built-in style with
+    # `section_anchor_style` (in config.yaml), or override this method for a
+    # rule your docs host uses. Return None to skip a chunk's anchor.
+    # def section_anchor_for(self, heading):
+    #     if not heading:
+    #         return None
+    #     # e.g. a host that keeps case and uses underscores:
+    #     return heading.strip().replace(" ", "_")
 '''
 
 CONFIG_YAML = '''\
@@ -40,6 +51,13 @@ ignore_patterns:
 # Optional: Python module with custom extensions (fence types, chunking strategies, walkers).
 # Path is relative to .opencrane/ directory.
 # extensions: extensions.py
+
+# Optional: section anchors. Each markdown sub-section chunk records a
+# `section_anchor` in its metadata (the in-page slug of its heading) so links
+# can point at the exact section via `{source_url}#{section_anchor}`.
+# `generic` (default) suits GitBook/GitHub-style slugs; `none` disables anchors.
+# For a custom slug rule, override `section_anchor_for` in extensions.py.
+# section_anchor_style: generic
 
 # Documentation sources.
 # Each entry maps a source name to its configuration.
@@ -205,6 +223,21 @@ For containerized deployment over HTTP:
 
 The Docker image bakes the vector database at build time for fast startup.
 Configure the embedding model via `EMBEDDING_MODEL` env var in `{container_tool}-compose.yaml`.
+
+> **Do not bind-mount the Milvus Lite database.** Milvus Lite cannot open its
+> `.db` from a bind-mounted volume (`Open local milvus failed`); the image bakes
+> it in with `COPY` (and builds it inside the container), so leave it baked —
+> don't mount a `.db` over `/app/milvus_data`.
+
+### Health checks (Cloud Run, Kubernetes, Scaleway, ...)
+
+The HTTP server exposes `GET /health` on port 8000 for liveness/readiness probes.
+It runs a real query and reports memory headroom, returning `200` when the
+instance can serve (`healthy`/`degraded`) and `503` when it cannot
+(`unhealthy`, or `initializing` while services load). Point your platform's
+probe at `/health`; give the startup/initial-delay enough headroom for the model
+to load, and prefer a longer period for liveness so a real search isn't run every
+few seconds.
 
 ### Build and publish the Docker image
 

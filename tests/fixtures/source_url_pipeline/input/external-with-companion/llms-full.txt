@@ -1,0 +1,7 @@
+# External Home
+
+Welcome to the external documentation home page. This is page one of the external bundle.
+
+# External Reference
+
+This is the API reference section of the external documentation bundle.

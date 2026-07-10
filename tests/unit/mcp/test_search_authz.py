@@ -65,8 +65,6 @@ async def test_allow_all_passes_source_names_unchanged(tmp_path, monkeypatch):
     recording = RecordingMilvus()
     monkeypatch.setattr(mcp_server, "get_milvus_service", lambda: recording)
     monkeypatch.setattr(mcp_server, "get_embeddings_service", lambda: DummyEmbeddings())
-    monkeypatch.setattr(mcp_server, "_build_chunk_source_map", lambda: {})
-    monkeypatch.setattr(mcp_server, "_build_chunk_index", lambda: {})
 
     # No token → empty scopes
     with patch("mcp.server.auth.middleware.auth_context.get_access_token", return_value=None):
@@ -103,8 +101,6 @@ async def test_scope_sources_constrains_source_names(tmp_path, monkeypatch):
     recording = RecordingMilvus()
     monkeypatch.setattr(mcp_server, "get_milvus_service", lambda: recording)
     monkeypatch.setattr(mcp_server, "get_embeddings_service", lambda: DummyEmbeddings())
-    monkeypatch.setattr(mcp_server, "_build_chunk_source_map", lambda: {})
-    monkeypatch.setattr(mcp_server, "_build_chunk_index", lambda: {})
 
     from mcp.server.auth.middleware.auth_context import AccessToken
     fake_token = AccessToken(token="t", client_id="c", scopes=["docs:tp"], expires_at=None)
@@ -141,8 +137,6 @@ async def test_empty_allowlist_short_circuits_no_backend_call(tmp_path, monkeypa
     recording = RecordingMilvus()
     monkeypatch.setattr(mcp_server, "get_milvus_service", lambda: recording)
     monkeypatch.setattr(mcp_server, "get_embeddings_service", lambda: DummyEmbeddings())
-    monkeypatch.setattr(mcp_server, "_build_chunk_source_map", lambda: {})
-    monkeypatch.setattr(mcp_server, "_build_chunk_index", lambda: {})
 
     # Caller has a scope that maps to nothing (not in scope_sources) and no default_sources
     from mcp.server.auth.middleware.auth_context import AccessToken
@@ -196,8 +190,6 @@ async def test_missing_mapping_file_treated_as_allow_all(tmp_path, monkeypatch):
     recording = RecordingMilvus()
     monkeypatch.setattr(mcp_server, "get_milvus_service", lambda: recording)
     monkeypatch.setattr(mcp_server, "get_embeddings_service", lambda: DummyEmbeddings())
-    monkeypatch.setattr(mcp_server, "_build_chunk_source_map", lambda: {})
-    monkeypatch.setattr(mcp_server, "_build_chunk_index", lambda: {})
 
     with patch("mcp.server.auth.middleware.auth_context.get_access_token", return_value=None):
         await mcp_server._search_documentation_impl({
@@ -256,8 +248,6 @@ async def test_unparseable_mapping_file_treated_as_allow_all(tmp_path, monkeypat
     recording = RecordingMilvus()
     monkeypatch.setattr(mcp_server, "get_milvus_service", lambda: recording)
     monkeypatch.setattr(mcp_server, "get_embeddings_service", lambda: DummyEmbeddings())
-    monkeypatch.setattr(mcp_server, "_build_chunk_source_map", lambda: {})
-    monkeypatch.setattr(mcp_server, "_build_chunk_index", lambda: {})
 
     with patch("mcp.server.auth.middleware.auth_context.get_access_token", return_value=None):
         await mcp_server._search_documentation_impl({

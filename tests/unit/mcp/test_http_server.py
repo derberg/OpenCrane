@@ -14,8 +14,14 @@ from opencrane.mcp.http_server import (
     lifespan,
     main,
     app,
+    health_handler,
 )
 from opencrane.mcp import server as s
+
+
+def _body(response):
+    """Decode a Starlette JSONResponse body to a dict."""
+    return json.loads(response.body)
 
 
 @pytest.fixture(autouse=True)
@@ -142,10 +148,9 @@ class TestRegisteredTools:
 
         with patch.object(s, "_has_yaml_chunks", return_value=False), \
                 patch.object(s, "_has_list_item_chunks", return_value=False), \
+                patch.object(s, "_get_indexed_chunk_types", return_value=set()), \
                 patch.object(s, "get_embeddings_service", return_value=fake_embeddings), \
-                patch.object(s, "get_milvus_service", return_value=fake_milvus), \
-                patch.object(s, "_build_chunk_source_map", return_value={}), \
-                patch.object(s, "_build_chunk_index", return_value={}):
+                patch.object(s, "get_milvus_service", return_value=fake_milvus):
             mcp = build_app()
             result = await mcp.call_tool(
                 "search_docs", {"query": "hi", "search_mode": "semantic"}
@@ -157,24 +162,35 @@ class TestRegisteredTools:
 
 
 class TestHealthEndpoint:
-    def test_health_ready_with_stats(self):
+    @pytest.mark.anyio
+    async def test_health_ready_delegates_to_compute_health(self):
+        """When services are ready, the honest compute_health payload is returned."""
         http_server._services_ready = True
-        http_server._milvus_stats = {"row_count": 7}
-        client = TestClient(build_app().streamable_http_app())
-        resp = client.get("/health")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["status"] == "ok"
-        assert data["services"] == "ready"
-        assert data["vectors"] == 7
+        payload = {"status": "healthy", "checks": {"query_probe": {"status": "healthy"}}}
+        with patch("opencrane.mcp.server.compute_health", new=AsyncMock(return_value=payload)):
+            response = await health_handler(Mock())
+        assert response.status_code == 200
+        assert _body(response) == payload
 
-    def test_health_ready_without_stats(self):
+    @pytest.mark.anyio
+    async def test_health_degraded_still_returns_200(self):
+        """A degraded instance is still serving, so the probe stays 200."""
         http_server._services_ready = True
-        http_server._milvus_stats = None
-        client = TestClient(build_app().streamable_http_app())
-        resp = client.get("/health")
-        assert resp.status_code == 200
-        assert resp.json()["vectors"] == 0
+        payload = {"status": "degraded", "checks": {}}
+        with patch("opencrane.mcp.server.compute_health", new=AsyncMock(return_value=payload)):
+            response = await health_handler(Mock())
+        assert response.status_code == 200
+        assert _body(response)["status"] == "degraded"
+
+    @pytest.mark.anyio
+    async def test_health_unhealthy_returns_503(self):
+        """An unhealthy instance cannot serve queries, so the probe fails."""
+        http_server._services_ready = True
+        payload = {"status": "unhealthy", "checks": {}}
+        with patch("opencrane.mcp.server.compute_health", new=AsyncMock(return_value=payload)):
+            response = await health_handler(Mock())
+        assert response.status_code == 503
+        assert _body(response)["status"] == "unhealthy"
 
     def test_health_initializing(self):
         http_server._services_ready = False

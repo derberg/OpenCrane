@@ -50,3 +50,26 @@ class TestVectorChunk:
         assert vector_chunk.metadata_json == '{\"key\": \"value\"}'
         assert vector_chunk.token_count == 10
         assert vector_chunk.line_start == 5
+        # Non-member chunk: list_id/table_id are absent
+        assert vector_chunk.list_id is None
+        assert vector_chunk.table_id is None
+
+    def test_vector_chunk_lifts_list_and_table_ids(self):
+        """list_id/table_id are lifted out of metadata into dedicated fields."""
+        from types import SimpleNamespace
+
+        chunk = SimpleNamespace(
+            content="row content",
+            source_file="file.md",
+            source_name=None,
+            chunk_type="table_row",
+            metadata={"table_id": "T1", "row_index": 0},
+            token_count=3,
+            line_start=None,
+        )
+        embedding = EmbeddingRecord(chunk_index=0, chunk_id="id2", vector=[0.2] * 768)
+
+        vector_chunk = VectorChunk.from_chunk_and_embedding(chunk, embedding)
+
+        assert vector_chunk.table_id == "T1"
+        assert vector_chunk.list_id is None

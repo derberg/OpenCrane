@@ -55,7 +55,6 @@ async def test__search_documentation_impl_hybrid_missing_chunk_record(
     mock_get_embed.return_value = DummyEmbeddings()
     mock_get_milvus.return_value = DummyMilvus()
     mock_get_keyword.return_value = DummyKeyword()
-    monkeypatch.setattr(mcp_server, "_build_chunk_source_map", lambda: {})
 
     res = await mcp_server._search_documentation_impl({
         "query": "test",

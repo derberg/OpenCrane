@@ -1,0 +1,4 @@
+# Standalone Page
+
+This external bundle has no companion llms.txt, so per-page source URLs cannot be resolved.
+Chunks from this content will have no source_url (or inherit the base docs_url if configured).

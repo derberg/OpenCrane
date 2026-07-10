@@ -34,8 +34,6 @@ def two_source_index(tmp_path, monkeypatch):
     """Index one chunk under ``source-a`` and one under ``source-b`` in a temp DB."""
     db_path = tmp_path / "milvus.db"
     monkeypatch.setenv("MILVUS_DB_PATH", str(db_path))
-    # conftest resets most MCP caches; the source map is rebuilt lazily, reset it too.
-    monkeypatch.setattr("opencrane.mcp.server._chunk_source_map", None)
 
     embedder = EmbeddingService()
     milvus = MilvusService()

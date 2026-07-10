@@ -8,8 +8,9 @@ When OpenCrane processes a markdown file, strategies are tried in order and the 
 
 1. **YAML chunker** — claims YAML documents (front matter is explicitly skipped).
 2. **Code chunker** — claims fenced code blocks. Fenced YAML that is a K8s CRD, OpenAPI spec, or JSON Schema is handed off to a tree walker for per-property chunking.
-3. **List chunker** — claims any section that contains markdown list markers outside code fences. Emits one chunk per top-level list item plus prose chunks for the text around the list.
-4. **Prose chunker** — the catch-all. Splits text into chunks at heading boundaries.
+3. **Table chunker** — claims any section that contains a markdown table outside code fences. Emits one chunk per table data row and delegates the surrounding text to the list and prose chunkers.
+4. **List chunker** — claims any section that contains markdown list markers outside code fences. Emits one chunk per top-level list item plus prose chunks for the text around the list.
+5. **Prose chunker** — the catch-all. Splits text into chunks at heading boundaries.
 
 Your authoring choices determine which strategy claims each piece of content and how well each chunk stands alone.
 
@@ -196,7 +197,7 @@ Headings are the primary chunk boundary. Get them right and most chunking proble
 
   Avoid: "Run the main command to execute it all."
 
-- **Don't open a section with a URL heading** like `## https://example.com/page Title`. That pattern is reserved by the pipeline for source-injection and will be rewritten.
+- **Don't open a section with a URL heading** like `## https://example.com/page Title`. The pipeline no longer injects URLs into headings, so a URL in your heading is kept verbatim as heading text — which makes for a noisy chunk title and, if it lands on a page's leading `#`, a noisy page title in the `llms.txt` index. Keep headings human-readable.
 
   Avoid:
 
@@ -334,6 +335,33 @@ Every top-level list item becomes its own chunk, each carrying a `breadcrumb_pat
   Each chunk also carries a sibling preview of the other item.
 
   The one edge case: if a list section has so many code blocks that more than half its lines are code, the code chunker claims the whole section first and it is no longer chunked as a list. For typical step-by-step docs the prose lines (markers, descriptions) easily outweigh the code lines, so this rarely applies.
+
+## Tables
+
+Every data row of a markdown table becomes its own chunk, rendered as natural-language `Column: value.` lines so it embeds like a sentence. Each row chunk carries a `breadcrumb_path` from the nearest heading ancestry and the table's lead-in sentence, and links to its siblings via `table_id` and `sibling_ids`.
+
+- **Give the table a heading and a lead-in sentence.** The heading builds the breadcrumb; the last non-blank line before the table becomes the caption included in every row chunk. Both make each row retrievable on its own.
+
+  Good:
+
+  ````md
+  ### DIAMETER AVP types
+
+  The following AVP types from the base 3GPP Diameter dictionary are used:
+
+  | AVP | Code | Type |
+  |-----|------|------|
+  | 3GPP-IMSI | 1 | UTF8String |
+  | 3GPP-Charging-Id | 2 | Unsigned32 |
+  ````
+
+  Each row chunk reads like: `# DIAMETER AVP types` / `The following AVP types from the base 3GPP Diameter dictionary are used:` / `AVP: 3GPP-IMSI.` / `Code: 1.` / `Type: UTF8String.`
+
+- **Put the identifying value in the first column.** The first column is the row's `row_key` and drives sibling previews (capped at 30 characters), so lead with the name or key, not a description.
+
+- **Give every column a header.** Cells are rendered as `Header: value.`; a blank header produces an unlabeled `: value.` line that reads poorly.
+
+- **Keep tables out of code fences.** A table inside a ``` fence is treated as code, not chunked into rows. A row-like line followed only by a separator (no data rows) is not a real table and falls through to prose.
 
 ## Fenced Code Blocks
 
@@ -548,9 +576,9 @@ Fenced YAML blocks are inspected by the chunker. If the YAML parses to a known s
 
 ## YAML Front Matter
 
-- **Front matter is ignored by chunking.** Flat `key: value` blocks at the top of a file with only scalar values are detected as front matter and skipped.
+- **Front matter is ignored by chunking**, but its `title` is used for the page title. Flat `key: value` blocks at the top of a file with only scalar values are detected as front matter and skipped from chunk content. When a `title` field is present, it becomes the page title used in the `llms.txt` index and normalized onto the page's leading `#` heading — taking precedence over the first body heading and the filename. See [Generating bundles](llms-generation.md#page-titles).
 
-  Skipped as front matter:
+  Skipped as front matter (its `title` becomes the page title):
 
   ````md
   ---

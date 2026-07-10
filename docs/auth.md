@@ -205,6 +205,8 @@ For authorization logic that config-driven `scope_sources` cannot express (e.g. 
 
 Entries are applied as the **outermost** layers of the HTTP MCP app (the first entry is outermost and runs first), so they execute before the tool handler. A middleware declares the request's permitted source names by calling `set_allowed_sources(...)`:
 
+A minimal example — grant a fixed set of sources to every caller:
+
 ```python
 # .opencrane/extensions.py
 from opencrane import OpenCraneConfig
@@ -216,13 +218,78 @@ class SourceAuthorizer:
 
     async def __call__(self, scope, receive, send):
         if scope.get("type") == "http":
-            # ... derive the caller's permitted sources however you like ...
             set_allowed_sources(["cgw", "npp"])   # () means "no sources permitted"
         await self.app(scope, receive, send)
 
 class Config(OpenCraneConfig):
     middleware = [SourceAuthorizer]
 ```
+
+### Realistic example — resolve sources from an external permissions service
+
+A common pattern: read the caller's bearer token, ask an external service which
+sources the caller may see, and cache the answer per token. A missing token or a
+failed lookup leaves the override unset, so the request falls back to
+`default_sources` (fail closed). This is how a downstream project keeps its own
+authorization logic out of OpenCrane.
+
+```python
+# .opencrane/extensions.py
+import time
+import httpx
+from opencrane import OpenCraneConfig
+from opencrane.mcp.auth.runtime import set_allowed_sources
+
+
+class PermissionsAuthorizer:
+    """Declare allowed sources from an external permissions API, cached per token."""
+
+    API = "https://permissions.example.com/api/allowed-sources"
+    TTL = 60  # seconds
+
+    def __init__(self, app):
+        self.app = app
+        self._cache: dict[str, tuple[float, list[str]]] = {}
+
+    def _bearer(self, headers) -> str | None:
+        for name, value in headers:
+            if name.lower() == b"authorization" and value[:7].lower() == b"bearer ":
+                return value[7:].decode("latin-1").strip()
+        return None
+
+    async def _allowed(self, token: str) -> list[str] | None:
+        cached = self._cache.get(token)
+        if cached and cached[0] > time.monotonic():
+            return cached[1]
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(self.API, headers={"Authorization": f"Bearer {token}"})
+            if resp.status_code != 200:
+                return None                      # fail closed — do not cache failures
+            names = list(resp.json().keys())
+        except Exception:
+            return None
+        self._cache[token] = (time.monotonic() + self.TTL, names)
+        return names
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http":
+            token = self._bearer(scope.get("headers") or [])
+            if token:
+                names = await self._allowed(token)
+                if names is not None:
+                    set_allowed_sources(names)   # authenticated caller → permitted sources
+                # no token, or a failed lookup → override stays unset → default_sources
+        await self.app(scope, receive, send)
+
+
+class Config(OpenCraneConfig):
+    middleware = [PermissionsAuthorizer]
+```
+
+Source names returned by the service must match the keys in the `sources:` block
+of the same `config.yaml`. Names with no matching source are simply never
+returned by search.
 
 At search time `set_allowed_sources` takes **highest precedence** — above the `scope_sources` access policy:
 

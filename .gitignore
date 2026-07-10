@@ -70,3 +70,7 @@ rag-embeddings.json
 llmstxt/
 external-sources/
 specs/
+
+# Superpowers workflow artifacts (specs, plans, reports) — not part of the codebase
+.superpowers/
+docs/superpowers/

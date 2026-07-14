@@ -409,17 +409,17 @@ def _has_yaml_chunks() -> bool:
     return bool(_get_indexed_chunk_types() & _YAML_CHUNK_TYPES)
 
 
-def _get_source_topics() -> list[str]:
-    """Derive topic names from the source mapping file.
+def _topic_name(key: str) -> str:
+    """Human-readable topic name from a source path key.
 
-    Returns human-readable topic names extracted from the mapping path keys
-    (e.g., ``MicrosoftDocs/microsoft-style-guide`` → ``microsoft-style-guide``).
+    ``MicrosoftDocs/microsoft-style-guide`` → ``microsoft style guide``.
     """
-    sources = _get_source_keys()
-    return [
-        Path(key).name.replace("-", " ").replace("_", " ")
-        for key in sources
-    ]
+    return Path(key).name.replace("-", " ").replace("_", " ")
+
+
+def _get_source_topics() -> list[str]:
+    """Derive topic names for every configured source (see :func:`_topic_name`)."""
+    return [_topic_name(key) for key in _get_source_keys()]
 
 
 def _get_source_keys() -> list[str]:
@@ -440,11 +440,22 @@ def _get_source_keys() -> list[str]:
         return []
 
 
-def _build_search_tool() -> Tool:
-    """Build the search_docs tool with description and schema derived from indexed data."""
+def _build_search_tool(source_keys: list[str] | None = None) -> Tool:
+    """Build the search_docs tool with description and schema derived from indexed data.
+
+    Args:
+        source_keys: When given, the advertised topics and the ``source_names``
+            enum are scoped to these sources only. Used to scope a per-endpoint
+            tool to the sources that endpoint serves, so an open endpoint does not
+            advertise the names of private topics served on another endpoint. When
+            ``None`` (default), every configured source is advertised.
+    """
     chunk_types = sorted(_get_indexed_chunk_types())
-    topics = _get_source_topics()
-    source_keys = _get_source_keys()
+    if source_keys is None:
+        source_keys = _get_source_keys()
+        topics = _get_source_topics()
+    else:
+        topics = [_topic_name(key) for key in source_keys]
 
     # Build description
     if topics:

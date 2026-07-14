@@ -74,6 +74,27 @@ class TestMCPServer:
         tool = _build_search_tool()
         assert "source_names" not in tool.inputSchema["properties"]
 
+    @patch('opencrane.mcp.server._get_source_keys', return_value=["cgw", "tsr-engine", "telna"])
+    @patch('opencrane.mcp.server._get_source_topics', return_value=["cgw", "tsr engine", "telna"])
+    @patch('opencrane.mcp.server._get_indexed_chunk_types', return_value={"prose"})
+    @patch('opencrane.mcp.server._has_yaml_chunks', return_value=False)
+    def test_explicit_source_keys_scope_topics_and_enum(self, *_mocks):
+        """An explicit source_keys list scopes the description topics and the enum,
+        so a private source (telna) is not advertised."""
+        tool = _build_search_tool(source_keys=["cgw", "tsr-engine"])
+        # Topics derived from the given keys only; the private 'telna' is absent.
+        assert "Topics: cgw, tsr engine." in tool.description
+        assert "telna" not in tool.description
+        assert tool.inputSchema["properties"]["source_names"]["items"]["enum"] == ["cgw", "tsr-engine"]
+
+    @patch('opencrane.mcp.server._get_indexed_chunk_types', return_value={"prose"})
+    @patch('opencrane.mcp.server._has_yaml_chunks', return_value=False)
+    def test_empty_source_keys_omits_source_names(self, *_mocks):
+        """An explicit empty list advertises no sources and no source_names filter."""
+        tool = _build_search_tool(source_keys=[])
+        assert "Topics:" not in tool.description
+        assert "source_names" not in tool.inputSchema["properties"]
+
     @patch('opencrane.mcp.server.EmbeddingService')
     def test_get_embeddings_service_lazy_init(self, mock_embedding_service):
         """Test lazy initialization of embeddings service."""

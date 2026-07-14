@@ -108,11 +108,33 @@ async def health_handler(_request):
     return JSONResponse(payload, status_code=status_code)
 
 
-def _register_tools(mcp):
-    """Register the same tool set the stdio transport advertises via list_tools()."""
+def _advertised_source_keys(auth_config):
+    """Which source names an endpoint advertises in its ``search_docs`` tool.
+
+    An open endpoint (``type: none``) that restricts anonymous callers to a fixed
+    ``default_sources`` set advertises only those, so a public endpoint does not
+    expose the names of private topics served on another endpoint. Every other
+    endpoint — an open endpoint with no restriction, or an authenticated one whose
+    per-caller sources are resolved at request time — advertises all sources
+    (returns ``None``, which ``_build_search_tool`` treats as "all").
+    """
+    if auth_config.type == "none" and auth_config.default_sources:
+        from opencrane.mcp.server import _get_source_keys
+
+        permitted = set(auth_config.default_sources)
+        return [key for key in _get_source_keys() if key in permitted]
+    return None
+
+
+def _register_tools(mcp, source_keys=None):
+    """Register the same tool set the stdio transport advertises via list_tools().
+
+    ``source_keys`` scopes the ``search_docs`` topics and ``source_names`` enum to
+    a single endpoint's sources; ``None`` advertises all.
+    """
     from opencrane.mcp import server as s
 
-    search_tool = s._build_search_tool()
+    search_tool = s._build_search_tool(source_keys)
     _register(mcp, "search_docs", search_tool.description,
               search_tool.inputSchema, s.search_docs)
     _register(mcp, "health", s.HEALTH_TOOL_DESCRIPTION,
@@ -348,7 +370,7 @@ def _build_mcp(auth_config, streamable_http_path, life, resource_url_suffix=""):
         streamable_http_path=streamable_http_path,
         **auth_kwargs,
     )
-    _register_tools(mcp)
+    _register_tools(mcp, source_keys=_advertised_source_keys(auth_config))
 
     if "auth_server_provider" in auth_kwargs:
         _register_login_route(

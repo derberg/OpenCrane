@@ -161,6 +161,51 @@ class TestRegisteredTools:
         assert "hello world" in result[0].text
 
 
+class TestAdvertisedSourceKeys:
+    """Per-endpoint scoping of the advertised search topics / source_names enum."""
+
+    def test_open_endpoint_with_default_sources_scopes(self):
+        from opencrane.mcp.auth.config_model import AuthConfig
+        with patch.object(s, "_get_source_keys", return_value=["a", "b", "c"]):
+            keys = http_server._advertised_source_keys(
+                AuthConfig(type="none", default_sources=("a", "c")))
+        assert keys == ["a", "c"]
+
+    def test_open_endpoint_without_default_sources_returns_none(self):
+        from opencrane.mcp.auth.config_model import AuthConfig
+        assert http_server._advertised_source_keys(AuthConfig(type="none")) is None
+
+    def test_authenticated_endpoint_returns_none(self):
+        """An authenticated endpoint advertises all sources (per-caller scope is dynamic)."""
+        from opencrane.mcp.auth.config_model import AuthConfig
+        cfg = AuthConfig(type="oauth", default_sources=("a",))
+        assert http_server._advertised_source_keys(cfg) is None
+
+
+class TestPerEndpointToolScoping:
+    @pytest.mark.anyio
+    async def test_build_mcp_scopes_open_endpoint_search_tool(self):
+        """A type:none + default_sources endpoint advertises only those topics —
+        a private source is neither in the enum nor the description."""
+        from opencrane.mcp.auth.config_model import AuthConfig
+        with patch.object(s, "_get_source_keys",
+                          return_value=["public-a", "public-b", "private-x"]), \
+                patch.object(s, "_get_source_topics",
+                             return_value=["public a", "public b", "private x"]), \
+                patch.object(s, "_get_indexed_chunk_types", return_value=set()), \
+                patch.object(s, "_has_yaml_chunks", return_value=False), \
+                patch.object(s, "_has_list_item_chunks", return_value=False):
+            mcp, _ = http_server._build_mcp(
+                AuthConfig(type="none", default_sources=("public-a", "public-b")),
+                "/mcp/public", http_server._noop_lifespan)
+            tools = await mcp.list_tools()
+        search = next(t for t in tools if t.name == "search_docs")
+        enum = search.inputSchema["properties"]["source_names"]["items"]["enum"]
+        assert enum == ["public-a", "public-b"]
+        assert "private-x" not in enum
+        assert "private x" not in search.description
+
+
 class TestHealthEndpoint:
     @pytest.mark.anyio
     async def test_health_ready_delegates_to_compute_health(self):

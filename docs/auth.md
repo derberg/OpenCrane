@@ -103,10 +103,31 @@ auth:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `oidc.issuer` | Yes | External IdP issuer URL |
-| `oidc.audience` | Yes | Resource identifier — the `aud` claim in tokens must include this value |
+| `oidc.audience` | Yes¹ | Resource identifier — the `aud` claim in tokens must include this value |
 | `oidc.scope_claim` | No | JWT claim name to read scopes from (default: `scope`) |
+| `oidc.verify_audience` | No | Enforce the `aud` binding (default: `true`). Set to `false` only for IdPs that cannot stamp the audience — see below. |
+
+¹ Required unless `oidc.verify_audience: false`, in which case `oidc.audience` is optional.
 
 `PUBLIC_URL` must be set (as with `local` mode).
+
+#### Disabling audience validation (`verify_audience: false`)
+
+By default OpenCrane requires the token's `aud` claim to match `oidc.audience`. This is the confused-deputy defense: a token minted for another service cannot be replayed against this one.
+
+Some IdPs, however, cannot put the audience into the token. Notably **Ory Hydra does not honor the RFC 8707 `resource` parameter** that MCP clients (e.g. Claude Code) send on the authorize request, so it issues access tokens with an **empty `aud`** — and every request is then rejected as `invalid_token`. There is no Ory-side setting that fixes this.
+
+For such IdPs, set `verify_audience: false`. Signature, issuer, and expiry are still enforced; only the audience check is skipped:
+
+```yaml
+auth:
+  type: oauth
+  oidc:
+    issuer: https://login.example.com
+    verify_audience: false   # IdP can't stamp aud (e.g. Ory Hydra + RFC 8707)
+```
+
+This is a deliberate security trade-off — a token this IdP issues for any resource is accepted here. Prefer an application-level check (e.g. validate the token's `client_id`/`azp` in a `middleware` authorizer) when audience binding is unavailable. A `WARNING` is logged at startup whenever `verify_audience` is disabled.
 
 ### Optional authentication (`allow_anonymous`)
 

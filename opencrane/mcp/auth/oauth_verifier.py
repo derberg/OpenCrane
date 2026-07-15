@@ -66,6 +66,7 @@ class JwtTokenVerifier(TokenVerifier):
         audiences: tuple[str, ...],
         scope_claim: str,
         signing_key_resolver: Callable[[str], object],
+        verify_audience: bool = True,
     ) -> None:
         """Initialize the verifier.
 
@@ -74,16 +75,23 @@ class JwtTokenVerifier(TokenVerifier):
             audiences: Accepted ``aud`` values. A token is valid if its ``aud``
                 matches ANY entry — this lets one server trust tokens from
                 several front-end OAuth clients (each carrying its own client_id
-                as ``aud`` with Dex).
+                as ``aud`` with Dex). Ignored when ``verify_audience`` is False.
             scope_claim: Name of the claim carrying granted scopes.
             signing_key_resolver: Callable mapping a raw token to the key used to
                 verify its signature. The (network) JWKS lookup lives here so the
                 verifier itself stays unit-testable.
+            verify_audience: When True (default), the ``aud`` claim is required
+                and must match ``audiences`` (the confused-deputy defense). When
+                False, ``aud`` is neither required nor checked — for IdPs that
+                cannot stamp the audience (e.g. Ory Hydra ignores the RFC 8707
+                ``resource`` parameter and issues an empty ``aud``). Signature,
+                issuer, and expiry are still enforced.
         """
         self._issuer = issuer
         self._audiences = audiences
         self._scope_claim = scope_claim
         self._signing_key_resolver = signing_key_resolver
+        self._verify_audience = verify_audience
 
     async def verify_token(self, token: str) -> AccessToken | None:
         """Verify a bearer JWT and map it to an :class:`AccessToken`.
@@ -97,16 +105,19 @@ class JwtTokenVerifier(TokenVerifier):
         """
         import jwt
 
+        decode_kwargs: dict = {
+            "algorithms": ["RS256", "ES256"],
+            "issuer": self._issuer,
+        }
+        if self._verify_audience:
+            decode_kwargs["audience"] = list(self._audiences)
+            decode_kwargs["options"] = {"require": ["exp", "aud", "iss"]}
+        else:
+            decode_kwargs["options"] = {"require": ["exp", "iss"], "verify_aud": False}
+
         try:
             key = self._signing_key_resolver(token)
-            claims = jwt.decode(
-                token,
-                key,
-                algorithms=["RS256", "ES256"],
-                audience=list(self._audiences),
-                issuer=self._issuer,
-                options={"require": ["exp", "aud", "iss"]},
-            )
+            claims = jwt.decode(token, key, **decode_kwargs)
         except jwt.PyJWTError:
             return None
         except AuthConfigError as exc:
@@ -194,9 +205,18 @@ def build_token_verifier(auth_config: AuthConfig) -> JwtTokenVerifier:
             cache["client"] = client
         return client.get_signing_key_from_jwt(token).key
 
+    if not auth_config.oidc_verify_audience:
+        logger.warning(
+            "oidc.verify_audience is disabled for issuer %s: tokens are accepted "
+            "without an audience claim (confused-deputy protection off). Enable it "
+            "once the IdP can stamp the token audience.",
+            auth_config.oidc_issuer,
+        )
+
     return JwtTokenVerifier(
         issuer=auth_config.oidc_issuer,
         audiences=auth_config.oidc_audiences,
         scope_claim=auth_config.scope_claim,
         signing_key_resolver=default_resolver,
+        verify_audience=auth_config.oidc_verify_audience,
     )

@@ -141,6 +141,46 @@ class TestJwtTokenVerifier:
         token = _mint(private_key, aud="https://other.example.com")
         assert asyncio.run(verifier.verify_token(token)) is None
 
+    def test_verify_audience_false_accepts_token_with_no_aud(self, public_key, private_key):
+        """With verify_audience=False, a token carrying no aud claim is accepted
+        (Ory Hydra ignores RFC 8707 resource and issues an empty audience)."""
+        v = JwtTokenVerifier(
+            issuer=ISSUER,
+            audiences=(),
+            scope_claim="scope",
+            signing_key_resolver=lambda token: public_key,
+            verify_audience=False,
+        )
+        claims = {"iss": ISSUER, "exp": int(time.time()) + 3600, "azp": "client-abc"}
+        token = jwt.encode(claims, private_key, algorithm="RS256")
+        result = asyncio.run(v.verify_token(token))
+        assert result is not None
+        assert result.client_id == "client-abc"
+
+    def test_verify_audience_false_accepts_mismatched_aud(self, public_key, private_key):
+        """With verify_audience=False, a non-matching aud is not grounds for rejection."""
+        v = JwtTokenVerifier(
+            issuer=ISSUER,
+            audiences=(),
+            scope_claim="scope",
+            signing_key_resolver=lambda token: public_key,
+            verify_audience=False,
+        )
+        token = _mint(private_key, aud="https://other.example.com")
+        assert asyncio.run(v.verify_token(token)) is not None
+
+    def test_verify_audience_false_still_rejects_wrong_issuer(self, public_key, private_key):
+        """Disabling audience validation must not loosen issuer validation."""
+        v = JwtTokenVerifier(
+            issuer=ISSUER,
+            audiences=(),
+            scope_claim="scope",
+            signing_key_resolver=lambda token: public_key,
+            verify_audience=False,
+        )
+        token = _mint(private_key, iss="https://evil.example.com", aud=None)
+        assert asyncio.run(v.verify_token(token)) is None
+
     def test_wrong_issuer_returns_none(self, verifier, private_key):
         token = _mint(private_key, iss="https://evil.example.com")
         assert asyncio.run(verifier.verify_token(token)) is None
@@ -192,6 +232,22 @@ class TestBuildTokenVerifier:
     def test_returns_jwt_token_verifier(self):
         v = build_token_verifier(self._config())
         assert isinstance(v, JwtTokenVerifier)
+
+    def test_verify_audience_disabled_builds_and_warns(self, caplog):
+        """With oidc_verify_audience False, the verifier is built with audience
+        checking off and a startup WARNING is emitted."""
+        config = AuthConfig(
+            type="oauth",
+            oidc_issuer=ISSUER,
+            oidc_audiences=(),
+            oidc_verify_audience=False,
+            scope_claim="scope",
+        )
+        with caplog.at_level("WARNING"):
+            v = build_token_verifier(config)
+        assert isinstance(v, JwtTokenVerifier)
+        assert v._verify_audience is False
+        assert "verify_audience is disabled" in caplog.text
 
     def test_default_resolver_uses_discovered_jwks_uri(self, monkeypatch):
         """The resolver builds PyJWKClient at the jwks_uri from OIDC discovery.

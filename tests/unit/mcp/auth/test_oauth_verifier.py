@@ -158,6 +158,15 @@ class TestJwtTokenVerifier:
         token = jwt.encode(claims, private_key, algorithm="RS256")
         assert asyncio.run(verifier.verify_token(token)) is None
 
+    def test_signing_key_resolution_failure_returns_none_not_raise(self, verifier):
+        """When the signing key can't be resolved (IdP discovery/JWKS unreachable,
+        e.g. a WAF 403), verify_token fails closed to None (a 401) rather than
+        letting the error propagate as a 500."""
+        def boom(_token):
+            raise AuthConfigError("could not fetch OIDC discovery document: HTTP Error 403")
+        verifier._signing_key_resolver = boom
+        assert asyncio.run(verifier.verify_token("any-token")) is None
+
 
 class TestBuildTokenVerifier:
     def _config(self):
@@ -202,8 +211,9 @@ class TestBuildTokenVerifier:
             key = "the-key"
 
         class FakePyJWKClient:
-            def __init__(self, url):
+            def __init__(self, url, headers=None):
                 captured["url"] = url
+                captured["headers"] = headers
 
             def get_signing_key_from_jwt(self, token):
                 return FakeKey()
@@ -213,6 +223,8 @@ class TestBuildTokenVerifier:
         key = v._signing_key_resolver("some-token")
         assert key == "the-key"
         assert captured["url"] == discovered
+        # WAF-safe User-Agent is sent on the JWKS fetch too.
+        assert captured["headers"] == {"User-Agent": "opencrane"}
 
     def test_default_resolver_discovers_once_and_caches(self, monkeypatch):
         """Discovery and PyJWKClient construction happen once, then are reused."""
@@ -230,7 +242,7 @@ class TestBuildTokenVerifier:
             key = "k"
 
         class FakePyJWKClient:
-            def __init__(self, url):
+            def __init__(self, url, headers=None):
                 calls["client"] += 1
 
             def get_signing_key_from_jwt(self, token):
@@ -263,28 +275,31 @@ class TestDiscoverJwksUri:
         body = b'{"issuer": "https://accounts.cennso.com", "jwks_uri": "https://accounts.cennso.com/keys"}'
         captured = {}
 
-        def fake_urlopen(url, *args, **kwargs):
-            captured["url"] = url
+        def fake_urlopen(request, *args, **kwargs):
+            captured["request"] = request
             return _FakeResponse(body)
 
         monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
         uri = _discover_jwks_uri("https://accounts.cennso.com")
         assert uri == "https://accounts.cennso.com/keys"
-        assert captured["url"] == "https://accounts.cennso.com/.well-known/openid-configuration"
+        # The fetch goes through a Request carrying a WAF-safe User-Agent (some
+        # IdPs 403 the default urllib UA).
+        assert captured["request"].full_url == "https://accounts.cennso.com/.well-known/openid-configuration"
+        assert captured["request"].get_header("User-agent") == "opencrane"
 
     def test_strips_trailing_slash_from_issuer(self, monkeypatch):
         captured = {}
 
-        def fake_urlopen(url, *args, **kwargs):
-            captured["url"] = url
+        def fake_urlopen(request, *args, **kwargs):
+            captured["request"] = request
             return _FakeResponse(b'{"jwks_uri": "https://idp/keys"}')
 
         monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
         _discover_jwks_uri("https://idp.example.com/")
-        assert captured["url"] == "https://idp.example.com/.well-known/openid-configuration"
+        assert captured["request"].full_url == "https://idp.example.com/.well-known/openid-configuration"
 
     def test_missing_jwks_uri_raises(self, monkeypatch):
-        def fake_urlopen(url, *args, **kwargs):
+        def fake_urlopen(request, *args, **kwargs):
             return _FakeResponse(b'{"issuer": "https://idp.example.com"}')
 
         monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)

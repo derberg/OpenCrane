@@ -16,6 +16,7 @@ The network JWKS fetch lives *outside* :class:`JwtTokenVerifier` (injected as
 from __future__ import annotations
 
 import json
+import logging
 import urllib.error
 import urllib.request
 from typing import Callable
@@ -23,6 +24,13 @@ from typing import Callable
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 
 from opencrane.mcp.auth.config_model import AuthConfig, AuthConfigError
+
+logger = logging.getLogger(__name__)
+
+# Sent on the OIDC discovery and JWKS fetches. Some IdPs sit behind a WAF/CDN
+# that returns 403 for the default ``Python-urllib/x.y`` User-Agent, so an
+# explicit one is required for discovery to succeed.
+_USER_AGENT = "opencrane"
 
 
 def _extract_scopes(claims: dict, claim: str) -> tuple[str, ...]:
@@ -101,6 +109,12 @@ class JwtTokenVerifier(TokenVerifier):
             )
         except jwt.PyJWTError:
             return None
+        except AuthConfigError as exc:
+            # Signing key could not be resolved (IdP discovery/JWKS unreachable or
+            # misconfigured). Fail closed to a 401 rather than crashing the request
+            # with a 500; log so operators can distinguish an outage from a bad token.
+            logger.warning(f"token verification could not resolve signing key: {exc}")
+            return None
 
         return AccessToken(
             token=token,
@@ -130,8 +144,9 @@ def _discover_jwks_uri(issuer: str) -> str:
             does not advertise a ``jwks_uri``.
     """
     url = f"{issuer.rstrip('/')}/.well-known/openid-configuration"
+    request = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
     try:
-        with urllib.request.urlopen(url, timeout=10) as response:
+        with urllib.request.urlopen(request, timeout=10) as response:
             doc = json.load(response)
     except (urllib.error.URLError, ValueError) as exc:  # network error / invalid JSON
         raise AuthConfigError(
@@ -175,7 +190,7 @@ def build_token_verifier(auth_config: AuthConfig) -> JwtTokenVerifier:
         client = cache.get("client")
         if client is None:
             jwks_uri = _discover_jwks_uri(auth_config.oidc_issuer)
-            client = jwt.PyJWKClient(jwks_uri)
+            client = jwt.PyJWKClient(jwks_uri, headers={"User-Agent": _USER_AGENT})
             cache["client"] = client
         return client.get_signing_key_from_jwt(token).key
 

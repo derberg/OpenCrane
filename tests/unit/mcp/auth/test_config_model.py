@@ -71,6 +71,49 @@ class TestOAuthParsing:
         with pytest.raises(AuthConfigError, match="oidc.audience"):
             parse_auth_config(data, known_sources=set())
 
+    def test_oauth_verify_audience_defaults_true(self):
+        """oidc.verify_audience defaults to True (audience binding enforced)."""
+        data = {
+            "auth": {
+                "type": "oauth",
+                "oidc": {"issuer": "https://auth.example.com", "audience": "myapp"},
+            }
+        }
+        result = parse_auth_config(data, known_sources=set())
+        assert result.oidc_verify_audience is True
+
+    def test_oauth_verify_audience_false_allows_missing_audience(self):
+        """With verify_audience: false, oidc.audience is optional (IdPs like Ory
+        Hydra do not honor RFC 8707 and issue tokens with an empty aud)."""
+        data = {
+            "auth": {
+                "type": "oauth",
+                "oidc": {
+                    "issuer": "https://auth.example.com",
+                    "verify_audience": False,
+                },
+            }
+        }
+        result = parse_auth_config(data, known_sources=set())
+        assert result.oidc_verify_audience is False
+        assert result.oidc_audiences == ()
+
+    def test_oauth_verify_audience_false_still_parses_given_audience(self):
+        """verify_audience: false does not forbid oidc.audience; it stays parsed."""
+        data = {
+            "auth": {
+                "type": "oauth",
+                "oidc": {
+                    "issuer": "https://auth.example.com",
+                    "audience": "myapp",
+                    "verify_audience": False,
+                },
+            }
+        }
+        result = parse_auth_config(data, known_sources=set())
+        assert result.oidc_verify_audience is False
+        assert result.oidc_audiences == ("myapp",)
+
     def test_oauth_missing_oidc_block_raises(self):
         """oauth with no oidc block raises AuthConfigError (both issuer and audience missing)."""
         data = {"auth": {"type": "oauth"}}

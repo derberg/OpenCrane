@@ -46,6 +46,7 @@ class AuthConfig:
     type: str = "none"
     oidc_issuer: str | None = None
     oidc_audiences: tuple[str, ...] = ()
+    oidc_verify_audience: bool = True
     scope_claim: str = "scope"
     scope_sources: dict[str, tuple[str, ...]] = field(default_factory=dict)
     default_sources: tuple[str, ...] = ()
@@ -164,6 +165,7 @@ def _parse_auth_entry(auth: dict, known_sources: set[str]) -> AuthConfig:
     # --- oauth-specific ---
     oidc_issuer: str | None = None
     oidc_audiences: tuple[str, ...] = ()
+    oidc_verify_audience = True
     scope_claim = "scope"
 
     if auth_type == "oauth":
@@ -174,7 +176,17 @@ def _parse_auth_entry(auth: dict, known_sources: set[str]) -> AuthConfig:
         oidc_issuer = oidc_block.get("issuer")
         if not oidc_issuer:
             raise AuthConfigError("oauth requires oidc.issuer to be set")
-        oidc_audiences = _parse_audiences(oidc_block.get("audience"))
+        # verify_audience gates the confused-deputy (aud-binding) defense. It
+        # defaults to True. Set it to False only for IdPs that cannot stamp the
+        # token audience — e.g. Ory Hydra ignores the RFC 8707 `resource`
+        # parameter and issues tokens with an empty `aud`. When disabled,
+        # oidc.audience becomes optional.
+        oidc_verify_audience = bool(oidc_block.get("verify_audience", True))
+        raw_audience = oidc_block.get("audience")
+        if oidc_verify_audience:
+            oidc_audiences = _parse_audiences(raw_audience)
+        elif raw_audience is not None:
+            oidc_audiences = _parse_audiences(raw_audience)
         scope_claim = oidc_block.get("scope_claim", "scope")  # OIDC-only: read from oidc: block
 
     # --- local-specific ---
@@ -197,6 +209,7 @@ def _parse_auth_entry(auth: dict, known_sources: set[str]) -> AuthConfig:
         type=auth_type,
         oidc_issuer=oidc_issuer,
         oidc_audiences=oidc_audiences,
+        oidc_verify_audience=oidc_verify_audience,
         scope_claim=scope_claim,
         scope_sources=scope_sources,
         default_sources=default_sources,

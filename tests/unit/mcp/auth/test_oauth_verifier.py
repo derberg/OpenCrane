@@ -233,6 +233,22 @@ class TestBuildTokenVerifier:
         v = build_token_verifier(self._config())
         assert isinstance(v, JwtTokenVerifier)
 
+    def test_verify_audience_disabled_builds_and_warns(self, caplog):
+        """With oidc_verify_audience False, the verifier is built with audience
+        checking off and a startup WARNING is emitted."""
+        config = AuthConfig(
+            type="oauth",
+            oidc_issuer=ISSUER,
+            oidc_audiences=(),
+            oidc_verify_audience=False,
+            scope_claim="scope",
+        )
+        with caplog.at_level("WARNING"):
+            v = build_token_verifier(config)
+        assert isinstance(v, JwtTokenVerifier)
+        assert v._verify_audience is False
+        assert "verify_audience is disabled" in caplog.text
+
     def test_default_resolver_uses_discovered_jwks_uri(self, monkeypatch):
         """The resolver builds PyJWKClient at the jwks_uri from OIDC discovery.
 

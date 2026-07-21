@@ -20,6 +20,7 @@ from collections.abc import AsyncIterator
 
 from starlette.responses import JSONResponse, HTMLResponse, RedirectResponse
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp.server.fastmcp.tools.base import Tool
 from mcp.server.fastmcp.utilities.func_metadata import FuncMetadata, ArgModelBase
 from pydantic import ConfigDict
@@ -349,6 +350,27 @@ async def _noop_lifespan(_mcp: FastMCP) -> AsyncIterator[None]:
     yield
 
 
+def _transport_security() -> TransportSecuritySettings:
+    """Host allow-list for the Streamable HTTP transport.
+
+    The MCP SDK auto-enables DNS-rebinding protection with a localhost-only
+    allow-list whenever the FastMCP host is loopback (its default). Behind a real
+    hostname or reverse proxy (Docker, Cloud Run, ...) that rejects every request
+    with ``421 Invalid Host header``. The HTTP transport exists to be reached
+    remotely, so disable the check by default and let operators opt back in with
+    ``MCP_ALLOWED_HOSTS`` (comma-separated ``host[:port]`` patterns).
+    """
+    hosts = [h.strip() for h in os.environ.get("MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]
+    if hosts:
+        origins = [f"https://{h}" for h in hosts] + [f"http://{h}" for h in hosts]
+        return TransportSecuritySettings(
+            enable_dns_rebinding_protection=True,
+            allowed_hosts=hosts,
+            allowed_origins=origins,
+        )
+    return TransportSecuritySettings(enable_dns_rebinding_protection=False)
+
+
 def _build_mcp(auth_config, streamable_http_path, life, resource_url_suffix=""):
     """Construct a FastMCP instance with tools + auth for one endpoint.
 
@@ -368,6 +390,7 @@ def _build_mcp(auth_config, streamable_http_path, life, resource_url_suffix=""):
         json_response=False,
         lifespan=life,
         streamable_http_path=streamable_http_path,
+        transport_security=_transport_security(),
         **auth_kwargs,
     )
     _register_tools(mcp, source_keys=_advertised_source_keys(auth_config))

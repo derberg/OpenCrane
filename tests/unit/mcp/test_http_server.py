@@ -206,6 +206,26 @@ class TestPerEndpointToolScoping:
         assert "private x" not in search.description
 
 
+class TestTransportSecurity:
+    def test_disabled_by_default(self, monkeypatch):
+        """Without MCP_ALLOWED_HOSTS the DNS-rebinding host check is off, so a
+        server behind a real hostname/proxy does not 421 (the SDK would otherwise
+        auto-enable a localhost-only allow-list)."""
+        monkeypatch.delenv("MCP_ALLOWED_HOSTS", raising=False)
+        settings = http_server._transport_security()
+        assert settings.enable_dns_rebinding_protection is False
+
+    def test_allowed_hosts_opt_in(self, monkeypatch):
+        """MCP_ALLOWED_HOSTS re-enables protection with the given hosts and
+        derives matching http/https origins."""
+        monkeypatch.setenv("MCP_ALLOWED_HOSTS", "mcp.cennso.com, example.com:8000")
+        settings = http_server._transport_security()
+        assert settings.enable_dns_rebinding_protection is True
+        assert settings.allowed_hosts == ["mcp.cennso.com", "example.com:8000"]
+        assert "https://mcp.cennso.com" in settings.allowed_origins
+        assert "http://example.com:8000" in settings.allowed_origins
+
+
 class TestHealthEndpoint:
     @pytest.mark.anyio
     async def test_health_ready_delegates_to_compute_health(self):

@@ -445,6 +445,76 @@ Content for section 2."""
         assert all((c.metadata or {}).get("source_url") == page for c in body), \
             f"Body should be attributed to the page URL, got: {[(c.metadata or {}).get('source_url') for c in body]}"
 
+    CRD_REFERENCE_PAGE = "\n".join([
+        "### https://github.com/org/repo/blob/main/widget-crd.md",
+        "",
+        "# Widget CRD Reference",
+        "",
+        "Reference for the Widget custom resource.",
+        "",
+        "```yaml",
+        "apiVersion: apiextensions.k8s.io/v1",
+        "kind: CustomResourceDefinition",
+        "metadata:",
+        "  name: widgets.example.com",
+        "spec:",
+        "  group: example.com",
+        "  names:",
+        "    kind: Widget",
+        "    plural: widgets",
+        "  scope: Namespaced",
+        "  versions:",
+        "    - name: v1",
+        "      served: true",
+        "      storage: true",
+        "      schema:",
+        "        openAPIV3Schema:",
+        "          type: object",
+        "          properties:",
+        "            spec:",
+        "              type: object",
+        "              properties:",
+        "                replicas:",
+        "                  type: integer",
+        "                  description: Number of replicas",
+        "                image:",
+        "                  type: string",
+        "                  description: Container image",
+        "```",
+        "",
+    ])
+
+    def test_crd_yaml_fence_chunked_exactly_once(self, tmp_path):
+        """A fenced CRD on a code-heavy page must yield ONE set of
+        crd_definition chunks, not a duplicate set from the retained section."""
+        processor = FileProcessor()
+        test_file = tmp_path / "llms-full.txt"
+        test_file.write_text(self.CRD_REFERENCE_PAGE, encoding="utf-8")
+
+        chunks = processor.process_file(test_file)
+
+        crd_chunks = [c for c in chunks if c.chunk_type == "crd_definition"]
+        assert crd_chunks, "expected CRD chunks from the fenced CRD"
+        breadcrumbs = [c.metadata["breadcrumb_path"] for c in crd_chunks]
+        assert len(breadcrumbs) == len(set(breadcrumbs)), \
+            f"CRD schema paths chunked more than once: {sorted(breadcrumbs)}"
+
+    def test_prose_around_extracted_yaml_fence_is_kept(self, tmp_path):
+        """The prose surrounding an extracted YAML fence must still be chunked;
+        the retained section must not carry the extracted YAML content."""
+        processor = FileProcessor()
+        test_file = tmp_path / "llms-full.txt"
+        test_file.write_text(self.CRD_REFERENCE_PAGE, encoding="utf-8")
+
+        chunks = processor.process_file(test_file)
+
+        prose_chunks = [c for c in chunks if c.chunk_type == "prose"]
+        assert any("Reference for the Widget custom resource." in c.content
+                   for c in prose_chunks), "surrounding prose must survive extraction"
+        assert not any("apiVersion: apiextensions.k8s.io/v1" in c.content
+                       for c in prose_chunks), \
+            "extracted YAML must not leak into prose chunks"
+
     def test_small_plain_text_file_without_section_markers(self, tmp_path):
         """Test processing small plain text file with no section markers or YAML blocks."""
         processor = FileProcessor()

@@ -25,13 +25,21 @@ class TestYAMLTreeChunkingE2E:
         assert len(actual_chunks) > 0, "No CRD chunks generated from markdown"
 
         # With granular chunking (token limit 800), large properties are recursively chunked.
-        # The fixture has two YAML blocks, and spec.config exceeded 800 tokens, so it was split into:
+        # The fixture has one CRD YAML block (the second block is an SMC resource
+        # instance, which produces no crd_definition chunks). spec.config exceeded
+        # 800 tokens, so it was split into:
         # - spec.config.logLevel, spec.config.enableMetrics, spec.config.metricsPort,
         #   spec.config.database, spec.config.cache, spec.config.messaging
         # Other properties: spec.replicas, spec.image, spec.storage, spec.networking,
         #   spec.resources, spec.affinity, spec.securityContext, spec.monitoring
-        # Total: ~14 unique property paths x 2 YAML blocks = ~28 chunks
-        assert len(actual_chunks) >= 20, f"Expected at least 20 chunks with granular chunking, got {len(actual_chunks)}"
+        # Total: ~14 unique property paths
+        assert len(actual_chunks) >= 10, f"Expected at least 10 chunks with granular chunking, got {len(actual_chunks)}"
+
+        # Each schema path must be chunked exactly once (fenced CRDs used to be
+        # chunked twice — standalone YAML item + retained section).
+        breadcrumbs = [c.metadata["breadcrumb_path"] for c in actual_chunks]
+        assert len(breadcrumbs) == len(set(breadcrumbs)), \
+            f"CRD schema paths chunked more than once: {sorted(breadcrumbs)}"
 
         # Verify required properties are present (either as direct chunks or recursively chunked)
         actual_property_paths = [chunk.metadata["crd_property_path"] for chunk in actual_chunks]

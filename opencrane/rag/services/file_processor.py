@@ -335,10 +335,23 @@ class FileProcessor:
                                 # Wrap in fenced block so YamlChunkingStrategy can process it
                                 yaml_text = f"```yaml\n{block.yaml_content}\n```"
                                 result.append(FakeTextItem(yaml_text, block.source_url))
-                            
-                            # Also keep the original section for prose content
-                            # (YAML blocks will be skipped by prose strategy)
-                            result.append(section)
+
+                            # Keep the surrounding prose, with the extracted
+                            # fences dropped by their line spans — each YAML
+                            # block must be owned by exactly one item, or
+                            # code-heavy sections get their YAML chunked a
+                            # second time by the code strategy.
+                            lines = section.text.split('\n')
+                            owned = {
+                                n
+                                for block in yaml_blocks
+                                for n in range(block.line_start - 1, block.line_end)
+                            }
+                            remainder = '\n'.join(
+                                line for n, line in enumerate(lines) if n not in owned
+                            )
+                            if remainder.strip():
+                                result.append(FakeTextItem(remainder, section.source_url))
                         else:
                             result.append(section)
                     else:

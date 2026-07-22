@@ -12,6 +12,7 @@ class YamlBlock(BaseModel):
     source_url: str = Field(..., description="GitHub URL of the markdown page")
     original_yaml_file: Optional[str] = Field(None, description="Original YAML file path if found in comment")
     line_start: Optional[int] = Field(None, description="Starting line number in markdown")
+    line_end: Optional[int] = Field(None, description="Line number of the closing fence (or last line when unclosed)")
 
 
 class YamlExtractor:
@@ -60,7 +61,8 @@ class YamlExtractor:
                         yaml_content=yaml_content,
                         source_url=source_url,
                         original_yaml_file=original_yaml_file,
-                        line_start=block_start_line
+                        line_start=block_start_line,
+                        line_end=min(i + 1, len(lines))
                     ))
             
             i += 1

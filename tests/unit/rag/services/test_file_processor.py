@@ -485,7 +485,7 @@ Content for section 2."""
     ])
 
     def test_crd_yaml_fence_chunked_exactly_once(self, tmp_path):
-        """CENNSO-3973: a fenced CRD on a code-heavy page must yield ONE set of
+        """A fenced CRD on a code-heavy page must yield ONE set of
         crd_definition chunks, not a duplicate set from the retained section."""
         processor = FileProcessor()
         test_file = tmp_path / "llms-full.txt"

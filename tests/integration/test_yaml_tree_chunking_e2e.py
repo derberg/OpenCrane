@@ -35,8 +35,8 @@ class TestYAMLTreeChunkingE2E:
         # Total: ~14 unique property paths
         assert len(actual_chunks) >= 10, f"Expected at least 10 chunks with granular chunking, got {len(actual_chunks)}"
 
-        # Each schema path must be chunked exactly once (CENNSO-3973: fenced CRDs
-        # used to be chunked twice — standalone YAML item + retained section).
+        # Each schema path must be chunked exactly once (fenced CRDs used to be
+        # chunked twice — standalone YAML item + retained section).
         breadcrumbs = [c.metadata["breadcrumb_path"] for c in actual_chunks]
         assert len(breadcrumbs) == len(set(breadcrumbs)), \
             f"CRD schema paths chunked more than once: {sorted(breadcrumbs)}"

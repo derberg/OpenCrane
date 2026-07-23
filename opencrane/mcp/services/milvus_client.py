@@ -206,12 +206,21 @@ class MilvusService:
                 "table_id": (chunk.table_id or "")[:_ID_FIELD_MAX],
             })
 
+        # Insert in batches: a single call covering a whole corpus can outlive
+        # milvus-lite's HTTP/2 keepalive window — the connection dies with
+        # GOAWAY, pymilvus retries the entire insert, and rows from every
+        # attempt persist (row_count becomes an exact multiple of the corpus).
+        # Each batch finishes well before the keepalive timeout, so it is
+        # never retried.
+        batch_size = self.config.milvus_insert_batch_size
+        total = len(data)
         try:
-            res = self.client.insert(
-                collection_name=self.collection_name,
-                data=data
-            )
-            logger.info(f"Inserted {len(data)} chunks, result: {res}")
+            for start in range(0, total, batch_size):
+                self.client.insert(
+                    collection_name=self.collection_name,
+                    data=data[start:start + batch_size]
+                )
+                logger.info(f"Inserted {min(start + batch_size, total)}/{total} chunks")
         except Exception as e:
             logger.error(f"Failed to insert chunks: {e}")
             raise

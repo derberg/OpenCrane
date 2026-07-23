@@ -157,6 +157,47 @@ class TestMilvusService:
         assert row['list_id'] == "L1"
         assert row['table_id'] == ""
 
+    @patch.dict('os.environ', {'MILVUS_INSERT_BATCH_SIZE': '2'})
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_insert_chunks_batches_inserts(self, mock_client_class):
+        """Chunks are inserted in batches, never as one giant call.
+
+        A single insert covering a whole corpus can outlive milvus-lite's
+        HTTP/2 keepalive window; the connection dies with GOAWAY, pymilvus
+        retries the entire insert, and rows from every attempt persist
+        (row_count becomes an exact multiple of the corpus). Batching keeps
+        each call short enough that it is never retried.
+        """
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        service = MilvusService()
+        chunks = [
+            VectorChunk(
+                chunk_id=f"id{i}",
+                embedding=[0.1] * 768,
+                content=f"content{i}",
+                source_file="file1.md",
+                chunk_type="prose",
+                metadata_json='{}',
+                token_count=10,
+                line_start=1,
+            )
+            for i in range(5)
+        ]
+
+        service.insert_chunks(chunks)
+
+        assert mock_client.insert.call_count == 3
+        batch_sizes = [len(c[1]['data']) for c in mock_client.insert.call_args_list]
+        assert batch_sizes == [2, 2, 1]
+        inserted_ids = [
+            row['chunk_id']
+            for c in mock_client.insert.call_args_list
+            for row in c[1]['data']
+        ]
+        assert inserted_ids == [f"id{i}" for i in range(5)]
+
     @patch('opencrane.mcp.services.milvus_client.MilvusClient')
     def test_search_without_filter(self, mock_client_class):
         """Test search without chunk type filter."""

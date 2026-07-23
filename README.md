@@ -413,6 +413,7 @@ OpenCrane supports two Milvus modes. Set `MILVUS_DB_PATH` to use **Milvus Lite**
 | `MILVUS_HOST` | `localhost` | Milvus server host (server mode only) |
 | `MILVUS_PORT` | `19530` | Milvus server port (server mode only) |
 | `MILVUS_COLLECTION` | `ai_docs_chunks_v1` | Milvus collection name |
+| `MILVUS_INSERT_BATCH_SIZE` | `2000` | Max chunks per insert call during `index`. Keeps each call short enough to finish before Milvus keepalive timeouts, which would otherwise trigger client retries that duplicate rows |
 | `HYBRID_ALPHA` | `0.6` | Weight of vector search vs keyword search (1.0 = pure vector, 0.0 = pure BM25) |
 
 #### Health check (`serve`, HTTP transport)

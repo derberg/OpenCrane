@@ -31,6 +31,7 @@ class Config:
     milvus_host: str = field(default_factory=lambda: os.getenv("MILVUS_HOST", "localhost"))
     milvus_port: int = field(default_factory=lambda: int(os.getenv("MILVUS_PORT", "19530")))
     milvus_collection: str = field(default_factory=lambda: os.getenv("MILVUS_COLLECTION", "ai_docs_chunks_v1"))
+    milvus_insert_batch_size: int = field(default_factory=lambda: int(os.getenv("MILVUS_INSERT_BATCH_SIZE", "2000")))
     # Embedding configuration
     embedding_model: str = field(default_factory=lambda: os.getenv("EMBEDDING_MODEL", "nomic-ai/nomic-embed-text-v1.5"))
     # Search configuration

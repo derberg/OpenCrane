@@ -2,3 +2,8 @@
 sentence-transformers>=2.0
 pymilvus[milvus_lite]>=2.5,<2.6
 milvus-lite>=2.4.0,<3.0.0
+# milvus-lite 2.x imports pkg_resources at connect time, and pymilvus's unbounded
+# `setuptools>69` dep resolves to >=82, where pkg_resources was removed. The <81 cap
+# follows setuptools' own guidance ("pin to Setuptools<81"; 81 only deprecates it).
+# Remove once pymilvus>=2.6 / milvus-lite>=3 (no pkg_resources usage) is adopted.
+setuptools<81

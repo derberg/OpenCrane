@@ -76,7 +76,8 @@ class TestRegisteredTools:
     @pytest.mark.anyio
     async def test_base_tools_always_advertised(self):
         with patch.object(s, "_has_yaml_chunks", return_value=False), \
-                patch.object(s, "_has_list_item_chunks", return_value=False):
+                patch.object(s, "_has_list_item_chunks", return_value=False), \
+                patch.object(s, "_has_table_row_chunks", return_value=False):
             mcp = build_app()
             tools = await mcp.list_tools()
         names = {t.name for t in tools}
@@ -86,7 +87,8 @@ class TestRegisteredTools:
     async def test_search_docs_schema_matches_source_of_truth(self):
         """search_docs advertises exactly server._build_search_tool().inputSchema."""
         with patch.object(s, "_has_yaml_chunks", return_value=False), \
-                patch.object(s, "_has_list_item_chunks", return_value=False):
+                patch.object(s, "_has_list_item_chunks", return_value=False), \
+                patch.object(s, "_has_table_row_chunks", return_value=False):
             mcp = build_app()
             tools = await mcp.list_tools()
         search = next(t for t in tools if t.name == "search_docs")
@@ -96,28 +98,49 @@ class TestRegisteredTools:
     @pytest.mark.anyio
     async def test_list_members_tool_appears_when_predicate_true(self):
         with patch.object(s, "_has_yaml_chunks", return_value=False), \
-                patch.object(s, "_has_list_item_chunks", return_value=True):
+                patch.object(s, "_has_list_item_chunks", return_value=True), \
+                patch.object(s, "_has_table_row_chunks", return_value=False):
             mcp = build_app()
             tools = await mcp.list_tools()
         names = {t.name for t in tools}
         assert "get_list_members" in names
-        # get_metadata_schema also gated on list-item OR yaml
+        # get_metadata_schema also gated on list-item OR yaml OR table-row
         assert "get_metadata_schema" in names
         assert "get_yaml_definition" not in names
+        assert "get_table_members" not in names
         gm = next(t for t in tools if t.name == "get_list_members")
         assert gm.inputSchema == s.GET_LIST_MEMBERS_TOOL_SCHEMA
         assert gm.description == s.GET_LIST_MEMBERS_TOOL_DESCRIPTION
 
     @pytest.mark.anyio
+    async def test_table_members_tool_appears_when_predicate_true(self):
+        with patch.object(s, "_has_yaml_chunks", return_value=False), \
+                patch.object(s, "_has_list_item_chunks", return_value=False), \
+                patch.object(s, "_has_table_row_chunks", return_value=True):
+            mcp = build_app()
+            tools = await mcp.list_tools()
+        names = {t.name for t in tools}
+        assert "get_table_members" in names
+        # get_metadata_schema also gated on list-item OR yaml OR table-row
+        assert "get_metadata_schema" in names
+        assert "get_list_members" not in names
+        assert "get_yaml_definition" not in names
+        gt = next(t for t in tools if t.name == "get_table_members")
+        assert gt.inputSchema == s.GET_TABLE_MEMBERS_TOOL_SCHEMA
+        assert gt.description == s.GET_TABLE_MEMBERS_TOOL_DESCRIPTION
+
+    @pytest.mark.anyio
     async def test_yaml_tools_appear_when_predicate_true(self):
         with patch.object(s, "_has_yaml_chunks", return_value=True), \
-                patch.object(s, "_has_list_item_chunks", return_value=False):
+                patch.object(s, "_has_list_item_chunks", return_value=False), \
+                patch.object(s, "_has_table_row_chunks", return_value=False):
             mcp = build_app()
             tools = await mcp.list_tools()
         names = {t.name for t in tools}
         assert "get_yaml_definition" in names
         assert "get_metadata_schema" in names
         assert "get_list_members" not in names
+        assert "get_table_members" not in names
         gy = next(t for t in tools if t.name == "get_yaml_definition")
         assert gy.inputSchema == s.GET_YAML_DEFINITION_TOOL_SCHEMA
         assert gy.description == s.GET_YAML_DEFINITION_TOOL_DESCRIPTION
@@ -159,6 +182,29 @@ class TestRegisteredTools:
         assert isinstance(result, list)
         assert all(isinstance(c, TextContent) for c in result)
         assert "hello world" in result[0].text
+
+
+class TestTransportParity:
+    """The HTTP transport must advertise exactly the tool set stdio's
+    list_tools() advertises, for every combination of indexed chunk types
+    (regression: get_table_members was registered on stdio only)."""
+
+    @pytest.mark.parametrize("chunk_types", [
+        set(),
+        {"prose"},
+        {"prose", "list_item"},
+        {"prose", "table_row"},
+        {"prose", "crd_definition"},
+        {"prose", "list_item", "table_row", "crd_definition", "openapi_spec"},
+    ])
+    @pytest.mark.anyio
+    async def test_http_advertises_same_tools_as_stdio(self, chunk_types):
+        with patch.object(s, "_get_indexed_chunk_types", return_value=chunk_types), \
+                patch.object(s, "_get_source_keys", return_value=[]), \
+                patch.object(s, "_get_source_topics", return_value=[]):
+            stdio_names = {t.name for t in await s.list_tools()}
+            http_names = {t.name for t in await build_app().list_tools()}
+        assert http_names == stdio_names
 
 
 class TestAdvertisedSourceKeys:

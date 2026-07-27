@@ -145,11 +145,15 @@ def _register_tools(mcp, source_keys=None):
         _register(mcp, "get_list_members", s.GET_LIST_MEMBERS_TOOL_DESCRIPTION,
                   s.GET_LIST_MEMBERS_TOOL_SCHEMA, s.get_list_members)
 
+    if s._has_table_row_chunks():
+        _register(mcp, "get_table_members", s.GET_TABLE_MEMBERS_TOOL_DESCRIPTION,
+                  s.GET_TABLE_MEMBERS_TOOL_SCHEMA, s.get_table_members)
+
     if s._has_yaml_chunks():
         _register(mcp, "get_yaml_definition", s.GET_YAML_DEFINITION_TOOL_DESCRIPTION,
                   s.GET_YAML_DEFINITION_TOOL_SCHEMA, s.get_yaml_definition)
 
-    if s._has_yaml_chunks() or s._has_list_item_chunks():
+    if s._has_yaml_chunks() or s._has_list_item_chunks() or s._has_table_row_chunks():
         _register(mcp, "get_metadata_schema", s.GET_METADATA_SCHEMA_TOOL_DESCRIPTION,
                   s.GET_METADATA_SCHEMA_TOOL_SCHEMA, s.get_metadata_schema)
 

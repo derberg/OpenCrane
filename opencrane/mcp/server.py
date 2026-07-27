@@ -549,6 +549,18 @@ GET_LIST_MEMBERS_TOOL_SCHEMA = {
     "required": ["list_id"],
 }
 
+GET_TABLE_MEMBERS_TOOL_DESCRIPTION = "Fetch all row chunks for a markdown table sharing a table_id, ordered by row_index. Use when a search returned one or more table_row chunks and you need the whole table."
+GET_TABLE_MEMBERS_TOOL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "table_id": {
+            "type": "string",
+            "description": "The table_id from a table_row chunk's metadata."
+        }
+    },
+    "required": ["table_id"],
+}
+
 GET_YAML_DEFINITION_TOOL_DESCRIPTION = "Retrieve complete YAML definition for CRD, OpenAPI, or JSON Schema chunks with breadcrumb comments. Use this when: 1) You need full YAML context with location breadcrumbs (e.g., 'spec.replicas is at spec.versions[0].schema.properties.spec.replicas in SMC CRD'), 2) Search results show truncated content and suggest using this tool, 3) You want to see neighbor chunks at the same tree level, 4) You need the documentation URL for a YAML chunk. Returns YAML with comment headers showing: location in tree, parent path, schema type/version information, and up to 5 sibling chunks."
 GET_YAML_DEFINITION_TOOL_SCHEMA = {
     "type": "object",
@@ -598,17 +610,8 @@ async def list_tools() -> list[Tool]:
     if _has_table_row_chunks():
         tools.append(Tool(
             name="get_table_members",
-            description="Fetch all row chunks for a markdown table sharing a table_id, ordered by row_index. Use when a search returned one or more table_row chunks and you need the whole table.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "table_id": {
-                        "type": "string",
-                        "description": "The table_id from a table_row chunk's metadata."
-                    }
-                },
-                "required": ["table_id"],
-            },
+            description=GET_TABLE_MEMBERS_TOOL_DESCRIPTION,
+            inputSchema=GET_TABLE_MEMBERS_TOOL_SCHEMA,
         ))
 
     if _has_yaml_chunks():

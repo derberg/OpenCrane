@@ -1,7 +1,0 @@
-# All dependencies - references split requirement files
--r requirements/base.txt
--r requirements/mcp.txt
--r requirements/ml.txt
--r requirements/rag.txt
--r requirements/dev.txt
--r requirements/viz.txt

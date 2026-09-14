@@ -15,7 +15,7 @@ You can set up the Python virtual environment manually:
 
 3. **Install dependencies**:
    ```bash
-   pip install -r requirements.txt
+   pip install -e '.[dev]'
    ```
 
 Ensure Python 3.11+ is used when creating the virtual environment.

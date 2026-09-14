@@ -17,7 +17,7 @@ jobs:
       with:
         python-version: '3.11'
         cache: 'pip'
-        cache-dependency-path: 'requirements.txt'
+        cache-dependency-path: 'pyproject.toml'
 
     - name: Free disk space
       run: |
@@ -27,7 +27,7 @@ jobs:
         df -h
 
     - name: Install dependencies
-      run: pip install -r requirements.txt
+      run: pip install -e '.[dev]'
 
     - name: Run tests with coverage check
       run: ./pytest.sh --check-coverage --cov-report=term-missing

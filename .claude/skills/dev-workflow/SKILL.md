@@ -113,9 +113,10 @@ Publishing happens when a **GitHub release** is created, which triggers
 
 - **Always pin actions to a full commit SHA**, with the version tag as a trailing
   comment: `uses: actions/checkout@de0fac…  # v6.0.2`. Never a bare tag/version.
-- CI installs `requirements.txt` (which pulls in `requirements/viz.txt`, so the
-  visualize tests run) and gates on 100% coverage via
-  `./pytest.sh --check-coverage`.
+- CI installs `pip install -e '.[dev]'`, the same command `scripts/worktree.sh`
+  uses, so CI and local venvs resolve identically. `pyproject.toml` is the single
+  source of dependency truth — there is no `requirements.txt`; add deps to the
+  right extra there. Gates on 100% coverage via `./pytest.sh --check-coverage`.
 
 ## Red flags — stop
 

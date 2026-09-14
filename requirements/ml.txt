@@ -1,5 +1,12 @@
 # ML dependencies (embeddings and vector DB)
 sentence-transformers>=2.0
+# The default embedding model (nomic-ai/nomic-embed-text-v1.5) is loaded with
+# trust_remote_code=True, and its modeling_hf_nomic_bert.py calls
+# ModuleUtilsMixin.get_extended_attention_mask, which transformers 5.17.0 removed.
+# Without this cap, encoding fails with "'NomicBertModel' object has no attribute
+# 'get_extended_attention_mask'". Keep in sync with the same cap in pyproject.toml:
+# CI installs from these files, so a pin that lives only in pyproject does not apply here.
+transformers<5.17
 pymilvus[milvus_lite]>=2.5,<2.6
 milvus-lite>=2.4.0,<3.0.0
 # milvus-lite 2.x imports pkg_resources at connect time, and pymilvus's unbounded

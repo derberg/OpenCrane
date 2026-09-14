@@ -1,5 +1,9 @@
 # MCP Server dependencies
-mcp>=0.1
+# Must match the cap in pyproject.toml. mcp 2.x removed Server.list_tools, which
+# server.py still uses, so an unbounded spec breaks test collection outright. CI
+# installs from these files rather than pyproject.toml, so the cap has to be
+# repeated here to take effect.
+mcp>=1.28,<1.29
 uvicorn>=0.24.0
 starlette>=0.32.0
 rank-bm25>=0.2.2

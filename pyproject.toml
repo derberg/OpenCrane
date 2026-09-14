@@ -22,6 +22,15 @@ dependencies = [
     "rank-bm25>=0.2.2",
     # ML dependencies (embeddings and vector DB)
     "sentence-transformers>=2.0",
+    # The default embedding model (nomic-ai/nomic-embed-text-v1.5) is loaded with
+    # trust_remote_code=True, and its modeling_hf_nomic_bert.py calls
+    # ModuleUtilsMixin.get_extended_attention_mask, which transformers 5.17.0 removed.
+    # Without this cap a default install fails on first encode with
+    # "'NomicBertModel' object has no attribute 'get_extended_attention_mask'" —
+    # at `opencrane embed`, and at query time in the MCP server. transformers is an
+    # unpinned transitive dep of sentence-transformers, so it otherwise floats to the
+    # latest release. Remove once the model's remote code works on transformers >=5.17.
+    "transformers<5.17",
     "pymilvus[milvus_lite]>=2.5,<2.6",
     "milvus-lite>=2.4.0,<3.0.0",
     # milvus-lite 2.x imports pkg_resources at connect time, and pymilvus's unbounded

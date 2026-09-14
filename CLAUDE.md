@@ -141,7 +141,8 @@ Config is auto-discovered from `.opencrane/extensions.py:Config` or set via `--c
 ## CI/CD
 
 - **test-coverage.yml**: runs on PRs to main, enforces 100% coverage
-- **publish-pypi.yml**: publishes to PyPI on GitHub release (trusted publisher, OIDC)
+- **release-please.yml**: on push to `main`, maintains a release PR that computes the next version from conventional commits, writes `CHANGELOG.md` and bumps `pyproject.toml`. Merging it tags and creates the GitHub release. Never hand-edit the version, changelog or tags — release-please owns them, and `.release-please-manifest.json` tracks the current version
+- **publish-pypi.yml**: publishes to PyPI on GitHub release (trusted publisher, OIDC). Also runnable manually with a tag input, needed because a release created with the default GITHUB_TOKEN cannot trigger another workflow; setting a `RELEASE_PLEASE_TOKEN` PAT removes that step
 - Actions pinned by SHA with tag comments
 - CI installs `pip install -e '.[dev]'` — `pyproject.toml` is the single source of dependency truth, and the `dev` extra pulls the pipeline, viz and auth deps the full suite needs. It gates on 100% coverage via `./pytest.sh --check-coverage`
 

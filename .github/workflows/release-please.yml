@@ -1,0 +1,33 @@
+name: Release Please
+
+# Automates the release chain that used to be manual: this opens (and keeps
+# updating) a release PR that accumulates conventional commits, computes the next
+# version from them, writes CHANGELOG.md and bumps `version` in pyproject.toml.
+# Merging that PR tags the commit and publishes a GitHub release — which is the
+# event publish-pypi.yml listens for.
+#
+# Token note: with the default GITHUB_TOKEN, GitHub deliberately does NOT let one
+# workflow's events start another, so the release created here will not kick off
+# publish-pypi.yml on its own. Add a PAT (repo scope) as RELEASE_PLEASE_TOKEN and
+# the whole chain runs unattended; without it, publishing is one manual click via
+# publish-pypi.yml's "Run workflow" button. The expression below picks up the PAT
+# automatically if and when the secret exists, so no edit is needed later.
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Create or update the release PR
+      uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+      with:
+        token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+        config-file: release-please-config.json
+        manifest-file: .release-please-manifest.json

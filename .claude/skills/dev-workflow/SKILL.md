@@ -86,20 +86,39 @@ git push -u origin feat/<short-name>         # 3. push (needs fresh explicit use
 - No Docker needed: Milvus runs in Lite mode (single-file DB) for unit tests.
   Integration tests (`./pytest.sh tests/integration/`) use Milvus Lite too.
 
-## Releasing to PyPI — gated, approval-first
+## Releasing to PyPI — automated, still approval-gated
 
-Publishing happens when a **GitHub release** is created, which triggers
-`publish-pypi.yml`. The discipline:
+Releases are driven by **release-please**. Do NOT hand-edit `version` in
+`pyproject.toml`, hand-write `CHANGELOG.md`, or create tags/releases manually —
+the bot owns all four, and doing it by hand desynchronises
+`.release-please-manifest.json`.
 
-1. **Bump the version** on a branch, open a PR, merge it the normal way.
-2. **Show the user the release notes for approval BEFORE creating the release.**
-   Do not create the release until they approve the notes.
-3. Order is: **bump → push → release.** Never create the release before the
-   version bump and tag are on `main`.
-4. **Never modify or delete an already-published release** (or re-publish a
-   version) — PyPI rejects re-uploads and downstream installs break.
-5. **Every push and every release needs fresh, explicit user approval.** Approval
-   for one push/release does NOT carry over to the next.
+How it runs:
+
+1. Merge normal PRs to `main`. `release-please.yml` opens (and keeps updating) a
+   release PR titled `chore(main): release X.Y.Z`, computing the version from the
+   conventional-commit prefixes: `fix:` → patch, `feat:` → minor,
+   `feat!:`/`BREAKING CHANGE` → major. This is why commit messages matter now —
+   they are the release input, not just style.
+2. **The release PR is the approval gate.** Review the generated version and
+   changelog there; merging it is what authorises the release. **Merging it needs
+   fresh, explicit user approval** — approval for one release never carries to the
+   next.
+3. Merging tags the commit and creates the GitHub release, which triggers
+   `publish-pypi.yml` → PyPI.
+
+Two things that still need a human:
+
+- **The GITHUB_TOKEN cascade.** GitHub blocks one workflow's events from starting
+  another, so a release created with the default token does not auto-fire
+  `publish-pypi.yml`. Either add a PAT (repo scope) as the `RELEASE_PLEASE_TOKEN`
+  secret — the workflow picks it up automatically and the chain runs unattended —
+  or run `publish-pypi.yml` manually via "Run workflow", passing the release tag.
+- **Never modify or delete an already-published release**, or re-publish a
+  version. PyPI rejects re-uploads and downstream installs break.
+
+If the manifest and `pyproject.toml` ever disagree, the manifest wins for the
+*next* computed version — fix it in a normal PR rather than editing a release.
 
 ## Commit rules
 

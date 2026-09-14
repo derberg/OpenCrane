@@ -3,6 +3,17 @@ name: Publish to PyPI
 on:
   release:
     types: [published]
+  # Manual fallback. A release created by release-please with the default
+  # GITHUB_TOKEN cannot start this workflow (GitHub blocks that cascade), so this
+  # button publishes such a release without needing a PAT. Give it the tag to
+  # build, so a manual run publishes that exact release rather than whatever
+  # happens to be on main.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build and publish (e.g. v0.30.4)'
+        required: true
+        type: string
 
 jobs:
   publish:
@@ -14,6 +25,10 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        # On a release event this is already the tag; on a manual run it is the
+        # tag typed into the input.
+        ref: ${{ inputs.tag || github.ref }}
 
     - name: Set up Python
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0

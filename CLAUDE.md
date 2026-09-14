@@ -143,7 +143,7 @@ Config is auto-discovered from `.opencrane/extensions.py:Config` or set via `--c
 - **test-coverage.yml**: runs on PRs to main, enforces 100% coverage
 - **publish-pypi.yml**: publishes to PyPI on GitHub release (trusted publisher, OIDC)
 - Actions pinned by SHA with tag comments
-- CI installs `requirements.txt` (which pulls in `requirements/viz.txt` so the visualize tests run) and gates on 100% coverage via `./pytest.sh --check-coverage`
+- CI installs `pip install -e '.[dev]'` — `pyproject.toml` is the single source of dependency truth, and the `dev` extra pulls the pipeline, viz and auth deps the full suite needs. It gates on 100% coverage via `./pytest.sh --check-coverage`
 
 ## Default Paths
 

@@ -13,6 +13,7 @@ the app open, ``local`` mounts a self-hosted OAuth authorization server (with a
 ``/login`` form) and wraps the MCP endpoint in a 401 challenge.
 """
 import contextlib
+import json
 import os
 import logging
 from pathlib import Path
@@ -277,6 +278,7 @@ def _build_multi_endpoint_app(endpoints):
         path = f"/mcp/{name}"
         mcp, _ = _build_mcp(cfg, path, _noop_lifespan, resource_url_suffix=path)
         sub_app = mcp.streamable_http_app()
+        _advertise_scopes(sub_app.routes, cfg.oidc_advertised_scopes)
         routes.extend(sub_app.routes)
         # An authenticating endpoint (oauth resource server, or local/custom self-
         # hosted auth) contributes app-level AuthenticationMiddleware; the 401 gate
@@ -427,6 +429,91 @@ def build_app() -> FastMCP:
     return mcp
 
 
+_PROTECTED_RESOURCE_PREFIX = "/.well-known/oauth-protected-resource"
+
+
+def _advertise_scopes(routes, scopes) -> None:
+    """Publish ``scopes_supported`` in the protected-resource metadata, in place.
+
+    FastMCP builds that metadata from ``AuthSettings.required_scopes``, which it
+    also hands to ``RequireAuthMiddleware`` as the scopes every request must
+    carry. Advertising through that field would therefore reject every token
+    lacking the scope, so this rewrites the metadata response instead and leaves
+    enforcement alone. The endpoint stays the source of truth for every other
+    field: only ``scopes_supported`` is added.
+
+    Advertising matters because some MCP clients take the scope they request
+    from this document alone. A client that finds none sends no ``scope`` at
+    all, and an IdP that issues refresh tokens only for ``offline_access`` then
+    never issues one, so the user signs in again whenever the access token
+    expires.
+
+    Args:
+        routes: The route list to patch, modified in place.
+        scopes: Scope names to advertise. Empty leaves the routes untouched.
+    """
+    if not scopes:
+        return
+
+    for route in routes:
+        if getattr(route, "path", "").startswith(_PROTECTED_RESOURCE_PREFIX):
+            route.app = _ScopesSupported(route.app, tuple(scopes))
+
+
+class _ScopesSupported:
+    """ASGI wrapper adding ``scopes_supported`` to a JSON metadata response.
+
+    The route it wraps is an ASGI app rather than a request handler, because
+    FastMCP wraps the metadata endpoint in CORS middleware. So this buffers the
+    response, rewrites the JSON body, and corrects ``content-length``. Anything
+    that is not a JSON body — a CORS preflight, an error page — passes through.
+    """
+
+    def __init__(self, app, scopes: tuple[str, ...]):
+        self.app = app
+        self.scopes = scopes
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        start: dict | None = None
+        chunks: list[bytes] = []
+
+        async def capture(message):
+            nonlocal start
+            if message["type"] == "http.response.start":
+                start = message
+                return  # hold it back: the body decides the final content-length
+            if message["type"] != "http.response.body":
+                await send(message)
+                return
+            chunks.append(message.get("body", b""))
+            if message.get("more_body"):
+                return
+            await self._flush(start, b"".join(chunks), send)
+
+        await self.app(scope, receive, capture)
+
+    async def _flush(self, start, body: bytes, send) -> None:
+        """Send the buffered response, with the scopes added when it is JSON."""
+        try:
+            payload = json.loads(body)
+            payload["scopes_supported"] = list(self.scopes)
+            body = json.dumps(payload).encode()
+        except (TypeError, ValueError):
+            pass  # not a JSON object: leave the response exactly as it was
+        headers = [
+            (key, value)
+            for key, value in start["headers"]
+            if key.lower() != b"content-length"
+        ]
+        headers.append((b"content-length", str(len(body)).encode()))
+        await send({**start, "headers": headers})
+        await send({"type": "http.response.body", "body": body})
+
+
 def build_asgi_app():
     """Build the ASGI app for the configured MCP endpoint(s).
 
@@ -447,6 +534,7 @@ def build_asgi_app():
         mcp = build_app()
         asgi_app = mcp.streamable_http_app()
         auth_config = endpoints[""]
+        _advertise_scopes(asgi_app.routes, auth_config.oidc_advertised_scopes)
         if auth_config.type == "oauth" and auth_config.allow_anonymous:
             from opencrane.mcp.auth.oauth_verifier import build_token_verifier
             from opencrane.mcp.auth.optional_auth import OptionalAuthMiddleware

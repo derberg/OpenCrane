@@ -39,6 +39,25 @@ def _parse_audiences(raw) -> tuple[str, ...]:
     )
 
 
+def _parse_advertised_scopes(raw) -> tuple[str, ...]:
+    """Normalize ``oidc.advertised_scopes`` (absent or a list of strings) to a tuple.
+
+    Args:
+        raw: The raw value from the ``oidc:`` block, or None when unset.
+
+    Returns:
+        The scopes to publish as ``scopes_supported``, empty when unset.
+
+    Raises:
+        AuthConfigError: If ``raw`` is not a list of non-empty strings.
+    """
+    if raw is None:
+        return ()
+    if isinstance(raw, list) and all(isinstance(s, str) and s for s in raw):
+        return tuple(raw)
+    raise AuthConfigError("oidc.advertised_scopes must be a list of non-empty strings")
+
+
 @dataclass(frozen=True)
 class AuthConfig:
     """Parsed and validated auth configuration."""
@@ -47,6 +66,7 @@ class AuthConfig:
     oidc_issuer: str | None = None
     oidc_audiences: tuple[str, ...] = ()
     oidc_verify_audience: bool = True
+    oidc_advertised_scopes: tuple[str, ...] = ()
     scope_claim: str = "scope"
     scope_sources: dict[str, tuple[str, ...]] = field(default_factory=dict)
     default_sources: tuple[str, ...] = ()
@@ -166,6 +186,7 @@ def _parse_auth_entry(auth: dict, known_sources: set[str]) -> AuthConfig:
     oidc_issuer: str | None = None
     oidc_audiences: tuple[str, ...] = ()
     oidc_verify_audience = True
+    oidc_advertised_scopes: tuple[str, ...] = ()
     scope_claim = "scope"
 
     if auth_type == "oauth":
@@ -188,6 +209,12 @@ def _parse_auth_entry(auth: dict, known_sources: set[str]) -> AuthConfig:
         elif raw_audience is not None:
             oidc_audiences = _parse_audiences(raw_audience)
         scope_claim = oidc_block.get("scope_claim", "scope")  # OIDC-only: read from oidc: block
+        # advertised_scopes lands in the RFC 9728 protected-resource metadata as
+        # scopes_supported. It is advertised only, never enforced: a client reads
+        # it to decide what to ask the IdP for, and some clients send no scope at
+        # all when the resource advertises none. Enforcing it instead would reject
+        # every token issued before the scope existed.
+        oidc_advertised_scopes = _parse_advertised_scopes(oidc_block.get("advertised_scopes"))
 
     # --- local-specific ---
     local_method = "token"
@@ -210,6 +237,7 @@ def _parse_auth_entry(auth: dict, known_sources: set[str]) -> AuthConfig:
         oidc_issuer=oidc_issuer,
         oidc_audiences=oidc_audiences,
         oidc_verify_audience=oidc_verify_audience,
+        oidc_advertised_scopes=oidc_advertised_scopes,
         scope_claim=scope_claim,
         scope_sources=scope_sources,
         default_sources=default_sources,

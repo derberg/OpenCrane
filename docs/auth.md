@@ -94,6 +94,7 @@ auth:
     issuer: https://login.example.com/realms/docs   # IdP issuer URL (JWKS discovered from here)
     audience: opencrane-docs                         # Expected `aud` claim; reject tokens not for this resource
     scope_claim: scope                               # JWT claim to read scopes from (default: scope)
+    advertised_scopes: [openid]                      # Published as scopes_supported; advertised, never enforced
   scope_sources:
     "docs:public":   [cennso-glossary]
     "docs:internal": [cgw, tsr, tposs]
@@ -106,10 +107,29 @@ auth:
 | `oidc.audience` | Yes¹ | Resource identifier — the `aud` claim in tokens must include this value |
 | `oidc.scope_claim` | No | JWT claim name to read scopes from (default: `scope`) |
 | `oidc.verify_audience` | No | Enforce the `aud` binding (default: `true`). Set to `false` only for IdPs that cannot stamp the audience — see below. |
+| `oidc.advertised_scopes` | No | Scope names published as `scopes_supported` in the protected-resource metadata. Advertised only, never enforced — see below. |
 
 ¹ Required unless `oidc.verify_audience: false`, in which case `oidc.audience` is optional.
 
 `PUBLIC_URL` must be set (as with `local` mode).
+
+#### Advertising scopes (`advertised_scopes`)
+
+Some MCP clients take the scope they request from the resource server's RFC 9728 metadata and from nowhere else. A client that finds no `scopes_supported` there sends no `scope` parameter at all. When the IdP issues refresh tokens only for the `offline_access` scope, that client never receives one, so its user signs in again every time the access token expires.
+
+List the scopes a client should ask for, and they are published as `scopes_supported`:
+
+```yaml
+auth:
+  type: oauth
+  oidc:
+    issuer: https://login.example.com
+    advertised_scopes: [openid]
+```
+
+These scopes are **advertised only**. They are not added to `required_scopes`, so no token is rejected for lacking them. This matters twice: tokens issued before the scope was advertised keep working, and a scope your IdP writes to a claim OpenCrane does not read cannot lock you out.
+
+Do not list `offline_access` here. The MCP authorization specification says a protected resource should not advertise it, because a refresh token serves the client session rather than the resource. Advertise an ordinary scope such as `openid` instead: a client that wants a refresh token adds `offline_access` itself once the authorization server's own metadata advertises it.
 
 #### Disabling audience validation (`verify_audience: false`)
 

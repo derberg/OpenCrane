@@ -11,7 +11,9 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Dict, Optional, Iterable
+from typing import Callable, List, Dict, Optional, Iterable
+
+from opencrane.shared.config import get_config
 
 try:
     from rank_bm25 import BM25Okapi
@@ -24,6 +26,48 @@ logger = logging.getLogger(__name__)
 def _simple_tokenize(text: str) -> List[str]:
     # Lowercase and split on non-alphanumeric
     return [t for t in re.split(r"[^a-zA-Z0-9_]+", text.lower()) if t]
+
+
+# A run of ASCII alphanumerics, optionally joined by single ".", "-" or "_"
+# characters that sit between alphanumerics. Joiners at the edges ("5.4.1." at
+# the end of a sentence, "GTP-" before a line break) are not part of the match.
+_IDENTIFIER_RE = re.compile(r"[a-z0-9]+(?:[._-][a-z0-9]+)*")
+_JOINER_RE = re.compile(r"[._-]")
+
+
+def _identifier_tokenize(text: str) -> List[str]:
+    """Tokenize while keeping technical identifiers intact.
+
+    Each compound such as ``5.4.1``, ``29.244``, ``v1.2.3``, ``gtp-u``,
+    ``sx-based`` or ``get_yaml_definition`` is emitted as one token, followed
+    by its distinct parts (``gtp-u`` -> ``gtp-u``, ``gtp``, ``u``), so a query
+    for ``gtp`` still matches ``GTP-U`` while a query for ``GTP-U`` ranks exact
+    occurrences above documents that only mention ``GTP``. Parts are
+    de-duplicated per compound, so one occurrence adds at most 1 to each term
+    frequency. Plain words produce the same token as the simple tokenizer.
+    """
+    tokens: List[str] = []
+    for match in _IDENTIFIER_RE.findall(text.lower()):
+        tokens.append(match)
+        if _JOINER_RE.search(match):
+            tokens.extend(dict.fromkeys(_JOINER_RE.split(match)))
+    return tokens
+
+
+_TOKENIZERS = {
+    "simple": _simple_tokenize,
+    "identifier": _identifier_tokenize,
+}
+
+
+def _resolve_tokenizer(name: Optional[str] = None) -> Callable[[str], List[str]]:
+    """Return the BM25 tokenizer selected by ``name`` or ``BM25_TOKENIZER``."""
+    if name is None:
+        name = get_config().bm25_tokenizer
+    key = name.strip().lower()
+    if key not in _TOKENIZERS:
+        raise ValueError(f"Unknown BM25_TOKENIZER {name!r}; expected one of: {', '.join(_TOKENIZERS)}")
+    return _TOKENIZERS[key]
 
 
 @dataclass
@@ -49,6 +93,8 @@ class KeywordSearchService:
         self._tokenized_corpus: List[List[str]] = []
         self._chunks = chunks
         self._chunks_path = chunks_path or Path(os.environ.get("AI_DOCS_CHUNKS_FILE", ".opencrane/chunks.json"))
+        # Resolved once so documents and queries always share the same tokenizer
+        self._tokenize = _resolve_tokenizer()
 
     def _load(self) -> None:
         raw = self._chunks if self._chunks is not None else json.loads(self._chunks_path.read_text(encoding="utf-8"))
@@ -74,7 +120,7 @@ class KeywordSearchService:
             except Exception:  # pragma: no cover - skip malformed
                 continue
 
-        tokenized = [_simple_tokenize(d.content) for d in docs]
+        tokenized = [self._tokenize(d.content) for d in docs]
         self._bm25 = BM25Okapi(tokenized)
         self._docs = docs
         self._tokenized_corpus = tokenized
@@ -92,7 +138,7 @@ class KeywordSearchService:
         self._load()
 
         assert self._bm25 is not None  # for type checkers
-        tokens = _simple_tokenize(query)
+        tokens = self._tokenize(query)
         scores = self._bm25.get_scores(tokens)
 
         # Rank indices by score

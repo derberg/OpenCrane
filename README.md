@@ -415,6 +415,7 @@ OpenCrane supports two Milvus modes. Set `MILVUS_DB_PATH` to use **Milvus Lite**
 | `MILVUS_COLLECTION` | `ai_docs_chunks_v1` | Milvus collection name |
 | `MILVUS_INSERT_BATCH_SIZE` | `2000` | Max chunks per insert call during `index`. Keeps each call short enough to finish before Milvus keepalive timeouts, which would otherwise trigger client retries that duplicate rows |
 | `HYBRID_ALPHA` | `0.6` | Weight of vector search vs keyword search (1.0 = pure vector, 0.0 = pure BM25) |
+| `BM25_TOKENIZER` | `simple` | Keyword (BM25) tokenizer. `simple` lowercases and splits on every non-alphanumeric character. `identifier` keeps dotted, hyphenated and underscored identifiers such as `5.4.1`, `TS 29.244`, `GTP-U` or `get_yaml_definition` as one token and also emits their parts, so `gtp` still matches `GTP-U` while `5.4.1` no longer matches `4.5.1`. The BM25 index is rebuilt in memory when the server loads, so switching needs no re-chunking, re-embedding or re-indexing |
 
 #### Health check (`serve`, HTTP transport)
 

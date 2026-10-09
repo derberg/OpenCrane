@@ -124,8 +124,9 @@ Subclass `OpenCraneConfig` in `.opencrane/extensions.py` to customize:
 1. **`fence_types`** — custom fence block handlers for llms-full.txt generation
 2. **`chunking_strategies`** — custom chunking strategies (first match wins)
 3. **`yaml_tree_walkers`** — custom YAML tree walkers for structured docs (K8s CRD, OpenAPI, JSON Schema built-in)
+4. **`extra_tools`** — custom MCP tools (`ExtraTool`: name, description, input schema, sync/async `handler(arguments, context)`), served on stdio and HTTP next to the built-ins; `context` is a `ToolContext` exposing the Milvus/embedding/keyword services and the config. Name collisions with built-ins (`BUILTIN_TOOL_NAMES` in `mcp/server.py`) fail at startup; handler exceptions surface as MCP tool errors
 
-Config is auto-discovered from `.opencrane/extensions.py:Config` or set via `--config` / `OPENCRANE_CONFIG` env var.
+Config is auto-discovered from `.opencrane/extensions.py:Config` or set via `--config` / `OPENCRANE_CONFIG` env var (`opencrane serve --config` exports it as `OPENCRANE_CONFIG`, since the server modules resolve the config themselves).
 
 ## Key Design Decisions
 

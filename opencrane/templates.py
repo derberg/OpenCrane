@@ -37,6 +37,22 @@ class Config(OpenCraneConfig):
     #         return None
     #     # e.g. a host that keeps case and uses underscores:
     #     return heading.strip().replace(" ", "_")
+
+    # Custom MCP tools served next to the built-in ones (stdio and HTTP).
+    # The handler (sync or async) gets the call arguments and a ToolContext
+    # (context.milvus, context.embeddings, context.keyword_search, context.config).
+    # Raised exceptions are returned to the client as MCP tool errors.
+    # from opencrane import ExtraTool
+    # extra_tools = [
+    #     ExtraTool(
+    #         name="get_chunk",
+    #         description="Return the raw content of a chunk by its ID.",
+    #         input_schema={"type": "object",
+    #                       "properties": {"chunk_id": {"type": "string"}},
+    #                       "required": ["chunk_id"]},
+    #         handler=lambda args, ctx: ctx.milvus.get_chunk(args["chunk_id"])["content"],
+    #     ),
+    # ]
 '''
 
 CONFIG_YAML = '''\

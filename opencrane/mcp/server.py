@@ -586,6 +586,35 @@ GET_METADATA_SCHEMA_TOOL_SCHEMA = {
 }
 
 
+# Names of every built-in tool, whether or not it is currently advertised.
+# Project ``extra_tools`` may not reuse these. Add every new built-in tool here
+# (a unit test checks this equals the full set list_tools() can advertise).
+BUILTIN_TOOL_NAMES = frozenset({
+    "search_docs",
+    "health",
+    "get_yaml_definition",
+    "get_metadata_schema",
+    "get_list_members",
+    "get_table_members",
+})
+
+# Project-defined tools from ``OpenCraneConfig.extra_tools``: name ->
+# (ExtraTool, bound async handler). Empty until main() loads them at startup.
+_extra_tools: dict = {}
+
+
+def load_extra_tools() -> dict:
+    """Load the project's ``extra_tools`` and bind their handlers to a context.
+
+    Raises ``ValueError`` when an extra tool is malformed or its name collides
+    with a built-in tool, so the server fails at startup.
+    """
+    from opencrane.mcp.extra_tools import bind_handler, load_extra_tools as _load
+
+    tools, context = _load(BUILTIN_TOOL_NAMES)
+    return {name: (tool, bind_handler(tool, context)) for name, tool in tools.items()}
+
+
 app = Server("opencrane")
 
 @app.list_tools()
@@ -628,6 +657,13 @@ async def list_tools() -> list[Tool]:
             inputSchema=GET_METADATA_SCHEMA_TOOL_SCHEMA,
         ))
 
+    for tool, _handler in _extra_tools.values():
+        tools.append(Tool(
+            name=tool.name,
+            description=tool.description,
+            inputSchema=tool.input_schema,
+        ))
+
     return tools
 
 @app.call_tool()
@@ -649,6 +685,8 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     }
 
     handler = _TOOL_HANDLERS.get(name)
+    if handler is None and name in _extra_tools:
+        handler = _extra_tools[name][1]
     if handler is None:
         logger.warning(f"Unknown tool requested: {name}")
         raise ValueError(f"Unknown tool: {name}")
@@ -1268,6 +1306,8 @@ async def get_table_members(arguments: dict) -> list[TextContent]:
 
 async def main():
     """Main entry point for the MCP server."""
+    global _extra_tools
+    _extra_tools = load_extra_tools()
 
     async with stdio_server() as (read_stream, write_stream):
         await app.run(

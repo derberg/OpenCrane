@@ -158,6 +158,11 @@ def _register_tools(mcp, source_keys=None):
         _register(mcp, "get_metadata_schema", s.GET_METADATA_SCHEMA_TOOL_DESCRIPTION,
                   s.GET_METADATA_SCHEMA_TOOL_SCHEMA, s.get_metadata_schema)
 
+    # Project-defined tools (OpenCraneConfig.extra_tools); a name colliding with
+    # a built-in raises here, so the server fails at startup.
+    for tool, handler in s.load_extra_tools().values():
+        _register(mcp, tool.name, tool.description, tool.input_schema, handler)
+
 
 def _load_auth_config():
     """Read the ``auth`` block from config.yaml the same way runtime.py does.

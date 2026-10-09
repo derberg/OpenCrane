@@ -33,6 +33,7 @@ A standalone, extensible RAG/MCP pipeline for building AI-powered documentation 
   - [Built-in YAML tree walkers](#built-in-yaml-tree-walkers)
   - [Writing a custom fence type](#writing-a-custom-fence-type)
   - [Writing a custom YAML tree walker](#writing-a-custom-yaml-tree-walker)
+  - [Adding custom MCP tools](#adding-custom-mcp-tools)
 - [Development](#development)
 - [License](#license)
 
@@ -503,6 +504,7 @@ opencrane build --config myproject.config:MyConfig
 | `chunking_strategies` | `chunk` | Add or replace chunking strategies for different content types |
 | `yaml_tree_walkers` | `chunk` | Add walkers for custom YAML document formats |
 | `section_anchor_for` | `chunk` | Build the in-page anchor slug recorded in each chunk's `section_anchor` metadata |
+| `extra_tools` | `serve` | Register custom MCP tools served next to the built-in ones (stdio and HTTP) |
 
 ### Section anchors
 
@@ -608,6 +610,42 @@ class TerraformTreeWalker(YamlTreeWalker):
         # return List[Chunk]
         ...
 ```
+
+### Adding custom MCP tools
+
+`extra_tools` adds project-specific tools to the MCP server, served on both the stdio and HTTP transports next to the built-in ones. Each entry is an `ExtraTool` with a name, description, JSON input schema and a handler. The handler may be sync or async and is called as `handler(arguments, context)`, where `context` is a `ToolContext` giving explicit access to the server's services: `context.milvus` (`MilvusService`), `context.embeddings` (`EmbeddingService`), `context.keyword_search` (`KeywordSearchService`), `context.config` (your config instance) and `context.allowed_sources()` (the sources a `middleware` hook permitted for this request, or `None`).
+
+```python
+from opencrane import ExtraTool, OpenCraneConfig
+
+
+def read_chunk(arguments, context):
+    chunk = context.milvus.get_chunk(arguments["chunk_id"])
+    if chunk is None:
+        raise ValueError(f"Chunk not found: {arguments['chunk_id']}")
+    return {"source": chunk["source_file"], "content": chunk["content"]}
+
+
+class Config(OpenCraneConfig):
+    extra_tools = [
+        ExtraTool(
+            name="read_chunk",
+            description="Return the full stored content of a chunk by its ID.",
+            input_schema={
+                "type": "object",
+                "properties": {"chunk_id": {"type": "string"}},
+                "required": ["chunk_id"],
+            },
+            handler=read_chunk,
+        ),
+    ]
+```
+
+- A handler returns a string, an MCP content block, a list of content blocks, or any other JSON-serialisable value (sent as JSON text). Sync handlers run in a worker thread.
+- An exception raised by a handler is returned to the client as an MCP tool error (`isError: true`) on both transports; the message is the exception text.
+- A name that collides with a built-in tool, or appears twice, makes the server fail at startup.
+- Extra tools bypass the built-in source access policy; a tool that returns corpus content should check `context.allowed_sources()` itself when authorization is in use.
+- The config is resolved as for every other extension point (`.opencrane/extensions.py:Config`, `opencrane serve --config`, or `OPENCRANE_CONFIG`). With no `extra_tools`, only the built-in tools are served.
 
 ## Authentication & Authorization
 

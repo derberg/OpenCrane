@@ -85,6 +85,16 @@ class OpenCraneConfig:
     # request's permitted source names before the tool executes. Default empty.
     middleware: list = []
 
+    # Custom MCP tools served alongside the built-in ones on both transports
+    # (stdio and HTTP). Each entry is an ``opencrane.ExtraTool(name, description,
+    # input_schema, handler)``; the handler (sync or async) is called as
+    # ``handler(arguments, context)`` with a ``ToolContext`` exposing the server's
+    # Milvus / embedding / keyword services and this config. A name that collides
+    # with a built-in tool (or another extra tool) fails at server startup; an
+    # exception raised by a handler is returned to the client as an MCP tool
+    # error. Default empty — only the built-in tools are served.
+    extra_tools: list = []
+
     # Each markdown sub-section chunk records a ``section_anchor`` in its
     # metadata — the in-page anchor slug of its nearest section heading — so
     # consumers can link straight to the section as

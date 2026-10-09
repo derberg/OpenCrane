@@ -466,6 +466,23 @@ def test_serve_http(runner, monkeypatch):
 
 
 @pytest.mark.unit
+def test_serve_config_flag_reaches_server_modules(runner):
+    """--config is exported as OPENCRANE_CONFIG so the server modules (which
+    resolve extra_tools / middleware via load_config(None)) honour it."""
+    import os
+
+    server_mod = MagicMock()
+    with patch.object(cli, "load_config"), \
+         patch("asyncio.run"), \
+         patch.dict(os.environ, {}, clear=False), \
+         patch.dict(sys.modules, {"opencrane.mcp.server": server_mod}):
+        os.environ.pop("OPENCRANE_CONFIG", None)
+        result = runner.invoke(cli_main, ["serve", "--config", "proj.ext:Config"])
+        assert os.environ["OPENCRANE_CONFIG"] == "proj.ext:Config"
+    assert result.exit_code == 0
+
+
+@pytest.mark.unit
 def test_serve_error(runner):
     with patch.object(cli, "load_config", side_effect=Exception("serve-fail")):
         result = runner.invoke(cli_main, ["serve"])

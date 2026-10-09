@@ -109,6 +109,8 @@ final_score = alpha × vector_score + (1 − alpha) × bm25_score
 
 The default **alpha** is `0.6` (60% semantic, 40% keyword). You can override it per query via the **alpha** parameter, or set a default with the `HYBRID_ALPHA` environment variable.
 
+An optional reranking stage (off by default) reorders the final candidate list of any mode before it is cut to `limit`. Enable the built-in cross-encoder with the `RERANKER_MODEL` environment variable, or register your own on `OpenCraneConfig.reranker`. See [Reranking](../README.md#reranking).
+
 Additional `search_docs` parameters let you filter results by **chunk_types**, **source_names**, and **metadata_contains**, which is useful when you want to restrict a search to a specific documentation source or chunk type.
 
 ## Internal components

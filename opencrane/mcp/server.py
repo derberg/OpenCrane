@@ -2,6 +2,7 @@
 
 import asyncio
 import importlib.resources
+import inspect
 import json
 import logging
 import os
@@ -17,6 +18,7 @@ from mcp.server.stdio import stdio_server
 from opencrane.mcp.services.embeddings import EmbeddingService
 from opencrane.mcp.services.milvus_client import MilvusService
 from opencrane.mcp.services.keyword_search import KeywordSearchService
+from opencrane.mcp.services.reranker import CrossEncoderReranker, apply_reranker
 from opencrane.shared.config import get_config
 
 import sys
@@ -33,6 +35,8 @@ logger = logging.getLogger(__name__)
 _embeddings_service = None
 _milvus_service = None
 _keyword_service = None
+_reranker = None
+_reranker_resolved = False
 _chunk_types_cache: set[str] | None = None
 
 def _extract_source_url(text: str) -> str | None:
@@ -121,6 +125,32 @@ def get_keyword_service():
     if _keyword_service is None:
         _keyword_service = KeywordSearchService()
     return _keyword_service
+
+def get_reranker():
+    """Resolve the optional search reranker once (``None`` = reranking off).
+
+    ``OpenCraneConfig.reranker`` wins; otherwise ``RERANKER_MODEL`` selects the
+    built-in cross-encoder (its model loads lazily on first use). A failure to
+    load the project config is logged and falls back to ``RERANKER_MODEL``.
+    """
+    global _reranker, _reranker_resolved
+    if not _reranker_resolved:
+        try:
+            from opencrane.cli import load_config
+
+            # getattr_static: a plain function assigned as a class attribute must
+            # not be bound as a method (it would receive the config as ``query``).
+            reranker = inspect.getattr_static(load_config(None), "reranker", None)
+            if isinstance(reranker, staticmethod):
+                reranker = reranker.__func__
+        except Exception as exc:
+            logger.warning(f"Failed to load project reranker: {exc} — skipping")
+            reranker = None
+        if reranker is None and get_config().reranker_model:
+            reranker = CrossEncoderReranker(get_config().reranker_model)
+        _reranker = reranker
+        _reranker_resolved = True
+    return _reranker
 
 _YAML_CHUNK_TYPES = {"crd_definition", "openapi_spec", "json_schema"}
 
@@ -709,6 +739,10 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
     metadata_contains = arguments.get("metadata_contains")
     search_mode = arguments.get("search_mode", "hybrid")
     alpha = max(0.0, min(1.0, float(arguments.get("alpha", get_config().hybrid_alpha))))
+    # Optional reranker: fetch RERANK_DEPTH candidates (never fewer than limit) so
+    # it can promote chunks the first stage ranked below the cut.
+    reranker = get_reranker()
+    fetch_limit = max(limit, get_config().rerank_depth) if reranker is not None else limit
 
     logger.info(
         f"   📖 search: query=\"{query}\" mode={search_mode} limit={limit} "
@@ -817,7 +851,7 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
             milvus_service = get_milvus_service()
             return milvus_service.search(
                 query_vec,
-                limit=limit,
+                limit=fetch_limit,
                 chunk_types=chunk_types,
                 source_names=source_names,
                 metadata_contains=metadata_contains,
@@ -827,22 +861,30 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
             keyword_service = get_keyword_service()
             return keyword_service.search(
                 query,
-                limit=limit,
+                limit=fetch_limit,
                 chunk_types=chunk_types,
                 source_names=source_names,
                 metadata_contains=metadata_contains,
             )
 
+        async def _rerank(candidates: list[dict]) -> list[dict]:
+            # Rerank stage: runs on the final candidate list of every mode (after
+            # hybrid fusion), then cuts to limit. No reranker = pass-through.
+            if reranker is None or not candidates:
+                return candidates
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(None, apply_reranker, reranker, query, candidates, limit)
+
         if search_mode == "semantic":
             results = _semantic_results()
             if results is None:
                 results = []
-            return _format(results)
+            return _format(await _rerank(results))
         elif search_mode == "keyword":
             results = _keyword_results()
             if results is None:
                 results = []
-            return _format(results)
+            return _format(await _rerank(results))
         elif search_mode == "hybrid":
             loop = asyncio.get_event_loop()
             sem, key = await asyncio.gather(
@@ -894,7 +936,7 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
                 combined.append(out)
 
             combined.sort(key=lambda r: r.get("distance", 0), reverse=True)
-            return _format(combined[:limit])
+            return _format(await _rerank(combined[:fetch_limit]))
         else:
             return [TextContent(type="text", text=f"Invalid search_mode: {search_mode}")]
 

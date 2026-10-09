@@ -36,6 +36,11 @@ class Config:
     embedding_model: str = field(default_factory=lambda: os.getenv("EMBEDDING_MODEL", "nomic-ai/nomic-embed-text-v1.5"))
     # Search configuration
     hybrid_alpha: float = field(default_factory=lambda: float(os.getenv("HYBRID_ALPHA", "0.6")))
+    # Optional reranking stage: a sentence-transformers CrossEncoder model name
+    # (unset = no reranker). RERANK_DEPTH is how many fused candidates are
+    # fetched and passed to the reranker before cutting to the requested limit.
+    reranker_model: str = field(default_factory=lambda: os.getenv("RERANKER_MODEL", ""))
+    rerank_depth: int = field(default_factory=lambda: int(os.getenv("RERANK_DEPTH", "50")))
     # Source mapping file configuration
     mapping_file: Path = field(default_factory=lambda: Path(os.getenv("MAPPING_FILE", ".opencrane/config.yaml")))
     # Optional: restrict fetch to a single repo by path key (e.g. "external-sources/cgw")

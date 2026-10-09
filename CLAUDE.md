@@ -124,6 +124,7 @@ Subclass `OpenCraneConfig` in `.opencrane/extensions.py` to customize:
 1. **`fence_types`** — custom fence block handlers for llms-full.txt generation
 2. **`chunking_strategies`** — custom chunking strategies (first match wins)
 3. **`yaml_tree_walkers`** — custom YAML tree walkers for structured docs (K8s CRD, OpenAPI, JSON Schema built-in)
+4. **`reranker`** — optional `search_docs` reranker, `(query, candidates) -> list[dict]` (built-in cross-encoder via `RERANKER_MODEL`)
 
 Config is auto-discovered from `.opencrane/extensions.py:Config` or set via `--config` / `OPENCRANE_CONFIG` env var.
 
@@ -134,6 +135,7 @@ Config is auto-discovered from `.opencrane/extensions.py:Config` or set via `--c
 - **Lazy service init** — MCP server initializes on first search for fast startup
 - **Token-based YAML splitting** — recursive split when chunks exceed 800 tokens
 - **Hybrid search scoring** — `HYBRID_ALPHA * vector + (1 - HYBRID_ALPHA) * BM25` (default 0.6)
+- **Optional reranker stage, off by default** — a separate step after the final candidate list of each search mode (after hybrid fusion): fetch `RERANK_DEPTH` (default 50, never below `limit`) candidates, rerank, cut to `limit`. `OpenCraneConfig.reranker` wins over the built-in CrossEncoder selected by `RERANKER_MODEL` (lazy-loaded). A reranker failure falls back to the unreranked results with a logged warning rather than failing the search
 - **Prose chunks split at heading boundaries only** — preserves complete sections for semantic coherence, no token-based splitting within sections
 - **MCP server is fully vector-DB-backed** — search, `get_yaml_definition`, `get_list_members`, and `get_table_members` all read from Milvus (chunk lookups by primary key, members by `list_id`/`table_id` scalar columns, `INVERTED`-indexed so lookups don't scan the corpus — `AUTOINDEX` is rejected for scalar fields on Milvus Lite); the server holds no in-memory copy of the corpus. Member queries interpolate a sanitized, width-capped id into the filter (Milvus Lite has no `filter_params` templating). `list_id`/`table_id` are lifted into their own columns at index time; adding them is a schema change, so a collection built by an older version is dropped and rebuilt on the next `index` run
 - **Per-page `source_url` via companion `llms.txt`** — `llms-full.txt` stays clean (no URLs injected into headings); each chunk's page URL is recovered by joining the clean content to the standard `llms.txt` index, matched positionally per source and validated by H1 title. External `llmstxt` sources contribute their fetched companion `llms.txt` (real per-page URLs) or a synthesized index from their `docs_url`

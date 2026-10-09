@@ -28,6 +28,7 @@ A standalone, extensible RAG/MCP pipeline for building AI-powered documentation 
   - [Source mapping file](#source-mapping-file-opencraneonfigyaml)
 - [Extending OpenCrane](#extending-opencrane)
   - [Extension points](#extension-points)
+  - [Reranking](#reranking)
   - [Section anchors](#section-anchors)
   - [Built-in fence types](#built-in-fence-types)
   - [Built-in YAML tree walkers](#built-in-yaml-tree-walkers)
@@ -415,6 +416,8 @@ OpenCrane supports two Milvus modes. Set `MILVUS_DB_PATH` to use **Milvus Lite**
 | `MILVUS_COLLECTION` | `ai_docs_chunks_v1` | Milvus collection name |
 | `MILVUS_INSERT_BATCH_SIZE` | `2000` | Max chunks per insert call during `index`. Keeps each call short enough to finish before Milvus keepalive timeouts, which would otherwise trigger client retries that duplicate rows |
 | `HYBRID_ALPHA` | `0.6` | Weight of vector search vs keyword search (1.0 = pure vector, 0.0 = pure BM25) |
+| `RERANKER_MODEL` | `` | sentence-transformers CrossEncoder model (e.g. `cross-encoder/ms-marco-MiniLM-L-6-v2`) used to rerank search results. Unset = no reranking. Loaded lazily on the first search. See [Reranking](#reranking) |
+| `RERANK_DEPTH` | `50` | With a reranker active: how many candidates are fetched and reranked before cutting to `limit` (never fewer than `limit`). Ignored without a reranker |
 
 #### Health check (`serve`, HTTP transport)
 
@@ -503,6 +506,29 @@ opencrane build --config myproject.config:MyConfig
 | `chunking_strategies` | `chunk` | Add or replace chunking strategies for different content types |
 | `yaml_tree_walkers` | `chunk` | Add walkers for custom YAML document formats |
 | `section_anchor_for` | `chunk` | Build the in-page anchor slug recorded in each chunk's `section_anchor` metadata |
+| `reranker` | `serve` | Rerank `search_docs` candidates (see [Reranking](#reranking)) |
+
+### Reranking
+
+`search_docs` can run an optional reranking stage. It is off by default, and with it off search behaves exactly as without it. When on, every search mode (semantic, keyword and hybrid, after fusion) fetches `RERANK_DEPTH` candidates, passes them to the reranker, and returns the top `limit` of its output. No re-indexing is needed.
+
+The built-in reranker uses a sentence-transformers CrossEncoder. Turn it on with `RERANKER_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2` (any CrossEncoder model works). The model loads lazily on the first search, and the reranker score becomes the result `Score`.
+
+To plug in your own reranker (an LLM, a hosted rerank API), set `reranker` on your config subclass. It takes precedence over `RERANKER_MODEL`. It is an object with a `rerank(query, candidates)` method or a plain function with that signature. `candidates` is a list of result dicts (`chunk_id`, `content`, `chunk_type`, `source_file`, `source_name`, `metadata_json`, `distance`). Return them best first; you may drop candidates or set `distance` to your own score:
+
+```python
+from opencrane import OpenCraneConfig
+
+
+def my_reranker(query: str, candidates: list[dict]) -> list[dict]:
+    return sorted(candidates, key=lambda c: query.lower() in str(c["content"]).lower(), reverse=True)
+
+
+class Config(OpenCraneConfig):
+    reranker = staticmethod(my_reranker)
+```
+
+**Failures do not break search.** If the reranker raises, or returns something other than a list, the server logs a warning (`Reranker failed, returning unreranked results: ...`) and returns the unreranked results cut to `limit`. Watch for that warning in the server logs. The `/health` query probe also runs through the reranker, so reranking latency counts toward its budget.
 
 ### Section anchors
 

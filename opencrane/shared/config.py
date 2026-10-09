@@ -26,6 +26,12 @@ class Config:
     # Chunker configuration
     yaml_crd_threshold_tokens: int = field(default_factory=lambda: int(os.getenv("YAML_CRD_THRESHOLD_TOKENS", "1000")))
     yaml_tree_chunking_enabled: bool = field(default_factory=lambda: os.getenv("YAML_TREE_CHUNKING_ENABLED", "true").lower() == "true")
+    # Prose chunking: deepest heading level that starts a new chunk (3 = #, ##, ###)
+    prose_split_heading_depth: int = field(default_factory=lambda: int(os.getenv("PROSE_SPLIT_HEADING_DEPTH", "3")))
+    # Prose chunking: token cap per chunk; oversized sections split at paragraph/line boundaries (0 = off)
+    prose_max_chunk_tokens: int = field(default_factory=lambda: int(os.getenv("PROSE_MAX_CHUNK_TOKENS", "0")))
+    # Prose chunking: emit sections that hold only a heading instead of dropping them
+    prose_keep_heading_only_sections: bool = field(default_factory=lambda: os.getenv("PROSE_KEEP_HEADING_ONLY_SECTIONS", "false").lower() == "true")
     default_output_format: str = field(default_factory=lambda: os.getenv("DEFAULT_OUTPUT_FORMAT", "json"))
     # Milvus configuration
     milvus_host: str = field(default_factory=lambda: os.getenv("MILVUS_HOST", "localhost"))

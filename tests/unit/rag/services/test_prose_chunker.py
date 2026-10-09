@@ -405,3 +405,126 @@ More content."""
         )
         # After the ====== reset, the final section's chunk carries no source_url.
         assert "source_url" not in chunks[-1].metadata
+
+def _prose_node(text):
+    node = Mock()
+    node.node_type = "text"
+    node.source_url = None
+    node.text = text
+    return node
+
+
+DEEP_DOC = """# 5 Procedures
+
+Intro to the procedures clause.
+
+#### 5.4 Deep clause
+
+Body of the level-4 clause.
+
+##### 5.4.1.2.2.8 Deeper clause
+
+Body of the level-5 clause.
+
+######## Annex A (informative): Change history
+
+Body of the annex."""
+
+
+class TestProseSplittingConfig:
+    """PROSE_SPLIT_HEADING_DEPTH, PROSE_MAX_CHUNK_TOKENS, PROSE_KEEP_HEADING_ONLY_SECTIONS."""
+
+    def test_default_depth_merges_deep_headings_into_parent(self, monkeypatch):
+        monkeypatch.delenv("PROSE_SPLIT_HEADING_DEPTH", raising=False)
+        chunks = ProseChunkingStrategy().process(_prose_node(DEEP_DOC), Path("t.md"))
+        assert len(chunks) == 1
+
+    def test_depth_8_splits_on_every_heading_level(self, monkeypatch):
+        monkeypatch.setenv("PROSE_SPLIT_HEADING_DEPTH", "8")
+        chunks = ProseChunkingStrategy().process(_prose_node(DEEP_DOC), Path("t.md"))
+        assert [c.content.split("\n")[0] for c in chunks] == [
+            "# 5 Procedures",
+            "#### 5.4 Deep clause",
+            "##### 5.4.1.2.2.8 Deeper clause",
+            "######## Annex A (informative): Change history",
+        ]
+
+    def test_depth_5_keeps_deeper_headings_in_parent(self, monkeypatch):
+        monkeypatch.setenv("PROSE_SPLIT_HEADING_DEPTH", "5")
+        chunks = ProseChunkingStrategy().process(_prose_node(DEEP_DOC), Path("t.md"))
+        assert len(chunks) == 3
+        assert "######## Annex A" in chunks[-1].content
+        assert chunks[-1].content.startswith("##### 5.4.1.2.2.8")
+
+    def test_heading_only_sections_dropped_by_default(self, monkeypatch):
+        monkeypatch.delenv("PROSE_KEEP_HEADING_ONLY_SECTIONS", raising=False)
+        text = "# 4 Restoration Procedures\n\n## 4.1 General description\n\nSome body text."
+        chunks = ProseChunkingStrategy().process(_prose_node(text), Path("t.md"))
+        assert [c.content.split("\n")[0] for c in chunks] == ["## 4.1 General description"]
+
+    def test_heading_only_sections_kept_when_enabled(self, monkeypatch):
+        monkeypatch.setenv("PROSE_KEEP_HEADING_ONLY_SECTIONS", "true")
+        text = "# 4 Restoration Procedures\n\n## 4.1 General description\n\nSome body text.\n\n## 4.2 Trailing heading only"
+        chunks = ProseChunkingStrategy().process(_prose_node(text), Path("t.md"))
+        assert [c.content for c in chunks] == [
+            "# 4 Restoration Procedures",
+            "## 4.1 General description\n\nSome body text.",
+            "## 4.2 Trailing heading only",
+        ]
+
+    def test_no_cap_by_default(self, monkeypatch):
+        monkeypatch.delenv("PROSE_MAX_CHUNK_TOKENS", raising=False)
+        text = "## Big section\n\n" + "\n\n".join(f"Paragraph number {i} with words." for i in range(200))
+        chunks = ProseChunkingStrategy().process(_prose_node(text), Path("t.md"))
+        assert len(chunks) == 1
+
+    def test_cap_splits_at_paragraphs_and_repeats_heading(self, monkeypatch):
+        monkeypatch.setenv("PROSE_MAX_CHUNK_TOKENS", "60")
+        paragraphs = [f"Paragraph number {i} with a few more words." for i in range(40)]
+        text = "## Big section\n\n" + "\n\n".join(paragraphs)
+        chunks = ProseChunkingStrategy().process(_prose_node(text), Path("t.md"))
+        assert len(chunks) > 1
+        bodies = []
+        for c in chunks:
+            assert c.token_count <= 60
+            assert c.content.startswith("## Big section\n\n")
+            bodies.extend(c.content[len("## Big section\n\n"):].split("\n\n"))
+        assert bodies == paragraphs  # whole paragraphs, in order, nothing lost
+
+    def test_cap_splits_long_paragraph_at_lines(self, monkeypatch):
+        monkeypatch.setenv("PROSE_MAX_CHUNK_TOKENS", "40")
+        lines = [f"<td>row {i} cell value</td>" for i in range(60)]
+        text = "### Table section\n\n<table>\n" + "\n".join(lines) + "\n</table>"
+        chunks = ProseChunkingStrategy().process(_prose_node(text), Path("t.md"))
+        assert len(chunks) > 1
+        body_lines = []
+        for c in chunks:
+            assert c.token_count <= 40
+            assert c.content.startswith("### Table section\n\n")
+            body_lines.extend(c.content.split("\n")[2:])
+        assert body_lines == ["<table>", *lines, "</table>"]  # no line cut
+
+    def test_cap_without_heading_does_not_prefix(self, monkeypatch):
+        monkeypatch.setenv("PROSE_MAX_CHUNK_TOKENS", "30")
+        paragraphs = [f"Plain paragraph {i} without any heading." for i in range(10)]
+        chunks = ProseChunkingStrategy().process(_prose_node("\n\n".join(paragraphs)), Path("t.md"))
+        assert len(chunks) > 1
+        assert "\n\n".join(c.content for c in chunks) == "\n\n".join(paragraphs)
+
+    def test_single_line_over_cap_stays_whole(self, monkeypatch):
+        monkeypatch.setenv("PROSE_MAX_CHUNK_TOKENS", "20")
+        long_line = " ".join(f"word{i}" for i in range(80))
+        text = f"## Section\n\nShort intro line.\n\n{long_line}\n\nShort outro line."
+        chunks = ProseChunkingStrategy().process(_prose_node(text), Path("t.md"))
+        assert [c.content for c in chunks] == [
+            "## Section\n\nShort intro line.",
+            f"## Section\n\n{long_line}",
+            "## Section\n\nShort outro line.",
+        ]
+
+    def test_heading_only_section_over_cap_kept_whole(self, monkeypatch):
+        monkeypatch.setenv("PROSE_MAX_CHUNK_TOKENS", "3")
+        monkeypatch.setenv("PROSE_KEEP_HEADING_ONLY_SECTIONS", "true")
+        text = "## A heading that is longer than the token cap"
+        chunks = ProseChunkingStrategy().process(_prose_node(text), Path("t.md"))
+        assert [c.content for c in chunks] == [text]

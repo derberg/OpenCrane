@@ -807,7 +807,7 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
                 formatted.append(TextContent(type="text", text=result_text))
             return formatted
 
-        def _semantic_results() -> list[dict]:
+        def _semantic_results(arm_limit: int = limit) -> list[dict]:
             embeddings_service = get_embeddings_service()
             query_embedding = embeddings_service.model.encode([query], batch_size=8, show_progress_bar=False)
             if hasattr(query_embedding, 'tolist'):
@@ -817,17 +817,17 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
             milvus_service = get_milvus_service()
             return milvus_service.search(
                 query_vec,
-                limit=limit,
+                limit=arm_limit,
                 chunk_types=chunk_types,
                 source_names=source_names,
                 metadata_contains=metadata_contains,
             )
 
-        def _keyword_results() -> list[dict]:
+        def _keyword_results(arm_limit: int = limit) -> list[dict]:
             keyword_service = get_keyword_service()
             return keyword_service.search(
                 query,
-                limit=limit,
+                limit=arm_limit,
                 chunk_types=chunk_types,
                 source_names=source_names,
                 metadata_contains=metadata_contains,
@@ -844,10 +844,14 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
                 results = []
             return _format(results)
         elif search_mode == "hybrid":
+            config = get_config()
+            # Fetch a wider candidate pool per arm so a chunk ranked just below
+            # `limit` by both arms can still win after fusion; never below limit.
+            pool = max(limit, config.hybrid_candidate_pool)
             loop = asyncio.get_event_loop()
             sem, key = await asyncio.gather(
-                loop.run_in_executor(None, _semantic_results),
-                loop.run_in_executor(None, _keyword_results),
+                loop.run_in_executor(None, _semantic_results, pool),
+                loop.run_in_executor(None, _keyword_results, pool),
             )
             
             # Handle None results
@@ -867,8 +871,26 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
                     return {r.get("chunk_id"): 1.0 for r in rs}
                 return {r.get("chunk_id"): (float(r.get("distance", 0.0)) - min_s) / spread for r in rs}
 
-            sem_norm = _normalize(sem)
-            key_norm = _normalize(key)
+            def _rrf(rs: list[dict]) -> dict[str, float]:
+                # 1 / (k + rank), rank 1-based by descending score; a duplicate
+                # chunk_id keeps its best (first) rank.
+                ordered = sorted(rs, key=lambda r: float(r.get("distance", 0.0)), reverse=True)
+                out: dict[str, float] = {}
+                for rank, r in enumerate(ordered, 1):
+                    out.setdefault(r.get("chunk_id"), 1.0 / (config.hybrid_rrf_k + rank))
+                return out
+
+            fusion = config.hybrid_fusion
+            if fusion == "rrf":
+                # Weighted RRF: alpha weights the semantic arm, (1 - alpha) the
+                # keyword arm. Scaled by 2 so alpha=0.5 equals classic RRF.
+                sem_norm, key_norm = _rrf(sem), _rrf(key)
+                sem_w, key_w = 2 * alpha, 2 * (1 - alpha)
+            else:
+                if fusion != "minmax":
+                    logger.warning(f"Unknown HYBRID_FUSION '{fusion}', using 'minmax'")
+                sem_norm, key_norm = _normalize(sem), _normalize(key)
+                sem_w, key_w = alpha, 1 - alpha
             ids = set(sem_norm.keys()) | set(key_norm.keys())
 
             # For assembling final objects, index originals by id
@@ -884,7 +906,7 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
             for cid in ids:
                 s = sem_norm.get(cid, 0.0)
                 k = key_norm.get(cid, 0.0)
-                score = alpha * s + (1 - alpha) * k
+                score = sem_w * s + key_w * k
                 # Prefer semantic record, else keyword
                 rec = sem_map.get(cid) or key_map.get(cid)
                 if not rec:

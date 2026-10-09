@@ -415,6 +415,9 @@ OpenCrane supports two Milvus modes. Set `MILVUS_DB_PATH` to use **Milvus Lite**
 | `MILVUS_COLLECTION` | `ai_docs_chunks_v1` | Milvus collection name |
 | `MILVUS_INSERT_BATCH_SIZE` | `2000` | Max chunks per insert call during `index`. Keeps each call short enough to finish before Milvus keepalive timeouts, which would otherwise trigger client retries that duplicate rows |
 | `HYBRID_ALPHA` | `0.6` | Weight of vector search vs keyword search (1.0 = pure vector, 0.0 = pure BM25) |
+| `HYBRID_CANDIDATE_POOL` | `0` | Results fetched from each arm (vector, BM25) before hybrid fusion; the fused list is still cut to the requested `limit`. `0` (or any value below `limit`) means the requested `limit`. A wider pool (e.g. `50`) lets a chunk ranked just below `limit` by both arms surface |
+| `HYBRID_FUSION` | `minmax` | How hybrid mode merges the two arms. `minmax`: min-max normalise each arm, then `alpha * vector + (1 - alpha) * BM25`. `rrf`: weighted Reciprocal Rank Fusion, `2 * alpha / (k + vector_rank) + 2 * (1 - alpha) / (k + bm25_rank)`; `alpha = 0.5` is classic unweighted RRF, higher favours vector ranks, lower favours BM25 ranks. The `Score` shown is the fused score |
+| `HYBRID_RRF_K` | `60` | RRF smoothing constant `k` (only used when `HYBRID_FUSION=rrf`) |
 
 #### Health check (`serve`, HTTP transport)
 

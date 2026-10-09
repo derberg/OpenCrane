@@ -175,6 +175,7 @@ services:
     environment:
       MILVUS_DB_PATH: /app/milvus_data/milvus.db
       COLLECTION_NAME: opencrane_chunks
+      EMBEDDING_QUERY_PROMPT: "${EMBEDDING_QUERY_PROMPT:-}"
 '''
 
 README_MD = '''\

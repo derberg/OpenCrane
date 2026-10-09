@@ -1341,3 +1341,36 @@ class TestHonestHealthCheck:
         assert len(results) == 1
         payload = json.loads(results[0].text)
         assert payload["status"] == "healthy"
+
+
+@patch('opencrane.mcp.server.get_embeddings_service')
+@patch('opencrane.mcp.server.get_milvus_service')
+@pytest.mark.anyio
+async def test_semantic_search_applies_query_prompt(mock_milvus_get, mock_embeddings_get, monkeypatch):
+    """The configured query template wraps the query before encoding."""
+    monkeypatch.setenv("EMBEDDING_QUERY_PROMPT", r"Instruct: find specs\nQuery: {query}")
+    mock_embeddings = Mock()
+    mock_embeddings.model.encode.return_value = [[0.1] * 768]
+    mock_embeddings_get.return_value = mock_embeddings
+    mock_milvus_get.return_value = Mock(search=Mock(return_value=[]))
+
+    await _search_documentation_impl({"query": "what is AMF", "search_mode": "semantic"})
+
+    mock_embeddings.model.encode.assert_called_once_with(
+        ["Instruct: find specs\nQuery: what is AMF"], batch_size=8, show_progress_bar=False
+    )
+
+
+@patch('opencrane.mcp.server.EmbeddingService')
+def test_get_embeddings_service_warns_on_inconsistent_prompts(mock_embedding_service, monkeypatch, caplog):
+    """Lazy init logs a warning when a document prompt has no matching query prompt."""
+    import logging
+    import opencrane.mcp.server as server_module
+    monkeypatch.setattr(server_module, "_embeddings_service", None)
+    monkeypatch.setenv("EMBEDDING_DOCUMENT_PROMPT", "search_document: ")
+    monkeypatch.delenv("EMBEDDING_QUERY_PROMPT", raising=False)
+
+    with caplog.at_level(logging.WARNING):
+        get_embeddings_service()
+
+    assert "EMBEDDING_QUERY_PROMPT is empty" in caplog.text

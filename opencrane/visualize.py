@@ -26,6 +26,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from opencrane.shared.utils.embedding_prompts import format_query
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_EMBEDDINGS_FILE = Path(".opencrane/embeddings.json")
@@ -149,7 +151,11 @@ def subsample_for_scatter(corpus: CorpusData, sample_size: int,
 
 
 def encode_paragraph(model_name: str, paragraph: str):
-    """Encode a single paragraph using the same model as the corpus."""
+    """Encode a single paragraph using the same model as the corpus.
+
+    The paragraph is treated like a search query, so ``EMBEDDING_QUERY_PROMPT``
+    is applied, mirroring how ``serve`` encodes queries against the corpus.
+    """
     np = _require("numpy")
     _require("sentence_transformers")
     from sentence_transformers import SentenceTransformer
@@ -157,7 +163,7 @@ def encode_paragraph(model_name: str, paragraph: str):
     logger.info("Loading model %s (CPU)…", model_name)
     model = SentenceTransformer(model_name, trust_remote_code=True, device="cpu")
     logger.info("Encoding paragraph (%d chars)…", len(paragraph))
-    vec = model.encode([paragraph], show_progress_bar=False)[0]
+    vec = model.encode([format_query(paragraph)], show_progress_bar=False)[0]
     return np.asarray(vec, dtype=np.float32)
 
 

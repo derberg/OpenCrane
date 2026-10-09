@@ -4,6 +4,11 @@ from typing import List
 import os
 
 
+def _prompt_env(name: str) -> str:
+    """Read an embedding prompt from env, unescaping a literal ``\\n`` to a newline."""
+    return os.getenv(name, "").replace("\\n", "\n")
+
+
 @dataclass
 class Config:
     org_name: str = field(default_factory=lambda: os.getenv("ORG_NAME", ""))
@@ -34,6 +39,10 @@ class Config:
     milvus_insert_batch_size: int = field(default_factory=lambda: int(os.getenv("MILVUS_INSERT_BATCH_SIZE", "2000")))
     # Embedding configuration
     embedding_model: str = field(default_factory=lambda: os.getenv("EMBEDDING_MODEL", "nomic-ai/nomic-embed-text-v1.5"))
+    # Task prompts for asymmetric embedding models (empty = encode text as-is).
+    # A literal backslash-n in the env value becomes a newline (for Qwen3-style templates).
+    embedding_document_prompt: str = field(default_factory=lambda: _prompt_env("EMBEDDING_DOCUMENT_PROMPT"))
+    embedding_query_prompt: str = field(default_factory=lambda: _prompt_env("EMBEDDING_QUERY_PROMPT"))
     # Search configuration
     hybrid_alpha: float = field(default_factory=lambda: float(os.getenv("HYBRID_ALPHA", "0.6")))
     # Source mapping file configuration

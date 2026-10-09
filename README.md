@@ -305,7 +305,7 @@ opencrane visualize --file paragraph.txt
 echo "your paragraph" | opencrane visualize
 ```
 
-Encodes the input paragraph with the same model as the indexed corpus, then renders an interactive HTML with three views side-by-side:
+Encodes the input paragraph with the same model as the indexed corpus (treating it like a search query, so `EMBEDDING_QUERY_PROMPT` applies), then renders an interactive HTML with three views side-by-side:
 
 - **Scatter** — global PCA / UMAP / t-SNE projection of a corpus sample, with the new paragraph as a highlighted diamond and its top-K neighbors ringed.
 - **Local neighborhood** — local PCA on just the paragraph + top-K neighbors. Every point has real coordinates, so distances between *neighbors* also carry meaning.
@@ -402,6 +402,7 @@ CLI flags take precedence over environment variables. Use env vars for persisten
 | `AI_DOCS_CHUNKS_FILE` | `.opencrane/chunks.json` | Input chunks JSON file (see also `--chunks-file` flag) |
 | `AI_DOCS_EMBEDDINGS_FILE` | `.opencrane/embeddings.json` | Output path for the generated embeddings (see also `--embeddings-file` flag) |
 | `EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | HuggingFace embedding model to use |
+| `EMBEDDING_DOCUMENT_PROMPT` | `` | Prefix prepended to every chunk before encoding (see [Embedding prompts](#embedding-prompts)). Recorded in `embeddings.json`; changing it re-embeds |
 
 **`index` and `serve` steps** — needed when loading into Milvus or running the MCP server:
 
@@ -415,6 +416,24 @@ OpenCrane supports two Milvus modes. Set `MILVUS_DB_PATH` to use **Milvus Lite**
 | `MILVUS_COLLECTION` | `ai_docs_chunks_v1` | Milvus collection name |
 | `MILVUS_INSERT_BATCH_SIZE` | `2000` | Max chunks per insert call during `index`. Keeps each call short enough to finish before Milvus keepalive timeouts, which would otherwise trigger client retries that duplicate rows |
 | `HYBRID_ALPHA` | `0.6` | Weight of vector search vs keyword search (1.0 = pure vector, 0.0 = pure BM25) |
+| `EMBEDDING_QUERY_PROMPT` | `` | Prompt applied to search queries before encoding: a template with a `{query}` placeholder, or a plain prefix (see [Embedding prompts](#embedding-prompts)). Also used by `opencrane visualize` |
+
+#### Embedding prompts
+
+Many retrieval models are trained with different prompts for documents and queries, and score noticeably worse without them. Both settings default to empty, which encodes text exactly as given. A literal `\n` in either value is turned into a newline.
+
+| Model | `EMBEDDING_DOCUMENT_PROMPT` | `EMBEDDING_QUERY_PROMPT` |
+|---|---|---|
+| `nomic-ai/nomic-embed-text-v1.5` (default) | `search_document: ` | `search_query: ` |
+| Qwen3-Embedding | *(empty)* | `Instruct: Given a question, retrieve passages that answer it\nQuery: {query}` |
+
+```bash
+export EMBEDDING_DOCUMENT_PROMPT="search_document: "
+export EMBEDDING_QUERY_PROMPT="search_query: "
+opencrane embed && DROP_EXISTING=true opencrane index && opencrane serve
+```
+
+Vectors built with one document prompt are not comparable with queries written for another convention, so **changing `EMBEDDING_DOCUMENT_PROMPT` requires re-embedding and re-indexing**. `opencrane embed` records the prompt in `embeddings.json` and regenerates automatically when it changes; `opencrane index` keeps an already populated collection unless `DROP_EXISTING=true`. `EMBEDDING_QUERY_PROMPT` only affects query encoding and takes effect on the next `serve` (set it in the server's environment, e.g. the generated compose file). `serve` logs a warning when a document prompt is set without a query prompt.
 
 #### Health check (`serve`, HTTP transport)
 

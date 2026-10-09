@@ -43,6 +43,11 @@ def main():
 
     embeddings_service = EmbeddingService()
     embeddings = embeddings_service.load_embeddings(str(embeddings_file))
+    if embeddings.document_prompt:
+        logger.info(
+            f"Embeddings were built with document prompt {embeddings.document_prompt!r}; "
+            "serve with the matching EMBEDDING_QUERY_PROMPT"
+        )
 
     logger.info(f"Initializing Milvus with {len(chunks_data)} chunks...")
     milvus = MilvusService()

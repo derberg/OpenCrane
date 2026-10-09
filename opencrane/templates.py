@@ -59,6 +59,12 @@ ignore_patterns:
 # For a custom slug rule, override `section_anchor_for` in extensions.py.
 # section_anchor_style: generic
 
+# Optional: clause ids. Each prose chunk records a `clause_id` taken from its
+# section heading (e.g. `5.4.1.2a`, `C.4.4.2`, `Annex C`), used by the MCP
+# `get_section` tool. Set a regex (first capture group = the id) to change
+# what is recognised, or `none` to record no clause ids.
+# section_clause_pattern: none
+
 # Documentation sources.
 # Each entry maps a source name to its configuration.
 #

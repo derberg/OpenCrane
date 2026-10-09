@@ -37,6 +37,8 @@ class VectorChunk(BaseModel):
     line_start: Optional[int] = Field(None, description="Starting line number")
     list_id: Optional[str] = Field(None, description="list_id from metadata (list_item chunks)")
     table_id: Optional[str] = Field(None, description="table_id from metadata (table_row chunks)")
+    clause_id: Optional[str] = Field(None, description="clause_id from metadata (prose chunks)")
+    parent_chunk_id: Optional[str] = Field(None, description="parent_chunk_id from metadata (prose chunks)")
 
     @classmethod
     def from_chunk_and_embedding(cls, chunk, embedding_record):
@@ -62,6 +64,8 @@ class VectorChunk(BaseModel):
             line_start=chunk.line_start,
             list_id=metadata.get("list_id"),
             table_id=metadata.get("table_id"),
+            clause_id=metadata.get("clause_id"),
+            parent_chunk_id=metadata.get("parent_chunk_id"),
         )
 
 

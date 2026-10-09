@@ -54,9 +54,11 @@ class TestMilvusService:
             call(field_name='line_start', datatype=ANY),
             call(field_name='list_id', datatype=ANY, max_length=64),
             call(field_name='table_id', datatype=ANY, max_length=64),
+            call(field_name='clause_id', datatype=ANY, max_length=64),
+            call(field_name='parent_chunk_id', datatype=ANY, max_length=64),
         ]
         schema_mock.add_field.assert_has_calls(expected_calls, any_order=True)
-        assert schema_mock.add_field.call_count == 11  # All fields added
+        assert schema_mock.add_field.call_count == 13  # All fields added
         # Verify index params: the embedding vector index plus scalar indexes on
         # the member-lookup fields.
         index_params_mock = mock_client.prepare_index_params.return_value
@@ -67,7 +69,9 @@ class TestMilvusService:
         )
         index_params_mock.add_index.assert_any_call(field_name="list_id", index_type="INVERTED")
         index_params_mock.add_index.assert_any_call(field_name="table_id", index_type="INVERTED")
-        assert index_params_mock.add_index.call_count == 3
+        index_params_mock.add_index.assert_any_call(field_name="clause_id", index_type="INVERTED")
+        index_params_mock.add_index.assert_any_call(field_name="parent_chunk_id", index_type="INVERTED")
+        assert index_params_mock.add_index.call_count == 5
         # Verify create_collection was called
         mock_client.create_collection.assert_called_once_with(
             collection_name=service.collection_name,

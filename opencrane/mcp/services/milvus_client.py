@@ -35,6 +35,16 @@ def _safe_id(value: str) -> str:
     """
     return _ID_UNSAFE.sub("", (value or "")[:_ID_FIELD_MAX])
 
+
+# Clause ids (``5.4.1.2a``, ``Annex C``) also carry dots and spaces, neither of
+# which can break out of a double-quoted filter literal.
+_CLAUSE_UNSAFE = re.compile(r"[^0-9A-Za-z_. -]")
+
+
+def _safe_clause(value: str) -> str:
+    """Like :func:`_safe_id`, but keeps the ``.`` and space a clause id uses."""
+    return _CLAUSE_UNSAFE.sub("", (value or "")[:_ID_FIELD_MAX])
+
 # Fields returned for chunk lookups (get_chunk / query_by_field). Excludes the
 # embedding vector, which is large and never needed by the MCP tools.
 _LOOKUP_FIELDS = [
@@ -48,6 +58,8 @@ _LOOKUP_FIELDS = [
     "line_start",
     "list_id",
     "table_id",
+    "clause_id",
+    "parent_chunk_id",
 ]
 
 # Heaviest metadata fields, dropped first when metadata would overflow the column.
@@ -135,6 +147,10 @@ class MilvusService:
         # of scanning an in-memory copy of the whole corpus.
         schema.add_field(field_name="list_id", datatype=DataType.VARCHAR, max_length=_ID_FIELD_MAX)
         schema.add_field(field_name="table_id", datatype=DataType.VARCHAR, max_length=_ID_FIELD_MAX)
+        # clause_id / parent_chunk_id (prose navigation) back get_section's clause
+        # lookup and sub-section listing the same way.
+        schema.add_field(field_name="clause_id", datatype=DataType.VARCHAR, max_length=_ID_FIELD_MAX)
+        schema.add_field(field_name="parent_chunk_id", datatype=DataType.VARCHAR, max_length=_ID_FIELD_MAX)
 
         index_params = self.client.prepare_index_params()
         index_params.add_index(
@@ -150,6 +166,8 @@ class MilvusService:
         # by both Milvus Lite and server mode.
         index_params.add_index(field_name="list_id", index_type="INVERTED")
         index_params.add_index(field_name="table_id", index_type="INVERTED")
+        index_params.add_index(field_name="clause_id", index_type="INVERTED")
+        index_params.add_index(field_name="parent_chunk_id", index_type="INVERTED")
 
         try:
             self.client.create_collection(
@@ -204,6 +222,8 @@ class MilvusService:
                 "line_start": chunk.line_start if chunk.line_start is not None else 0,
                 "list_id": (chunk.list_id or "")[:_ID_FIELD_MAX],
                 "table_id": (chunk.table_id or "")[:_ID_FIELD_MAX],
+                "clause_id": (chunk.clause_id or "")[:_ID_FIELD_MAX],
+                "parent_chunk_id": (chunk.parent_chunk_id or "")[:_ID_FIELD_MAX],
             })
 
         # Insert in batches: a single call covering a whole corpus can outlive
@@ -369,6 +389,70 @@ class MilvusService:
                 "some members may be omitted."
             )
         return rows
+
+    def query_by_values(
+        self, field: str, values: List[str], chunk_type: Optional[str] = None, limit: int = 16384
+    ) -> List[Dict]:
+        """Return all chunks whose scalar ``field`` is one of ``values``.
+
+        Same safety contract as :meth:`query_by_field`: each value is capped to
+        the stored column width and stripped to a safe charset (clause ids keep
+        ``.`` and spaces), then interpolated as an ``in [...]`` list.
+        """
+        sanitize = _safe_clause if field == "clause_id" else _safe_id
+        safe = sorted({sanitize(v) for v in values} - {""})
+        if not safe:
+            return []
+        expr = f"{field} in [" + ", ".join(f'"{v}"' for v in safe) + "]"
+        return self._query_rows(expr, chunk_type, limit)
+
+    def query_by_prefix(
+        self, field: str, prefix: str, chunk_type: Optional[str] = None, limit: int = 16384
+    ) -> List[Dict]:
+        """Return all chunks whose scalar ``field`` starts with ``prefix``.
+
+        The prefix is sanitized like a clause id, and ``%`` (the LIKE wildcard)
+        is never in the safe charset, so it can only be a literal prefix.
+        """
+        safe = _safe_clause(prefix)
+        if not safe:
+            return []
+        return self._query_rows(f'{field} like "{safe}%"', chunk_type, limit)
+
+    def _query_rows(self, expr: str, chunk_type: Optional[str], limit: int) -> List[Dict]:
+        if chunk_type is not None:
+            expr += f' and chunk_type == "{chunk_type}"'
+        try:
+            rows = self.client.query(
+                collection_name=self.collection_name,
+                filter=expr,
+                output_fields=_LOOKUP_FIELDS,
+                limit=limit,
+            )
+        except Exception as e:
+            logger.error(f"Failed to query {expr!r}: {e}")
+            return []
+        if len(rows) >= limit:
+            logger.warning(f"Query {expr!r} returned the {limit}-row cap; some chunks may be omitted.")
+        return rows
+
+    def has_prose_navigation(self) -> bool:
+        """True when indexed prose chunks carry navigation metadata.
+
+        Reads a single prose row's metadata (never the corpus): chunks produced
+        with prose navigation enabled all carry ``position``.
+        """
+        try:
+            rows = self.client.query(
+                collection_name=self.collection_name,
+                filter='chunk_type == "prose"',
+                output_fields=["metadata_json"],
+                limit=1,
+            )
+            return bool(rows) and "position" in json.loads(rows[0].get("metadata_json") or "{}")
+        except Exception as e:
+            logger.error(f"Failed to check for prose navigation metadata: {e}")
+            return False
 
     def field_names(self) -> set:
         """Return the set of scalar/vector field names in the existing collection."""

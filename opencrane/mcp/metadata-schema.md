@@ -32,7 +32,8 @@ These fields enable tree traversal and context reconstruction:
 ### `breadcrumb_path` (string)
 - **Purpose**: Exact location in the document/YAML tree structure
 - **Format**:
-  - Markdown chunks (prose/list_item/table_row): heading ancestry joined by ` > `, i.e. `page title > … > section`
+  - list_item/table_row chunks: heading ancestry joined by ` > `, i.e. `page title > … > section`
+  - prose chunks: `page title > section`, only two levels, where the section is the first level ≥ 2 heading in the chunk. The full ancestry is in `heading_path` (see Prose Navigation Metadata)
   - Structured YAML chunks (crd/openapi/json_schema): dot-separated data-tree path with array indices
 - **Usage**:
   - **Location Display**: label a citation as "page › section" (the last segment is the section heading)
@@ -174,6 +175,46 @@ These fields enable tree traversal and context reconstruction:
 - **Present in**: Definition chunks
 - **Example**: `"address"`, `"phoneNumber"`
 - **Usage**: Reference schema definitions
+
+## Prose Navigation Metadata (`chunk_type: "prose"`)
+
+Prose chunks record where they sit in their page's heading tree and link to
+the chunks around them, so a hit can be expanded to its whole section, its
+parent or its neighbours. The fields are set at chunking time (on by default,
+turned off with `OpenCraneConfig.prose_navigation = False`), so an existing
+corpus gets them after a re-chunk and re-index. They are not embedded and not
+BM25-indexed, so they do not affect ranking. Use the MCP `get_section` tool to
+read a section by `chunk_id` or `clause_id`.
+
+A chunk's *section* is the heading its content opens with. A chunk that does
+not open with a heading (for example prose that resumes after a code block)
+continues the section before it and repeats that section's `heading_path`,
+`clause_id` and `parent_chunk_id`.
+
+### `heading_path` (string, optional)
+- **Purpose**: Full heading ancestry of the chunk's section within its page, joined by ` > `
+- **Example**: `"TS 23.501 System architecture > 5 Functional description > 5.2 Network access control"`
+- **Absent**: for prose before the page's first heading
+- **Note**: Unlike `breadcrumb_path`, it includes every intermediate heading, including headings that have no chunk of their own (sections with no text before their first sub-section, and headings deeper than the chunking boundary that sit inside an earlier chunk).
+
+### `clause_id` (string, optional)
+- **Purpose**: Section/clause number taken from the section heading
+- **Examples**: `"5.4.1.2.2.8"`, `"4c.4.3"`, `"6.1.1.2a"`, `"16.1.4B.1"`, `"C.4.4.2"`, `"Annex C"`
+- **Extraction**: the regex in `section_clause_pattern` (in `.opencrane/config.yaml` or on `OpenCraneConfig`), matched at the start of the heading title; its first capture group is the id. `none` disables clause ids.
+- **Usage**: `get_section(clause_id=..., source=...)`. A clause with no chunk of its own is answered with its sub-sections; a clause inside an enclosing chunk is cut out of that chunk's text.
+
+### `parent_chunk_id` (chunk_id string, or null)
+- **Purpose**: The chunk that holds the nearest enclosing section's heading (a heading with no chunk of its own is skipped)
+- **Values**: `null` for top-level sections (and prose before the first heading)
+- **Usage**: Walk up to the enclosing section. Direct sub-sections of a chunk are the chunks whose `parent_chunk_id` is that chunk.
+
+### `position` (integer, 1-indexed)
+- **Purpose**: Order of this chunk among the prose chunks of its page
+
+### `prev_chunk_id` / `next_chunk_id` (chunk_id string, or null)
+- **Purpose**: The previous and next prose chunk of the same page, in document order
+- **Values**: `null` at the start/end of the page
+- **Note**: Only prose chunks are linked. Code, list and table chunks between them are skipped.
 
 ## List Item Metadata (`chunk_type: "list_item"`)
 
@@ -371,6 +412,7 @@ The MCP server uses these metadata fields programmatically:
 2. **YAML Definition Tool**: Uses `breadcrumb_path` to add location comments
 3. **Context Expansion**: Automatically fetches `neighbor_chunks` when relevant
 4. **Hierarchical Display**: Uses `logical_parent` to show tree structure
+5. **Section Tool**: `get_section` reads a prose section by `chunk_id` or `clause_id`, lists its sub-sections via `parent_chunk_id` and follows `prev_chunk_id` / `next_chunk_id` to its neighbours
 
 The LLM receives **enriched results** from the MCP server, not raw chunks, so it doesn't need to interpret metadata directly.
 

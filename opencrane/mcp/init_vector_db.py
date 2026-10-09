@@ -14,7 +14,7 @@ from opencrane.shared.logging_config import setup_logging
 # Scalar columns added so the MCP server can serve chunk lookups from Milvus
 # instead of an in-memory copy of the corpus. Collections created before these
 # existed must be rebuilt.
-_REQUIRED_FIELDS = {"list_id", "table_id"}
+_REQUIRED_FIELDS = {"list_id", "table_id", "clause_id", "parent_chunk_id"}
 
 logger = logging.getLogger(__name__)
 

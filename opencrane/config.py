@@ -4,6 +4,7 @@ Subclass OpenCraneConfig to register project-specific fence types,
 chunking strategies, and YAML tree walkers.
 """
 
+import re
 from typing import Callable, Dict, List
 
 from opencrane.fences import CodeFenceConfig, inline_file
@@ -26,6 +27,16 @@ from opencrane.walkers import K8sCRDTreeWalker, OpenAPITreeWalker, JsonSchemaTre
 ANCHOR_STYLE_BUILDERS: Dict[str, Callable[[str], str]] = {
     "generic": slugify,
 }
+
+# Default ``OpenCraneConfig.section_clause_pattern``: a leading clause number
+# (``5``, ``5.4.1.2.2.8``, ``4c.4.3``, ``6.1.1.2a``, ``16.1.4B.1``), an annex
+# clause (``C.4.4.2``) or an annex heading (``Annex C``), followed by
+# whitespace, ``:`` or the end of the title. A trailing ``.`` (``1. Install``)
+# is tolerated but not part of the id.
+DEFAULT_SECTION_CLAUSE_PATTERN = (
+    r"(Annex\s+[A-Z]{1,2}|(?:\d+[A-Za-z]?|[A-Z])(?:\.\d+[A-Za-z]?)+|\d+[A-Za-z]?)"
+    r"\.?(?=\s|:|$)"
+)
 
 
 class OpenCraneConfig:
@@ -95,6 +106,38 @@ class OpenCraneConfig:
     # subclass required. For a project-specific slug rule, override
     # ``section_anchor_for`` in .opencrane/extensions.py:Config.
     section_anchor_style: str = "generic"
+
+    # Prose navigation metadata. When enabled, every prose chunk records its
+    # full ``heading_path`` (heading ancestry within its page), an optional
+    # ``clause_id`` taken from its section heading, its ``position`` among the
+    # page's prose chunks, and links to its parent section chunk and its
+    # previous/next prose chunk (``parent_chunk_id`` / ``prev_chunk_id`` /
+    # ``next_chunk_id``). Metadata is neither embedded nor BM25-indexed, so
+    # rankings are unaffected. The MCP ``get_section`` tool reads these fields.
+    prose_navigation: bool = True
+
+    # Regex that pulls a section/clause identifier out of a heading title. The
+    # first capture group is the clause id (the whole match when the pattern has
+    # no group). The default recognises numbered headings such as
+    # ``5.4.1.2.2.8 Title``, ``4c.4.3``, ``6.1.1.2a``, ``16.1.4B.1``, ``C.4.4.2``
+    # and ``Annex C``. Set to ``"none"`` (or empty) to record no clause ids.
+    # Settable from ``.opencrane/config.yaml`` via ``section_clause_pattern``.
+    section_clause_pattern: str = DEFAULT_SECTION_CLAUSE_PATTERN
+
+    def section_clause_for(self, heading: str | None) -> str | None:
+        """Return the clause identifier of *heading*, or ``None``.
+
+        Applies ``section_clause_pattern`` at the start of the heading title.
+        Subclasses may override this for a project-specific rule.
+        """
+        pattern = (self.section_clause_pattern or "").strip()
+        if not heading or not pattern or pattern == "none":
+            return None
+        match = re.match(pattern, heading.strip())
+        if not match:
+            return None
+        clause = (match.group(1) if match.re.groups else match.group(0)) or ""
+        return clause.strip() or None
 
     def section_anchor_for(self, heading: str | None) -> str | None:
         """Return the in-page anchor slug for a chunk under *heading*.

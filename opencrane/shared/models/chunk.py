@@ -1,7 +1,7 @@
 """Pydantic models for the Structure-Aware Hybrid Chunker."""
 
 from typing import Dict, Any, Literal, Union
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
 
 class Chunk(BaseModel):
@@ -22,6 +22,10 @@ class Chunk(BaseModel):
     # TODO: line_start is currently unused (always None). Would require tracking line numbers during
     # document parsing. Kept for future use if line-level source tracking is implemented.
     line_start: int | None = Field(None, description="Starting line number in source file (1-indexed)")
+    # Heading lines of sections the prose chunker dropped (no text of their own)
+    # right before this chunk. Not serialized; read by the chunker's prose
+    # navigation pass so heading ancestry includes them.
+    _preceding_headings: list = PrivateAttr(default_factory=list)
     @model_validator(mode='after')
     def validate_content_and_metadata(self):
         """Validate content is non-empty and metadata matches chunk type."""
@@ -38,7 +42,12 @@ class Chunk(BaseModel):
         
         # Validate metadata shape based on chunk_type
         if self.chunk_type == "prose":
-            allowed_keys = {"source_url", "breadcrumb_path", "section_anchor", "tab_value", "tab_label", "key"}
+            allowed_keys = {
+                "source_url", "breadcrumb_path", "section_anchor", "tab_value", "tab_label", "key",
+                # Navigation metadata (see _annotate_prose_navigation in rag/chunker.py)
+                "heading_path", "clause_id", "parent_chunk_id", "position",
+                "prev_chunk_id", "next_chunk_id",
+            }
             invalid_keys = set(self.metadata.keys()) - allowed_keys
             if invalid_keys:
                 raise ValueError("prose chunks must use supported metadata keys only")

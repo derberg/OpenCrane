@@ -4,13 +4,18 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 import hashlib
 
+# Output size of the default embedding model (nomic-embed-text-v1.5). Only a
+# fallback: indexes take their vector dimension from the embeddings file, so
+# models of any size work.
+DEFAULT_EMBEDDING_DIM = 768
+
 
 class EmbeddingRecord(BaseModel):
     """Represents a single embedding record in rag-embeddings.json."""
 
     chunk_index: int = Field(..., description="Index into rag-chunks.json")
     chunk_id: str = Field(..., description="Deterministic ID for the chunk")
-    vector: List[float] = Field(..., description="768-dimensional embedding vector")
+    vector: List[float] = Field(..., description="Embedding vector (length set by the embedding model)")
 
 
 class EmbeddingsFile(BaseModel):

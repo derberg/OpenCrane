@@ -401,7 +401,7 @@ CLI flags take precedence over environment variables. Use env vars for persisten
 |---|---|---|
 | `AI_DOCS_CHUNKS_FILE` | `.opencrane/chunks.json` | Input chunks JSON file (see also `--chunks-file` flag) |
 | `AI_DOCS_EMBEDDINGS_FILE` | `.opencrane/embeddings.json` | Output path for the generated embeddings (see also `--embeddings-file` flag) |
-| `EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | HuggingFace embedding model to use |
+| `EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | HuggingFace embedding model to use. Any output size works: `index` takes the vector dimension from the embeddings file. Serve with the same model you embedded with |
 
 **`index` and `serve` steps** — needed when loading into Milvus or running the MCP server:
 

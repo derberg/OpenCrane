@@ -153,7 +153,7 @@ The server initializes its backing services lazily on the first tool call, so st
 Which tools are exposed is decided at startup by asking Milvus which `chunk_type` values the collection contains — a light column-only scan (via `query_iterator`, pulling just the `chunk_type` field, never the corpus) whose result is cached for the process. This keeps the tool list correct for any corpus, including custom chunk types, without a separate sidecar file that could get separated from the database. The two backing services are:
 
 - **`opencrane/mcp/services/milvus_client.py`** — Manages the Milvus connection and loads the collection into memory at startup for low-latency vector search.
-- **`opencrane/mcp/services/keyword_search.py`** — Builds a Best Match 25 (BM25) index lazily from `chunks.json` on the first keyword or hybrid query.
+- **`opencrane/mcp/services/keyword_search.py`** — Builds a Best Match 25 (BM25) index lazily from `chunks.json` on the first keyword or hybrid query, then keeps it in memory and reuses it; it is rebuilt only when `chunks.json` changes (mtime or size).
 
 ### Configuration (`opencrane/config.py`, `opencrane/shared/config.py`)
 

@@ -25,6 +25,7 @@ class EmbeddingsFile(BaseModel):
     dimensions: int = Field(..., description="Vector dimensions")
     created_at: str = Field(..., description="ISO-8601 creation timestamp")
     chunks_sha256: str = Field(..., description="SHA-256 of rag-chunks.json used")
+    document_prompt: str = Field("", description="Document prompt prepended to each chunk before encoding")
     embeddings: List[EmbeddingRecord] = Field(..., description="List of embedding records")
 
 

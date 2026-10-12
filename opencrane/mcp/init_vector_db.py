@@ -50,6 +50,11 @@ def main():
         dim = len(embeddings.embeddings[0].vector)
     else:
         dim = embeddings.dimensions or DEFAULT_EMBEDDING_DIM
+    if embeddings.document_prompt:
+        logger.info(
+            f"The embeddings use document prompt {embeddings.document_prompt!r}; "
+            "serve with the matching EMBEDDING_QUERY_PROMPT"
+        )
 
     logger.info(f"Initializing Milvus with {len(chunks_data)} chunks...")
     milvus = MilvusService()

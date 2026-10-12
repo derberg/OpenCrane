@@ -676,3 +676,15 @@ def test_main_html_shows_real_embedding_dimension(tmp_path, workspace_files, pat
     assert f"full {DIM}-number embedding" in body  # glossary and captions
     assert "768" not in body
     assert "__EMBED_DIM__" not in body
+
+
+@pytest.mark.unit
+def test_encode_paragraph_applies_query_prompt(monkeypatch):
+    monkeypatch.setenv("EMBEDDING_QUERY_PROMPT", "search_query: ")
+    mock_model = MagicMock()
+    mock_model.encode.return_value = np.array([[0.1, 0.2, 0.3]], dtype=np.float32)
+    with patch.object(viz, "_require") as req:
+        req.side_effect = lambda name, *args: {"numpy": np, "sentence_transformers": MagicMock()}.get(name, MagicMock())
+        with patch("sentence_transformers.SentenceTransformer", return_value=mock_model):
+            viz.encode_paragraph("dummy-model", "hello world")
+    mock_model.encode.assert_called_once_with(["search_query: hello world"], show_progress_bar=False)

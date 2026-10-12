@@ -117,6 +117,7 @@ Subclass `OpenCraneConfig` in `.opencrane/extensions.py` to customize:
 3. **`yaml_tree_walkers`**: custom YAML tree walkers for structured docs (K8s CRD, OpenAPI, JSON Schema built-in)
 4. **`section_anchor_for`**: builds the in-page anchor slug recorded on each chunk
 5. **`middleware`, `token_verifier`, `auth_provider`**: authentication and authorization hooks for the HTTP transport, see `docs/auth.md`
+6. **`extra_tools`**: custom MCP tools (`ExtraTool`) served on both transports. An extra tool cannot reuse a built-in tool name, so add every new built-in tool to `BUILTIN_TOOL_NAMES` in `mcp/server.py` (a test checks this). OpenCrane does not filter extra tool output
 
 Config is auto-discovered from the file that the `extensions` key in `.opencrane/config.yaml` names, for example `extensions: extensions.py`. The class in that file must be named `Config`. The `opencrane init` template ships the key commented out. Config can also be set with `--config` / `OPENCRANE_CONFIG` env var.
 

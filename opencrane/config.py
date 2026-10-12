@@ -85,6 +85,12 @@ class OpenCraneConfig:
     # request's permitted source names before the tool executes. Default empty.
     middleware: list = []
 
+    # Custom MCP tools served next to the built-in ones on both transports
+    # (stdio and HTTP). Each entry is an ``opencrane.ExtraTool``; see
+    # ``opencrane/mcp/extra_tools.py``. A name that collides with a built-in
+    # tool or another extra tool stops the server at startup. Default empty.
+    extra_tools: list = []
+
     # Each markdown sub-section chunk records a ``section_anchor`` in its
     # metadata — the in-page anchor slug of its nearest section heading — so
     # consumers can link straight to the section as

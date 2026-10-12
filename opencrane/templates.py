@@ -37,6 +37,22 @@ class Config(OpenCraneConfig):
     #         return None
     #     # e.g. a host that keeps case and uses underscores:
     #     return heading.strip().replace(" ", "_")
+
+    # Custom MCP tools served next to the built-in tools. OpenCrane does not
+    # filter the tool output: if you restrict sources, call
+    # context.allowed_sources() in each handler that returns documentation.
+    # For a handler that does this, see "Add custom MCP tools" in the README.
+    # from opencrane import ExtraTool
+    # extra_tools = [
+    #     ExtraTool(
+    #         name="read_chunk",
+    #         description="Returns the full stored content of a chunk by its ID.",
+    #         input_schema={"type": "object",
+    #                       "properties": {"chunk_id": {"type": "string"}},
+    #                       "required": ["chunk_id"]},
+    #         handler=read_chunk,
+    #     ),
+    # ]
 '''
 
 CONFIG_YAML = '''\

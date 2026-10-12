@@ -152,7 +152,7 @@ WORKDIR /build
 COPY .opencrane/ ./.opencrane/
 
 ENV MILVUS_DB_PATH=/build/milvus_data/milvus.db
-ENV COLLECTION_NAME=opencrane_chunks
+ENV MILVUS_COLLECTION=opencrane_chunks
 ENV DROP_EXISTING=true
 ENV PYTHONPATH=/build
 
@@ -181,7 +181,7 @@ COPY --from=milvus /build/milvus_data /app/milvus_data
 COPY .opencrane/ /app/.opencrane/
 
 ENV MILVUS_DB_PATH=/app/milvus_data/milvus.db
-ENV COLLECTION_NAME=opencrane_chunks
+ENV MILVUS_COLLECTION=opencrane_chunks
 ENV MCP_HTTP_PORT=8000
 ENV PYTHONUNBUFFERED=1
 ENV TRANSFORMERS_OFFLINE=1
@@ -206,7 +206,7 @@ services:
       - "8000:8000"
     environment:
       MILVUS_DB_PATH: /app/milvus_data/milvus.db
-      COLLECTION_NAME: opencrane_chunks
+      MILVUS_COLLECTION: opencrane_chunks
       EMBEDDING_QUERY_PROMPT: "${EMBEDDING_QUERY_PROMPT:-}"
 '''
 
@@ -495,6 +495,13 @@ claude mcp add {name} --transport http --url http://localhost:8000/http
 }}
 ```
 '''
+
+
+def docker_compose(dockerfile_name: str = "Dockerfile") -> str:
+    """Render the compose file so its build points at the container file ``init`` wrote."""
+    return DOCKER_COMPOSE.replace(
+        "dockerfile: .opencrane/Dockerfile", f"dockerfile: .opencrane/{dockerfile_name}"
+    )
 
 
 def readme(podman: bool = False) -> str:

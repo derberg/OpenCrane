@@ -54,9 +54,9 @@ The following variables control the split:
 
 | Variable | Default | Description |
 |---|---|---|
-| `PROSE_SPLIT_HEADING_DEPTH` | `3` | Sets the deepest heading level that starts a chunk. |
-| `PROSE_MAX_CHUNK_TOKENS` | `0` (off) | Sets the token limit for a chunk. A section over the limit splits at paragraphs, then at lines. Each chunk repeats the section heading. Lines and code blocks never split. |
-| `PROSE_KEEP_HEADING_ONLY_SECTIONS` | `false` | Keeps heading-only sections of 15 characters or more. |
+| `PROSE_SPLIT_HEADING_DEPTH` | `3` | Sets the deepest heading level that starts a new chunk. A deeper heading stays in the chunk of the heading above it. For example, with `3`, a `####` section is part of its `###` chunk. Raise the value to make search return smaller, more precise sections of deeply nested docs. Lower it to keep more context in each result. |
+| `PROSE_MAX_CHUNK_TOKENS` | `0` (off) | Sets a token limit for each chunk. Set it at or below the input limit of your embedding model, so the model reads all of each chunk. A section over the limit splits at paragraphs, then at lines, and each chunk repeats the section heading. Lines and code blocks never split. A split table loses its header row in all chunks after the first. |
+| `PROSE_KEEP_HEADING_ONLY_SECTIONS` | `false` | Keeps a section that has a heading but no text, when the heading has 15 characters or more. Turn it on when headings carry meaning on their own, such as numbered clauses in a specification, so search can find them. |
 
 After you change a variable, rerun `chunk` and `embed`, then [rebuild the Milvus collection](../README.md#index-the-embeddings-in-milvus-with-opencrane-index).
 

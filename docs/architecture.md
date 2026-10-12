@@ -196,7 +196,7 @@ The BM25 index uses the `simple` tokenizer by default. This tokenizer lowercases
 
 An optional reranker reorders the results of every search mode. The reranker scores each candidate against the query and can move up a chunk that search ranks too low. Reranking is off by default and needs no re-indexing.
 
-To turn on the built-in reranker, set the `RERANKER_MODEL` environment variable to a sentence-transformers cross-encoder model, for example `cross-encoder/ms-marco-MiniLM-L-6-v2`. To use your own reranker, see [Custom reranker](#custom-reranker).
+To turn on the built-in reranker, set the `RERANKER_MODEL` environment variable to a sentence-transformers cross-encoder model, for example `cross-encoder/ms-marco-MiniLM-L-6-v2`. To use your own reranker, see [Custom reranker](#custom-reranker). The Docker image from `opencrane init` runs offline, so set `RERANKER_MODEL` before you build the image. The build then downloads the model into the image.
 
 The server reranks the first `RERANK_DEPTH` candidates, `50` by default, and returns the top **limit** results. Set `RERANK_DEPTH` to a whole number up to `16384`. A value below **limit** counts as **limit**. The built-in reranker runs on the CPU, so a higher `RERANK_DEPTH` makes each search slower. The `Score` line shows the score of the built-in reranker.
 

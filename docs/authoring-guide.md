@@ -1,644 +1,733 @@
-# Authoring Markdown for OpenCrane Chunking
+# Write Markdown for OpenCrane chunking
 
-This guide describes how to structure markdown documentation so OpenCrane produces high-quality, retrievable chunks. It applies to `.md` and `.mdx` source files authored for a docs site (Docusaurus, Nextra, plain markdown repos). It does **not** cover hand-authored `llms-full.txt` files.
+This guide describes how to structure Markdown documentation so that OpenCrane produces high-quality chunks that search can retrieve. It applies to `.md` source files written for a documentation site, such as Docusaurus, Nextra, or a plain Markdown repository. It does not cover hand-written `llms-full.txt` files.
 
-## How Chunking Sees Your Markdown
+## How OpenCrane chunks Markdown
 
-When OpenCrane processes a markdown file, strategies are tried in order and the first match wins:
+When OpenCrane processes a Markdown file, it tries the following chunking strategies in this order. The first strategy that matches a part of the content claims that part:
 
-1. **YAML chunker** — claims YAML documents (front matter is explicitly skipped).
-2. **Code chunker** — claims fenced code blocks. Fenced YAML that is a K8s CRD, OpenAPI spec, or JSON Schema is handed off to a tree walker for per-property chunking.
-3. **Table chunker** — claims any section that contains a markdown table outside code fences. Emits one chunk per table data row and delegates the surrounding text to the list and prose chunkers.
-4. **List chunker** — claims any section that contains markdown list markers outside code fences. Emits one chunk per top-level list item plus prose chunks for the text around the list.
-5. **Prose chunker** — the catch-all. Splits text into chunks at heading boundaries.
+1. Fenced `yaml` and `yml` blocks go to the YAML chunker. OpenCrane takes these blocks out of the page before the other strategies run. [Embedded specifications](#embedded-specifications) describes how the YAML chunker handles each kind of YAML.
+2. Other fenced code blocks usually go to the code chunker. A block whose lines look like `key: value` pairs can go to the YAML chunker instead.
+3. A section that contains a Markdown table outside code fences goes to the table chunker. It emits one chunk for each table data row and passes the surrounding text to the list and prose chunkers.
+4. Sections that contain Markdown list markers outside code fences go to the list chunker. It emits one chunk for each list item, plus prose chunks for the text around the list.
+5. All remaining content goes to the prose chunker. It splits the text into chunks at heading boundaries.
 
-Your authoring choices determine which strategy claims each piece of content and how well each chunk stands alone.
+How you write the content determines which strategy claims each part of it and how well each chunk stands alone.
 
 ## Headings
 
-Headings are the primary chunk boundary. Get them right and most chunking problems go away.
+Headings are the main chunk boundary. When each heading starts one focused section, most chunking problems do not occur. The following sections describe which headings split the content and how to use them.
 
-- **`#`, `##`, and `###` create chunk boundaries.** Everything between two such headings (inclusive of the opening heading) becomes one chunk.
+### Headings that create chunk boundaries
 
-  Example — this produces three chunks:
+The `#`, `##`, and `###` headings create chunk boundaries. Everything between two such headings, including the opening heading, becomes one chunk.
 
-  ````md
-  # Getting Started
+The following example produces three chunks:
 
-  Installation instructions go here.
+````md
+# Getting Started
 
-  ## Prerequisites
+Installation instructions go here.
 
-  Requirements go here.
+## Prerequisites
 
-  ## First Run
+Requirements go here.
 
-  First-run steps go here.
-  ````
+## First Run
 
-- **`####` and deeper do NOT split chunks.** Content under an `####` sub-heading stays embedded in the parent `###` chunk. Use `####+` deliberately for sub-structure you want retrieved *together with* the parent topic.
+First-run steps go here.
+````
 
-  Example — one chunk, not two:
+### Headings that do not split chunks
 
-  ````md
-  ### Error Handling
+The `####` heading and deeper headings do not split chunks. Content under a `####` sub-heading stays in the parent `###` chunk. Use `####` and deeper headings on purpose, for sub-structure that search must retrieve together with the parent topic.
 
-  The client retries on transient errors.
+The following example produces one chunk, not two:
 
-  #### Retry policy
+````md
+### Error Handling
 
-  Default is three retries with exponential backoff.
-  ````
+The client retries on transient errors.
 
-- **One focused topic per `##`/`###` section.** That section is one chunk; make sure everything a reader needs to understand the topic is inside it, including the opening heading (which gives the chunk its subject).
+#### Retry policy
 
-  Good:
+Default is three retries with exponential backoff.
+````
 
-  ````md
-  ## Configuring the Retry Policy
+If search must retrieve the content under a `####` heading on its own, promote that heading to `###`. The following structure keeps the `#### Rotating keys` content inside the parent chunk:
 
-  The retry policy controls how failed requests are re-attempted.
-  Set `retries` and `backoff_ms` in `config.yaml` to tune behavior.
-  ````
+````md
+## Authentication
 
-  Avoid (one chunk covers four unrelated topics — a search for "retry policy" or
-  "authentication" retrieves this whole blob and the answer is buried inside it):
+#### Rotating keys
 
-  ````md
-  ## Configuration
+Keys must be rotated every 90 days.
+````
 
-  Set `retries` and `backoff_ms` to tune retry behavior.
-  Set `request_timeout_ms` for timeouts.
-  Auth tokens go in `auth.token`. Log level is set via `log_level`.
-  ````
+The following structure gives the key rotation content its own chunk:
 
-  Better — four focused chunks, each retrievable on its own:
+````md
+## Authentication
+...
 
-  ````md
-  ## Retry policy
+### Rotating keys
 
-  Set `retries` and `backoff_ms` in `config.yaml` to tune how failed
-  requests are re-attempted.
+Keys must be rotated every 90 days.
+````
 
-  ## Request timeouts
+### Start every page with a title
 
-  Set `request_timeout_ms` to control how long the client waits before
-  aborting a request.
+Start every page with a `#` title. The breadcrumb of every prose chunk on the page starts with the title.
 
-  ## Authentication
+The following page is correct:
 
-  Provide your API token via `auth.token` in `config.yaml`.
+````md
+# Database Migrations
 
-  ## Logging
+## Running a migration
+...
+````
 
-  Set `log_level` to `debug`, `info`, or `warn` to control log verbosity.
-  ````
+Avoid the following page. It has no `#` title, so OpenCrane uses the first heading, "Running a migration", as the page title. A search result does not say that the page is about database migrations rather than data migrations or network migrations:
 
-- **Lead every page with an `#` title.** It anchors the first chunk and provides breadcrumb context for any lists below.
+````md
+## Running a migration
+...
+````
 
-  Good:
+### Give each section one topic
 
-  ````md
-  # Database Migrations
+Give each `##` or `###` section one focused topic. Each such section is one chunk, so make sure it holds everything a reader needs to understand the topic. The heading is part of the chunk and gives the chunk its subject.
 
-  ## Running a migration
-  ...
-  ````
+The following section is correct:
 
-  Avoid (no `#` — the `## Running a migration` chunk has no page-level context,
-  so a retrieval result shows "Running a migration" with no indication this is
-  about database migrations versus, say, data migrations or network migrations):
+````md
+## Configuring the Retry Policy
 
-  ````md
-  ## Running a migration
-  ...
-  ````
+The retry policy controls how failed requests are re-attempted.
+Set `retries` and `backoff_ms` in `config.yaml` to tune behavior.
+````
 
-- **Never indent content under an `##`/`###` with a deeper heading you plan to retrieve separately.** If it deserves its own chunk, promote it to `###`.
+Avoid the following section. It is one chunk that covers four unrelated topics. A search for "retry policy" or "authentication" retrieves the whole section, and the reader has to find the answer inside it:
 
-  Avoid (`#### Rotating keys` will be buried inside the parent chunk):
+````md
+## Configuration
 
-  ````md
-  ## Authentication
+Set `retries` and `backoff_ms` to tune retry behavior.
+Set `request_timeout_ms` for timeouts.
+Auth tokens go in `auth.token`. Log level is set via `log_level`.
+````
 
-  #### Rotating keys
+The following version is better. It produces four focused chunks, and search can retrieve each one on its own:
 
-  Keys must be rotated every 90 days.
-  ````
+````md
+## Retry policy
 
-  Good:
+Set `retries` and `backoff_ms` in `config.yaml` to tune how failed
+requests are re-attempted.
 
-  ````md
-  ## Authentication
-  ...
+## Request timeouts
 
-  ### Rotating keys
+Set `request_timeout_ms` to control how long the client waits before
+aborting a request.
 
-  Keys must be rotated every 90 days.
-  ````
+## Authentication
 
-- **Sections whose total content (heading + body) is under 15 characters are dropped** as garbage. In practice this means very short headings with no body text. Don't leave placeholder headings with no body.
+Provide your API token via `auth.token` in `config.yaml`.
 
-  Avoid:
+## Logging
 
-  ````md
-  ## TODO
-  ````
+Set `log_level` to `debug`, `info`, or `warn` to control log verbosity.
+````
 
-- **There is no token-based split inside a section.** An overly long `#`, `##`, or `###` section remains one chunk regardless of size. Keep sections focused; split by topic, not by length.
+### Add body text under every heading
 
-  If a section grows past a few hundred words, break it into sibling `###` sections by sub-topic rather than letting it balloon.
+The prose chunker drops a heading that has no body text, whatever the length of the heading. It also drops any section shorter than 15 characters. Do not leave placeholder headings with no body.
 
-## Prose Sections
+Avoid the following placeholder:
 
-- **Write sections that stand alone.** Each `##`/`###` chunk will be retrieved on its own with no surrounding context. Don't use pronouns or references that depend on the previous section.
+````md
+## TODO
+````
 
-  Avoid:
+### Split long sections by topic
 
-  ````md
-  ## Configuring timeouts
+OpenCrane does not split a section by size. A long `#`, `##`, or `###` section stays one chunk, however long it is. Keep sections focused, and split them by topic.
 
-  As mentioned above, the tool described earlier reads these values
-  from the same file.
-  ````
+If a section grows past a few hundred words, it usually covers more than one sub-topic. Break it into sibling `###` sections, one for each sub-topic.
 
-  Good:
+### Keep URLs out of headings
 
-  ````md
-  ## Configuring timeouts
+Do not start a section with a URL heading such as `## https://example.com/page Title`. The URL stays in list-item breadcrumbs and in section anchors. If a page has no front matter `title`, its first heading, at any level, becomes the page title in the `llms.txt` index. A URL in that heading becomes part of the page title. Keep headings readable.
 
-  The OpenCrane CLI reads `request_timeout_ms` and `connect_timeout_ms`
-  from `.opencrane/config.yaml` on every invocation.
-  ````
+Avoid the following heading:
 
-- **Put the key phrasing in the first sentence.** The MCP server supports three search modes — keyword (BM25), semantic (vector), and hybrid. BM25 is position-agnostic: it only cares whether a term appears in the chunk, not where, so first-sentence placement doesn't change keyword results. For semantic and hybrid search, a chunk focused on one clear concept is more likely to match a focused query than one that mixes the topic with preamble. Stating the topic up front also makes chunks easier to evaluate in search results regardless of mode.
+````md
+## https://docs.example.com/api/auth Authentication
+````
 
-  Good:
+The following heading is correct:
 
-  ````md
-  ### Hybrid search scoring
+````md
+## Authentication
+````
 
-  OpenCrane blends vector cosine similarity and BM25 using
-  `HYBRID_ALPHA * vector + (1 - HYBRID_ALPHA) * BM25`.
-  ````
+## Prose sections
 
-  Avoid (buries the topic):
+Search retrieves each prose chunk on its own, without the rest of the page. The following sections help each prose chunk make sense in a search result.
 
-  ````md
-  ### Hybrid search scoring
+### Write sections that stand alone
 
-  There are several ways to score search results. Some systems use
-  only vectors, others only BM25. OpenCrane blends both…
-  ````
+Do not use pronouns or references that depend on the previous section. A `##` or `###` chunk reaches the reader without the text around it.
 
-- **Include concrete terms a user would search for** (product names, command names, error strings, config keys). Avoid vague referents when a noun would do.
+Avoid the following section:
 
-  Good: "Run `opencrane build` to execute the full pipeline."
+````md
+## Configuring timeouts
 
-  Avoid: "Run the main command to execute it all."
+As mentioned above, the tool described earlier reads these values
+from the same file.
+````
 
-- **Don't open a section with a URL heading** like `## https://example.com/page Title`. The pipeline no longer injects URLs into headings, so a URL in your heading is kept verbatim as heading text — which makes for a noisy chunk title and, if it lands on a page's leading `#`, a noisy page title in the `llms.txt` index. Keep headings human-readable.
+The following section is correct:
 
-  Avoid:
+````md
+## Configuring timeouts
 
-  ````md
-  ## https://docs.example.com/api/auth Authentication
-  ````
+The OpenCrane CLI reads `request_timeout_ms` and `connect_timeout_ms`
+from `.opencrane/config.yaml` on every invocation.
+````
 
-  Good:
+### Put the topic in the first sentence
 
-  ````md
-  ## Authentication
-  ````
+State the topic of a section in its first sentence. In every search mode, a reader can then judge the search result quickly.
+
+The following section is correct:
+
+````md
+### Hybrid search scoring
+
+OpenCrane blends vector cosine similarity and BM25 using
+`HYBRID_ALPHA * vector + (1 - HYBRID_ALPHA) * BM25`.
+````
+
+Avoid the following section, because it states the topic late:
+
+````md
+### Hybrid search scoring
+
+There are several ways to score search results. Some systems use
+only vectors, others only BM25. OpenCrane blends both…
+````
+
+### Use concrete search terms
+
+Include the concrete terms a user searches for. Use a noun instead of a vague reference. The following terms are typical:
+
+- Product names
+- Command names
+- Error strings
+- Configuration keys
+
+The following sentence is correct: "Run `opencrane build` to execute the full pipeline."
+
+Avoid sentences like this one: "Run the main command to execute it all."
 
 ## Lists
 
-Every top-level list item becomes its own chunk, each carrying a `breadcrumb_path` built from the nearest heading ancestry.
+Every list item, including each nested item, becomes its own chunk. Each item chunk carries a `breadcrumb_path` built from the headings the list sits under. The following sections help each item chunk stand alone.
 
-- **Every list must appear within a section that has a heading (`#`/`##`/`###`).** The breadcrumb attached to each list-item chunk is built from all headings seen before the list in the document — not just the immediately preceding line. Prose between the heading and the list is fine. What breaks breadcrumb context is a list that appears before any heading has been encountered, typically at the very top of a file.
+### Put every list under a heading
 
-  Good:
+Place every list in a section that has a `##` or `###` heading. OpenCrane builds the breadcrumb of each list-item chunk from the headings the list sits under, starting at the page title. Prose between the heading and the list does not cause a problem. A list that appears before the first `##` heading, usually at the top of a file, gets only the page title as its breadcrumb. A code block earlier on the page shortens the breadcrumb: for a list after a code block, the breadcrumb holds only the headings between that code block and the list.
 
-  ````md
-  ### Supported Embedding Models
+The following list is correct:
 
-  - `nomic-ai/nomic-embed-text-v1.5` — default
-  - `BAAI/bge-small-en-v1.5` — smaller, faster
-  - `sentence-transformers/all-MiniLM-L6-v2` — legacy
-  ````
+````md
+### Supported Embedding Models
 
-  Avoid (no heading above — items chunk without breadcrumb):
+- `nomic-ai/nomic-embed-text-v1.5` — default
+- `BAAI/bge-small-en-v1.5` — smaller, faster
+- `sentence-transformers/all-MiniLM-L6-v2` — legacy
+````
 
-  ````md
-  OpenCrane supports these models:
+Avoid the following list. It has no section heading before it, so its items carry only the page title as their breadcrumb:
 
-  - `nomic-ai/nomic-embed-text-v1.5`
-  - `BAAI/bge-small-en-v1.5`
-  ````
+````md
+OpenCrane supports these models:
 
-- **Make each item meaningful in isolation.**
+- `nomic-ai/nomic-embed-text-v1.5`
+- `BAAI/bge-small-en-v1.5`
+````
 
-  Good: `- Click **Next** to advance the installer to disk selection.`
+### Start each list item with its key phrase
 
-  Avoid: `- Click Next.`
+Make each item meaningful on its own, and put its key phrase at the start of the first line. Each list-item chunk carries short previews of the other items in the same list, called sibling previews. A sibling preview shows up to 30 characters of the first line of an item. The 30 characters include the ellipsis and, in an ordered list, the item number. Put the explanation on continuation lines or in nested items.
 
-- **First line first.** The item's first line is what appears in sibling previews (capped at 30 characters). Put the key phrase at the start; push explanation to continuation lines or nested bullets.
+The following item is meaningful on its own: `- Click **Next** to advance the installer to disk selection.`
 
-  Good:
+Avoid items like this one: `- Click Next.`
 
-  ````md
-  - **Retry policy** — governs behavior on transient 5xx responses.
-    Default is three retries with exponential backoff starting at 500ms.
-  ````
+The following item puts its key phrase first:
 
-  Avoid (key phrase arrives late, preview shows filler):
+````md
+- **Retry policy** — governs behavior on transient 5xx responses.
+  Default is three retries with exponential backoff starting at 500ms.
+````
 
-  ````md
-  - Something you might want to tune is the retry policy, which governs…
-  ````
+Avoid the following item. Its key phrase comes late, so the preview shows filler text:
 
-- **Prefer nesting for real hierarchy, not visual indent.** Nested items inherit their ancestors' first lines as a content prefix, which keeps the chunk self-contained. If the nested bullets aren't logically children of the parent, use a paragraph or a separate list instead.
+````md
+- Something you might want to tune is the retry policy, which governs…
+````
 
-  Good:
+### Nest list items only for real hierarchy
 
-  ````md
-  - **Chunking strategies**
-    - Prose — splits at heading boundaries
-    - Code — one chunk per fenced block
-    - List — one chunk per list item
-  ````
+Use nesting for real hierarchy, not for visual indentation. Each nested item gets the first lines of its parent items as a content prefix, so the chunk stays self-contained. If the nested items are not logical children of the parent, use a paragraph or a separate list instead.
 
-  Avoid (nested items are unrelated to parent):
+The following list is correct:
 
-  ````md
-  - **Chunking strategies**
-    - See also: MCP server
-    - Contact: support@example.com
-  ````
+````md
+- **Chunking strategies**
+  - Prose — splits at heading boundaries
+  - Code — one chunk per fenced block
+  - List — one chunk per list item
+````
 
-- **Keep top-level lists short — aim for 5–8 items, hard limit 15.** Each list-item chunk carries `sibling_previews` — short text previews of every other item in the same list. Every retrieved chunk brings all those previews with it. A 15-item list means 14 preview strings riding along with every single result, which is token overhead that scales with list length. Beyond 15 items the previews also start truncating to `... +N more` with no text, so the agent can no longer reconstruct the full list from a single chunk without additional search calls.
+Avoid the following list, because the nested items do not relate to the parent:
 
-  If a list is growing past 8 items, ask whether the items naturally group into sub-topics. If so, split under `###` sub-sections with shorter lists under each — better retrieval and less per-chunk overhead.
+````md
+- **Chunking strategies**
+  - See also: MCP server
+  - Contact: support@example.com
+````
 
-  If you have more than 15 items, split by sub-topic with `###` sub-sections, each containing a shorter list.
+### Keep lists short
 
-- **Don't interleave prose paragraphs between list items.** Keep descriptive prose above or below the list, not between bullets — it can break list detection and produce odd prose chunks.
+Keep top-level lists short. Aim for five to eight items, and never use more than 15.
 
-  Avoid:
+Every retrieved list-item chunk includes the sibling previews of all other items in its list. In a 15-item list, every search result carries 14 preview strings, so the token overhead grows with the length of the list. A chunk shows at most 15 sibling previews. In a list of more than 16 items, OpenCrane replaces the rest with `... +N more`. The AI agent that queries the Model Context Protocol (MCP) server then cannot rebuild the full list from a single chunk without more search calls.
 
-  ````md
-  - First step: install the CLI.
+If a list grows past eight items, check whether the items form sub-topics. If they do, split them into `###` sub-sections, each with a shorter list. Retrieval improves, and each chunk carries less overhead.
 
-  Some background on why this matters…
+### Keep prose outside the list
 
-  - Second step: run `opencrane init`.
-  ````
+Do not put prose paragraphs between list items. Keep descriptive prose before or after the list. A paragraph between items ends the list. OpenCrane treats the items after the paragraph as a separate list. The positions and sibling previews of each item then cover only part of the list.
 
-  Good:
+Avoid the following structure:
 
-  ````md
-  Install the CLI first, then initialize the project.
+````md
+- First step: install the CLI.
 
-  - First step: install the CLI.
-  - Second step: run `opencrane init`.
-  ````
+Some background on why this matters…
 
-- **Use markers consistently at the same indent level.** Mixing `1.` and `-` at the same level in one list is confusing style. Mixing across levels is fine and expected — ordered top-level steps with unordered nested sub-options is a normal pattern and the chunker handles it correctly (nesting is determined by indentation, not marker type).
+- Second step: run `opencrane init`.
+````
 
-  Fine — ordered steps, unordered nested options:
+The following structure is correct:
 
-  ````md
-  1. Install the CLI.
-  2. Choose an output format:
-     - JSON
-     - YAML
-  3. Run `opencrane build`.
-  ````
+````md
+Install the CLI first, then initialize the project.
 
-- **Code blocks inside list items are included verbatim in the item's chunk — they do not become separate code chunks.** The list chunker tracks fences to avoid treating code content as list markers, and renders each item's full body including any code blocks it contains.
+- First step: install the CLI.
+- Second step: run `opencrane init`.
+````
 
-  This example produces **2 chunks** — one per top-level item. Each chunk contains the prose description and the code block together:
+### Use one marker for each indentation level
 
-  ````md
-  1. Install the CLI:
-     ```bash
-     pip install opencrane
-     ```
-  2. Initialise the project:
-     ```bash
-     opencrane init
-     ```
-  ````
+Use the same marker for all items at the same indentation level. If you mix `1.` and `-` at the same level of one list, the items of that list get different `list_style` values. Mixing markers across levels is a normal pattern, for example ordered top-level steps with unordered nested options. The chunker handles this pattern correctly, because it finds the nesting from the indentation, not from the marker type.
 
-  Chunk 1 content: `1. Install the CLI:` + the bash block.
-  Chunk 2 content: `2. Initialise the project:` + the bash block.
-  Each chunk also carries a sibling preview of the other item.
+The following list mixes markers across levels correctly:
 
-  The one edge case: if a list section has so many code blocks that more than half its lines are code, the code chunker claims the whole section first and it is no longer chunked as a list. For typical step-by-step docs the prose lines (markers, descriptions) easily outweigh the code lines, so this rarely applies.
+````md
+1. Install the CLI.
+2. Choose an output format:
+   - JSON
+   - YAML
+3. Run `opencrane build`.
+````
+
+### Code blocks in list items
+
+OpenCrane splits each page at every fenced code block before the list chunker runs. A code block inside a list item therefore does not stay with the item. It becomes its own `code_snippet` chunk, and that chunk has no heading breadcrumb. The list items after the code block lose their breadcrumb, because the breadcrumb holds only the headings between the most recent code block and the list.
+
+The following list produces four chunks:
+
+````md
+1. Install the CLI:
+   ```bash
+   pip install opencrane
+   ```
+2. Initialize the project:
+   ```bash
+   opencrane init
+   ```
+````
+
+The first chunk contains `1. Install the CLI:`, with the breadcrumb of its section. The second chunk is the `pip install opencrane` code block. The third chunk contains `2. Initialize the project:`, with an empty breadcrumb. The fourth chunk is the `opencrane init` code block.
+
+Put each step that needs a code block under its own heading instead, and introduce the code block with a sentence. The prose chunk of each step then carries the page title and the step heading in its breadcrumb. The following page is correct:
+
+````md
+## Install the CLI
+
+Run the following command to install the CLI:
+
+```bash
+pip install opencrane
+```
+
+## Initialize the project
+
+Run the following command to initialize the project:
+
+```bash
+opencrane init
+```
+````
+
+If a list follows a code block, put a heading between them. The list items then carry that heading as their breadcrumb.
 
 ## Tables
 
-Every data row of a markdown table becomes its own chunk, rendered as natural-language `Column: value.` lines so it embeds like a sentence. Each row chunk carries a `breadcrumb_path` from the nearest heading ancestry and the table's lead-in sentence, and links to its siblings via `table_id` and `sibling_ids`.
+Every data row of a Markdown table becomes its own chunk. OpenCrane renders the row as `Column: value.` lines, so the row reads like a sentence when it is embedded. Each row chunk carries a `breadcrumb_path` from its heading ancestry, and it carries the lead-in sentence of the table. It links to its sibling rows through `table_id` and `sibling_ids`. The following sections help each row chunk stand alone.
 
-- **Give the table a heading and a lead-in sentence.** The heading builds the breadcrumb; the last non-blank line before the table becomes the caption included in every row chunk. Both make each row retrievable on its own.
+### Give each table a heading and a lead-in sentence
 
-  Good:
+Give the table a heading and a lead-in sentence. OpenCrane builds the breadcrumb from the heading. The last non-blank line before the table becomes the caption, which OpenCrane includes in every row chunk. Both make each row retrievable on its own.
 
-  ````md
-  ### DIAMETER AVP types
+The following table is correct:
 
-  The following AVP types from the base 3GPP Diameter dictionary are used:
+````md
+### DIAMETER AVP types
 
-  | AVP | Code | Type |
-  |-----|------|------|
-  | 3GPP-IMSI | 1 | UTF8String |
-  | 3GPP-Charging-Id | 2 | Unsigned32 |
-  ````
+The following AVP types from the base 3GPP Diameter dictionary are used:
 
-  Each row chunk reads like: `# DIAMETER AVP types` / `The following AVP types from the base 3GPP Diameter dictionary are used:` / `AVP: 3GPP-IMSI.` / `Code: 1.` / `Type: UTF8String.`
+| AVP | Code | Type |
+|-----|------|------|
+| 3GPP-IMSI | 1 | UTF8String |
+| 3GPP-Charging-Id | 2 | Unsigned32 |
+````
 
-- **Put the identifying value in the first column.** The first column is the row's `row_key` and drives sibling previews (capped at 30 characters), so lead with the name or key, not a description.
+Each row chunk reads like this, where `{PAGE_TITLE}` is the `#` title of the page: `# {PAGE_TITLE} > DIAMETER AVP types` / `The following AVP types from the base 3GPP Diameter dictionary are used:` / `AVP: 3GPP-IMSI.` / `Code: 1.` / `Type: UTF8String.`
 
-- **Give every column a header.** Cells are rendered as `Header: value.`; a blank header produces an unlabeled `: value.` line that reads poorly.
+### Structure tables for row chunks
 
-- **Keep tables out of code fences.** A table inside a ``` fence is treated as code, not chunked into rows. A row-like line followed only by a separator (no data rows) is not a real table and falls through to prose.
+The following rules apply to the columns and placement of a table:
 
-## Fenced Code Blocks
+- Put the identifying value in the first column. The first column is the `row_key` of the row, and the sibling previews show up to 30 characters of it, including the ellipsis. Start with the name or key, not a description.
+- Give every column a header. OpenCrane renders each cell as `Header: value.`, so a blank header produces an unlabeled `: value.` line that reads poorly.
+- Keep tables out of code fences. OpenCrane treats a table inside a code fence as code and does not chunk it into rows.
+- Add at least one data row. OpenCrane chunks a header line and separator with no data rows as prose, not as a table.
 
-- **Always label the language** after the opening fence. Unlabeled blocks are tagged `language: unknown`, which breaks language-filtered retrieval.
+## Fenced code blocks
 
-  Good:
+Each fenced code block becomes one chunk, except the specification YAML that [Embedded specifications](#embedded-specifications) describes. This includes code blocks inside list items, as [Code blocks in list items](#code-blocks-in-list-items) explains. The following sections help each code chunk stay usable on its own.
 
-  ````md
-  ```python
-  from opencrane import OpenCrane
-  ```
-  ````
+### Label every code block with its language
 
-  Avoid:
+Always put the language after the opening fence. OpenCrane tags unlabeled blocks with `language: unknown`, which breaks retrieval filtered by language.
 
-  ````md
-  ```
-  from opencrane import OpenCrane
-  ```
-  ````
+The following code block is correct:
 
-- **One concept per fenced block.** Each fence becomes one chunk. Don't concatenate a config example and an unrelated error trace in the same fence.
+````md
+```python
+from opencrane import OpenCrane
+```
+````
 
-  Avoid:
+Avoid the following code block:
 
-  ````md
-  ```yaml
-  # config.yaml
-  embedding_model: nomic-ai/nomic-embed-text-v1.5
+````md
+```
+from opencrane import OpenCrane
+```
+````
 
-  # error seen when misconfigured:
-  # RuntimeError: model not found
-  ```
-  ````
+### Show one concept in each code block
 
-  Good — two separate fences:
+Show one concept in each fenced block, because each fence becomes one chunk. Do not combine a configuration example and an unrelated error trace in the same fence.
 
-  ````md
-  ```yaml
-  embedding_model: nomic-ai/nomic-embed-text-v1.5
-  ```
+Avoid the following code block:
 
-  If the model is missing you will see:
+````md
+```yaml
+# config.yaml
+embedding_model: nomic-ai/nomic-embed-text-v1.5
 
-  ```text
-  RuntimeError: model not found
-  ```
-  ````
+# error seen when misconfigured:
+# RuntimeError: model not found
+```
+````
 
-- **Keep examples complete and self-sufficient.** Each code fence becomes one chunk. If that chunk contains truncated fields the agent cannot act on it without additional search calls. When showing a large object, pick one of two approaches:
+The following example uses two separate fences:
 
-  If the surrounding structure is irrelevant to the point, show only the relevant section and use prose to say where it goes:
+````md
+```yaml
+embedding_model: nomic-ai/nomic-embed-text-v1.5
+```
 
-  ````md
-  Set `branch` under your source entry in `.opencrane/config.yaml`:
+If the model is missing you will see:
 
-  ```yaml
-  branch: main
-  ```
-  ````
+```text
+RuntimeError: model not found
+```
+````
 
-  If the structure context matters, use a comment to mark elision rather than literal `...` — the shown fields stay syntactically valid:
+### Keep code examples complete
 
-  ````md
-  ```yaml
-  sources:
-    my-repo:
-      url: https://github.com/example/repo
-      # ... other fields ...
-      branch: main
-  ```
-  ````
+Keep examples complete. Each code fence becomes one chunk. If the chunk contains truncated fields, the AI agent cannot act on it without more search calls. To show a large object, use one of the following approaches.
 
-  Avoid literal `...` ellipsis syntax — it is not valid YAML and makes the chunk unparseable:
+If the surrounding structure does not matter, show only the relevant section, and use prose to say where it goes:
 
-  ````md
-  ```yaml
-  sources:
-    my-repo:
-      ...
-      branch: main
-  ```
-  ````
+````md
+Set `branch` under your source entry in `.opencrane/config.yaml`:
 
-  Good:
+```yaml
+branch: main
+```
+````
 
-  ````md
-  ```yaml
-  sources:
-    - type: github
-      repo: example/docs
-      branch: main
-  ```
-  ````
+If the surrounding structure matters, show the path from the top of the object down to the field, and leave out the sibling fields. Do not mark the omission with a comment. OpenCrane parses the block as YAML and stores it without comments, so the chunk does not show that anything is missing. The following block is correct:
 
-  Avoid:
+````md
+```yaml
+sources:
+  my-repo:
+    branch: main
+```
+````
 
-  ````md
-  ```yaml
-  sources:
-    - type: github
-      ...
-  ```
-  ````
+Avoid a literal `...`. It is not valid YAML, so a reader who copies the block gets a parse error. OpenCrane keeps the block as plain code instead of parsing it as YAML. Avoid the following block:
 
-- **Prose-heavy pages stay prose.** The code chunker only claims a node if more than half its lines are code (or the node is under ~50 lines). In ordinary markdown docs each fenced block is its own node, so this is rarely an issue — just don't write one giant document that is mostly code fences with occasional paragraphs if you want the prose chunks to survive.
+````md
+```yaml
+sources:
+  my-repo:
+    ...
+    branch: main
+```
+````
 
-## Embedded Specs (CRD / OpenAPI / JSON Schema)
+### Keep pages mostly prose
 
-Fenced YAML blocks are inspected by the chunker. If the YAML parses to a known structured type, a tree walker replaces the single-block chunk with rich per-property chunks.
+Do not write one large document that is mostly code fences with a few paragraphs. The code chunker claims a block of content only if more than half its lines are code, or if the block is under 50 lines. OpenCrane separates each fenced code block from the text around it before chunking, so in ordinary Markdown documentation this rule rarely matters.
 
-- **For Kubernetes CRDs:** paste the real spec — `apiVersion: apiextensions.k8s.io/...`, `kind: CustomResourceDefinition`, full `spec.versions[].schema.openAPIV3Schema`. The tree walker completely replaces the raw YAML chunk — the original code block produces no chunk of its own. Only `spec.properties` produces chunks, but the CRD identity is not lost: every property chunk carries `crd_kind` (from `spec.names.kind`), `crd_api_version` (from `spec.group` + version), `crd_version`, and `crd_property_path` as metadata. The agent can filter and group results by kind and API version. What is intentionally skipped: `status` (runtime state, not user-configurable) and `metadata.name` (the full CRD name like `databases.example.com`, though `crd_kind` + `crd_api_version` together convey the same identity).
+## Embedded specifications
 
-  Good — produces one chunk per spec property:
+The YAML chunker parses each fenced `yaml` or `yml` block. If the YAML is a known structured type, a parser called the tree walker replaces the single-block chunk with detailed chunks, one for each property. Other YAML, including a block of flat `key: value` pairs, becomes one `yaml_content` chunk. The following sections describe what each structured type needs.
 
-  ````md
-  ```yaml
-  apiVersion: apiextensions.k8s.io/v1
-  kind: CustomResourceDefinition
-  metadata:
-    name: databases.example.com
-  spec:
-    group: example.com
-    names:
-      kind: Database
-    versions:
-      - name: v1
-        schema:
-          openAPIV3Schema:
-            properties:
-              spec:
-                properties:
-                  engine:
-                    type: string
-                    description: Database engine (postgres, mysql).
-                  size:
-                    type: string
-                    description: Persistent volume size, e.g. "10Gi".
-  ```
-  ````
+### Kubernetes CustomResourceDefinitions
 
-- **For OpenAPI specs:** include real `info`, `servers`, `paths`, and `components`. Each operation (`paths.<path>.<method>`) and each named component becomes its own chunk. Write meaningful `summary` and `description` on every operation — they are the retrieval signal.
+For a Kubernetes CustomResourceDefinition (CRD), paste the real specification. Include the following parts:
 
-  Good:
+- `apiVersion: apiextensions.k8s.io/...`
+- `kind: CustomResourceDefinition`
+- The full `spec.versions[].schema.openAPIV3Schema`
 
-  ````md
-  ```yaml
-  openapi: 3.0.3
-  info:
-    title: Example API
-    version: 1.0.0
-  paths:
-    /users/{id}:
-      get:
-        summary: Fetch a user by ID
-        description: Returns the full user record including profile data.
-        parameters:
-          - name: id
-            in: path
-            required: true
-            schema: { type: string }
-  ```
-  ````
+The tree walker replaces the raw YAML chunk completely, so the original code block produces no chunk of its own. Only `spec.properties` produces chunks. Every property chunk keeps the CRD identity in the following metadata fields:
 
-  Avoid (empty `summary`/`description` — retrieval can't rank the operation):
+- `crd_kind`, from `spec.names.kind`
+- `crd_api_version`, from `spec.group` and the version
+- `crd_version`, from the version name
+- `crd_property_path`, from the dot-notation path of the property, starting at `spec`
 
-  ````md
-  ```yaml
-  paths:
-    /users/{id}:
-      get:
-        summary: ""
-        responses: { "200": { description: "" } }
-  ```
-  ````
+With these fields, the AI agent can filter and group results by kind and API version.
 
-- **For JSON Schema:** populate `title` and `description` at the root and on each property. A schema with empty or generic descriptions produces low-quality chunks.
+The tree walker skips the following parts on purpose:
 
-  Good:
+- `status`, because it holds runtime state that the user does not configure
+- `metadata.name`, the full CRD name such as `databases.example.com`, because `crd_kind` and `crd_api_version` together carry the same identity
 
-  ````md
-  ```yaml
-  $schema: https://json-schema.org/draft/2020-12/schema
-  title: OpenCrane Source
-  description: A single documentation source definition.
-  properties:
-    type:
-      type: string
-      description: Source kind — either "github" or "llmstxt".
-    repo:
-      type: string
-      description: GitHub "owner/name" — required when type is "github".
-  ```
-  ````
+The following CRD produces one chunk for each spec property:
 
-- **Properties under 800 tokens are emitted as one chunk. Properties over 800 tokens with nested `properties` or `items` are recursed into — each child becomes its own chunk instead.** No content is lost: every child chunk carries `crd_property_path` (full dot-notation path, e.g. `spec.config.database`), `logical_parent` (the parent's path), and `neighbor_chunks` (sibling IDs), so an agent can navigate the full schema tree from any leaf. The thresholds are hardcoded — there is no config knob. The only authoring lever is `$ref` into `$defs`: a large property broken into named definitions gives the walker more structure to recurse into.
+````md
+```yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: databases.example.com
+spec:
+  group: example.com
+  names:
+    kind: Database
+  versions:
+    - name: v1
+      schema:
+        openAPIV3Schema:
+          properties:
+            spec:
+              properties:
+                engine:
+                  type: string
+                  description: Database engine (postgres, mysql).
+                size:
+                  type: string
+                  description: Persistent volume size, e.g. "10Gi".
+```
+````
 
-  Good:
+### OpenAPI specifications
 
-  ````md
-  ```yaml
-  properties:
-    database:
-      $ref: "#/$defs/DatabaseConfig"
-  $defs:
-    DatabaseConfig:
-      type: object
-      description: Database connection configuration.
-      properties: { ... }
-  ```
-  ````
+For an OpenAPI specification, include real versions of the following sections:
 
-## YAML Front Matter
+- `info`
+- `servers`
+- `paths`
+- `components`
 
-- **Front matter is ignored by chunking**, but its `title` is used for the page title. Flat `key: value` blocks at the top of a file with only scalar values are detected as front matter and skipped from chunk content. When a `title` field is present, it becomes the page title used in the `llms.txt` index and normalized onto the page's leading `#` heading — taking precedence over the first body heading and the filename. See [Generating bundles](llms-generation.md#page-titles).
+Each operation (`paths.<path>.<method>`) and each named component becomes its own chunk. Write a meaningful `summary` and `description` for every operation, because retrieval relies on them.
 
-  Skipped as front matter (its `title` becomes the page title):
+The following specification is correct:
 
-  ````md
-  ---
-  title: Getting Started
-  slug: getting-started
-  author: Lukasz
-  date: 2026-04-01
-  ---
-  ````
+````md
+```yaml
+openapi: 3.0.3
+info:
+  title: Example API
+  version: 1.0.0
+paths:
+  /users/{id}:
+    get:
+      summary: Fetch a user by ID
+      description: Returns the full user record including profile data.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+```
+````
 
-- **Don't hide retrievable content in front matter.** Keep body content in the markdown body.
+Avoid the following specification. Its `summary` and `description` are empty, so retrieval ranks the operation poorly:
 
-  Avoid (the full description will never be retrieved):
+````md
+```yaml
+paths:
+  /users/{id}:
+    get:
+      summary: ""
+      responses: { "200": { description: "" } }
+```
+````
 
-  ````md
-  ---
-  title: Getting Started
-  description: >
-    OpenCrane is a standalone RAG pipeline that fetches docs from GitHub,
-    generates llms-full.txt bundles, chunks and embeds them, and serves
-    them via MCP.
-  ---
-  ````
+### JSON Schema
 
-  Good — keep a short slug in front matter, put the real description in the body:
+For a JSON Schema, fill in `title` and `description` at the root and on each property. A schema with empty or generic descriptions produces low-quality chunks.
 
-  ````md
-  ---
-  title: Getting Started
-  ---
+The following schema is correct:
 
-  # Getting Started
+````md
+```yaml
+$schema: https://json-schema.org/draft/2020-12/schema
+title: OpenCrane Source
+description: A single documentation source definition.
+properties:
+  type:
+    type: string
+    description: Source kind — either "github" or "llmstxt".
+  repo:
+    type: string
+    description: GitHub "owner/name" — required when type is "github".
+```
+````
 
+### Split large properties
+
+OpenCrane emits a property under 800 tokens as one chunk. If a property is over 800 tokens and has nested `properties` or `items.properties`, the tree walker splits it, and each child becomes its own chunk. A large property without nested structure stays one chunk. The 800-token limit is fixed in code, and you cannot configure it.
+
+The split property gets no chunk of its own, so its own `description` and `type` do not appear in any chunk. Put the information a reader needs on the child properties.
+
+Every child chunk carries the following fields, so the AI agent can navigate the schema tree from any child chunk:
+
+- `crd_property_path` on CRD chunks and `property_path` on JSON Schema and OpenAPI chunks: the full dot-notation path, for example `spec.config.database` on a CRD chunk or `config.database` on a JSON Schema chunk
+- `logical_parent`: the path of the parent
+- `neighbor_chunks`: the IDs of the sibling chunks
+
+In a JSON Schema, you can also move a large property into a named definition under `$defs` and reference it with `$ref`. The tree walker chunks each definition separately. Kubernetes CRD schemas do not support `$ref`.
+
+The following schema is correct:
+
+````md
+```yaml
+properties:
+  database:
+    $ref: "#/$defs/DatabaseConfig"
+$defs:
+  DatabaseConfig:
+    type: object
+    description: Database connection configuration.
+    properties: { ... }
+```
+````
+
+## YAML front matter
+
+Front matter is a `---`-delimited YAML block at the top of a file. The following sections describe how OpenCrane uses it.
+
+### Set the page title in front matter
+
+The `llms` step strips the front matter, so the block never reaches chunking. When the block has a `title` field, that title becomes the page title in the `llms.txt` index. The `title` field takes precedence over the first body heading and the file name. For details, see [Page titles](llms-generation.md#page-titles).
+
+OpenCrane adds a `# {TITLE}` heading at the top of the page in `llms-full.txt`, unless the page already starts with exactly that heading. An existing H1 with different text stays under the new one, so the page then has two H1 headings. Make the body H1 match `title` exactly. You can also leave the H1 out, because OpenCrane adds it from `title`.
+
+OpenCrane strips the following block, and its `title` becomes the page title:
+
+````md
+---
+title: Getting Started
+slug: getting-started
+author: Lukasz
+date: 2026-04-01
+---
+````
+
+### Keep searchable content out of front matter
+
+Do not put content that search must retrieve in front matter. Keep body content in the Markdown body.
+
+Avoid the following front matter. OpenCrane discards every front matter field except `title`, so search never retrieves the description:
+
+````md
+---
+title: Getting Started
+description: >
   OpenCrane is a standalone RAG pipeline that fetches docs from GitHub,
   generates llms-full.txt bundles, chunks and embeds them, and serves
   them via MCP.
-  ````
+---
+````
 
-- **Front matter with nested values is NOT skipped.** If your front matter contains lists or maps, it will be chunked as YAML. Keep it flat-scalar or move complex metadata to a dedicated file.
+The following page keeps a short title in the front matter and puts the real description in the body:
 
-  Chunked as YAML (not skipped):
+````md
+---
+title: Getting Started
+---
 
-  ````md
-  ---
-  title: My Page
-  tags:
-    - rag
-    - mcp
-  authors:
-    - name: Lukasz
-      role: maintainer
-  ---
-  ````
+# Getting Started
 
-  Front-matter-safe flat equivalent:
+OpenCrane is a standalone RAG pipeline that fetches docs from GitHub,
+generates llms-full.txt bundles, chunks and embeds them, and serves
+them via MCP.
+````
 
-  ````md
-  ---
-  title: My Page
-  tags: "rag, mcp"
-  author: Lukasz
-  ---
-  ````
+### Keep front matter valid YAML
+
+The `llms` step strips any front matter that parses as a YAML mapping, including mappings whose values are lists or nested maps. If the block is not valid YAML, OpenCrane keeps the whole block in the page body, and the block ends up in the chunks.
+
+OpenCrane keeps the following block in the body, because the unquoted colon in the `title` value is not valid YAML:
+
+````md
+---
+title: Setup: the first run
+---
+````
+
+OpenCrane strips the following block, because the quoted value is valid YAML:
+
+````md
+---
+title: "Setup: the first run"
+---
+````

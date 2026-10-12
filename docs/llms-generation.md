@@ -1,34 +1,47 @@
-# Generating llms-full.txt bundles
+# Generate llms-full.txt bundles
 
-Use the `llms` command to create flattened text bundles for LLM ingestion:
+The `llms` step combines the fetched documentation into single text files for a large language model (LLM) to read. Each of these bundles is an `llms-full.txt` file. The step writes one bundle for each source and a combined bundle with all sources in `.opencrane/llmstxt/llms-full.txt`. The combined bundle also includes the existing bundles of `llmstxt` sources.
+
+OpenCrane loads the `Config` class from the file named in the `extensions` key of `.opencrane/config.yaml`. To load a class from another module, add `--config {MODULE}:{CLASS}` to the commands on this page, or set the `OPENCRANE_CONFIG` environment variable.
+
+To process every source in the source mapping file, run the following command:
 
 ```bash
-opencrane llms --config yourproject.config:YourConfig  # Default: processes configured source directories
-
-# Multiple source directories
-opencrane llms --config yourproject.config:YourConfig --sources-dir external-sources --sources-dir external/docs
+opencrane llms
 ```
 
-## Output Control via Source Mapping Config
+> [!CAUTION]
+> A run with `--sources-dir` rebuilds the combined `llms-full.txt` and its `llms.txt` index from only the directories you pass. Sources outside them lose their page URLs, so their chunks get no `source_url`. Run `opencrane llms` without `--sources-dir` before you run `opencrane chunk`.
 
-The source mapping config file (e.g., `source-mapping.yaml`) controls which directories get `llms-full.txt` files generated. This provides fine-grained control over the output structure and prevents unwanted file generation.
+To process only specific directories, pass each one with the `--sources-dir` flag:
 
-**How it works:**
-- Only paths explicitly listed in the source mapping under the `sources:` key get `llms-full.txt` files generated
-- Each generated file includes ALL markdown from that directory and subdirectories recursively
-- No automatic subdirectory file generation - one file per mapped path
-- **Automatically maintained** during documentation fetch - adds new repos and removes stale ones (only `manual: false` entries)
+```bash
+opencrane llms --sources-dir {SOURCE_DIR} --sources-dir {OTHER_SOURCE_DIR}
+```
 
-**Example:**
+With `--sources-dir`, or with directories set in the `AI_DOCS_SOURCES_DIRS` environment variable, the step skips regeneration when those directories have no uncommitted or untracked changes in Git. Git never reports changes in a directory it ignores. If Git ignores every directory you pass, the step always skips. To regenerate the bundles anyway, add the `--force` flag.
 
-If your source mapping config contains:
+## Control the output with the source mapping file
+
+The source mapping file, `.opencrane/config.yaml` by default, controls which directories get an `llms-full.txt` file. With one bundle for each mapped path, you choose which documentation sets the output includes. An LLM agent then reads one file for each source. The file shapes the output in the following ways:
+
+- Only paths listed under the `sources:` key get an `llms-full.txt` file.
+- Each generated file includes all Markdown from that directory and its subdirectories, except directories listed in `ignore_patterns`.
+- Subdirectories do not get their own files. Each mapped path produces one file.
+
+The documentation fetch keeps the source mapping file up to date. It adds new repositories and removes only auto-discovered entries that auto-discovery no longer returns. It never removes entries with `manual: true` or `local: true`, or `llmstxt` entries. See [How the fetch removes stale sources](fetching.md#how-the-fetch-removes-stale-sources).
+
+### Example output
+
+Consider a source mapping file with the following content:
+
 ```yaml
 sources:
-  external-sources/my-project:
+  my-project:
     url: https://github.com/my-org/my-project
     docs_path: docs
     manual: false
-  external-sources/another-project:
+  another-project:
     url: https://github.com/my-org/another-project
     docs_path: docs
     manual: false
@@ -36,33 +49,33 @@ sources:
     local: true
 ```
 
-Then generation produces:
-- `llmstxt/external-sources/my-project/llms-full.txt` (includes all markdown from `guides/`, `releases/`, `technical-reference/`, etc.)
-- `llmstxt/external-sources/another-project/llms-full.txt` (includes all markdown recursively)
-- `llmstxt/content-guidelines/writing/llms-full.txt` (reads directly from local `content-guidelines/writing/` directory)
-- No files for `my-project/guides/` or other subdirectories
+From this file, the `llms` step generates the following output:
 
-**Local sources** (`local: true`) are resolved relative to the workspace root instead of `.opencrane/sources/`. This is useful for documentation that already exists in the same repository — no fetching or copying needed.
+- `.opencrane/llmstxt/my-project/llms-full.txt`, which includes all Markdown from the fetched documentation of `my-project`
+- `.opencrane/llmstxt/another-project/llms-full.txt`, which includes all Markdown from the fetched documentation of `another-project`
+- `.opencrane/llmstxt/content-guidelines/writing/llms-full.txt`, built directly from the local `content-guidelines/writing/` directory
 
-**Why this matters:**
-- Prevents file explosion with hundreds of small files
-- Gives you explicit control over what gets generated
-- Makes it easy to include/exclude specific documentation sets
-- Simplifies consumption for LLM agents (one file per product/extension)
-- Automatically stays in sync with active repositories (stale entries are cleaned up during fetch)
+OpenCrane resolves local sources (`local: true`) relative to the project root instead of `.opencrane/sources/`. Use local sources for documentation that already exists in the same repository, because they need no fetching or copying.
 
-## Document Structure
+## Bundle structure
 
-The `llms` step emits a **clean** `llms-full.txt` — source URLs are **not** injected into headings, and there is no per-file `### {url}` boundary line. Instead, the bundle carries only the documentation content, and per-page source URLs are recorded in a companion `llms.txt` index written alongside it (see below).
+The bundle holds the documentation content without page URLs. OpenCrane records the URL of each page in the companion `llms.txt` index next to the combined bundle. See [Companion `llms.txt` index](#companion-llmstxt-index).
 
-Within `llms-full.txt`, boundaries are marked structurally:
+The following table lists the markers that separate content within `llms-full.txt`:
 
-1. `<!-- opencrane:page -->` — separates the individual files (pages) that make up one source. This is a collision-proof HTML-comment sentinel (invisible when rendered) rather than a dash rule, because a markdown thematic break (`---`, `-----`) in page content would be indistinguishable from a dash-based separator and silently split the page.
-2. `======` — separates one source's block from the next in the combined bundle
+| Marker | Separates |
+|---|---|
+| `<!-- opencrane:page -->` | The individual files (pages) that make up one source |
+| `======` | One source's block from the next in the combined bundle |
 
-Each page begins with a single `# {title}` H1 heading (see [Page titles](#page-titles)). Image references are stripped and relative links are rewritten so they continue to work in the flattened output.
+The page marker is an HTML comment, so it does not show when the Markdown is rendered. To split a bundle into pages, split on the page marker, not on `---`, because page content can contain Markdown thematic breaks.
 
-Example structure of the combined `llms-full.txt`:
+Each page begins with a `# {TITLE}` heading. See [Page titles](#page-titles).
+
+OpenCrane replaces each image with an `[Image removed: {ALT_TEXT}]` note. It replaces each relative link to a Markdown file or an anchor with its link text, and an absolute-path link becomes `{LABEL} (link removed: {PATH})`. External links stay as they are.
+
+The following example shows the structure of the combined `llms-full.txt`:
+
 ```markdown
 # Home
 
@@ -87,7 +100,7 @@ A page from a different source...
 
 ## Companion `llms.txt` index
 
-Next to every `llms-full.txt`, the `llms` step writes a standard `llms.txt` index that maps each page's title to its specific URL. The combined `.opencrane/llmstxt/llms.txt` follows the `llms.txt` convention:
+Next to the combined `llms-full.txt`, the `llms` step writes a standard `llms.txt` index that maps the title of each page to its URL. The index follows the [llms.txt convention](https://llmstxt.org/). The per-source bundles get no index of their own. The exception is an `llmstxt` source whose companion `llms.txt` the fetch downloaded. The following example shows the combined `.opencrane/llmstxt/llms.txt`:
 
 ```markdown
 # Documentation
@@ -100,20 +113,22 @@ Next to every `llms-full.txt`, the `llms` step writes a standard `llms.txt` inde
 - [Overview](https://beta.example.com/docs/overview)
 ```
 
-- A top-level `# {project}` H1.
-- One `## {source}` section per source, in the **same order** as the corresponding `======` blocks in `llms-full.txt`.
-- One `- [{title}]({page_url})` link per page, in the **same order** as the `<!-- opencrane:page -->`-separated pages inside that source's block.
+The index has the following structure:
 
-Per-source `llms.txt` files are also written next to each per-source `llms-full.txt`. The URL for each entry comes from `get_source_url(...)`, which is page-specific for GitHub sources and for sources configured with a `docs_url`.
+- One top-level `# Documentation` heading
+- A `## {SOURCE}` section for each source, in the same order as the matching `======` blocks in `llms-full.txt`
+- Under each section, a `- [{TITLE}]({PAGE_URL})` link for each page that has a URL, in the same order as the pages in that source's block
 
-This positional, per-source alignment is what lets the `chunk` step recover each chunk's specific page `source_url` from clean content — see [Chunking](chunking.md).
+Each link points to the specific page for GitHub sources and for sources configured with a `docs_url`. For GitHub sources, the link always points to the `main` branch, even when the fetch used a release or a pinned commit. A page without a URL gets no link. A source with no URLs at all gets an empty `- []()` placeholder, so the section order still matches the blocks in the bundle.
+
+The `chunk` step uses this shared order to give each chunk the URL of its page. See [Document boundaries and page URLs](chunking.md#document-boundaries-and-page-urls).
 
 ## Page titles
 
-Each page's title is chosen with this precedence:
+OpenCrane removes from the bundle any YAML front matter that parses as a mapping. It chooses the title of each page from the first of the following that exists:
 
-1. **Frontmatter `title`** — YAML frontmatter is stripped from the emitted content, and its `title` field (when present and non-empty) is used.
-2. **First heading** — the first Markdown heading in the body.
-3. **Filename** — derived from the file stem (e.g. `getting-started.md` → "Getting Started").
+1. The `title` field of the front matter, when it is present and not empty
+2. The first Markdown heading of any level in the body
+3. A title derived from the file name, for example "Getting Started" from `getting-started.md`
 
-The page block's leading H1 in `llms-full.txt` is normalized to equal the chosen title (a synthetic `# {title}` is prepended when the body has no matching leading H1). This keeps the H1 exactly equal to the matching `llms.txt` index entry so the title-validated join stays exact.
+OpenCrane adds a `# {TITLE}` heading with the chosen title at the start of each page block in `llms-full.txt`, unless the body already starts with exactly that heading. An existing H1 with different text stays in place under the new heading. The first heading of each page block then matches its entry in the `llms.txt` index.

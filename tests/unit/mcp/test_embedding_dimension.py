@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, Mock, patch, mock_open, ANY
 
 import pytest
 
-from opencrane.mcp.init_vector_db import main as init_main
+from opencrane.mcp.init_vector_db import _REQUIRED_FIELDS, main as init_main
 from opencrane.mcp.services.milvus_client import MilvusService
 from opencrane.shared.models.vector_chunk import DEFAULT_EMBEDDING_DIM
 
@@ -90,7 +90,7 @@ class TestInitVectorDbDim:
     def test_populated_collection_with_other_dim_is_rebuilt(self):
         milvus = MagicMock()
         milvus.client.has_collection.return_value = True
-        milvus.field_names.return_value = {"list_id", "table_id"}
+        milvus.field_names.return_value = set(_REQUIRED_FIELDS)
         milvus.get_collection_stats.return_value = {"row_count": 65}
         milvus.vector_dim.return_value = 768
         _run_init(milvus, [[0.1] * 384], dimensions=384)
@@ -101,7 +101,7 @@ class TestInitVectorDbDim:
     def test_populated_collection_with_same_dim_is_kept(self):
         milvus = MagicMock()
         milvus.client.has_collection.return_value = True
-        milvus.field_names.return_value = {"list_id", "table_id"}
+        milvus.field_names.return_value = set(_REQUIRED_FIELDS)
         milvus.get_collection_stats.return_value = {"row_count": 65}
         milvus.vector_dim.return_value = 1024
         _run_init(milvus, [[0.1] * 1024], dimensions=1024)
@@ -146,7 +146,7 @@ def test_empty_embeddings_keep_populated_collection_of_other_dim():
     must not count as a model change and wipe a populated collection."""
     milvus = MagicMock()
     milvus.client.has_collection.return_value = True
-    milvus.field_names.return_value = {"list_id", "table_id"}
+    milvus.field_names.return_value = set(_REQUIRED_FIELDS)
     milvus.get_collection_stats.return_value = {"row_count": 65}
     milvus.vector_dim.return_value = 1024
     with patch('opencrane.mcp.init_vector_db.json.load', return_value=[]):

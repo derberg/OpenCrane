@@ -19,6 +19,37 @@ To use a different model, set the `EMBEDDING_MODEL` environment variable.
 > [!IMPORTANT]
 > The Milvus collection stores 768-dimension vectors, which matches the default model. Choose a model that produces 768-dimension vectors. If the model produces vectors of another size, the `index` step cannot load them.
 
+## Embedding prompts
+
+Many embedding models need one prompt for documents and another for queries, or search returns less relevant results. The following environment variables set the prompts:
+
+- `EMBEDDING_DOCUMENT_PROMPT` is a prefix that `embed` adds to every chunk.
+- `EMBEDDING_QUERY_PROMPT` is a `{query}` template or a prefix that `serve` and `visualize` apply to each query.
+
+Both default to empty. A literal `\n` in either value becomes a newline.
+
+The following table lists prompts for common 768-dimension models:
+
+| Model | `EMBEDDING_DOCUMENT_PROMPT` | `EMBEDDING_QUERY_PROMPT` |
+|---|---|---|
+| `nomic-ai/nomic-embed-text-v1.5`, the default | `search_document: ` | `search_query: ` |
+| `intfloat/e5-base-v2` | `passage: ` | `query: ` |
+
+To change the document prompt, generate new embeddings and rebuild the collection.
+
+> [!CAUTION]
+> `DROP_EXISTING=true` deletes the Milvus collection before `index` rebuilds it. First confirm that `MILVUS_COLLECTION` and the connection variables name the right collection.
+
+The following commands do both for the default model:
+
+```bash
+export EMBEDDING_DOCUMENT_PROMPT="search_document: "
+export EMBEDDING_QUERY_PROMPT="search_query: "
+opencrane embed && DROP_EXISTING=true opencrane index
+```
+
+A new query prompt needs only a server restart. The `docker-compose.yml` file from `opencrane init` passes `EMBEDDING_QUERY_PROMPT` from your shell to the container.
+
 ## Collection schema
 
 When the `index` step loads the embeddings into Milvus, each chunk becomes one record in the collection. The following table lists the fields of each record:

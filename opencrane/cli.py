@@ -354,6 +354,11 @@ def serve(config_path, transport):
     try:
         import asyncio
         load_config(config_path)
+        if config_path:
+            # The server modules resolve the config class themselves (for
+            # extra_tools, middleware, custom auth); OPENCRANE_CONFIG is how
+            # --config reaches them.
+            __import__("os").environ["OPENCRANE_CONFIG"] = config_path
 
         if transport == "http":
             port = __import__("os").environ.get("MCP_HTTP_PORT", "8000")

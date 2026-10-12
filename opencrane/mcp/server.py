@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 import yaml
 from pathlib import Path
@@ -18,6 +19,7 @@ from opencrane.mcp.services.embeddings import EmbeddingService
 from opencrane.mcp.services.milvus_client import MilvusService
 from opencrane.mcp.services.keyword_search import KeywordSearchService
 from opencrane.shared.config import get_config
+from opencrane.shared.utils.embedding_prompts import format_query, warn_if_inconsistent
 
 import sys
 
@@ -33,6 +35,9 @@ logger = logging.getLogger(__name__)
 _embeddings_service = None
 _milvus_service = None
 _keyword_service = None
+# Sync extra_tools handlers run in worker threads and may reach these getters
+# while the event loop does too; the lock keeps each service a singleton.
+_service_init_lock = threading.Lock()
 _chunk_types_cache: set[str] | None = None
 
 def _extract_source_url(text: str) -> str | None:
@@ -107,19 +112,26 @@ def _rehydrate_to_yaml(content: dict | str, metadata: dict, chunk_type: str = ""
 def get_embeddings_service():
     global _embeddings_service
     if _embeddings_service is None:
-        _embeddings_service = EmbeddingService()
+        with _service_init_lock:
+            if _embeddings_service is None:
+                _embeddings_service = EmbeddingService()
+                warn_if_inconsistent()
     return _embeddings_service
 
 def get_milvus_service():
     global _milvus_service
     if _milvus_service is None:
-        _milvus_service = MilvusService()
+        with _service_init_lock:
+            if _milvus_service is None:
+                _milvus_service = MilvusService()
     return _milvus_service
 
 def get_keyword_service():
     global _keyword_service
     if _keyword_service is None:
-        _keyword_service = KeywordSearchService()
+        with _service_init_lock:
+            if _keyword_service is None:
+                _keyword_service = KeywordSearchService()
     return _keyword_service
 
 _YAML_CHUNK_TYPES = {"crd_definition", "openapi_spec", "json_schema"}
@@ -618,6 +630,35 @@ GET_METADATA_SCHEMA_TOOL_SCHEMA = {
 }
 
 
+# Names of every built-in tool, whether or not it is currently advertised.
+# Project ``extra_tools`` may not reuse these. Add every new built-in tool here
+# (a unit test checks this equals the full set list_tools() can advertise).
+BUILTIN_TOOL_NAMES = frozenset({
+    "search_docs",
+    "health",
+    "get_yaml_definition",
+    "get_metadata_schema",
+    "get_list_members",
+    "get_table_members",
+})
+
+# Project-defined tools from ``OpenCraneConfig.extra_tools``: name ->
+# (ExtraTool, bound async handler). Empty until main() loads them at startup.
+_extra_tools: dict = {}
+
+
+def load_extra_tools() -> dict:
+    """Load the project's ``extra_tools`` and bind their handlers to a context.
+
+    Raises ``ValueError`` when an extra tool is malformed or its name collides
+    with a built-in tool, so the server fails at startup.
+    """
+    from opencrane.mcp.extra_tools import bind_handler, load_extra_tools as _load
+
+    tools, context = _load(BUILTIN_TOOL_NAMES)
+    return {name: (tool, bind_handler(tool, context)) for name, tool in tools.items()}
+
+
 app = Server("opencrane")
 
 @app.list_tools()
@@ -660,6 +701,13 @@ async def list_tools() -> list[Tool]:
             inputSchema=GET_METADATA_SCHEMA_TOOL_SCHEMA,
         ))
 
+    for tool, _handler in _extra_tools.values():
+        tools.append(Tool(
+            name=tool.name,
+            description=tool.description,
+            inputSchema=tool.input_schema,
+        ))
+
     return tools
 
 @app.call_tool()
@@ -681,6 +729,8 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     }
 
     handler = _TOOL_HANDLERS.get(name)
+    if handler is None and name in _extra_tools:
+        handler = _extra_tools[name][1]
     if handler is None:
         logger.warning(f"Unknown tool requested: {name}")
         raise ValueError(f"Unknown tool: {name}")
@@ -713,23 +763,10 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
     chunk_types = arguments.get("chunk_types")
     source_names = arguments.get("source_names")
     # --- Layer 2: content authorization ---
-    from opencrane.mcp.auth.runtime import (
-        current_allowed_sources,
-        current_scopes,
-        get_access_policy,
-    )
-    allowed = current_allowed_sources()
-    if allowed is not None:
-        # A project middleware declared the permitted sources for this request —
-        # highest precedence. Narrow-only: intersect with any client-supplied
-        # source_names (the client can restrict, never expand).
-        allowed_set = set(allowed)
-        if source_names is not None:
-            decision = [s for s in source_names if s in allowed_set]
-        else:
-            decision = list(allowed)
-    else:
-        decision = get_access_policy().authorize(current_scopes(), source_names)
+    from opencrane.mcp.auth.runtime import resolve_allowed_sources
+    # A project middleware's declared sources take precedence over the scope
+    # policy; client-supplied source_names can narrow, never expand.
+    decision = resolve_allowed_sources(source_names)
     # SECURITY: an empty allowlist means zero permitted sources — short-circuit,
     # because passing [] to the search backends is falsy and would DISABLE the
     # source filter (leaking all sources). None = no restriction (AllowAll).
@@ -841,7 +878,7 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
 
         def _semantic_results(arm_limit: int = limit) -> list[dict]:
             embeddings_service = get_embeddings_service()
-            query_embedding = embeddings_service.model.encode([query], batch_size=8, show_progress_bar=False)
+            query_embedding = embeddings_service.model.encode([format_query(query)], batch_size=8, show_progress_bar=False)
             if hasattr(query_embedding, 'tolist'):
                 query_embedding = query_embedding.tolist()
             query_vec = query_embedding[0]
@@ -1331,6 +1368,8 @@ async def get_table_members(arguments: dict) -> list[TextContent]:
 
 async def main():
     """Main entry point for the MCP server."""
+    global _extra_tools
+    _extra_tools = load_extra_tools()
 
     async with stdio_server() as (read_stream, write_stream):
         await app.run(

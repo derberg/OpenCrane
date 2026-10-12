@@ -155,6 +155,23 @@ def get_access_policy() -> "AllowAllPolicy | ScopeSourcesPolicy":
     return policy
 
 
+def resolve_allowed_sources(requested: list[str] | None = None) -> list[str] | None:
+    """Return the source names the current request may read, or ``None`` for all.
+
+    A middleware-declared set (``set_allowed_sources``) wins and only narrows
+    ``requested``; otherwise the endpoint's scope->sources policy decides. An
+    empty list means no source is permitted. Built-in search and
+    ``ToolContext.allowed_sources()`` both use this, so they always agree.
+    """
+    allowed = current_allowed_sources()
+    if allowed is not None:
+        allowed_set = set(allowed)
+        if requested is not None:
+            return [s for s in requested if s in allowed_set]
+        return list(allowed)
+    return get_access_policy().authorize(current_scopes(), requested)
+
+
 def reset_auth_runtime() -> None:
     """Clear the cached access policies and per-request auth state.
 

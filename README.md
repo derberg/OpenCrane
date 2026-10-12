@@ -43,6 +43,7 @@ This README covers the following topics:
   - [Built-in YAML tree walkers](#built-in-yaml-tree-walkers)
   - [Write a custom fence type](#write-a-custom-fence-type)
   - [Write a custom YAML tree walker](#write-a-custom-yaml-tree-walker)
+  - [Add custom MCP tools](#add-custom-mcp-tools)
 - [Authentication and authorization](#authentication-and-authorization)
 - [Development](#development)
 - [Credits](#credits)
@@ -108,7 +109,7 @@ This section is the reference for the OpenCrane CLI and its configuration.
 
 ### CLI
 
-Each pipeline step and each project task has its own `opencrane` command. Commands that show `[--config {MODULE}:{CLASS}]` in their usage line accept the `--config` flag, which loads a custom `OpenCraneConfig` subclass. Pass the module and the class name, or the path to a Python file that defines a class named `Config`. The `OPENCRANE_CONFIG` environment variable takes the same value. For `opencrane serve`, the server takes `middleware`, `token_verifier`, and `auth_provider` only from `OPENCRANE_CONFIG` or the `extensions:` key, not from `--config`.
+Each pipeline step and each project task has its own `opencrane` command. Commands that show `[--config {MODULE}:{CLASS}]` in their usage line accept the `--config` flag, which loads a custom `OpenCraneConfig` subclass. Pass the module and the class name, or the path to a Python file that defines a class named `Config`. The `OPENCRANE_CONFIG` environment variable takes the same value.
 
 #### Create a project with `opencrane init`
 
@@ -387,7 +388,7 @@ opencrane visualize --file {PATH_TO_FILE}
 echo "{PARAGRAPH}" | opencrane visualize
 ```
 
-The command encodes the paragraph with the same model as the indexed chunks. It then renders an interactive HTML page with the following views side by side:
+The command encodes the paragraph the way the server encodes a search query. It then renders an interactive HTML page with the following views side by side:
 
 - Scatter: a projection of the indexed chunks, or of a random sample of them when you set `--sample`. The new paragraph is a highlighted diamond, and the chart draws a ring around each nearest neighbor.
 - Local neighborhood: a projection of only the paragraph and its nearest neighbors. Because the projection uses only these points, the distances between the neighbors are meaningful.
@@ -559,6 +560,7 @@ You need the following variables only if you run the `embed` step, directly or t
 | `AI_DOCS_CHUNKS_FILE` | `.opencrane/chunks.json` | Input chunks JSON file. See also the `--chunks-file` flag. |
 | `AI_DOCS_EMBEDDINGS_FILE` | `.opencrane/embeddings.json` | Output path for the generated embeddings. See also the `--embeddings-file` flag. |
 | `EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | Hugging Face embedding model to use |
+| `EMBEDDING_DOCUMENT_PROMPT` | none | Prefix that `embed` adds to every chunk. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
 
 #### Variables for the `index` and `serve` steps
 
@@ -578,6 +580,7 @@ The following table lists the variables:
 | `AI_DOCS_CHUNKS_FILE` | `.opencrane/chunks.json` | Chunks file that `index` loads and that the MCP server reads for keyword search. `index` reads only this variable, not the `--chunks-file` flag. |
 | `AI_DOCS_EMBEDDINGS_FILE` | `.opencrane/embeddings.json` | Embeddings file that `index` loads. `index` reads only this variable, not the `--embeddings-file` flag. |
 | `MILVUS_INSERT_BATCH_SIZE` | `2000` | Maximum number of chunks in each insert call during `index`. This limit keeps each call short enough to finish before the Milvus keepalive timeouts. A timeout makes the client retry, and the retries duplicate rows. If `index` creates duplicate rows, lower this value. |
+| `EMBEDDING_QUERY_PROMPT` | none | Prompt that `serve` and `visualize` apply to each query. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
 | `HYBRID_ALPHA` | `0.6` | Weight of vector search compared to keyword search. `1.0` is pure vector search, and `0.0` is pure BM25 keyword search. |
 | `HYBRID_CANDIDATE_POOL` | `0` | Number of results that hybrid search fetches from each arm before it fuses them. `0` means the requested `limit`. A wider pool, for example `50`, can surface chunks that both arms rank just below `limit`. |
 | `HYBRID_FUSION` | `minmax` | How hybrid search merges the two arms. `minmax` blends normalized scores, and `rrf` blends ranks with Reciprocal Rank Fusion. See [Search modes](docs/architecture.md#search-modes). |
@@ -700,6 +703,7 @@ Each extension point is an attribute or a method of `OpenCraneConfig`. The follo
 | `section_anchor_for` | `chunk` | Builds the in-page anchor that each chunk records in its `section_anchor` metadata. |
 | `middleware` | `serve` | Adds Asynchronous Server Gateway Interface (ASGI) middleware around the HTTP MCP server, for example for custom authorization. See [Authentication and authorization](#authentication-and-authorization). |
 | `token_verifier`, `auth_provider` | `serve` | Replaces token validation or the authorization server in `custom` authentication mode. See [Authentication and authorization](#authentication-and-authorization). |
+| `extra_tools` | `serve` | Adds custom MCP tools to the server. See [Add custom MCP tools](#add-custom-mcp-tools). |
 
 ### Section anchors
 
@@ -833,6 +837,60 @@ class TerraformTreeWalker(YamlTreeWalker):
 ```
 
 The `can_handle` method returns `True` for the documents that the walker supports. The `walk` method returns the chunks of the document. To register the walker, add it to `yaml_tree_walkers`, as in the example in [Extend OpenCrane](#extend-opencrane).
+
+### Add custom MCP tools
+
+To serve custom MCP tools on both transports, list `ExtraTool` entries in `extra_tools`. Your agents then get project-specific lookups without a second MCP server.
+
+> [!CAUTION]
+> OpenCrane does not filter the output of extra tools. If you restrict the sources a caller can read, filter the output in each handler that returns documentation content. Call `context.allowed_sources()` and drop content from other sources, as the next example does.
+
+The following example adds a tool that returns the stored content of a chunk:
+
+```python
+from opencrane import ExtraTool, OpenCraneConfig
+
+
+def read_chunk(arguments, context):
+    chunk = context.milvus.get_chunk(arguments["chunk_id"])
+    allowed = context.allowed_sources()
+    if chunk is None or (allowed is not None and chunk["source_name"] not in allowed):
+        raise ValueError(f"Chunk not found: {arguments['chunk_id']}")
+    return {"source": chunk["source_file"], "content": chunk["content"]}
+
+
+class Config(OpenCraneConfig):
+    extra_tools = [
+        ExtraTool(
+            name="read_chunk",
+            description="Returns the full stored content of a chunk by its ID.",
+            input_schema={
+                "type": "object",
+                "properties": {"chunk_id": {"type": "string"}},
+                "required": ["chunk_id"],
+            },
+            handler=read_chunk,
+        ),
+    ]
+```
+
+OpenCrane calls the synchronous or asynchronous `handler` as `handler(arguments, context)`. If `name` matches a built-in tool or another extra tool, the server does not start.
+
+The `context` argument is a `ToolContext` with the following members:
+
+| Member | Description |
+|---|---|
+| `milvus`, `embeddings`, `keyword_search` | The server's `MilvusService`, `EmbeddingService`, and `KeywordSearchService` instances |
+| `config` | Your `OpenCraneConfig` instance |
+| `allowed_sources()` | The sources that `search_docs` allows for the current caller, or `None` for all sources |
+
+OpenCrane sends the handler's return value to the client as follows:
+
+- A string becomes a text content block.
+- An MCP content block, or a list of them, stays unchanged.
+- Any other value becomes JSON text.
+
+If the handler raises an exception, the client receives an MCP tool error with the exception message.
 
 ## Authentication and authorization
 

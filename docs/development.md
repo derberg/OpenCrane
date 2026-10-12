@@ -1,67 +1,54 @@
 # Development
 
-This page describes how to set up a local development environment for OpenCrane and how to run the tests.
+This page describes how to set up a development environment for OpenCrane. To run the tests, see [Run the tests](running-tests.md).
 
 ## Set up the virtual environment
 
-The following steps create a virtual environment in `.venv`:
+OpenCrane needs Python 3.11 or later, and the continuous integration (CI) workflow tests on Python 3.11. To create a virtual environment in `.venv`, follow these steps:
 
-1. Create the virtual environment with Python 3.11 or later:
+1. Create the virtual environment:
 
    ```bash
-   python -m venv .venv
+   python3 -m venv .venv
    ```
 
-2. Activate the virtual environment. If you use macOS or Linux, run the following command:
+2. Activate the virtual environment. On macOS or Linux, run the following command:
 
    ```bash
    source .venv/bin/activate
    ```
 
-   If you use Windows, run the following command:
+   On Windows, run the following command:
 
    ```bat
    .venv\Scripts\activate
    ```
 
-3. Install the dependencies:
+3. Install OpenCrane in editable mode with the `dev` extra:
 
    ```bash
    pip install -e '.[dev]'
    ```
 
-The virtual environment in `.venv` now contains OpenCrane and its development dependencies.
+The `.venv` directory now contains OpenCrane, the test tools, and the dependencies of the `pipeline`, `viz`, and `auth` extras that the full test suite needs. The CI workflow installs the same extra.
 
-## Run the tests
+## Work in a separate worktree
 
-To run the tests, use the `./pytest.sh` wrapper script. For the reasons, see [What the `pytest.sh` script does](running-tests.md#what-the-pytestsh-script-does). The following commands show its common uses:
+To work on several branches at the same time, give each branch its own Git worktree. The `scripts/worktree.sh` script creates the worktree in `.worktrees/` from the latest `origin/main`, with its own `.venv` and an editable install. In a worktree, `./pytest.sh` uses that worktree's `.venv`, so the tests run against that worktree's source code. The following commands show how to use the script:
 
 ```bash
-# Run all tests
-./pytest.sh
+# Create .worktrees/{BRANCH_NAME} on a new branch. A slash in the name becomes a hyphen in the directory name.
+scripts/worktree.sh new {BRANCH_NAME}
 
-# Run tests with coverage check (enforces 100% threshold)
-./pytest.sh --check-coverage
+# List the worktrees
+scripts/worktree.sh list
 
-# Run with a coverage report that lists the uncovered lines
-./pytest.sh --check-coverage --cov-report=term-missing
+# Remove the worktree directory. The branch stays.
+scripts/worktree.sh rm {BRANCH_NAME}
 ```
 
-## Run part of the test suite
+Git refuses to remove a worktree that has uncommitted changes.
 
-To run only part of the test suite, pass a path to `./pytest.sh`. The following table lists the commands for each scope:
+## Write commit messages for releases
 
-| Scope | Command |
-|---|---|
-| Unit tests only | `./pytest.sh tests/unit/` |
-| Integration tests only | `./pytest.sh tests/integration/` |
-| A specific test file | `./pytest.sh tests/unit/test_cli.py` |
-
-## Additional test options
-
-The wrapper script passes any other option to pytest unchanged. The following table lists some of these options:
-
-| Output | Command |
-|---|---|
-| Verbose output | `./pytest.sh -v` |
-| HTML coverage report in `htmlcov/` | `./pytest.sh --cov=opencrane --cov-report=html` |
+Write commit messages in the Conventional Commits format, for example `feat: add custom walker support` or `fix: token count for empty files`. Release Please reads these messages to compute the next version and to write `CHANGELOG.md`. Do not edit the version in `pyproject.toml`, `CHANGELOG.md`, or the release tags by hand, because Release Please manages them.

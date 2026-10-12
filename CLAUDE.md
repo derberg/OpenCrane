@@ -30,27 +30,34 @@ opencrane/                  # Main Python package
 ├── cli.py                  # Click CLI entry point
 ├── add_source.py           # Source addition logic (GitHub repos + llms.txt files)
 ├── config.py               # OpenCraneConfig base class (extension points)
-├── visualize.py            # `opencrane visualize` — embedding-placement HTML (needs viz extras)
+├── templates.py            # Files that `opencrane init` and `opencrane pack` write
+├── pack.py                 # `opencrane pack`: builds a uvx-installable MCP server package
+├── visualize.py            # `opencrane visualize`: embedding-placement HTML (needs viz extras)
 ├── fences/                 # Fence type configuration API
 ├── mcp/                    # MCP server (stdio + HTTP transport)
-│   ├── server.py           # Stdio MCP server
+│   ├── server.py           # Stdio MCP server and the tool implementations
 │   ├── http_server.py      # HTTP transport for Docker
-│   └── services/           # Milvus client, embeddings, BM25 search
+│   ├── init_vector_db.py   # `opencrane index`
+│   ├── extra_tools.py      # ExtraTool API for project-defined MCP tools
+│   ├── auth/               # HTTP authentication and source authorization
+│   └── services/           # Milvus client, embeddings, BM25 search, reranker
 ├── rag/                    # RAG pipeline modules
 │   ├── fetch_docs.py       # GitHub repo fetching
 │   ├── generate_llms_txt.py # llms-full.txt generation with fence handlers
-│   ├── chunker.py          # Chunking orchestrator
+│   ├── chunker.py          # Chunking orchestrator, page URLs, prose navigation
 │   ├── generate_embeddings.py
-│   └── services/           # Chunking strategies and YAML tree walkers
-├── shared/                 # Shared utilities and Pydantic models
-│   ├── models/             # Chunk, VectorChunk, File, Repository
-│   └── utils/              # Token counter, git helpers, URL parsing
+│   └── services/           # Chunking strategies, YAML tree walkers, llms.txt index
+├── shared/                 # Shared utilities, runtime Config, Pydantic models
+│   ├── models/             # Chunk, VectorChunk, EmbeddingsFile, File, Repository
+│   └── utils/              # Token counter, embedding prompts, git helpers, URL parsing
 └── walkers/                # Public walker API re-exports
 tests/
 ├── unit/                   # Fast, mocked tests (no Milvus)
 ├── integration/            # Requires Milvus Lite
 ├── fixtures/               # Test data (markdown, YAML)
 └── conftest.py             # Session fixtures, temp dirs
+docs/                       # User documentation
+scripts/worktree.sh         # Per-topic git worktrees
 ```
 
 ## Tech stack
@@ -58,7 +65,7 @@ tests/
 - **Python >= 3.11** (uses modern type hints)
 - **CLI**: Click
 - **Validation**: Pydantic v2
-- **Chunking**: Docling, custom YAML tree walkers
+- **Chunking**: custom strategies and YAML tree walkers (Docling only for non-`.txt` input, so the `chunk` step's `llms-full.txt` bypasses it)
 - **Embeddings**: sentence-transformers (default: `nomic-ai/nomic-embed-text-v1.5`)
 - **Vector DB**: Milvus (Lite mode by default, server mode optional)
 - **Search**: hybrid of cosine similarity and BM25 (configurable alpha blend)
@@ -74,7 +81,7 @@ add → fetch → llms → chunk → embed → index → serve
 - `opencrane add`: interactively add GitHub repos or pre-existing llms.txt files as sources
 - `opencrane init`: scaffolds project and offers interactive source addition (same as `add`)
 - Each step is independently callable from the CLI (`opencrane <step>`) or through `opencrane build` for the full pipeline
-- `build` exits gracefully when no sources are configured (suggests `opencrane add`)
+- `build` stops gracefully after `llms` when no `llms-full.txt` was generated (suggests `opencrane add`)
 - The `llms` step combines pre-existing llms-full.txt files even when `config.yaml` is empty
 - The `llms` step also writes a companion `llms.txt` index next to the combined `llms-full.txt`; the `chunk` step reads both to assign each chunk its specific page `source_url`
 
@@ -115,7 +122,7 @@ Subclass `OpenCraneConfig` in `.opencrane/extensions.py` to customize:
 1. **`fence_types`**: custom fence block handlers for llms-full.txt generation
 2. **`chunking_strategies`**: custom chunking strategies (first match wins)
 3. **`yaml_tree_walkers`**: custom YAML tree walkers for structured docs (K8s CRD, OpenAPI, JSON Schema built-in)
-4. **`section_anchor_for`**: builds the in-page anchor slug recorded on each chunk
+4. **`section_anchor_for`**, **`section_clause_for`**, **`prose_navigation`**: section anchor slug, clause id and prose navigation metadata on chunks. `section_anchor_style` and `section_clause_pattern` can also be set as keys in `.opencrane/config.yaml`
 5. **`middleware`, `token_verifier`, `auth_provider`**: authentication and authorization hooks for the HTTP transport, see `docs/auth.md`
 6. **`extra_tools`**: custom MCP tools (`ExtraTool`) served on both transports. An extra tool cannot reuse a built-in tool name, so add every new built-in tool to `BUILTIN_TOOL_NAMES` in `mcp/server.py` (a test checks this). OpenCrane does not filter extra tool output
 7. **`reranker`**: optional `search_docs` reranker, `(query, candidates) -> list[dict]`
@@ -126,14 +133,14 @@ Config is auto-discovered from the file that the `extensions` key in `.opencrane
 
 - **Strategy Pattern** for chunking: extensible without modifying core
 - **Milvus Lite by default**: single-file DB, no Docker needed
-- **Lazy service init**: MCP server initializes on first search for fast startup
+- **Lazy service init**: the stdio server creates its services on first use for fast startup; the HTTP server initializes them at startup
 - **Token-based YAML splitting**: recursive split when chunks exceed 800 tokens
 - **Hybrid search scoring**: `HYBRID_ALPHA * vector + (1 - HYBRID_ALPHA) * BM25` over min-max normalised arms (default 0.6), or weighted RRF with `HYBRID_FUSION=rrf` (`HYBRID_RRF_K`, alpha 0.5 = classic RRF). `HYBRID_CANDIDATE_POOL` widens each arm before fusion. Score-0 keyword hits are dropped before fusion, and ties break by `chunk_id`. The `alpha` schema is built from config, so agents see the real default and, under `rrf`, that scores are rank-only
 - **Asymmetric embedding prompts**: `shared/utils/embedding_prompts.py` prepends `EMBEDDING_DOCUMENT_PROMPT` to chunks and applies `EMBEDDING_QUERY_PROMPT` to vector queries, `visualize` included. BM25 gets the raw query. `embeddings.json` records the document prompt, so `embed` regenerates after a change
 - **Opt-in identifier-aware BM25 tokenizer**: `BM25_TOKENIZER=identifier` (default `simple`) emits each `.`/`-`/`_`-joined compound (`5.4.1`, `gtp-u`) plus its de-duplicated parts, so exact identifiers outrank scattered fragments while part queries still match. Resolved once per `KeywordSearchService` so documents and queries always share it. No stopword list: BM25 IDF already discounts common words
 - **Optional reranker, off by default**: after fusion, it reorders `RERANK_DEPTH` candidates (default 50, at least `limit`, capped at the Milvus topk limit). `OpenCraneConfig.reranker` overrides the built-in CrossEncoder from `RERANKER_MODEL`. A failing reranker falls back to the unreranked order, and the health probe skips it
 - **Prose chunks split at heading boundaries**: preserves complete sections for semantic coherence. The `PROSE_*` variables in `docs/chunking.md` change the split
-- **MCP server is fully vector-DB-backed**: search, `get_yaml_definition`, `get_list_members`, and `get_table_members` all read from Milvus (chunk lookups by primary key, members by `list_id`/`table_id` scalar columns, `INVERTED`-indexed so lookups don't scan the corpus, because Milvus Lite rejects `AUTOINDEX` on scalar fields); the server holds no in-memory copy of the corpus. Member queries interpolate a sanitized, width-capped id into the filter (Milvus Lite has no `filter_params` templating). `list_id`/`table_id` are lifted into their own columns at index time; adding them is a schema change, so a collection built by an older version is dropped and rebuilt on the next `index` run
+- **MCP lookups are vector-DB-backed**: semantic search, `get_yaml_definition`, `get_list_members`, `get_table_members`, and `get_section` read from Milvus (chunk lookups by primary key, members by `list_id`/`table_id`/`clause_id`/`parent_chunk_id` scalar columns, `INVERTED`-indexed so lookups don't scan the corpus, because Milvus Lite rejects `AUTOINDEX` on scalar fields). The only in-memory copy is the BM25 index for keyword and hybrid search, built from `chunks.json`. Member queries interpolate a sanitized, width-capped id into the filter (Milvus Lite has no `filter_params` templating). `list_id`/`table_id` are lifted into their own columns at index time; adding them is a schema change, so a collection built by an older version is dropped and rebuilt on the next `index` run
 - **Vector size follows the embedding model**: `index` sizes the `embedding` field from the embeddings file and rebuilds a collection of another size. `MilvusService.search` raises on a wrong-size query vector instead of returning empty results
 - **Prose navigation metadata**: `_annotate_prose_navigation` in `rag/chunker.py` adds `heading_path`, `clause_id`, `parent_chunk_id`, `position`, and `prev_chunk_id`/`next_chunk_id` to prose chunks, one page at a time (a new `source_url` or page-title H1 starts a page). `get_section` reads the indexed `clause_id`/`parent_chunk_id` columns, which upgrade like `list_id`/`table_id`. The server lists the tool only when an indexed prose chunk has `position`
 - **Per-page `source_url` from the companion `llms.txt`**: `llms-full.txt` stays clean (no URLs injected into headings); each chunk's page URL is recovered by joining the clean content to the standard `llms.txt` index, matched positionally per source and validated by H1 title. External `llmstxt` sources contribute their fetched companion `llms.txt` (real per-page URLs) or a synthesized index from their `docs_url`

@@ -70,7 +70,14 @@ uvx opencrane init
 
 The command creates the `.opencrane/` directory with the project configuration and the container files. It then prompts you to add documentation sources.
 
-To build and serve the index, install OpenCrane with the `pipeline` extra, as described in [Installation](#installation). Then run `opencrane build` and `opencrane serve`.
+To build and serve the index, complete the following steps:
+
+1. Install OpenCrane with the `pipeline` extra, as described in [Installation](#installation).
+2. Set the `GITHUB_TOKEN` environment variable to a GitHub API token. The fetch step of `opencrane build` fails without it, even when no source is a GitHub repository.
+3. Run `opencrane build`.
+4. Run `opencrane serve`.
+
+The MCP server starts and prints the commands that add it to common MCP clients.
 
 ## Installation
 
@@ -82,6 +89,7 @@ pip install opencrane
 
 To build an index, install the `pipeline` extra. The following commands need it:
 
+- `build`
 - `fetch`
 - `llms`
 - `chunk`
@@ -110,7 +118,12 @@ This section is the reference for the OpenCrane CLI and its configuration.
 
 ### CLI
 
-Each pipeline step and each project task has its own `opencrane` command. Commands that show `[--config {MODULE}:{CLASS}]` in their usage line accept the `--config` flag, which loads a custom `OpenCraneConfig` subclass. Pass the module and the class name, or the path to a Python file that defines a class named `Config`. The `OPENCRANE_CONFIG` environment variable takes the same value.
+Each pipeline step and each project task has its own `opencrane` command. Commands that show `[--config {MODULE}:{CLASS}]` in their usage line accept the `--config` flag, which loads a custom `OpenCraneConfig` subclass. The flag takes one of the following values:
+
+- A module and a class name, for example `myproject.config:MyConfig`. Python must be able to import the module, for example from an installed package or a directory in `PYTHONPATH`.
+- The path to a Python file that defines a class named `Config`. If the file does not exist, OpenCrane uses the base configuration and reports no error.
+
+The `OPENCRANE_CONFIG` environment variable takes the same values. Without the flag and the variable, OpenCrane loads the file that the `extensions` key in `.opencrane/config.yaml` names.
 
 #### Create a project with `opencrane init`
 
@@ -139,28 +152,38 @@ The command accepts the following flags:
 |---|---|
 | `--podman` | Generates `.opencrane/Containerfile` instead of `.opencrane/Dockerfile`. The generated README uses `podman` commands. |
 | `--force` | Overwrites existing generated files. By default, the command skips them. The command never overwrites `.opencrane/config.yaml`. |
-| `--no-add` | Skips the interactive prompt to add sources, which is useful in CI or in scripts. |
+| `--no-add` | Skips the interactive prompt to add sources, which is useful in CI or in scripts. The prompt works like [`opencrane add`](#add-documentation-sources-with-opencrane-add). |
 | `--extensions` | Generates `.opencrane/extensions.py` for custom Python extensions. |
 
 > [!IMPORTANT]
-> To load `.opencrane/extensions.py` without the `--config` flag, set `extensions: extensions.py` in `.opencrane/config.yaml`. The generated `config.yaml` has this key commented out, so uncomment it. Name the class in the file `Config`.
-
-After it creates the files, `opencrane init` prompts you to add documentation sources, in the same way as [`opencrane add`](#add-documentation-sources-with-opencrane-add). To skip the prompt, use `--no-add`.
+> To load `.opencrane/extensions.py` without the `--config` flag, uncomment the `extensions: extensions.py` key in `.opencrane/config.yaml`. Name the class in the file `Config`.
 
 #### Add documentation sources with `opencrane add`
 
-The `opencrane add` command adds documentation sources to your project interactively. Run `opencrane init` first, because the command needs the `.opencrane/` directory. The command has the following syntax:
+The `opencrane add` command adds documentation sources to `.opencrane/config.yaml` interactively. Run `opencrane init` first, because the command needs the `.opencrane/` directory. The command has the following syntax:
 
 ```bash
 opencrane add
 ```
 
-The command runs in a loop. For each source, it asks you to choose one of the following kinds of source:
+For each source, the command asks you to choose one of the following kinds of source:
 
-1. GitHub repository: the command asks for the repository URL, the path to the documentation in the repository, and an optional published documentation URL. It then adds an entry to `.opencrane/config.yaml`. You can also pin the entry to a Git ref, as described in [Source mapping file](docs/source-mapping.md). The `fetch` step downloads the repository's documentation on the next `opencrane build`.
-2. Existing `llms.txt` file: you provide a URL or a local file path, and the command adds an entry to `.opencrane/config.yaml`. On the next `fetch`, OpenCrane downloads or copies the file into `.opencrane/llmstxt/{NAME}/llms-full.txt`. When the upstream companion `llms.txt` is available, OpenCrane also fetches it into the same directory, so each page gets its own source URL.
+1. GitHub repository: the command asks for the following values:
+   - Repository URL
+   - Path to the documentation in the repository
+   - Published documentation URL, optional
+   - Source name
+   - [Git ref to pin](#source-mapping-file), optional
 
-After each source, the command asks whether to add another source or to finish.
+   The next `fetch` step downloads the documentation.
+2. Existing `llms.txt` file: the command asks for the following values:
+   - Source name
+   - URL or local path of the `llms-full.txt` file
+   - Published documentation URL, optional
+
+   The next `fetch` step downloads or copies the file into `.opencrane/llmstxt/{NAME}/llms-full.txt`. If a companion `llms.txt` exists next to the file, the fetch copies it too, so each page gets its own source URL.
+
+After each source, the command asks whether to add another source.
 
 #### Run the full pipeline with `opencrane build`
 
@@ -180,7 +203,9 @@ The command accepts the following flags:
 | `--chunks-file {PATH}` | Output path for the chunks JSON file, and input path for the embed step. Overrides the `AI_DOCS_CHUNKS_FILE` environment variable. |
 | `--embeddings-file {PATH}` | Output path for the embeddings JSON file. Overrides the `AI_DOCS_EMBEDDINGS_FILE` environment variable. |
 
-The `index` step does not use `--chunks-file` or `--embeddings-file`. It reads the chunks and embeddings from the paths in `AI_DOCS_CHUNKS_FILE` and `AI_DOCS_EMBEDDINGS_FILE`, by default `.opencrane/chunks.json` and `.opencrane/embeddings.json`. To build with other paths, set these environment variables instead of the flags.
+The `index` step ignores `--chunks-file` and `--embeddings-file` and reads only `AI_DOCS_CHUNKS_FILE` and `AI_DOCS_EMBEDDINGS_FILE`. To build with other paths, set these environment variables instead of the flags.
+
+The `llms` step of the build runs without `--force`. If you pass `--sources-dir` for a directory that Git ignores, run `opencrane llms --force` before the build, or the build keeps the old bundles.
 
 #### Fetch documentation from GitHub with `opencrane fetch`
 
@@ -201,7 +226,7 @@ For details about fetching, see [Fetch documentation sources](docs/fetching.md).
 
 #### Generate `llms-full.txt` bundles with `opencrane llms`
 
-The `opencrane llms` command writes one `llms-full.txt` file for each source, in `.opencrane/llmstxt/{SOURCE}/`. It also writes a combined `llms-full.txt` bundle of all sources in `.opencrane/llmstxt/`. Next to the bundle, it writes a companion `llms.txt` index that maps each page title to the page URL. The `chunk` step reads the combined bundle and the index to assign each chunk the `source_url` of its page. For details, see [the `llms-full.txt` generation guide](docs/llms-generation.md).
+The `opencrane llms` command writes one `llms-full.txt` file for each source, in `.opencrane/llmstxt/{SOURCE}/`. It also writes a combined `llms-full.txt` bundle of all sources in `.opencrane/llmstxt/`. Next to the bundle, it writes a companion `llms.txt` index that maps each page title to the page URL. For details, see [the `llms-full.txt` generation guide](docs/llms-generation.md).
 
 The command has the following syntax:
 
@@ -240,7 +265,7 @@ The `opencrane chunk` command splits the documentation into chunks and writes th
 opencrane chunk [--config {MODULE}:{CLASS}] [--llmstxt-dir {PATH}] [--chunks-file {PATH}]
 ```
 
-When the companion `llms.txt` index exists, the command reads it together with `llms-full.txt` and assigns each chunk the `source_url` of its page. For bundles from earlier OpenCrane versions, which have no index, the command reads the page URLs from the bundle itself.
+The command reads the combined `llms-full.txt` and its companion `llms.txt` index, and assigns each chunk the `source_url` of its page. For a bundle from an earlier OpenCrane version, which has no index, the command reads the page URLs from the bundle itself.
 
 The command accepts the following flags:
 
@@ -248,6 +273,7 @@ The command accepts the following flags:
 |---|---|
 | `--llmstxt-dir {PATH}` | Directory with `llms-full.txt` and its companion `llms.txt`. Overrides the `AI_DOCS_LLMSTXT_DIR` environment variable. |
 | `--chunks-file {PATH}` | Output path for the chunks JSON file. Overrides the `AI_DOCS_CHUNKS_FILE` environment variable. |
+| `--force` | Has no effect. The command always regenerates the chunks. |
 
 > [!TIP]
 > To learn how to structure Markdown so that its chunks are high quality and easy to retrieve, see the [authoring guide](docs/authoring-guide.md).
@@ -266,27 +292,29 @@ The command accepts the following flags:
 |---|---|
 | `--chunks-file {PATH}` | Input chunks JSON file. Overrides the `AI_DOCS_CHUNKS_FILE` environment variable. |
 | `--embeddings-file {PATH}` | Output embeddings JSON file. Overrides the `AI_DOCS_EMBEDDINGS_FILE` environment variable. |
-| `--force` | Regenerates the embeddings even when the chunks have not changed since the last run. Without this flag, the command skips the step when the chunks are unchanged. |
+| `--force` | Regenerates the embeddings even when nothing changed. Without this flag, the command skips the step when the chunks and `EMBEDDING_DOCUMENT_PROMPT` are the same as in the last run. The check ignores `EMBEDDING_MODEL`, so pass `--force` after you change the model. |
 
 #### Index the embeddings in Milvus with `opencrane index`
 
-The `opencrane index` command loads the chunks and their embeddings into Milvus. It has the following syntax:
+The `opencrane index` command loads the chunks and their embeddings into Milvus. It reads them from the paths in the `AI_DOCS_CHUNKS_FILE` and `AI_DOCS_EMBEDDINGS_FILE` environment variables.
+
+> [!CAUTION]
+> When the collection has a different vector size or lacks fields that this OpenCrane version needs, the command deletes and rebuilds the collection. Searches fail until the rebuild finishes and the MCP server uses the same embedding model. First, check that the embeddings come from the model you want to serve.
+
+The command has the following syntax:
 
 ```bash
 opencrane index [--config {MODULE}:{CLASS}]
 ```
 
-When the Milvus collection already has rows, the command skips indexing and keeps the existing data. This also applies to the index step of `opencrane build`. As a result, after a documentation update, `opencrane build` leaves the old data in Milvus.
+When the Milvus collection already has rows, the command skips indexing and keeps the existing data. This also applies to the index step of `opencrane build`, so after a documentation update, the build leaves the old data in Milvus.
 
-> [!CAUTION]
-> When the collection has a different vector size or lacks fields that this OpenCrane version needs, the command deletes and rebuilds the collection. Searches fail until the rebuild finishes and the MCP server uses the same model. First, check that the embeddings come from the model you want to serve.
-
-The command reads the chunks and embeddings from the paths in the `AI_DOCS_CHUNKS_FILE` and `AI_DOCS_EMBEDDINGS_FILE` environment variables, by default `.opencrane/chunks.json` and `.opencrane/embeddings.json`.
+To replace the existing data, set `DROP_EXISTING=true`.
 
 > [!CAUTION]
 > `DROP_EXISTING=true` deletes the Milvus collection before the command rebuilds it. On a Milvus server that an MCP server already uses, searches fail until the rebuild finishes. Before you run the command, confirm that `MILVUS_COLLECTION` and the connection variables point to the collection that you want to replace. The connection variables are `MILVUS_DB_PATH` in Lite mode, or `MILVUS_HOST` and `MILVUS_PORT` in server mode.
 
-To replace the existing data, set `DROP_EXISTING=true`:
+The following command replaces the existing data:
 
 ```bash
 DROP_EXISTING=true opencrane index
@@ -300,29 +328,25 @@ The `opencrane serve` command starts the MCP server. It has the following syntax
 opencrane serve [--config {MODULE}:{CLASS}] [--transport stdio|http]
 ```
 
+> [!CAUTION]
+> With `--transport http`, the server has no authentication by default and listens on all network interfaces. Anyone who can reach the port can search every source. Before you expose the port, set up [authentication](#authentication-and-authorization). To accept only local connections, set `MCP_HTTP_HOST=127.0.0.1`.
+
 The `--transport` flag accepts the following values:
 
 | Value | Description |
 |---|---|
-| `stdio` | Default. Standard input and output (stdio) transport for local MCP clients. At startup, the server prints integration instructions for Claude Code, Cursor, Windsurf, VS Code, Zed, Amazon Q, and Docker or Podman. |
-| `http` | HTTP transport on port 8000, using Streamable HTTP in stateless mode. The MCP endpoint is `http://localhost:8000/mcp`. Docker and Podman containers use this transport. The `MCP_HTTP_PORT` environment variable sets the port. |
+| `stdio` | Default. Standard input and output (stdio) transport for local MCP clients. At startup, the server prints the configuration for common MCP clients, for example Claude Code and Cursor. |
+| `http` | Streamable HTTP transport in stateless mode, on port 8000 by default. The MCP endpoint is `http://localhost:8000/mcp`, and the [health endpoint](#health-endpoint) is `/health`. Docker and Podman containers use this transport. For its settings, see [Variables for the HTTP transport](#variables-for-the-http-transport). |
 
-The server always exposes the following MCP tools:
+The server always exposes the `search_docs` and `health` tools. The following tools appear only when the index contains the chunk types that they read:
 
-- `search_docs`: searches the indexed documentation
-- `health`: returns the same report as the [health endpoint](#health-endpoint)
+- `get_list_members`
+- `get_table_members`
+- `get_yaml_definition`
+- `get_section`
+- `get_metadata_schema`
 
-The server adds the following tools only when the index contains the chunk types they need:
-
-| Tool | Description | Required chunk types |
-|---|---|---|
-| `get_list_members` | Returns every chunk of a Markdown list, in order. | List item |
-| `get_table_members` | Returns every row chunk of a Markdown table, in order. | Table row |
-| `get_yaml_definition` | Returns the full YAML definition behind a structured YAML chunk, for example a field of a Kubernetes CustomResourceDefinition. | CustomResourceDefinition, OpenAPI, or JSON Schema |
-| `get_section` | Returns a whole prose section by chunk ID or clause number. | Prose with navigation metadata |
-| `get_metadata_schema` | Describes the metadata fields of the chunks. | List item, table row, CustomResourceDefinition, OpenAPI, JSON Schema, or prose with navigation metadata |
-
-The HTTP transport also exposes a health endpoint. For details, see [Health endpoint](#health-endpoint).
+For the condition behind each tool, see [MCP tools](docs/architecture.md#mcp-tools). For the parameters, see [the MCP tools reference](docs/vector-search.md#mcp-tools).
 
 > [!IMPORTANT]
 > Do not bind-mount the Milvus Lite database. Milvus Lite cannot open its `.db` file from a bind-mounted volume and fails with `Open local milvus failed`. Copy the database into the image with `COPY` instead. The generated `.opencrane/Dockerfile` does this in a dedicated build stage.
@@ -370,7 +394,7 @@ The `opencrane inspect` command opens the [MCP Inspector](https://github.com/mod
 opencrane inspect [--config {MODULE}:{CLASS}]
 ```
 
-The command requires `npx`, which comes with Node.js. The web interface is available at `http://localhost:5173`.
+The command requires `npx`, which comes with Node.js. The MCP Inspector serves its web interface on port 6274 and prints the URL to open, with its session token.
 
 #### Compare a paragraph with the indexed documentation with `opencrane visualize`
 
@@ -417,13 +441,7 @@ The following table lists the main flags:
 | `--output {PATH}` | `.opencrane/visualization.html` | Output path for the HTML page |
 | `--no-open` | Off | Does not open the HTML page in a browser |
 
-The command requires the optional `viz` extra, which adds the following packages:
-
-- plotly
-- scikit-learn
-- umap-learn
-
-To install the `viz` extra, run the following command:
+The command requires the optional `viz` extra. To install it, run the following command:
 
 ```bash
 pip install 'opencrane[viz]'
@@ -485,69 +503,58 @@ To use the endpoint on a container platform, configure the probes as follows:
 
 ### Default file and directory names
 
-To override a default for one run, use the CLI flag. To override it persistently, set the environment variable. CLI flags take precedence over environment variables. The following table lists the default files and directories of the pipeline:
+To override a default for one run, use the CLI flag. To override it persistently, set the environment variable. A CLI flag takes precedence over the environment variable. The following table lists the default files and directories of the pipeline:
 
 | File or directory | Default | CLI flag | Environment variable |
 |---|---|---|---|
 | Fetched documentation | `.opencrane/sources` | none | `TARGET_DIR` |
-| Output directory for `llms-full.txt` | `.opencrane/llmstxt` | `--llmstxt-dir` | `AI_DOCS_LLMSTXT_DIR` |
+| `llms-full.txt` bundles | `.opencrane/llmstxt` | `--llmstxt-dir` | `AI_DOCS_LLMSTXT_DIR` |
 | Chunks file | `.opencrane/chunks.json` | `--chunks-file` | `AI_DOCS_CHUNKS_FILE` |
 | Embeddings file | `.opencrane/embeddings.json` | `--embeddings-file` | `AI_DOCS_EMBEDDINGS_FILE` |
-| Token report output | `.opencrane/llmstxt/README.md` | `--output-file` | `TOKEN_OUTPUT_FILE` |
+| Input directory of the token report | `.opencrane/llmstxt` | `--source-dir` | `TOKEN_SOURCE_DIR` |
+| Token report | `.opencrane/llmstxt/README.md` | `--output-file` | `TOKEN_OUTPUT_FILE` |
 | Source mapping file | `.opencrane/config.yaml` | none | `MAPPING_FILE` |
 | Milvus database file (Lite mode) | `.opencrane/milvus.db` | none | `MILVUS_DB_PATH` |
 
+The MCP server also reads the chunks file, for keyword search.
+
+Keep the following variables at their defaults in these cases:
+
+- `TARGET_DIR`, when you run the `llms` step without `--sources-dir`. The step reads the fetched documentation only from `.opencrane/sources`.
+- `AI_DOCS_LLMSTXT_DIR`, when you use `llmstxt` sources. The `fetch` step writes them only to `.opencrane/llmstxt`.
+
 ### Environment variables
 
-Environment variables set persistent defaults, for example in a CI/CD pipeline. The following sections list the variables for each pipeline step and for the health check.
-
-#### Variables for the `fetch` and `llms` steps
-
-The `fetch` and `llms` steps share the following variable for source tracking:
-
-| Variable | Default | Description |
-|---|---|---|
-| `MAPPING_FILE` | `.opencrane/config.yaml` | Path to the source mapping file. The `fetch` step records the fetched repositories in it. The `llms` step uses it to build the source URL of each page in the companion `llms.txt` index. The MCP server also reads it. |
+Environment variables set persistent defaults, for example in a CI/CD pipeline. For the variables that set file paths, see [Default file and directory names](#default-file-and-directory-names). The following sections list the other variables.
 
 #### Variables for the `fetch` step
 
-You need the following variables only if you run the `fetch` step, directly or through `opencrane build`, to pull documentation from GitHub:
+You need the following variables only if you run the `fetch` step, directly or through `opencrane build`:
 
 | Variable | Default | Description |
 |---|---|---|
+| `GITHUB_TOKEN` | none | GitHub API token. Required: `opencrane fetch` and `opencrane build` fail without it. |
 | `ORG_NAME` | none | GitHub organization to auto-discover repositories from. Auto-discovery runs only when `AUTO_DISCOVERY_ORGS` also lists the organization. The `--org` flag adds the organization to `AUTO_DISCOVERY_ORGS`. |
-| `FETCH_REPO` | none | Limits the fetch to one or more sources, by their key under `sources:`, as a comma-separated list. See also the `--source` flag. |
-| `GITHUB_TOKEN` | none | GitHub API token. Required: `opencrane fetch` fails without it. |
-| `DOCS_TOPIC` | `documentation` | GitHub topic that marks the repositories of an organization for auto-discovery |
 | `AUTO_DISCOVERY_ORGS` | none | Comma-separated list of the organizations where topic-based auto-discovery runs |
-| `TARGET_DIR` | `.opencrane/sources` | Local directory where OpenCrane stores the fetched documentation |
+| `DOCS_TOPIC` | `documentation` | GitHub topic that marks the repositories of an organization for auto-discovery |
+| `FETCH_REPO` | none | Limits the fetch to one or more sources, by their key under `sources:`, as a comma-separated list. See also the `--source` flag. |
 
 #### Variables for the `llms` step
 
-You need the following variables only if you run the `llms` step, directly or through `opencrane build`:
+The `llms` step, run directly or through `opencrane build`, reads the following variable:
 
 | Variable | Default | Description |
 |---|---|---|
-| `AI_DOCS_SOURCES_DIRS` | none | Comma-separated list of source directories to process. See also the `--sources-dir` flag. When the variable is empty, the `llms` step processes the sources listed in the source mapping file. |
-| `AI_DOCS_LLMSTXT_DIR` | `.opencrane/llmstxt` | Output directory for the generated `llms-full.txt` files. See also the `--llmstxt-dir` flag. |
-
-#### Variables for the `tokens` step
-
-You need the following variables only if you use `opencrane tokens`:
-
-| Variable | Default | Description |
-|---|---|---|
-| `TOKEN_SOURCE_DIR` | `.opencrane/llmstxt` | Directory with the `llms-full.txt` files to count. See also the `--source-dir` flag. |
-| `TOKEN_OUTPUT_FILE` | `.opencrane/llmstxt/README.md` | Output path for the Markdown report. See also the `--output-file` flag. |
+| `AI_DOCS_SOURCES_DIRS` | none | Comma-separated list of source directories to process. See also the `--sources-dir` flag. When the variable is empty, the step processes the sources in the source mapping file. |
 
 #### Variables for the `chunk` step
 
-You need the following variables only if you run the `chunk` step, directly or through `opencrane build`:
+The `chunk` step, run directly or through `opencrane build`, reads the following variables:
 
 | Variable | Default | Description |
 |---|---|---|
-| `AI_DOCS_LLMSTXT_DIR` | `.opencrane/llmstxt` | Directory with the `llms-full.txt` files. See also the `--llmstxt-dir` flag. |
-| `AI_DOCS_CHUNKS_FILE` | `.opencrane/chunks.json` | Output path for the generated chunks. See also the `--chunks-file` flag. |
+| `YAML_TREE_CHUNKING_ENABLED` | `true` | When `false`, the step does not use the [YAML tree walkers](#built-in-yaml-tree-walkers) and uses the generic YAML chunking for every YAML document. |
+| `TOKEN_ENCODING` | `cl100k_base` | The tiktoken encoding that the `chunk` and `tokens` steps use to count tokens |
 
 For the `PROSE_*` variables, see [Prose sections](docs/chunking.md#prose-sections).
 
@@ -557,9 +564,7 @@ You need the following variables only if you run the `embed` step, directly or t
 
 | Variable | Default | Description |
 |---|---|---|
-| `AI_DOCS_CHUNKS_FILE` | `.opencrane/chunks.json` | Input chunks JSON file. See also the `--chunks-file` flag. |
-| `AI_DOCS_EMBEDDINGS_FILE` | `.opencrane/embeddings.json` | Output path for the generated embeddings. See also the `--embeddings-file` flag. |
-| `EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | Hugging Face embedding model. See [Choose an embedding model](docs/embeddings.md#choose-an-embedding-model). |
+| `EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | Hugging Face embedding model. The MCP server must use the same model. See [Choose an embedding model](docs/embeddings.md#choose-an-embedding-model). |
 | `EMBEDDING_DOCUMENT_PROMPT` | none | Prefix that `embed` adds to every chunk. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
 
 #### Variables for the `index` and `serve` steps
@@ -577,18 +582,28 @@ The following table lists the variables:
 | `MILVUS_HOST` | `localhost` | Milvus server host, in server mode only |
 | `MILVUS_PORT` | `19530` | Milvus server port, in server mode only |
 | `MILVUS_COLLECTION` | `ai_docs_chunks_v1` | Milvus collection name |
-| `AI_DOCS_CHUNKS_FILE` | `.opencrane/chunks.json` | Chunks file that `index` loads and that the MCP server reads for keyword search. `index` reads only this variable, not the `--chunks-file` flag. |
-| `AI_DOCS_EMBEDDINGS_FILE` | `.opencrane/embeddings.json` | Embeddings file that `index` loads. `index` reads only this variable, not the `--embeddings-file` flag. |
-| `MILVUS_INSERT_BATCH_SIZE` | `2000` | Maximum number of chunks in each insert call during `index`. This limit keeps each call short enough to finish before the Milvus keepalive timeouts. A timeout makes the client retry, and the retries duplicate rows. If `index` creates duplicate rows, lower this value. |
+| `MILVUS_INSERT_BATCH_SIZE` | `2000` | Maximum number of chunks in each insert call during `index`. If `index` creates duplicate rows, lower this value. |
+| `DROP_EXISTING` | `false` | When `true`, `index` deletes and rebuilds the Milvus collection. When `false`, `index` keeps a collection that already has rows, unless its vector size or its fields no longer match. See [`opencrane index`](#index-the-embeddings-in-milvus-with-opencrane-index). |
 | `EMBEDDING_QUERY_PROMPT` | none | Prompt that `serve` and `visualize` apply to each query. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
 | `HYBRID_ALPHA` | `0.6` | Weight of vector search compared to keyword search. `1.0` is pure vector search, and `0.0` is pure BM25 keyword search. |
 | `HYBRID_CANDIDATE_POOL` | `0` | Number of results that hybrid search fetches from each arm before it fuses them. `0` means the requested `limit`. A wider pool, for example `50`, can surface chunks that both arms rank just below `limit`. |
 | `HYBRID_FUSION` | `minmax` | How hybrid search merges the two arms. `minmax` blends normalized scores, and `rrf` blends ranks with Reciprocal Rank Fusion. See [Search modes](docs/architecture.md#search-modes). |
 | `HYBRID_RRF_K` | `60` | The RRF smoothing constant `k`. OpenCrane uses it only when `HYBRID_FUSION` is `rrf`. |
-| `BM25_TOKENIZER` | `simple` | Keyword (BM25) tokenizer. `simple` lowercases text and splits it on every non-alphanumeric character. `identifier` keeps dotted, hyphenated, and underscored identifiers such as `5.4.1`, `TS 29.244`, `GTP-U`, or `get_yaml_definition` as one token and also emits their parts. With `identifier`, `gtp` still matches `GTP-U`, and `5.4.1` no longer matches `4.5.1`. The MCP server builds the BM25 index in memory, so a change of tokenizer needs a server restart but no re-chunking, re-embedding, or re-indexing. |
+| `BM25_TOKENIZER` | `simple` | Keyword (BM25) tokenizer. `simple` splits text on every non-alphanumeric character. `identifier` also keeps identifiers such as `5.4.1` or `GTP-U` as one token. A change needs a server restart, but no new index. See [Search modes](docs/architecture.md#search-modes). |
 | `RERANKER_MODEL` | none | Cross-encoder model that turns on the built-in reranker. See [Search modes](docs/architecture.md#search-modes). |
-| `RERANK_DEPTH` | `50` | Number of candidates the reranker reorders. |
-| `DROP_EXISTING` | `false` | When `true`, `index` deletes and rebuilds the Milvus collection. When `false`, `index` skips a collection that already has rows, unless the vector size changed. See [`opencrane index`](#index-the-embeddings-in-milvus-with-opencrane-index). |
+| `RERANK_DEPTH` | `50` | Number of candidates the reranker reorders |
+
+#### Variables for the HTTP transport
+
+The following variables configure the HTTP transport of `opencrane serve`:
+
+| Variable | Default | Description |
+|---|---|---|
+| `MCP_HTTP_PORT` | `8000` | Port that the server listens on |
+| `MCP_HTTP_HOST` | `0.0.0.0` | Network interface that the server listens on. `127.0.0.1` accepts only local connections. |
+| `MCP_ALLOWED_HOSTS` | none | Comma-separated list of `host[:port]` values that the server accepts in the `Host` header of a request. When it is set, the server rejects other hosts, which protects against Domain Name System (DNS) rebinding attacks. When it is empty, the server accepts any host, so it works behind a reverse proxy. |
+
+For `PUBLIC_URL` and the other authentication variables, see [Authentication and authorization](docs/auth.md).
 
 #### Variables for the health check
 
@@ -603,40 +618,16 @@ The following variables tune the search probe and the memory threshold of the [h
 
 ### Source mapping file
 
-The source mapping file, `.opencrane/config.yaml`, lists the documentation sources under the `sources:` key. For each source, it records the location of the documentation and the URL of the published documentation site. The same file also holds other project settings, for example `section_anchor_style`. For details, see [Source mapping file](docs/source-mapping.md).
+The source mapping file, `.opencrane/config.yaml`, lists the documentation sources under the `sources:` key. The `fetch` step adds and updates the entries of the repositories that it auto-discovers. You edit the entries that you manage yourself. The same file also holds other project settings, for example `section_anchor_style`. For the fields of an entry, see [Source mapping file](docs/source-mapping.md).
 
-The following steps use the file:
+By default, `opencrane fetch` pulls from the latest GitHub release of a repository, or from the default branch when the repository has no releases. To pin an entry with `manual: true` to a specific Git ref instead, set one of the following fields:
 
-- `fetch`: tracks the fetched repositories
-- `llms`: builds the companion `llms.txt` index with the source URL of each page
+- `sha`: a commit SHA
+- `tag`: a Git tag
+- `release`: the tag name of a GitHub release
+- `branch`: a branch
 
-The `fetch` step fills in the file automatically. For sources that you manage yourself, edit the file directly.
-
-Each entry under `sources:` supports the following fields:
-
-| Field | Required | Description |
-|---|---|---|
-| `url` | Yes, for `fetch` | GitHub repository URL. `opencrane fetch` uses it to download the documentation and to build the GitHub source URL of each page in the companion `llms.txt` index. For a `type: llmstxt` source, the URL or local path of the `llms-full.txt` file. |
-| `docs_path` | No | Path to the documentation in the repository, for example `docs` |
-| `docs_url` | No | Base URL of the published documentation site, for example `https://docs.example.com/product`. When it is set, OpenCrane builds the page URLs from it instead of from `url`. AI agents can then point users to the rendered documentation instead of the raw GitHub files. |
-| `manual` | No | When `true`, you manage the entry yourself, and `opencrane fetch` auto-discovery does not overwrite it. The `opencrane add` command sets this field. |
-| `local` | No | When `true`, the key of the entry under `sources:` is the path to a local directory in the project. `opencrane fetch` skips the entry, and the pipeline reads directly from that path. |
-| `type` | No | `llmstxt` for an existing `llms-full.txt` file. Without this field, the entry is a GitHub repository. |
-| `branch` | No | Branch to pin the source to, for example `develop` |
-| `tag` | No | Git tag to pin the source to, for example `v2.1.0` |
-| `release` | No | GitHub release to pin the source to, by its tag name, for example `v2.1.0`. OpenCrane validates it through the Releases API. |
-| `sha` | No | Commit SHA to pin the source to |
-
-For a `type: llmstxt` source without a companion `llms.txt`, every page in the bundle gets `docs_url` as its base URL. If neither `url` nor `docs_url` is set, chunks from the source get no `source_url`.
-
-By default, `opencrane fetch` pulls from the latest GitHub release. If a repository has no releases, `opencrane fetch` uses the default branch.
-
-To pin a source to a specific Git ref instead, set one of the `branch`, `tag`, `release`, or `sha` fields. OpenCrane applies a pin only to entries with `manual: true`. Set only one of these fields. If you set several, OpenCrane logs a warning and uses the first one in the following order:
-
-1. `sha`
-2. `tag`
-3. `release`
-4. `branch`
+OpenCrane ignores these fields on entries without `manual: true`. Set only one of the fields. If you set several, OpenCrane logs a warning and uses the first one in the order of the previous list.
 
 The following example pins a manually managed source to a tag:
 
@@ -666,7 +657,7 @@ from opencrane.rag.services.prose_chunker import ProseChunkingStrategy
 from myproject.strategies.custom import CustomChunkingStrategy
 from myproject.walkers.terraform import TerraformTreeWalker
 
-class MyConfig(OpenCraneConfig):
+class Config(OpenCraneConfig):
     fence_types = {
         **OpenCraneConfig.fence_types,  # keep openapi, asyncapi, crd, json-schema
         "terraform": CodeFenceConfig(fence_type="terraform", handler=inline_file),
@@ -691,7 +682,7 @@ To use the subclass, pass it to the `--config` flag:
 opencrane build --config myproject.config:MyConfig
 ```
 
-OpenCrane tries the chunking strategies in list order and uses the first one that matches the content. Put a custom strategy before the general strategies that would otherwise match first.
+Python must be able to import the `myproject` module, as described in [CLI](#cli). OpenCrane tries the chunking strategies in list order and uses the first one that matches the content. Put a custom strategy before the general strategies that would otherwise match first.
 
 ### Extension points
 
@@ -763,10 +754,16 @@ section_clause_pattern: '(\d+(?:\.\d+)*)\s'
 
 To turn the navigation metadata off, set `prose_navigation = False` in your config subclass.
 
-> [!CAUTION]
-> `opencrane index` deletes a collection that an older version built, and searches fail until the rebuild finishes. First confirm that `MILVUS_COLLECTION` and the connection variables name the collection to replace.
+An index from an earlier OpenCrane version has no navigation metadata, so the server does not offer `get_section`. To add the metadata, run `opencrane chunk` and `opencrane embed`, and then run `opencrane index`.
 
-For an older index, run `opencrane chunk`, `opencrane embed`, and `opencrane index` again.
+> [!CAUTION]
+> `opencrane index` deletes a collection that an earlier version built and rebuilds it. Searches fail until the rebuild finishes. First confirm that `MILVUS_COLLECTION` and the connection variables name the collection to replace.
+
+The following command rebuilds the index:
+
+```bash
+opencrane chunk && opencrane embed && opencrane index
+```
 
 ### Built-in fence types
 
@@ -777,7 +774,7 @@ A fence type is the language identifier after the opening backticks of a code bl
 - `crd`
 - `json-schema`
 
-Each type uses the `opencrane.fences.inline_file` handler. The handler reads the file path written inside the fence block and replaces the block with the file content. The path is relative to the Markdown file, and the file must be inside the project. If the file is missing or outside the project, the handler writes a `# Source missing` comment instead. The handler also adds a `### {source_url}` heading above the content, so the chunker assigns the source URL of each file to the resulting chunks.
+Each type uses the `opencrane.fences.inline_file` handler. The handler reads the file path written inside the fence block and replaces the block with the file content. The path is relative to the Markdown file, and the file must be inside the project. If the file is missing or outside the project, the handler writes a `# Source missing` comment instead. When OpenCrane can build the source URL of the file, the handler adds it as a `### {source_url}` heading, so the chunks from the file get that URL.
 
 The following Markdown example uses two of the built-in fence types:
 
@@ -818,27 +815,14 @@ def my_handler(content: str, file_path: Path, project_dir: Path, project_name: s
     # return the full replacement string
     return f"```yaml\n# processed\n{content}\n```\n"
 
-class MyConfig(OpenCraneConfig):
+class Config(OpenCraneConfig):
     fence_types = {
         **OpenCraneConfig.fence_types,
         "my-type": CodeFenceConfig(fence_type="my-type", handler=my_handler),
     }
 ```
 
-To inline a file that the block references by path, use the built-in `inline_file` handler from `opencrane.fences`:
-
-```python
-from opencrane import OpenCraneConfig
-from opencrane.fences import CodeFenceConfig, inline_file
-
-class MyConfig(OpenCraneConfig):
-    fence_types = {
-        **OpenCraneConfig.fence_types,
-        "my-type": CodeFenceConfig(fence_type="my-type", handler=inline_file),
-    }
-```
-
-The `inline_file` handler works as described in [Built-in fence types](#built-in-fence-types).
+To inline a file that the block references by path, pass `handler=inline_file` from `opencrane.fences`, as the `terraform` entry in the example in [Extend OpenCrane](#extend-opencrane) does. The handler works as described in [Built-in fence types](#built-in-fence-types).
 
 ### Write a custom YAML tree walker
 
@@ -857,7 +841,9 @@ class TerraformTreeWalker(YamlTreeWalker):
         ...
 ```
 
-The `can_handle` method returns `True` for the documents that the walker supports. The `walk` method returns the chunks of the document. To register the walker, add it to `yaml_tree_walkers`, as in the example in [Extend OpenCrane](#extend-opencrane).
+The `can_handle` method returns `True` for the documents that the walker supports. The `walk` method returns the chunks of the document. Each chunk needs a `chunk_type` that the `Chunk` model accepts. A new chunk type needs a change to OpenCrane itself, as described in [Add a tree walker for a YAML specification](docs/chunking.md#add-a-tree-walker-for-a-yaml-specification).
+
+To register the walker, add it to `yaml_tree_walkers`, as in the example in [Extend OpenCrane](#extend-opencrane).
 
 ### Add custom MCP tools
 
@@ -917,13 +903,13 @@ If the handler raises an exception, the client receives an MCP tool error with t
 
 The HTTP transport (`opencrane serve --transport http`) supports OAuth 2.1 authentication and scope-based authorization of content. The stdio transport has no authentication, following the MCP specification.
 
-You choose the authentication mode with the `auth.type` key in `.opencrane/config.yaml`. Every mode needs the `PUBLIC_URL` environment variable, set to the public base URL of the server, except `oauth` with `allow_anonymous: true`. The following table lists the modes:
+You choose the authentication mode with the `auth.type` key in `.opencrane/config.yaml`. The default mode, `none`, has no authentication. The other modes need the `PUBLIC_URL` environment variable, set to the public base URL of the server. The exception is `oauth` with `allow_anonymous: true`. The following table lists the modes with authentication:
 
 | Mode | Who issues the tokens | Configuration |
 |---|---|---|
 | `local` | OpenCrane acts as its own authorization server. When an MCP client starts authorization, OpenCrane redirects the browser to its `/login` form. | Set `auth.type: local` and `OPENCRANE_ACCESS_TOKEN`. For a username and password instead of a token, set `auth.local.method: password`, `OPENCRANE_LOGIN_USER`, and `OPENCRANE_LOGIN_PASS`. |
 | `oauth` | An external identity provider, such as Keycloak or Microsoft Entra ID. OpenCrane is an OAuth resource server. | Install the `auth` extra with `pip install 'opencrane[auth]'`. Set `auth.type: oauth` with the OpenID Connect (OIDC) settings `oidc.issuer` and `oidc.audience`. |
-| `custom` | Your own code, for full control over token validation or the authorization server. | Set `auth.type: custom`, and supply your own `token_verifier` or `auth_provider` on `OpenCraneConfig`. |
+| `custom` | Your own code, for full control over token validation or the authorization server. | Set `auth.type: custom`, and supply your own `token_verifier` or `auth_provider` on `OpenCraneConfig`. Without either, the server runs with no authentication and logs a warning. |
 
 To limit which sources a caller can search, set `scope_sources`. It maps OAuth scopes to sets of documentation sources. Callers get content only from the sources that the scopes of their token allow.
 
@@ -952,7 +938,7 @@ To run the tests, use the following command:
 ./pytest.sh
 ```
 
-For more test options, see [Run the tests](docs/running-tests.md).
+For more test options, see [Run the tests](docs/running-tests.md). For the development setup, see [Development](docs/development.md).
 
 ## Credits
 

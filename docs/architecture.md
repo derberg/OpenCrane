@@ -241,7 +241,7 @@ The following table lists the backing services:
 | Service | Responsibility |
 |---|---|
 | `opencrane/mcp/services/milvus_client.py` | Manages the connection to Milvus and runs the vector searches. |
-| `opencrane/mcp/services/keyword_search.py` | Builds the BM25 index from `chunks.json` when the first keyword or hybrid query arrives. The server needs `chunks.json` for keyword and hybrid search. |
+| `opencrane/mcp/services/keyword_search.py` | Builds the BM25 index from `chunks.json` when the first keyword or hybrid query arrives, then keeps it in memory and reuses it for later queries. It rebuilds the index only when the modification time or size of `chunks.json` changes. The server needs `chunks.json` for keyword and hybrid search. |
 
 ### Configuration
 

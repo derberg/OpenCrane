@@ -1057,11 +1057,13 @@ async def compute_health() -> dict:
             stats_status = "degraded"
 
         # The keyword (BM25) index is the one heavy structure still built lazily
-        # on first use (search no longer loads any chunk map into RAM). Capture its
-        # residency BEFORE the probe, which may build it itself, so the first-query
+        # on first use (search no longer loads any chunk map into RAM), then kept
+        # resident. Capture its residency BEFORE the probe so the first-query
         # memory spike stays visible.
         checks["heavy_maps"] = {
-            "keyword_index_resident": _keyword_service is not None,
+            "keyword_index_resident": (
+                _keyword_service is not None and bool(_keyword_service.index_resident)
+            ),
         }
 
         checks["memory"] = _memory_health()

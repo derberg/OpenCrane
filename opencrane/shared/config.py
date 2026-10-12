@@ -45,6 +45,14 @@ class Config:
     embedding_query_prompt: str = field(default_factory=lambda: _prompt_env("EMBEDDING_QUERY_PROMPT"))
     # Search configuration
     hybrid_alpha: float = field(default_factory=lambda: float(os.getenv("HYBRID_ALPHA", "0.6")))
+    # Results fetched per arm (semantic, keyword) before hybrid fusion; 0 = the requested limit
+    hybrid_candidate_pool: int = field(default_factory=lambda: int(os.getenv("HYBRID_CANDIDATE_POOL", "0")))
+    # Hybrid fusion method: "minmax" (min-max normalised alpha blend) or "rrf" (reciprocal rank fusion)
+    hybrid_fusion: str = field(default_factory=lambda: os.getenv("HYBRID_FUSION", "minmax").strip().lower())
+    # RRF smoothing constant k in 1 / (k + rank)
+    hybrid_rrf_k: int = field(default_factory=lambda: int(os.getenv("HYBRID_RRF_K", "60")))
+    # BM25 tokenizer: "simple" (split on non-alphanumerics) or "identifier" (keeps 5.4.1 / GTP-U intact)
+    bm25_tokenizer: str = field(default_factory=lambda: os.getenv("BM25_TOKENIZER", "simple"))
     # Source mapping file configuration
     mapping_file: Path = field(default_factory=lambda: Path(os.getenv("MAPPING_FILE", ".opencrane/config.yaml")))
     # Optional: restrict fetch to a single repo by path key (e.g. "external-sources/cgw")

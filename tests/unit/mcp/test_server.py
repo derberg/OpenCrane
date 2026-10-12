@@ -12,6 +12,7 @@ from opencrane.mcp.server import (
     _worst_status, _read_cgroup_memory, _memory_health, _query_probe,
 )
 from mcp.types import TextContent
+from opencrane.mcp.services.keyword_search import KeywordSearchService
 
 
 class TestMCPServer:
@@ -1322,6 +1323,27 @@ class TestHonestHealthCheck:
 
         payload = await compute_health()
         assert payload["checks"]["heavy_maps"]["keyword_index_resident"] is True
+
+    @patch("opencrane.mcp.server._query_probe")
+    @patch("opencrane.mcp.server._memory_health")
+    @patch("opencrane.mcp.server.get_milvus_service")
+    @patch("opencrane.mcp.server.get_embeddings_service")
+    @pytest.mark.anyio
+    async def test_compute_health_keyword_service_without_built_index_not_resident(
+        self, mock_emb_get, mock_milv_get, mock_mem, mock_probe, monkeypatch
+    ):
+        emb, milv = self._services()
+        mock_emb_get.return_value = emb
+        mock_milv_get.return_value = milv
+        mock_mem.return_value = {"status": "unavailable"}
+        mock_probe.return_value = {"status": "healthy"}
+        # The service object exists but has not built its BM25 index yet.
+        monkeypatch.setattr(
+            "opencrane.mcp.server._keyword_service", KeywordSearchService(chunks=[])
+        )
+
+        payload = await compute_health()
+        assert payload["checks"]["heavy_maps"]["keyword_index_resident"] is False
 
     @patch("opencrane.mcp.server.get_embeddings_service")
     @pytest.mark.anyio

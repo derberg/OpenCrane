@@ -277,9 +277,9 @@ opencrane index [--config {MODULE}:{CLASS}]
 When the Milvus collection already has rows, the command skips indexing and keeps the existing data. This also applies to the index step of `opencrane build`. As a result, after a documentation update, `opencrane build` leaves the old data in Milvus.
 
 > [!CAUTION]
-> After an OpenCrane upgrade, `opencrane index` can delete and rebuild the collection. On a Milvus server that an MCP server already uses, searches fail until the rebuild finishes.
+> After an OpenCrane upgrade or a change of embedding model, `opencrane index` can delete and rebuild the collection. On a Milvus server that an MCP server already uses, searches fail until the rebuild finishes.
 
-When the collection lacks fields that the current OpenCrane version needs, the command drops and rebuilds the collection automatically.
+The command drops and rebuilds the collection automatically in two cases: the collection lacks fields that the current OpenCrane version needs, or its vector size differs from the vector size in the embeddings file. For model changes, see [Choose an embedding model](docs/embeddings.md#choose-an-embedding-model).
 
 The command reads the chunks and embeddings from the paths in the `AI_DOCS_CHUNKS_FILE` and `AI_DOCS_EMBEDDINGS_FILE` environment variables, by default `.opencrane/chunks.json` and `.opencrane/embeddings.json`.
 
@@ -556,7 +556,7 @@ You need the following variables only if you run the `embed` step, directly or t
 |---|---|---|
 | `AI_DOCS_CHUNKS_FILE` | `.opencrane/chunks.json` | Input chunks JSON file. See also the `--chunks-file` flag. |
 | `AI_DOCS_EMBEDDINGS_FILE` | `.opencrane/embeddings.json` | Output path for the generated embeddings. See also the `--embeddings-file` flag. |
-| `EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | Hugging Face embedding model to use. Models of any vector size work. Serve with the model you embedded with. See [Generate embeddings](docs/embeddings.md#choose-an-embedding-model). |
+| `EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | Hugging Face embedding model to use. Models of any vector size work. Serve with the model you embedded with. See [Choose an embedding model](docs/embeddings.md#choose-an-embedding-model). |
 
 #### Variables for the `index` and `serve` steps
 

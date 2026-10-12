@@ -350,7 +350,7 @@ class TerraformTreeWalker(YamlTreeWalker):
 
 A custom reranker replaces the built-in reranker, for example to call a hosted rerank API or a large language model. Set the `reranker` attribute on your `Config` class to a function or an object with a `rerank` method. The reranker takes the query and a list of candidates. Each candidate is a dictionary with the following keys:
 
-- `chunk_id`: the ID of the chunk
+- `chunk_id`: the chunk ID
 - `content`: the chunk text, which is a JSON string for YAML chunks
 - `source_file`: the source file path
 - `source_name`: the documentation source
@@ -358,7 +358,7 @@ A custom reranker replaces the built-in reranker, for example to call a hosted r
 - `metadata_json`: the chunk metadata as JSON
 - `distance`: the search score, where a higher value is better
 
-Return the candidates in order, best first. You can drop candidates or set `distance` to your own score. The following example moves candidates that contain the query text to the top:
+Return the candidates best first. You can drop candidates or set `distance` to your own score. The following example moves candidates that contain the query text to the top:
 
 ```python
 def my_reranker(query: str, candidates: list[dict]) -> list[dict]:

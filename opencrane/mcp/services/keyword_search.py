@@ -9,9 +9,10 @@ import json
 import logging
 import os
 import re
+import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, List, Dict, Optional, Iterable
+from typing import Callable, List, Dict, Optional, Iterable, Tuple
 
 from opencrane.shared.config import get_config
 
@@ -84,7 +85,9 @@ class KeywordDoc:
 class KeywordSearchService:
     """BM25-based keyword search over chunks.
 
-    Index is built lazily from rag-chunks.json or injected data for tests.
+    Index is built lazily on first search, from rag-chunks.json or injected data
+    for tests, and then reused. A file-backed index is rebuilt only when the
+    chunks file changes (mtime or size); an injected ``chunks`` list is built once.
     """
 
     def __init__(self, chunks: Optional[List[Dict]] = None, chunks_path: Optional[Path] = None):
@@ -95,6 +98,32 @@ class KeywordSearchService:
         self._chunks_path = chunks_path or Path(os.environ.get("AI_DOCS_CHUNKS_FILE", ".opencrane/chunks.json"))
         # Resolved once so documents and queries always share the same tokenizer
         self._tokenize = _resolve_tokenizer()
+        # Signature of the source the current index was built from; None = not built.
+        self._source_signature: Optional[Tuple] = None
+        # Serialises build/rebuild: hybrid search runs the keyword arm in an
+        # executor thread, so concurrent first queries must not build twice or
+        # observe a half-swapped index.
+        self._lock = threading.Lock()
+
+    @property
+    def index_resident(self) -> bool:
+        """True once the BM25 index has been built and is held in memory."""
+        return self._bm25 is not None
+
+    def _current_signature(self) -> Tuple:
+        if self._chunks is not None:
+            return ("injected",)
+        st = self._chunks_path.stat()
+        return (str(self._chunks_path), st.st_mtime_ns, st.st_size)
+
+    def _ensure_index(self) -> Tuple[BM25Okapi, List[KeywordDoc]]:
+        """Build the index if missing or stale; return a consistent (bm25, docs) pair."""
+        with self._lock:
+            signature = self._current_signature()
+            if self._bm25 is None or signature != self._source_signature:
+                self._load()
+                self._source_signature = signature
+            return self._bm25, self._docs
 
     def _load(self) -> None:
         raw = self._chunks if self._chunks is not None else json.loads(self._chunks_path.read_text(encoding="utf-8"))
@@ -124,7 +153,6 @@ class KeywordSearchService:
         self._bm25 = BM25Okapi(tokenized)
         self._docs = docs
         self._tokenized_corpus = tokenized
-        self._loaded = True
 
     def search(
         self,
@@ -135,11 +163,10 @@ class KeywordSearchService:
         source_names: Optional[List[str]] = None,
         metadata_contains: Optional[List[str]] = None,
     ) -> List[Dict]:
-        self._load()
+        bm25, docs = self._ensure_index()
 
-        assert self._bm25 is not None  # for type checkers
         tokens = self._tokenize(query)
-        scores = self._bm25.get_scores(tokens)
+        scores = bm25.get_scores(tokens)
 
         # Rank indices by score
         ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
@@ -160,7 +187,7 @@ class KeywordSearchService:
 
         results: List[Dict] = []
         for i in ranked:
-            doc = self._docs[i]
+            doc = docs[i]
             if not _passes_filters(doc):
                 continue
             results.append({

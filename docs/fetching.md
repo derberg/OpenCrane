@@ -1,70 +1,119 @@
-# Fetch Documentation Sources
+# Fetch documentation sources
 
-OpenCrane can automatically fetch documentation files from GitHub repositories. Documentation is fetched from the **latest release** of each repository. The primary mechanism for fetching is through a scheduled GitHub Actions workflow that runs on a defined cadence to keep documentation up-to-date.
+The `opencrane fetch` command copies documentation from GitHub repositories into `.opencrane/sources/`. By default, it fetches the documentation from the latest release of each repository. If a repository has no releases, it uses the default branch.
 
-## GitHub Actions Workflow
+For an entry with `manual: true`, you can fetch a fixed branch, tag, release, or commit instead. Set the matching field on the entry, as described in the [source mapping file](source-mapping.md). If you set more than one of these fields, `sha` takes precedence, then `tag`, `release`, and `branch`. OpenCrane ignores these fields on auto-discovered entries.
 
-A typical `update-docs.yml` workflow fetches documentation from one or more organizations or repositories:
+The usual setup runs the fetch on a schedule, for example in a scheduled GitHub Actions workflow, so the indexed documentation stays current.
 
-- **Auto-discovery**: Repos tagged with a specific topic (e.g., `"documentation"`) are discovered automatically
-- **Manual repositories**: Specific repos can be added in your source mapping config with `manual: true`
+## Choose which repositories to fetch
 
-**Auto-discovery configuration**: The `AUTO_DISCOVERY_ORGS` environment variable (in your project's config class) controls which orgs have auto-discovery enabled. To enable auto-discovery for additional orgs, set `AUTO_DISCOVERY_ORGS=my-org,other-org`.
+OpenCrane finds the repositories to fetch in two ways:
 
-The workflow makes sure that your project always operates on the latest docs.
+- Auto-discovery: OpenCrane fetches every repository with the discovery topic in the organization you fetch from.
+- Manual entries: OpenCrane fetches every repository whose entry in the source mapping file sets `manual: true`, regardless of its topics.
 
-## Automatic Cleanup
+The discovery topic is `documentation` by default. To use another topic, set the `DOCS_TOPIC` environment variable.
 
-The fetch process automatically cleans up stale documentation sources:
+Each fetch discovers repositories in one organization only: the one that the `--org` flag or the `ORG_NAME` environment variable names. When you pass `--org`, auto-discovery always runs for that organization.
 
-- **Stale Detection**: Repositories that **lose the discovery topic** are identified and removed
-- **Mapping Cleanup**: Removes entries from your source mapping config (only auto-generated entries with `manual: false`)
-- **Directory Cleanup**: Deletes both source directories and generated output (`llmstxt/`)
-- **Manual Entry Protection**: Entries marked as `manual: true` are never automatically removed
-- **Local Entry Protection**: Entries marked as `local: true` are never fetched or removed (they reference local filesystem paths)
-- **Org Filtering**: The `--org` flag filters which repos are processed - repos from other orgs are skipped (not removed)
-- **Failure Protection**: Repos that **fail to fetch** (network errors, no files, etc.) are NOT removed - only repos that lose the topic are removed
-
-This prevents accumulation of outdated documentation while protecting against temporary failures.
-
-## Local Execution
-
-Running locally is intended **only for testing purposes** or in exceptional cases where manual fetching is required (e.g., troubleshooting issues, one-off updates, or when the automated workflow fails). It requires setting up a GitHub token and Python environment locally.
-
-### Fetch from a specific organization
+When `ORG_NAME` selects the organization, as in a continuous integration (CI) workflow, auto-discovery runs only if the organization is in the `AUTO_DISCOVERY_ORGS` environment variable. The variable takes a comma-separated list and is empty by default. The following command allows auto-discovery for two organizations:
 
 ```bash
-# Fetch from an organization (auto-discovers repos with the configured topic)
-opencrane fetch --config yourproject.config:YourConfig --org my-org
-
-# Force fetch regardless of changes
-opencrane fetch --config yourproject.config:YourConfig --org my-org --force
+export AUTO_DISCOVERY_ORGS={ORG_NAME},{OTHER_ORG_NAME}
 ```
 
-### Fetch a single repository
+> [!CAUTION]
+> If `ORG_NAME` names an organization that is not in `AUTO_DISCOVERY_ORGS` and you do not pass `--org`, the fetch discovers no repositories in it. It then deletes the local source directory and the `llmstxt/` output of every auto-discovered entry from that organization, and removes the entries from the source mapping file. `opencrane build` never passes `--org`, so a build in this setup always deletes these entries. Pass `--org`, or add the organization to `AUTO_DISCOVERY_ORGS`.
 
-Use `--repo <path_key>` to restrict the fetch to one specific entry from your source mapping config. The path key is the top-level key under `sources:` in that file (e.g. `external-sources/my-repo`). The org filter is bypassed automatically when `--repo` is used, so no `--org` flag is needed.
+## How the fetch removes stale sources
+
+A source is stale when auto-discovery no longer returns its repository. Auto-discovery stops returning a repository in the following cases:
+
+- The repository lost the discovery topic.
+- OpenCrane could not read the topics of the repository after retries.
+- The token cannot see the repository, for example because it was deleted or renamed.
+
+Each fetch removes stale sources, so outdated documentation does not accumulate.
+
+> [!CAUTION]
+> When auto-discovery no longer returns a repository, `opencrane fetch` deletes its local source directory and its generated `llmstxt/` output. To keep the source, set `manual: true` on its entry.
+
+The following table shows what the fetch does with each kind of source during cleanup:
+
+| Source | Cleanup behavior |
+|---|---|
+| Stale auto-discovered entry (`manual: false`) | Removed from the source mapping file, with its directories in `.opencrane/sources/` and `.opencrane/llmstxt/` |
+| Entry with `manual: true` | Never removed |
+| Entry with `local: true` | Never fetched or removed, because it points to a directory in the project root |
+| Entry with `type: llmstxt` | Never removed |
+| Auto-discovered entry from another organization | Not fetched, and kept |
+| Entry that `--source` does not name, when you pass `--source` | Not fetched, and kept |
+| Repository whose files fail to download, for example after a network error, or that has no files | Kept |
+
+## Run the fetch locally
+
+Run the fetch on your own machine for the following purposes:
+
+- To test a configuration
+- To troubleshoot a source
+- To refresh a source after the scheduled run fails
+
+Run the commands from the project root, the directory that contains `.opencrane/config.yaml`. Before you start, make sure you have the following:
+
+- OpenCrane installed with the `pipeline` extra, on Python 3.11 or later (see [Installation](../README.md#installation))
+- A GitHub token in the `GITHUB_TOKEN` environment variable
+
+### Fetch the repositories of an organization
+
+The `opencrane fetch --org` command fetches every repository in the organization that has the discovery topic. It also fetches every entry with `manual: true` and every `llmstxt` source, and then removes stale sources.
+
+> [!CAUTION]
+> This command deletes the local source directory and the generated `llmstxt/` output of every auto-discovered repository in the organization that auto-discovery no longer returns. To keep such a source, set `manual: true` on its entry before you run the command.
+
+To fetch the repositories of an organization, run the following command:
 
 ```bash
-# Fetch only one repo — no --org needed
-opencrane fetch --config yourproject.config:YourConfig --repo external-sources/my-repo
+opencrane fetch --org {ORG_NAME}
 ```
 
-This is useful when you need to refresh a single source without re-fetching the entire set of repositories.
+The fetched files appear in `.opencrane/sources/`, in one directory for each source.
 
-## Companion `llms.txt` for external `llmstxt` sources
+### Fetch specific sources
 
-When a source is added as a pre-existing `llmstxt` bundle (a URL or local path to an `llms-full.txt`), fetch also tries to retrieve the upstream **companion `llms.txt`** index next to it — the standard `llms.txt` file that carries real per-page URLs. It is saved alongside the bundle in `.opencrane/llmstxt/<name>/llms.txt`.
+To refresh only some sources, pass their path keys to `--source`. The path key is the top-level key under `sources:` in the source mapping file. Separate several keys with commas. For entries with `manual: true`, you do not need `--org`. To refresh an auto-discovered entry, also pass `--org {ORG_NAME}`.
 
-- **Remote sources**: the companion URL is derived by swapping a trailing `llms-full.txt` for `llms.txt`, or, when that does not apply, by appending `/llms.txt` to the source's `docs_url`. If the companion returns a 404 or any error, fetch proceeds without it — no hard failure.
-- **Local sources**: a sibling `llms.txt` next to the source file is copied when present.
+> [!CAUTION]
+> If a source you name is auto-discovered and auto-discovery no longer returns its repository, this command deletes its local source directory and its generated `llmstxt/` output. To keep the source, set `manual: true` on its entry before you run the command.
 
-When a companion index is available, the `chunk` step uses its per-page URLs so each chunk carries its specific page `source_url`. When it is absent, the `llms` step synthesizes an index from the source's `docs_url` (the base URL, repeated for every page) — see [Source mapping](source-mapping.md).
-
-Companion entries may include the standard optional `: description` suffix after the link (`- [Title](url): some text`); it is parsed and ignored. GitBook-style companions often list source-file URLs ending in `.md` (or `/index.md`). When the source has a `docs_url` configured, those URLs are normalized to the rendered docs-site page (the extension is stripped and `/index.md` maps to its parent path), matching how `docs_url` sources resolve page URLs. Without a `docs_url`, companion URLs are used verbatim.
-
-### Generate LLM bundles
+To fetch specific sources, run the following command:
 
 ```bash
-opencrane llms --config yourproject.config:YourConfig
+opencrane fetch --source {PATH_KEY}
 ```
+
+The `--repo` flag is an alias for `--source`.
+
+The fetched files of a GitHub source appear in `.opencrane/sources/{PATH_KEY}/`. OpenCrane saves an `llmstxt` source in `.opencrane/llmstxt/{PATH_KEY}/llms-full.txt`.
+
+## Companion `llms.txt` index for `llmstxt` sources
+
+A source with `type: llmstxt` points to an existing `llms-full.txt` bundle, by URL or by local path, instead of to a GitHub repository. For these sources, `opencrane fetch` also tries to get the companion `llms.txt` index, which lists the URL of each page. OpenCrane saves the index next to the bundle, in `.opencrane/llmstxt/{PATH_KEY}/llms.txt`.
+
+OpenCrane looks for the index in the following places:
+
+- Remote source whose `url` ends in `llms-full.txt`: OpenCrane replaces that file name with `llms.txt`.
+- Other remote source: OpenCrane appends `/llms.txt` to the `docs_url` of the source.
+- Local source: OpenCrane copies the `llms.txt` file from the directory of the bundle, if the file exists.
+
+If the download fails, the fetch continues without the index.
+
+When the index exists, the `chunk` step gives each chunk the URL of its own page. Without the index, the `llms` step builds an index from the `docs_url` of the source, and every page gets that same base URL. If the source has no `docs_url` either, its pages get no URL. For details, see [`docs_url` for external `llmstxt` sources](source-mapping.md#docs_url-for-external-llmstxt-sources).
+
+An index entry can end with a description, as in `- [Title](https://example.com/page): some text`. OpenCrane ignores the description.
+
+The `llms.txt` index from GitBook and similar tools often lists URLs that end in `.md` or `/index.md`. If the source has a `docs_url`, OpenCrane converts these URLs to the URL of the published page. It removes the `.md` extension and maps `/index.md` to its parent path. Without a `docs_url`, OpenCrane uses the URLs as they are.
+
+## Next steps
+
+After the fetch, generate the bundles from the fetched files. See [Generate llms-full.txt bundles](llms-generation.md).

@@ -48,7 +48,7 @@ class Config(OpenCraneConfig):
     # extra_tools = [
     #     ExtraTool(
     #         name="get_chunk",
-    #         description="Return the raw content of a chunk by its ID.",
+    #         description="Returns the raw content of a chunk by its ID.",
     #         input_schema={"type": "object",
     #                       "properties": {"chunk_id": {"type": "string"}},
     #                       "required": ["chunk_id"]},

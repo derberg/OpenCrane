@@ -1,4 +1,4 @@
-"""Project-defined MCP tools registered via ``OpenCraneConfig.extra_tools``.
+"""Project-defined MCP tools registered through ``OpenCraneConfig.extra_tools``.
 
 A project lists :class:`ExtraTool` entries on its config subclass; both MCP
 transports (stdio and HTTP) advertise them alongside the built-in tools. Each
@@ -31,7 +31,7 @@ class ExtraTool:
         input_schema: JSON Schema (``"type": "object"``) for the tool arguments.
         handler: ``handler(arguments: dict, context: ToolContext)``, sync or
             async. It may return a string, a content block, a list of content
-            blocks, or any other JSON-serialisable value (sent as JSON text).
+            blocks, or any other JSON-serializable value (sent as JSON text).
             An exception it raises is returned to the client as an MCP tool
             error, exactly like a failing built-in tool.
     """
@@ -120,7 +120,7 @@ def load_extra_tools(builtin_names: Iterable[str]) -> tuple[dict[str, ExtraTool]
     The config is resolved like every other extension point (``OPENCRANE_CONFIG``,
     or the ``extensions`` key in ``.opencrane/config.yaml``). A config that fails to load is logged
     and treated as having no extra tools, matching the ``middleware`` hook; an
-    invalid ``extra_tools`` list (e.g. a name collision) raises so the server
+    invalid ``extra_tools`` list (for example, a name collision) raises so the server
     fails at startup.
 
     Returns:
@@ -141,7 +141,7 @@ def load_extra_tools(builtin_names: Iterable[str]) -> tuple[dict[str, ExtraTool]
 
 
 def _to_content(result: Any) -> list:
-    """Normalise a handler's return value to a list of MCP content blocks."""
+    """Normalize a handler's return value to a list of MCP content blocks."""
     if isinstance(result, str):
         return [TextContent(type="text", text=result)]
     if isinstance(result, _CONTENT_TYPES):

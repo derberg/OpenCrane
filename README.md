@@ -699,7 +699,7 @@ Each extension point is an attribute or a method of `OpenCraneConfig`. The follo
 | `section_anchor_for` | `chunk` | Builds the in-page anchor that each chunk records in its `section_anchor` metadata. |
 | `middleware` | `serve` | Adds Asynchronous Server Gateway Interface (ASGI) middleware around the HTTP MCP server, for example for custom authorization. See [Authentication and authorization](#authentication-and-authorization). |
 | `token_verifier`, `auth_provider` | `serve` | Replaces token validation or the authorization server in `custom` authentication mode. See [Authentication and authorization](#authentication-and-authorization). |
-| `extra_tools` | `serve` | Registers custom MCP tools that the server serves next to the built-in tools, on both transports. See [Add custom MCP tools](#add-custom-mcp-tools). |
+| `extra_tools` | `serve` | Adds custom MCP tools to the server, next to the built-in tools. See [Add custom MCP tools](#add-custom-mcp-tools). |
 
 ### Section anchors
 
@@ -836,7 +836,7 @@ The `can_handle` method returns `True` for the documents that the walker support
 
 ### Add custom MCP tools
 
-To serve your own MCP tools next to the built-in tools, add `ExtraTool` entries to `extra_tools`. The server serves the extra tools on both the stdio and the HTTP transport, so you don't need a second MCP server. Use this extension point when your agents need a project-specific lookup that the built-in tools do not offer.
+To serve your own MCP tools from the OpenCrane server, list `ExtraTool` entries in `extra_tools`. The server offers them next to the built-in tools on both the stdio and the HTTP transport, so you don't need a second MCP server. Use this extension point when your agents need a project-specific lookup that the built-in tools do not offer.
 
 The following example adds a tool that returns the stored content of a chunk:
 
@@ -856,7 +856,7 @@ class Config(OpenCraneConfig):
     extra_tools = [
         ExtraTool(
             name="read_chunk",
-            description="Return the full stored content of a chunk by its ID.",
+            description="Returns the full stored content of a chunk by its ID.",
             input_schema={
                 "type": "object",
                 "properties": {"chunk_id": {"type": "string"}},
@@ -882,11 +882,17 @@ The `context` argument is a `ToolContext`. The following table lists its members
 |---|---|
 | `milvus`, `embeddings`, `keyword_search` | The `MilvusService`, `EmbeddingService`, and `KeywordSearchService` instances of the server. |
 | `config` | Your `OpenCraneConfig` instance. |
-| `allowed_sources()` | Returns the sources that the current caller may read, or `None` if the caller may read all sources. |
+| `allowed_sources()` | Returns the sources that `search_docs` allows for the current caller, or `None` if the caller may read all sources. |
 
-The handler can return a string, an MCP content block, or a list of content blocks. OpenCrane sends any other return value as JSON text. If the handler raises an exception, the client receives an MCP tool error with the exception message.
+OpenCrane sends the return value of the handler to the client as follows:
 
-OpenCrane does not filter the output of extra tools. If you limit access with `scope_sources`, `default_sources`, or an authorization middleware, filter the output yourself. In each handler that returns documentation content, call `context.allowed_sources()`, as the `read_chunk` example does. The method returns the sources that `search_docs` allows for the same caller.
+- A string becomes a text content block.
+- An MCP content block, or a list of content blocks, stays unchanged.
+- Any other value becomes JSON text.
+
+If the handler raises an exception, the client receives an MCP tool error with the exception message.
+
+OpenCrane does not filter the output of extra tools. If you limit which sources a caller can read, for example with `scope_sources` or a middleware, filter the output yourself. In each handler that returns documentation content, call `context.allowed_sources()` and drop content from other sources, as the `read_chunk` example does.
 
 ## Authentication and authorization
 

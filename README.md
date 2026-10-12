@@ -836,7 +836,10 @@ The `can_handle` method returns `True` for the documents that the walker support
 
 ### Add custom MCP tools
 
-To serve your own MCP tools next to the built-in tools on both transports, list `ExtraTool` entries in `extra_tools`. Your agents then get project-specific lookups without a second MCP server.
+To serve custom MCP tools on both transports, list `ExtraTool` entries in `extra_tools`. Your agents then get project-specific lookups without a second MCP server.
+
+> [!CAUTION]
+> OpenCrane does not filter the output of extra tools. If you restrict the sources a caller can read, filter the output in each handler that returns documentation content. Call `context.allowed_sources()` and drop content from other sources, as the next example does.
 
 The following example adds a tool that returns the stored content of a chunk:
 
@@ -873,20 +876,17 @@ The `context` argument is a `ToolContext` with the following members:
 
 | Member | Description |
 |---|---|
-| `milvus`, `embeddings`, `keyword_search` | The `MilvusService`, `EmbeddingService`, and `KeywordSearchService` instances of the server |
+| `milvus`, `embeddings`, `keyword_search` | The server's `MilvusService`, `EmbeddingService`, and `KeywordSearchService` instances |
 | `config` | Your `OpenCraneConfig` instance |
 | `allowed_sources()` | The sources that `search_docs` allows for the current caller, or `None` for all sources |
 
-OpenCrane sends the return value of the handler to the client as follows:
+OpenCrane sends the handler's return value to the client as follows:
 
 - A string becomes a text content block.
 - An MCP content block, or a list of them, stays unchanged.
 - Any other value becomes JSON text.
 
 If the handler raises an exception, the client receives an MCP tool error with the exception message.
-
-> [!CAUTION]
-> OpenCrane does not filter the output of extra tools. If you limit sources with `scope_sources` or a middleware, filter the output in each handler that returns documentation content. Call `context.allowed_sources()` and drop content from other sources, as `read_chunk` does.
 
 ## Authentication and authorization
 

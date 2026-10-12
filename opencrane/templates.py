@@ -38,18 +38,19 @@ class Config(OpenCraneConfig):
     #     # e.g. a host that keeps case and uses underscores:
     #     return heading.strip().replace(" ", "_")
 
-    # Custom MCP tools served next to the built-in tools. See "Add custom MCP
-    # tools" in the README. OpenCrane does not filter the tool output, so check
-    # context.allowed_sources() when you use scope_sources or a middleware.
+    # Custom MCP tools served next to the built-in tools. OpenCrane does not
+    # filter the tool output: if you restrict sources, call
+    # context.allowed_sources() in each handler that returns documentation.
+    # For a handler that does this, see "Add custom MCP tools" in the README.
     # from opencrane import ExtraTool
     # extra_tools = [
     #     ExtraTool(
-    #         name="get_chunk",
-    #         description="Returns the raw content of a chunk by its ID.",
+    #         name="read_chunk",
+    #         description="Returns the full stored content of a chunk by its ID.",
     #         input_schema={"type": "object",
     #                       "properties": {"chunk_id": {"type": "string"}},
     #                       "required": ["chunk_id"]},
-    #         handler=lambda args, ctx: ctx.milvus.get_chunk(args["chunk_id"])["content"],
+    #         handler=read_chunk,
     #     ),
     # ]
 '''

@@ -156,7 +156,7 @@ def _resolve_reranker():
         if isinstance(reranker, staticmethod):
             reranker = reranker.__func__
     except Exception as exc:
-        logger.warning(f"Failed to load project reranker: {exc} — skipping")
+        logger.warning(f"Failed to load project reranker: {exc}; skipping")
         reranker = None
     if reranker is None and get_config().reranker_model:
         reranker = CrossEncoderReranker(get_config().reranker_model)

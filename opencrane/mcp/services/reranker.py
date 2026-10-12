@@ -3,7 +3,7 @@
 A reranker reorders the final candidate list of a search (after semantic,
 keyword or hybrid fusion) before it is cut to ``limit``.
 
-Protocol — a reranker is either an object with a ``rerank`` method or a plain
+Protocol: a reranker is either an object with a ``rerank`` method or a plain
 callable, both with the signature::
 
     (query: str, candidates: list[dict]) -> list[dict]
@@ -88,7 +88,7 @@ def apply_reranker(reranker, query: str, candidates: list[dict], limit: int) -> 
     Failure policy: a reranker that raises, or returns something other than a
     list, must not take search down. The error is logged as a warning and the
     unreranked candidates (already in fused/backend order) are returned, cut to
-    *limit* — i.e. exactly what search returns without a reranker.
+    *limit*. That is exactly what search returns without a reranker.
     """
     try:
         rerank = getattr(reranker, "rerank", reranker)

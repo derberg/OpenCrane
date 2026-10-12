@@ -85,7 +85,7 @@ class OpenCraneConfig:
     # request's permitted source names before the tool executes. Default empty.
     middleware: list = []
 
-    # Optional reranker for ``search_docs`` — an object with a
+    # Optional reranker for ``search_docs``: an object with a
     # ``rerank(query, candidates) -> list[dict]`` method, or a plain callable with
     # that signature (protocol documented in ``opencrane.mcp.services.reranker``).
     # It receives the final candidate list of every search mode (after hybrid

@@ -584,6 +584,8 @@ The following table lists the variables:
 | `HYBRID_FUSION` | `minmax` | How hybrid search merges the two arms. `minmax` blends normalized scores, and `rrf` blends ranks with Reciprocal Rank Fusion. See [Search modes](docs/architecture.md#search-modes). |
 | `HYBRID_RRF_K` | `60` | The RRF smoothing constant `k`. OpenCrane uses it only when `HYBRID_FUSION` is `rrf`. |
 | `BM25_TOKENIZER` | `simple` | Keyword (BM25) tokenizer. `simple` lowercases text and splits it on every non-alphanumeric character. `identifier` keeps dotted, hyphenated, and underscored identifiers such as `5.4.1`, `TS 29.244`, `GTP-U`, or `get_yaml_definition` as one token and also emits their parts. With `identifier`, `gtp` still matches `GTP-U`, and `5.4.1` no longer matches `4.5.1`. The MCP server builds the BM25 index in memory, so a change of tokenizer needs a server restart but no re-chunking, re-embedding, or re-indexing. |
+| `RERANKER_MODEL` | none | Cross-encoder model that turns on the built-in reranker. See [Search modes](docs/architecture.md#search-modes). |
+| `RERANK_DEPTH` | `50` | Number of candidates the reranker reorders. |
 | `DROP_EXISTING` | `false` | When `true`, `index` deletes and rebuilds the Milvus collection. When `false`, `index` skips a collection that already has rows, unless the vector size changed. See [`opencrane index`](#index-the-embeddings-in-milvus-with-opencrane-index). |
 
 #### Variables for the health check
@@ -701,6 +703,7 @@ Each extension point is an attribute or a method of `OpenCraneConfig`. The follo
 | `section_anchor_for` | `chunk` | Builds the in-page anchor that each chunk records in its `section_anchor` metadata. |
 | `middleware` | `serve` | Adds Asynchronous Server Gateway Interface (ASGI) middleware around the HTTP MCP server, for example for custom authorization. See [Authentication and authorization](#authentication-and-authorization). |
 | `token_verifier`, `auth_provider` | `serve` | Replaces token validation or the authorization server in `custom` authentication mode. See [Authentication and authorization](#authentication-and-authorization). |
+| `reranker` | `serve` | Reorders the `search_docs` results. See [Custom reranker](docs/architecture.md#custom-reranker). |
 | `extra_tools` | `serve` | Adds custom MCP tools to the server. See [Add custom MCP tools](#add-custom-mcp-tools). |
 
 ### Section anchors

@@ -59,6 +59,11 @@ class Config:
     hybrid_rrf_k: int = field(default_factory=lambda: int(os.getenv("HYBRID_RRF_K", "60")))
     # BM25 tokenizer: "simple" (split on non-alphanumerics) or "identifier" (keeps 5.4.1 / GTP-U intact)
     bm25_tokenizer: str = field(default_factory=lambda: os.getenv("BM25_TOKENIZER", "simple"))
+    # Optional reranking stage: a sentence-transformers CrossEncoder model name
+    # (unset = no reranker). RERANK_DEPTH is how many fused candidates are
+    # fetched and passed to the reranker before cutting to the requested limit.
+    reranker_model: str = field(default_factory=lambda: os.getenv("RERANKER_MODEL", ""))
+    rerank_depth: int = field(default_factory=lambda: int(os.getenv("RERANK_DEPTH", "50")))
     # Source mapping file configuration
     mapping_file: Path = field(default_factory=lambda: Path(os.getenv("MAPPING_FILE", ".opencrane/config.yaml")))
     # Optional: restrict fetch to a single repo by path key (e.g. "external-sources/cgw")

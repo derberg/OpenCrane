@@ -2,6 +2,7 @@
 
 import asyncio
 import importlib.resources
+import inspect
 import json
 import logging
 import os
@@ -18,6 +19,7 @@ from mcp.server.stdio import stdio_server
 from opencrane.mcp.services.embeddings import EmbeddingService
 from opencrane.mcp.services.milvus_client import MilvusService
 from opencrane.mcp.services.keyword_search import KeywordSearchService
+from opencrane.mcp.services.reranker import CrossEncoderReranker, apply_reranker
 from opencrane.shared.config import get_config
 from opencrane.shared.utils.embedding_prompts import format_query, warn_if_inconsistent
 
@@ -35,6 +37,11 @@ logger = logging.getLogger(__name__)
 _embeddings_service = None
 _milvus_service = None
 _keyword_service = None
+_reranker = None
+_reranker_resolved = False
+# Serializes the one-time reranker resolution, so concurrent first searches
+# share one instance (and therefore one loaded model).
+_reranker_lock = threading.Lock()
 # Sync extra_tools handlers run in worker threads and may reach these getters
 # while the event loop does too; the lock keeps each service a singleton.
 _service_init_lock = threading.Lock()
@@ -133,6 +140,38 @@ def get_keyword_service():
             if _keyword_service is None:
                 _keyword_service = KeywordSearchService()
     return _keyword_service
+
+def get_reranker():
+    """Resolve the optional search reranker once (``None`` = reranking off).
+
+    ``OpenCraneConfig.reranker`` wins; otherwise ``RERANKER_MODEL`` selects the
+    built-in cross-encoder (its model loads lazily on first use). A failure to
+    load the project config is logged and falls back to ``RERANKER_MODEL``.
+    """
+    global _reranker, _reranker_resolved
+    with _reranker_lock:
+        if not _reranker_resolved:
+            _reranker = _resolve_reranker()
+            _reranker_resolved = True
+    return _reranker
+
+
+def _resolve_reranker():
+    """Return the configured reranker: the project hook, else ``RERANKER_MODEL``, else ``None``."""
+    try:
+        from opencrane.cli import load_config
+
+        # getattr_static: a plain function assigned as a class attribute must
+        # not be bound as a method (it would receive the config as ``query``).
+        reranker = inspect.getattr_static(load_config(None), "reranker", None)
+        if isinstance(reranker, staticmethod):
+            reranker = reranker.__func__
+    except Exception as exc:
+        logger.warning(f"Failed to load project reranker: {exc}; skipping")
+        reranker = None
+    if reranker is None and get_config().reranker_model:
+        reranker = CrossEncoderReranker(get_config().reranker_model)
+    return reranker
 
 _YAML_CHUNK_TYPES = {"crd_definition", "openapi_spec", "json_schema"}
 
@@ -471,13 +510,24 @@ def _alpha_description(config) -> str:
         "Set alpha=0.9 for conceptual queries that happen to include a known term. "
         "Set alpha=1.0 for pure semantic within hybrid mode. Only used when search_mode is 'hybrid'."
     )
+    reranked = get_reranker() is not None
     if config.hybrid_fusion == "rrf":
-        top = 2 / (_effective_rrf_k(config) + 1)
         description += (
             " This server fuses hybrid results by rank (reciprocal rank fusion): alpha weights the "
-            "semantic ranking against the keyword ranking, and 0.5 weights them equally. "
-            f"Hybrid scores are therefore small (at most {top:.3f}) and only order the results; "
-            "a low score does not mean a weak match."
+            "semantic ranking against the keyword ranking, and 0.5 weights them equally."
+        )
+        if not reranked:
+            top = 2 / (_effective_rrf_k(config) + 1)
+            description += (
+                f" Hybrid scores are therefore small (at most {top:.3f}) and only order the results; "
+                "a low score does not mean a weak match."
+            )
+    if reranked:
+        # The reranker replaces the fused order (and usually the score), so the
+        # RRF score-scale hint above would describe a Score agents never see.
+        description += (
+            " This server reranks the results: the order and usually the Score come from the "
+            "reranker, so alpha only selects which candidates reach the reranker."
         )
     return description
 
@@ -746,7 +796,9 @@ async def search_docs(arguments: dict) -> list[TextContent]:
     return await _search_documentation_impl(arguments)
 
 
-async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = False) -> list[TextContent]:
+async def _search_documentation_impl(
+    arguments: dict, *, raise_on_error: bool = False, rerank: bool = True
+) -> list[TextContent]:
     """
     Internal implementation of search logic.
     This contains all the existing search_documentation code.
@@ -755,6 +807,10 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
     an exception instead of being swallowed into a ``"Search failed:"`` message.
     The health probe uses this so it detects failures via a real exception rather
     than string-matching a human-facing message.
+
+    ``rerank=False`` skips the optional reranker. The health probe uses it: a
+    reranker failure never fails a search, so probing through it would only add
+    the reranker's latency (and its first-use model load) to every probe.
     """
     query = arguments.get("query", "")
     if not query or not query.strip():
@@ -778,6 +834,15 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
     metadata_contains = arguments.get("metadata_contains")
     search_mode = arguments.get("search_mode", "hybrid")
     alpha = max(0.0, min(1.0, float(arguments.get("alpha", get_config().hybrid_alpha))))
+    # Optional reranker: fetch RERANK_DEPTH candidates (never fewer than limit) so
+    # it can promote chunks the first stage ranked below the cut.
+    # Capped like the hybrid pool: Milvus rejects a topk above 16384.
+    reranker = get_reranker() if rerank else None
+    fetch_limit = (
+        min(max(limit, get_config().rerank_depth), MAX_HYBRID_CANDIDATE_POOL)
+        if reranker is not None
+        else limit
+    )
 
     logger.info(
         f"   📖 search: query=\"{query}\" mode={search_mode} limit={limit} "
@@ -876,7 +941,7 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
                 formatted.append(TextContent(type="text", text=result_text))
             return formatted
 
-        def _semantic_results(arm_limit: int = limit) -> list[dict]:
+        def _semantic_results(arm_limit: int = fetch_limit) -> list[dict]:
             embeddings_service = get_embeddings_service()
             query_embedding = embeddings_service.model.encode([format_query(query)], batch_size=8, show_progress_bar=False)
             if hasattr(query_embedding, 'tolist'):
@@ -892,7 +957,7 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
                 metadata_contains=metadata_contains,
             )
 
-        def _keyword_results(arm_limit: int = limit) -> list[dict]:
+        def _keyword_results(arm_limit: int = fetch_limit) -> list[dict]:
             keyword_service = get_keyword_service()
             return keyword_service.search(
                 query,
@@ -902,21 +967,30 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
                 metadata_contains=metadata_contains,
             )
 
+        async def _rerank(candidates: list[dict]) -> list[dict]:
+            # Rerank stage: runs on the final candidate list of every mode (after
+            # hybrid fusion), then cuts to limit. No reranker = pass-through.
+            if reranker is None or not candidates:
+                return candidates
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(None, apply_reranker, reranker, query, candidates, limit)
+
         if search_mode == "semantic":
             results = _semantic_results()
             if results is None:
                 results = []
-            return _format(results)
+            return _format(await _rerank(results))
         elif search_mode == "keyword":
             results = _keyword_results()
             if results is None:
                 results = []
-            return _format(results)
+            return _format(await _rerank(results))
         elif search_mode == "hybrid":
             config = get_config()
             # Fetch a wider candidate pool per arm so a chunk ranked just below
-            # `limit` by both arms can still win after fusion; never below limit.
-            pool = min(max(limit, config.hybrid_candidate_pool), MAX_HYBRID_CANDIDATE_POOL)
+            # `limit` by both arms can still win after fusion; never below
+            # fetch_limit, so a reranker sees RERANK_DEPTH fused candidates.
+            pool = min(max(fetch_limit, config.hybrid_candidate_pool), MAX_HYBRID_CANDIDATE_POOL)
             loop = asyncio.get_event_loop()
             sem, key = await asyncio.gather(
                 loop.run_in_executor(None, _semantic_results, pool),
@@ -992,7 +1066,7 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
             # chunk_id breaks ties, which RRF produces often, so the order does
             # not depend on set iteration and stays stable across restarts.
             combined.sort(key=lambda r: (-r.get("distance", 0), str(r.get("chunk_id"))))
-            return _format(combined[:limit])
+            return _format(await _rerank(combined[:fetch_limit]))
         else:
             return [TextContent(type="text", text=f"Invalid search_mode: {search_mode}")]
 
@@ -1110,7 +1184,7 @@ async def _query_probe() -> dict:
         # can actually preempt it: the semantic search path is synchronous
         # (blocking encode + Milvus call) and would otherwise never yield, leaving
         # asyncio.wait_for unable to fire and blocking the server's event loop.
-        return asyncio.run(_search_documentation_impl(probe_args, raise_on_error=True))
+        return asyncio.run(_search_documentation_impl(probe_args, raise_on_error=True, rerank=False))
 
     start = time.monotonic()
     try:

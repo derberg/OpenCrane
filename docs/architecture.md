@@ -194,6 +194,14 @@ Neither setting needs re-indexing.
 
 The BM25 index uses the `simple` tokenizer by default. This tokenizer lowercases text and splits it on every non-alphanumeric character, so `5.4.1` and `4.5.1` produce the same tokens. To keep dotted, hyphenated, and underscored identifiers as one token, set the `BM25_TOKENIZER` environment variable to `identifier`. This tokenizer also emits the parts of each identifier, so a query for `gtp` still matches `GTP-U`. The server builds the BM25 index in memory, so a change of tokenizer needs a server restart but no re-indexing.
 
+An optional reranker reorders the results of every search mode. The reranker scores each candidate against the query and can move up a chunk that search ranks too low. Reranking is off by default and needs no re-indexing.
+
+To turn on the built-in reranker, set the `RERANKER_MODEL` environment variable to a sentence-transformers cross-encoder model, for example `cross-encoder/ms-marco-MiniLM-L-6-v2`. To use your own reranker, see [Custom reranker](#custom-reranker). The Docker image from `opencrane init` runs offline, so set `RERANKER_MODEL` before you build the image. The build then downloads the model into the image.
+
+The server reranks the first `RERANK_DEPTH` candidates, `50` by default, and returns the top **limit** results. Set `RERANK_DEPTH` to a whole number up to `16384`. A value below **limit** counts as **limit**. The built-in reranker runs on the CPU, so a higher `RERANK_DEPTH` makes each search slower. The `Score` line shows the score of the built-in reranker.
+
+If the reranker fails, the server logs the `Reranker failed, returning unreranked results` warning and returns the results in search order. The health check skips the reranker.
+
 To narrow the results, pass the following `search_docs` parameters:
 
 - **chunk_types**: limits the results to the given chunk types
@@ -218,6 +226,7 @@ When `.opencrane/config.yaml` has an `extensions` key, for example `extensions: 
 - Fence types
 - Chunking strategies
 - YAML tree walkers
+- Reranker
 
 ### Retrieval-augmented generation pipeline
 
@@ -271,6 +280,7 @@ The configuration is in `opencrane/config.py` and `opencrane/shared/config.py`. 
 | `fence_types` | A dictionary of fence type handlers. The defaults include OpenAPI, AsyncAPI, CRD, and JSON Schema. |
 | `chunking_strategies` | An ordered list of chunking strategy instances. OpenCrane evaluates them in order, and the first match handles the fragment. |
 | `yaml_tree_walkers` | A list of tree walker classes. OpenCrane evaluates them in the order listed. |
+| `reranker` | An optional `search_docs` reranker. See [Custom reranker](#custom-reranker). |
 
 `Config` in `opencrane/shared/config.py` is the runtime configuration that comes from the environment. It reads all settings from environment variables when the process starts. This runtime `Config` is a different class from the `Config` subclass in `.opencrane/extensions.py`.
 
@@ -336,6 +346,29 @@ class TerraformTreeWalker(YamlTreeWalker):
 
     def walk(self) -> list[Chunk]:
         ...
+```
+
+### Custom reranker
+
+A custom reranker replaces the built-in reranker, for example to call a hosted rerank API or a large language model. Set the `reranker` attribute on your `Config` class to a function or an object with a `rerank` method. The reranker takes the query and a list of candidates. Each candidate is a dictionary with the following keys:
+
+- `chunk_id`: the chunk ID
+- `content`: the chunk text, which is a JSON string for YAML chunks
+- `source_file`: the source file path
+- `source_name`: the documentation source
+- `chunk_type`: the chunk type
+- `metadata_json`: the chunk metadata as JSON
+- `distance`: the search score, where a higher value is better
+
+Return the candidates best first. You can drop candidates or set `distance` to your own score. The following example moves candidates that contain the query text to the top:
+
+```python
+def my_reranker(query: str, candidates: list[dict]) -> list[dict]:
+    return sorted(candidates, key=lambda c: query.lower() in c["content"].lower(), reverse=True)
+
+
+class Config(OpenCraneConfig):
+    reranker = my_reranker
 ```
 
 ## Data model

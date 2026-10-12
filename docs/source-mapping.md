@@ -81,6 +81,8 @@ For the file `.opencrane/sources/my-project/guides/setup.md`, OpenCrane builds t
 3. Adds `docs_path`, if present: `/docs`
 4. Adds the path of the file relative to the directory of the source: `/guides/setup.md`
 
+When the entry has no `docs_path` or an empty one, step 4 adds the path with the path key in front, for example `/my-project/guides/setup.md`.
+
 OpenCrane writes the resulting entry to `llms.txt`:
 
 ```markdown

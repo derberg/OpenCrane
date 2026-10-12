@@ -15,7 +15,7 @@ The `opencrane embed` command performs the following steps:
 3. Generates a vector embedding for each chunk on the CPU, in small batches to limit memory use. The default model is Nomic Embed, `nomic-ai/nomic-embed-text-v1.5`.
 4. Saves the embeddings to `.opencrane/embeddings.json`, together with the model name and the document prompt.
 
-The command skips the run when the chunks and the document prompt match the last run. The check does not compare the model. To regenerate the embeddings anyway, add the `--force` flag.
+The command regenerates the embeddings on every run, with or without the `--force` flag.
 
 ## Choose an embedding model
 

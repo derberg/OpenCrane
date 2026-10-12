@@ -292,7 +292,7 @@ The command accepts the following flags:
 |---|---|
 | `--chunks-file {PATH}` | Input chunks JSON file. Overrides the `AI_DOCS_CHUNKS_FILE` environment variable. |
 | `--embeddings-file {PATH}` | Output embeddings JSON file. Overrides the `AI_DOCS_EMBEDDINGS_FILE` environment variable. |
-| `--force` | Regenerates the embeddings even when nothing changed. Without this flag, the command skips the step when the chunks and `EMBEDDING_DOCUMENT_PROMPT` are the same as in the last run. The check ignores `EMBEDDING_MODEL`, so pass `--force` after you change the model. |
+| `--force` | Regenerates the embeddings. The command currently regenerates them on every run, with or without this flag. |
 
 #### Index the embeddings in Milvus with `opencrane index`
 

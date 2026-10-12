@@ -48,23 +48,17 @@ When no companion `llms.txt` is present, the chunker uses the URL markers inside
 
 ## Prose sections
 
-By default, a prose chunk holds one `#`, `##`, or `###` section with all its deeper headings, and has no size limit. With long clauses, such as in converted standards, a chunk can exceed the input limit of the embedding model. The model drops the rest.
+By default, a prose chunk holds one `#`, `##`, or `###` section with all its deeper headings, and has no size limit. A long section can exceed the input limit of the embedding model. The model ignores the extra text.
 
 The following variables control the split:
 
 | Variable | Default | Description |
 |---|---|---|
-| `PROSE_SPLIT_HEADING_DEPTH` | `3` | Deepest heading level that starts a chunk. |
-| `PROSE_MAX_CHUNK_TOKENS` | `0` (off) | Token limit. A longer section splits at paragraphs, then lines, and each piece repeats the heading. Lines and code blocks never split. |
+| `PROSE_SPLIT_HEADING_DEPTH` | `3` | Sets the deepest heading level that starts a chunk. |
+| `PROSE_MAX_CHUNK_TOKENS` | `0` (off) | Sets the token limit for a chunk. A section over the limit splits at paragraphs, then at lines. Each piece repeats the section heading. Lines and code blocks never split. |
 | `PROSE_KEEP_HEADING_ONLY_SECTIONS` | `false` | Keeps heading-only sections of 15 characters or more. |
 
-After a change, rebuild the index:
-
-```bash
-opencrane chunk
-opencrane embed
-opencrane index
-```
+After you change a variable, rerun the steps from `chunk` to `index`.
 
 ## Table chunks
 

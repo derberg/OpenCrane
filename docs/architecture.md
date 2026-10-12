@@ -175,7 +175,7 @@ final_score = alpha × vector_score + (1 − alpha) × bm25_score
 
 The default **alpha** is `0.6`, which means 60% semantic and 40% keyword. To override it for a single query, pass the **alpha** parameter. To set a different default, use the `HYBRID_ALPHA` environment variable.
 
-Before the fusion, hybrid search fetches results from each arm and then cuts the fused list to the requested **limit**. By default, each arm returns **limit** results, so a chunk that both arms rank just below **limit** can't reach the fused list. To fetch a wider pool from each arm, set the `HYBRID_CANDIDATE_POOL` environment variable, for example to `50`. A value below **limit** has no effect.
+Before the fusion, hybrid search fetches results from each arm and then cuts the fused list to the requested **limit**. By default, each arm returns **limit** results, so a chunk that both arms rank just below **limit** can't reach the fused list. To fetch a wider pool from each arm, set the `HYBRID_CANDIDATE_POOL` environment variable, for example to `50`. A value below **limit** has no effect, and OpenCrane caps the pool at 16384, the largest result count that Milvus accepts. A wider pool also helps queries with **metadata_contains**, because the vector arm applies that filter after Milvus returns its results.
 
 The `HYBRID_FUSION` environment variable selects how hybrid search merges the two arms:
 
@@ -186,7 +186,15 @@ The `HYBRID_FUSION` environment variable selects how hybrid search merges the tw
   final_score = 2 × alpha / (k + vector_rank) + 2 × (1 − alpha) / (k + bm25_rank)
   ```
 
-  With `rrf`, an **alpha** of `0.5` gives classic unweighted RRF. A higher **alpha** favors the vector ranks, and a lower one favors the BM25 ranks. The `HYBRID_RRF_K` environment variable sets the smoothing constant `k`, and the default is `60`.
+  With `rrf`, an **alpha** of `0.5` gives classic unweighted RRF. A higher **alpha** favors the vector ranks, and a lower one favors the BM25 ranks. The `HYBRID_RRF_K` environment variable sets the smoothing constant `k`. The default is `60`, and OpenCrane raises a negative value to `0`. RRF scores are small, at most `2 / (k + 1)`, so they only order the results and don't measure confidence.
+
+Both fusion methods follow the same rules:
+
+- A chunk that only one arm returns gets `0` from the other arm.
+- Keyword results that match none of the query terms have a BM25 score of `0`. Hybrid search drops them before the fusion, so they never gain rank credit or a normalized score.
+- Chunks with equal fused scores are ordered by chunk ID, so the order stays the same across server restarts.
+
+The `search_docs` tool schema reflects these settings. The **alpha** parameter advertises the configured default, and with `rrf` its description tells the agent that hybrid scores are small and order the results only.
 
 Neither setting needs re-indexing.
 

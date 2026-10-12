@@ -548,7 +548,7 @@ You need the following variables only if you run the `chunk` step, directly or t
 | `AI_DOCS_LLMSTXT_DIR` | `.opencrane/llmstxt` | Directory with the `llms-full.txt` files. See also the `--llmstxt-dir` flag. |
 | `AI_DOCS_CHUNKS_FILE` | `.opencrane/chunks.json` | Output path for the generated chunks. See also the `--chunks-file` flag. |
 
-For the `PROSE_*` variables that control prose splitting, see [Prose sections](docs/chunking.md#prose-sections).
+For the `PROSE_*` variables, see [Prose sections](docs/chunking.md#prose-sections).
 
 #### Variables for the `embed` step
 

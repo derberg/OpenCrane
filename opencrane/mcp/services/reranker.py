@@ -1,7 +1,7 @@
 """Optional reranking stage for ``search_docs``.
 
-A reranker reorders the final candidate list of a search (after semantic,
-keyword or hybrid fusion) before it is cut to ``limit``.
+A reranker reorders the final candidates of a semantic, keyword, or hybrid
+search. The server then cuts the list to ``limit``.
 
 Protocol: a reranker is either an object with a ``rerank`` method or a plain
 callable, both with the signature::
@@ -9,15 +9,15 @@ callable, both with the signature::
     (query: str, candidates: list[dict]) -> list[dict]
 
 Each candidate is a search-result dict from the search backends. It carries
-``chunk_id``, ``content`` (a string; YAML chunks arrive as JSON strings), ``chunk_type``,
-``source_file``, ``source_name``, ``metadata_json`` and ``distance`` (the
-pre-rerank score, higher is better). The reranker returns the candidates it
-wants to keep, best first. It may rescore them by setting ``distance`` (shown
+``chunk_id``, ``content`` (a string; YAML chunks are JSON strings), ``chunk_type``,
+``source_file``, ``source_name``, ``metadata_json``, and ``distance`` (the
+pre-rerank score, higher is better). The reranker returns the candidates to
+keep, best first. It may rescore them by setting ``distance`` (shown
 as ``Score`` in results) and may drop candidates; the server cuts the returned
 list to ``limit``.
 
 Register a custom reranker on ``OpenCraneConfig.reranker``, or set the
-``RERANKER_MODEL`` env var to use the built-in :class:`CrossEncoderReranker`.
+``RERANKER_MODEL`` environment variable to use the built-in :class:`CrossEncoderReranker`.
 """
 
 import logging
@@ -33,7 +33,7 @@ def candidate_text(candidate: dict) -> str:
     """Return the text of a search candidate as a string.
 
     Search backends always return ``content`` as a string. The dict/list branch
-    is defensive: it YAML-dumps structured content if a caller passes it.
+    is defensive: it dumps structured content as YAML if a caller passes it.
     """
     content = candidate.get("content", "")
     if isinstance(content, (dict, list)):
@@ -42,9 +42,9 @@ def candidate_text(candidate: dict) -> str:
 
 
 class CrossEncoderReranker:
-    """Reference reranker scoring (query, chunk) pairs with a sentence-transformers CrossEncoder.
+    """Reference reranker that scores (query, chunk) pairs with a sentence-transformers CrossEncoder.
 
-    The model is loaded lazily on the first ``rerank`` call, like the embedding
+    The model loads lazily on the first ``rerank`` call, like the embedding
     model, so configuring it does not slow down server startup.
     """
 
@@ -90,9 +90,9 @@ def apply_reranker(reranker, query: str, candidates: list[dict], limit: int) -> 
     """Run *reranker* over *candidates* and cut the result to *limit*.
 
     Failure policy: a reranker that raises, or returns something other than a
-    list, must not take search down. The error is logged as a warning and the
-    unreranked candidates (already in fused/backend order) are returned, cut to
-    *limit*. That is exactly what search returns without a reranker.
+    list, must not break search. The function logs the error as a warning and
+    returns the unreranked candidates in fused or backend order, cut to *limit*.
+    That is what search returns without a reranker.
     """
     try:
         rerank = getattr(reranker, "rerank", reranker)

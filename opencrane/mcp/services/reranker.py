@@ -21,6 +21,7 @@ Register a custom reranker on ``OpenCraneConfig.reranker``, or set the
 """
 
 import logging
+import threading
 from typing import Any
 
 import yaml
@@ -47,15 +48,19 @@ class CrossEncoderReranker:
         self.model_name = model_name
         self.batch_size = batch_size
         self.model: Any = None
+        # Searches rerank in executor threads; without the lock, concurrent
+        # first searches would each load their own copy of the model.
+        self._load_lock = threading.Lock()
 
     def _load_model(self):
-        if self.model is None:
-            from sentence_transformers import CrossEncoder
+        with self._load_lock:
+            if self.model is None:
+                from sentence_transformers import CrossEncoder
 
-            logger.info(f"Loading reranker model: {self.model_name}")
-            # CPU, matching the embedding service (avoids MPS memory issues on macOS).
-            self.model = CrossEncoder(self.model_name, device="cpu", trust_remote_code=True)
-            logger.info("Reranker model loaded successfully (using CPU)")
+                logger.info(f"Loading reranker model: {self.model_name}")
+                # CPU, matching the embedding service (avoids MPS memory issues on macOS).
+                self.model = CrossEncoder(self.model_name, device="cpu", trust_remote_code=True)
+                logger.info("Reranker model loaded successfully (using CPU)")
         return self.model
 
     def rerank(self, query: str, candidates: list[dict]) -> list[dict]:

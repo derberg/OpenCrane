@@ -286,3 +286,104 @@ async def test_reranker_not_called_without_candidates(monkeypatch, reranker_stat
 
     assert res[0].text == "No results found."
     rr.rerank.assert_not_called()
+
+
+# --- follow-up fixes ------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_rerank_depth_capped_at_milvus_topk_limit(monkeypatch, reranker_state):
+    reranker_state(_Reverser(), depth=100000)
+    calls = _backends(monkeypatch, POOL, POOL)
+
+    await mcp_server._search_documentation_impl({"query": "q", "search_mode": "semantic", "limit": 2})
+
+    assert calls == {"semantic": mcp_server.MAX_HYBRID_CANDIDATE_POOL}
+
+
+@pytest.mark.anyio
+async def test_health_probe_skips_reranker(monkeypatch, reranker_state):
+    rr = MagicMock()
+    reranker_state(rr, depth=4)
+    calls = _backends(monkeypatch, POOL, POOL)
+
+    result = await mcp_server._query_probe()
+
+    assert result["status"] in ("healthy", "degraded")
+    rr.rerank.assert_not_called()
+    assert calls == {"semantic": 1}  # no RERANK_DEPTH fetch either
+
+
+def _alpha_description(monkeypatch, fusion: str) -> str:
+    monkeypatch.setenv("HYBRID_FUSION", fusion)
+    monkeypatch.setenv("HYBRID_RRF_K", "60")
+    return mcp_server._alpha_description(mcp_server.get_config())
+
+
+def test_alpha_description_with_reranker_drops_rrf_score_scale(monkeypatch, reranker_state):
+    reranker_state(_Reverser())
+    text = _alpha_description(monkeypatch, "rrf")
+    assert "reciprocal rank fusion" in text
+    assert "at most" not in text
+    assert "come from the reranker" in text
+
+
+def test_alpha_description_with_reranker_minmax(monkeypatch, reranker_state):
+    reranker_state(_Reverser())
+    assert "come from the reranker" in _alpha_description(monkeypatch, "minmax")
+
+
+def test_cross_encoder_concurrent_first_use_loads_model_once():
+    import threading
+    import time
+
+    model = MagicMock()
+    model.predict.side_effect = lambda pairs, **kw: [0.5] * len(pairs)
+
+    def slow_load(*args, **kwargs):
+        time.sleep(0.1)
+        return model
+
+    rr = CrossEncoderReranker("m")
+    barrier = threading.Barrier(4)
+
+    def worker():
+        barrier.wait()
+        rr.rerank("q", [_cand("a")])
+
+    with patch("sentence_transformers.CrossEncoder", side_effect=slow_load) as ce:
+        threads = [threading.Thread(target=worker) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+    assert ce.call_count == 1
+
+
+def test_get_reranker_concurrent_first_calls_share_one_instance(reranker_state, monkeypatch):
+    import threading
+    import time
+
+    monkeypatch.setenv("RERANKER_MODEL", "cross/model")
+
+    def slow_config(_arg):
+        time.sleep(0.1)
+        return OpenCraneConfig()
+
+    barrier = threading.Barrier(4)
+    seen = []
+
+    def worker():
+        barrier.wait()
+        seen.append(mcp_server.get_reranker())
+
+    with patch("opencrane.cli.load_config", side_effect=slow_config):
+        threads = [threading.Thread(target=worker) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+    assert len(seen) == 4
+    assert len({id(r) for r in seen}) == 1

@@ -22,6 +22,7 @@ from opencrane.mcp.services.reranker import CrossEncoderReranker, apply_reranker
 from opencrane.shared.config import get_config
 
 import sys
+import threading
 
 # Configure logging to stderr (stdout is reserved for MCP stdio transport)
 logging.basicConfig(
@@ -37,6 +38,9 @@ _milvus_service = None
 _keyword_service = None
 _reranker = None
 _reranker_resolved = False
+# Serializes the one-time reranker resolution, so concurrent first searches
+# share one instance (and therefore one loaded model).
+_reranker_lock = threading.Lock()
 _chunk_types_cache: set[str] | None = None
 
 def _extract_source_url(text: str) -> str | None:
@@ -134,23 +138,29 @@ def get_reranker():
     load the project config is logged and falls back to ``RERANKER_MODEL``.
     """
     global _reranker, _reranker_resolved
-    if not _reranker_resolved:
-        try:
-            from opencrane.cli import load_config
-
-            # getattr_static: a plain function assigned as a class attribute must
-            # not be bound as a method (it would receive the config as ``query``).
-            reranker = inspect.getattr_static(load_config(None), "reranker", None)
-            if isinstance(reranker, staticmethod):
-                reranker = reranker.__func__
-        except Exception as exc:
-            logger.warning(f"Failed to load project reranker: {exc} — skipping")
-            reranker = None
-        if reranker is None and get_config().reranker_model:
-            reranker = CrossEncoderReranker(get_config().reranker_model)
-        _reranker = reranker
-        _reranker_resolved = True
+    with _reranker_lock:
+        if not _reranker_resolved:
+            _reranker = _resolve_reranker()
+            _reranker_resolved = True
     return _reranker
+
+
+def _resolve_reranker():
+    """Return the configured reranker: the project hook, else ``RERANKER_MODEL``, else ``None``."""
+    try:
+        from opencrane.cli import load_config
+
+        # getattr_static: a plain function assigned as a class attribute must
+        # not be bound as a method (it would receive the config as ``query``).
+        reranker = inspect.getattr_static(load_config(None), "reranker", None)
+        if isinstance(reranker, staticmethod):
+            reranker = reranker.__func__
+    except Exception as exc:
+        logger.warning(f"Failed to load project reranker: {exc} — skipping")
+        reranker = None
+    if reranker is None and get_config().reranker_model:
+        reranker = CrossEncoderReranker(get_config().reranker_model)
+    return reranker
 
 _YAML_CHUNK_TYPES = {"crd_definition", "openapi_spec", "json_schema"}
 
@@ -489,13 +499,25 @@ def _alpha_description(config) -> str:
         "Set alpha=0.9 for conceptual queries that happen to include a known term. "
         "Set alpha=1.0 for pure semantic within hybrid mode. Only used when search_mode is 'hybrid'."
     )
+    reranked = get_reranker() is not None
     if config.hybrid_fusion == "rrf":
-        top = 2 / (_effective_rrf_k(config) + 1)
         description += (
             " This server fuses hybrid results by rank (reciprocal rank fusion): alpha weights the "
-            "semantic ranking against the keyword ranking, and 0.5 weights them equally. "
-            f"Hybrid scores are therefore small (at most {top:.3f}) and only order the results; "
-            "a low score does not mean a weak match."
+            "semantic ranking against the keyword ranking, and 0.5 weights them equally."
+        )
+        if not reranked:
+            top = 2 / (_effective_rrf_k(config) + 1)
+            description += (
+                f" Hybrid scores are therefore small (at most {top:.3f}) and only order the results; "
+                "a low score does not mean a weak match."
+            )
+    if reranked:
+        # The reranker replaces the fused order (and usually the score), so the
+        # RRF score-scale hint above would describe a Score agents never see.
+        description += (
+            " This server reranks the results of every search mode, so the result order and, "
+            "usually, the Score come from the reranker; alpha only decides which candidates "
+            "reach the reranker."
         )
     return description
 
@@ -726,7 +748,9 @@ async def search_docs(arguments: dict) -> list[TextContent]:
     return await _search_documentation_impl(arguments)
 
 
-async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = False) -> list[TextContent]:
+async def _search_documentation_impl(
+    arguments: dict, *, raise_on_error: bool = False, rerank: bool = True
+) -> list[TextContent]:
     """
     Internal implementation of search logic.
     This contains all the existing search_documentation code.
@@ -735,6 +759,10 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
     an exception instead of being swallowed into a ``"Search failed:"`` message.
     The health probe uses this so it detects failures via a real exception rather
     than string-matching a human-facing message.
+
+    ``rerank=False`` skips the optional reranker. The health probe uses it: a
+    reranker failure never fails a search, so probing through it would only add
+    the reranker's latency (and its first-use model load) to every probe.
     """
     query = arguments.get("query", "")
     if not query or not query.strip():
@@ -773,8 +801,13 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
     alpha = max(0.0, min(1.0, float(arguments.get("alpha", get_config().hybrid_alpha))))
     # Optional reranker: fetch RERANK_DEPTH candidates (never fewer than limit) so
     # it can promote chunks the first stage ranked below the cut.
-    reranker = get_reranker()
-    fetch_limit = max(limit, get_config().rerank_depth) if reranker is not None else limit
+    # Capped like the hybrid pool: Milvus rejects a topk above 16384.
+    reranker = get_reranker() if rerank else None
+    fetch_limit = (
+        min(max(limit, get_config().rerank_depth), MAX_HYBRID_CANDIDATE_POOL)
+        if reranker is not None
+        else limit
+    )
 
     logger.info(
         f"   📖 search: query=\"{query}\" mode={search_mode} limit={limit} "
@@ -1116,7 +1149,7 @@ async def _query_probe() -> dict:
         # can actually preempt it: the semantic search path is synchronous
         # (blocking encode + Milvus call) and would otherwise never yield, leaving
         # asyncio.wait_for unable to fire and blocking the server's event loop.
-        return asyncio.run(_search_documentation_impl(probe_args, raise_on_error=True))
+        return asyncio.run(_search_documentation_impl(probe_args, raise_on_error=True, rerank=False))
 
     start = time.monotonic()
     try:

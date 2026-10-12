@@ -20,7 +20,7 @@ Headings are the main chunk boundary. When each heading starts one focused secti
 
 ### Headings that create chunk boundaries
 
-By default, the `#`, `##`, and `###` headings create chunk boundaries. Everything between two such headings, including the opening heading, becomes one chunk. To change the boundaries for a project, see [Prose sections](chunking.md#prose-sections).
+[By default](chunking.md#prose-sections), the `#`, `##`, and `###` headings create chunk boundaries. Everything between two such headings, including the opening heading, becomes one chunk.
 
 The following example produces three chunks:
 
@@ -142,7 +142,7 @@ Set `log_level` to `debug`, `info`, or `warn` to control log verbosity.
 
 ### Add body text under every heading
 
-By default, the prose chunker drops a heading that has no body text, whatever the length of the heading. To keep such headings, see [Prose sections](chunking.md#prose-sections). The chunker always drops any section shorter than 15 characters. Do not leave placeholder headings with no body.
+By default, the prose chunker drops a heading that has no body text, whatever the length of the heading. It always drops any section shorter than 15 characters. Do not leave placeholder headings with no body.
 
 Avoid the following placeholder:
 

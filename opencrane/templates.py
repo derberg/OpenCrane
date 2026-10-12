@@ -118,16 +118,22 @@ RUN --mount=type=cache,target=/root/.cache/pip \\
     pip install opencrane
 
 # =============================================================================
-# Stage 2: Model download (cached unless EMBEDDING_MODEL changes)
+# Stage 2: Model download (cached unless EMBEDDING_MODEL or RERANKER_MODEL changes)
 # =============================================================================
 FROM deps AS model
 
 ARG EMBEDDING_MODEL=nomic-ai/nomic-embed-text-v1.5
 ENV EMBEDDING_MODEL=${EMBEDDING_MODEL}
+# Optional reranker. The runtime image is offline, so the model must be baked in.
+ARG RERANKER_MODEL=
 
 RUN --mount=type=cache,target=/root/.cache/huggingface \\
     echo "Downloading embedding model..." && \\
     python3 -c "from sentence_transformers import SentenceTransformer; SentenceTransformer(\'${EMBEDDING_MODEL}\', trust_remote_code=True)" && \\
+    if [ -n "${RERANKER_MODEL}" ]; then \\
+        echo "Downloading reranker model..." && \\
+        python3 -c "from sentence_transformers import CrossEncoder; CrossEncoder(\'${RERANKER_MODEL}\', trust_remote_code=True)"; \\
+    fi && \\
     mkdir -p /build/hf_cache && cp -r /root/.cache/huggingface /build/hf_cache/
 
 # =============================================================================
@@ -151,6 +157,8 @@ RUN mkdir -p /build/milvus_data && opencrane index
 # =============================================================================
 FROM python:3.11-slim
 
+ARG RERANKER_MODEL=
+
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \\
@@ -171,6 +179,7 @@ ENV COLLECTION_NAME=opencrane_chunks
 ENV MCP_HTTP_PORT=8000
 ENV PYTHONUNBUFFERED=1
 ENV TRANSFORMERS_OFFLINE=1
+ENV RERANKER_MODEL=${RERANKER_MODEL}
 
 EXPOSE 8000
 
@@ -186,6 +195,7 @@ services:
       dockerfile: .opencrane/Dockerfile
       args:
         EMBEDDING_MODEL: "${EMBEDDING_MODEL:-nomic-ai/nomic-embed-text-v1.5}"
+        RERANKER_MODEL: "${RERANKER_MODEL:-}"
     ports:
       - "8000:8000"
     environment:

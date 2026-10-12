@@ -23,7 +23,7 @@ The following fields describe where a chunk sits in a page or in a YAML tree:
 
 | Field | Type | Description | Example |
 |---|---|---|---|
-| `breadcrumb_path` | string, optional | Location of the chunk. Prose chunks use `page title > section`. List item and table row chunks use the heading ancestry, joined by ` > `. CRD, OpenAPI, and JSON Schema chunks use a dot-separated path with array indices. Code and generic YAML chunks have no breadcrumb. Prose chunks whose page is not in the `llms.txt` index, and table rows with no heading above them, have none either. For all headings above a prose chunk, see `heading_path`. | Prose: `"Setup Guide > Prerequisites"`<br>CRD: `"spec.versions[0].schema.openAPIV3Schema.properties.spec.replicas"`<br>OpenAPI: `"paths./users/{id}.get"`<br>JSON Schema: `"properties.config.properties.database"` |
+| `breadcrumb_path` | string, optional | Location of the chunk. Prose chunks use `page title > section`. List item and table row chunks use the heading ancestry, joined by ` > `. CRD, OpenAPI, and JSON Schema chunks use a dot-separated path with array indices. Code and generic YAML chunks have no breadcrumb. Prose chunks whose page is not in the `llms.txt` index, and table rows with no heading above them, have none either. | Prose: `"Setup Guide > Prerequisites"`<br>CRD: `"spec.versions[0].schema.openAPIV3Schema.properties.spec.replicas"`<br>OpenAPI: `"paths./users/{id}.get"`<br>JSON Schema: `"properties.config.properties.database"` |
 | `logical_parent` | string | Dot-separated path of the parent node. It does not always equal `breadcrumb_path` without its final segment. A top-level CRD property keeps the trailing `properties` segment, and a top-level JSON Schema property has the parent `"root"`. Use it to find sibling chunks and to build a tree view. | For `spec.replicas`: `"spec.versions[0].schema.openAPIV3Schema.properties.spec.properties"`<br>For `paths./users.get`: `"paths./users"` |
 | `neighbor_chunks` | array of chunk IDs | The `chunk_id` values of the chunks that share the same `logical_parent`. An empty array means that the chunk is the only child of its parent. Use it to fetch related properties for more context. | For `spec.replicas`, the ID of the `spec.image` chunk |
 
@@ -71,19 +71,19 @@ Chunks of JSON Schema documents, with `chunk_type: "json_schema"`, carry the fol
 
 ## Prose navigation metadata
 
-A `prose` chunk records where it sits in the heading tree of its page and links to the prose chunks around it. Your code can use these fields to expand a search result to its whole section, its parent section, or the sections next to it.
+A `prose` chunk records where it sits in the heading tree of its page and links to the prose chunks around it, so you can expand a search result to its whole section.
 
-The section of a chunk is the heading that its content starts with. A chunk that does not start with a heading, for example text after a code block, continues the previous section. It repeats the `heading_path`, `clause_id`, and `parent_chunk_id` of that section.
+A chunk without a heading of its own, for example text after a code block, repeats the `heading_path`, `clause_id`, and `parent_chunk_id` of the previous section.
 
-Chunks with `chunk_type: "prose"` carry the following navigation fields:
+The following table lists the navigation fields:
 
 | Field | Type | Description | Example |
 |---|---|---|---|
-| `heading_path` | string, optional | All headings above the section and the section heading itself, joined by ` > `. Unlike `breadcrumb_path`, it keeps every level. Text before the first heading of a page has none. | `"TS 23.501 System architecture > 5 Functional description > 5.2 Network access control"` |
-| `clause_id` | string, optional | Clause number from the section heading. Only a heading that starts with a clause number gives one. The `section_clause_pattern` setting in `.opencrane/config.yaml` defines what a clause number is. | `"5.4.1.2a"`, `"C.4.4.2"`, `"Annex C"` |
-| `parent_chunk_id` | `chunk_id` string, or null | The chunk that holds the nearest enclosing section heading. The value is `null` for a top-level section. The direct sub-sections of a chunk are the chunks whose `parent_chunk_id` is that chunk. | `null` |
-| `position` | integer, 1-indexed | Position of the chunk among the prose chunks of its page. | `1` for the first prose chunk |
-| `prev_chunk_id`, `next_chunk_id` | `chunk_id` string, or null | The previous and the next prose chunk of the same page. The value is `null` at the start and at the end of the page. The links skip code, list item, and table row chunks between two prose chunks. | `"a41e…"` (shortened) |
+| `heading_path` | string, optional | The section heading and every heading above it, joined by ` > `. | `"Setup Guide > Install > Prerequisites"` |
+| `clause_id` | string, optional | Clause number at the start of the section heading. The `section_clause_pattern` setting defines its format. | `"5.4.1.2a"`, `"Annex C"` |
+| `parent_chunk_id` | `chunk_id` string, or null | The chunk of the enclosing section, or `null` for a top-level section. | `null` |
+| `position` | integer, 1-indexed | Position of the chunk among the prose chunks of its page. | `1` |
+| `prev_chunk_id`, `next_chunk_id` | `chunk_id` string, or null | The previous and the next prose chunk of the same page, or `null` at the page edges. The links skip other chunk types. | `"a41e…"` (shortened) |
 
 These fields do not change search ranking. To configure them, see [Section navigation and clause IDs](../README.md#section-navigation-and-clause-ids).
 
@@ -224,7 +224,6 @@ The MCP server uses the metadata fields in the following ways:
 |---|---|
 | Search tool | Shows `breadcrumb_path` and `section_anchor` with each result. For CRD, OpenAPI, and JSON Schema results, it adds `breadcrumb_path` and `logical_parent` as comments to the content instead. |
 | YAML definition tool | Adds `breadcrumb_path` and `logical_parent` as location comments. It also lists up to five `neighbor_chunks` IDs, so the AI agent can fetch them. |
-| Section tool | Reads a prose section by `chunk_id` or `clause_id`. It follows `parent_chunk_id` to list the sub-sections and `prev_chunk_id` and `next_chunk_id` to read the sections next to it. |
 
 The AI agent receives formatted results from the MCP server, not raw chunks. To learn what a metadata field means, the agent can call the `get_metadata_schema` tool, which returns the schema from `opencrane/mcp/metadata-schema.md`.
 

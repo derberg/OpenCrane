@@ -10,7 +10,7 @@ The following table lists the search modes and filters that the MCP server suppo
 |---|---|
 | Semantic search | Vector similarity with Nomic Embed v1.5 embeddings |
 | Keyword search | Best Matching 25 (BM25) ranking, without a dependency on the vector database. The `BM25_TOKENIZER` environment variable selects the tokenizer. The `identifier` tokenizer keeps identifiers such as `5.4.1` or `GTP-U` as one token. |
-| Hybrid search | Weighted combination of the semantic and keyword scores |
+| Hybrid search | Weighted combination of the semantic and keyword results |
 | Filters | Restrict results by chunk type, source name, and metadata content |
 
 ## Start the MCP server
@@ -108,7 +108,7 @@ The following table lists the parameters of `search_docs`:
 | `query` | string | Yes | The search query. | none |
 | `limit` | integer | No | The maximum number of results, from 1 to 50. | `5` |
 | `search_mode` | string | No | The search mode: `semantic`, `keyword`, or `hybrid`. | `hybrid` |
-| `alpha` | number | No | The weight of the semantic score in hybrid mode, from 0 to 1. | `0.6` |
+| `alpha` | number | No | The weight of the semantic arm in hybrid mode, from 0 to 1. With `HYBRID_FUSION=rrf`, it weights ranks instead of scores. | `HYBRID_ALPHA`, or `0.6` |
 | `chunk_types` | array | No | Filters by content type. Possible values are `prose`, `code_snippet`, `crd_definition`, `openapi_spec`, `json_schema`, `yaml_content`, `list_item`, and `table_row`. The tool schema lists only the types present in the index. | none |
 | `metadata_contains` | array | No | Filters by metadata content. Each value is a text string that the chunk metadata must contain. A chunk must match all values (AND logic). | none |
 | `source_names` | array | No | Restricts results to one or more configured sources (OR logic). The values must be keys of the `sources:` block in the `.opencrane/config.yaml` file, for example `MicrosoftDocs/microsoft-style-guide`. The tool schema advertises this parameter only when sources are configured, and its enum lists the exact valid values. With authentication, the caller's permissions can narrow the results further. See [Authentication and authorization](auth.md). | none |

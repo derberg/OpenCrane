@@ -13,8 +13,7 @@ Each candidate is a search-result dict from the search backends. It carries
 ``source_file``, ``source_name``, ``metadata_json``, and ``distance`` (the
 pre-rerank score, higher is better). The reranker returns the candidates to
 keep, best first. It may rescore them by setting ``distance`` (shown
-as ``Score`` in results) and may drop candidates; the server cuts the returned
-list to ``limit``.
+as ``Score`` in results) and may drop candidates.
 
 Register a custom reranker on ``OpenCraneConfig.reranker``, or set the
 ``RERANKER_MODEL`` environment variable to use the built-in :class:`CrossEncoderReranker`.
@@ -92,7 +91,6 @@ def apply_reranker(reranker, query: str, candidates: list[dict], limit: int) -> 
     Failure policy: a reranker that raises, or returns something other than a
     list, must not break search. The function logs the error as a warning and
     returns the unreranked candidates in fused or backend order, cut to *limit*.
-    That is what search returns without a reranker.
     """
     try:
         rerank = getattr(reranker, "rerank", reranker)

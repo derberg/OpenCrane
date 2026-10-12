@@ -192,7 +192,7 @@ Neither setting needs re-indexing.
 
 The BM25 index uses the `simple` tokenizer by default. This tokenizer lowercases text and splits it on every non-alphanumeric character, so `5.4.1` and `4.5.1` produce the same tokens. To keep dotted, hyphenated, and underscored identifiers as one token, set the `BM25_TOKENIZER` environment variable to `identifier`. This tokenizer also emits the parts of each identifier, so a query for `gtp` still matches `GTP-U`. The server builds the BM25 index in memory, so a change of tokenizer needs a server restart but no re-indexing.
 
-An optional reranker reorders the results of every search mode. Use a reranker when search ranks the right chunk too low to return it. The reranker scores the query with each candidate and can rank that chunk higher. Reranking is off by default and needs no re-indexing.
+An optional reranker reorders the results of every search mode. The reranker scores each candidate against the query and can move up a chunk that search ranks too low. Reranking is off by default and needs no re-indexing.
 
 To turn on the built-in reranker, set the `RERANKER_MODEL` environment variable to a sentence-transformers cross-encoder model, for example `cross-encoder/ms-marco-MiniLM-L-6-v2`. To use your own reranker, see [Custom reranker](#custom-reranker).
 
@@ -346,20 +346,21 @@ class TerraformTreeWalker(YamlTreeWalker):
 
 ### Custom reranker
 
-A custom reranker replaces the built-in reranker, for example to call a hosted rerank API or a large language model. Set the `reranker` attribute on your `Config` class to a function or an object with a `rerank` method. The reranker takes the query and the list of candidates.
-
-Each candidate is a search result dictionary with the following keys:
+A custom reranker replaces the built-in reranker, for example to call a hosted rerank API or a large language model. Set the `reranker` attribute on your `Config` class to a function or an object with a `rerank` method. The reranker takes the query and a list of candidates. Each candidate is a dictionary with the following keys:
 
 - `chunk_id`: the ID of the chunk
 - `content`: the chunk text, which is a JSON string for YAML chunks
-- `source_file`, `source_name`, `chunk_type`, and `metadata_json`: the chunk fields from the index
+- `source_file`: the source file path
+- `source_name`: the documentation source
+- `chunk_type`: the chunk type
+- `metadata_json`: the chunk metadata as JSON
 - `distance`: the search score, where a higher value is better
 
 Return the candidates in order, best first. You can drop candidates or set `distance` to your own score. The following example moves candidates that contain the query text to the top:
 
 ```python
 def my_reranker(query: str, candidates: list[dict]) -> list[dict]:
-    return sorted(candidates, key=lambda c: query.lower() in str(c["content"]).lower(), reverse=True)
+    return sorted(candidates, key=lambda c: query.lower() in c["content"].lower(), reverse=True)
 
 
 class Config(OpenCraneConfig):

@@ -628,7 +628,7 @@ GET_METADATA_SCHEMA_TOOL_SCHEMA = {
     "required": []
 }
 
-GET_SECTION_TOOL_DESCRIPTION = "Read a whole documentation section by chunk_id (from search results), or by clause/section number (e.g. '5.4.1.2a', 'C.4.4.2', 'Annex C') optionally narrowed by source. Returns the section's full text with its heading path, a list of its sub-sections (or their full text with include_subsections), and optionally the N previous/next sections in document order. Use it to expand a search hit to its complete section, to open a clause cited by number, or to read the surrounding clauses."
+GET_SECTION_TOOL_DESCRIPTION = "Read a whole documentation section by chunk_id or by clause number. Use search_docs to find information. Use get_section instead when a prose search result is cut off or is only part of a longer section, when the question names a clause or section number (for example '5.4.1.2a', 'C.4.4.2', or 'Annex C'), or when you need the sub-sections or the sections before and after a result. Returns the section text with its heading path and its direct sub-sections. Set include_subsections to get the full text of all sub-sections, and neighbors to also get that many sections before and after it on the same page."
 GET_SECTION_TOOL_SCHEMA = {
     "type": "object",
     "properties": {
@@ -879,7 +879,10 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
                 result_text += f"Content:\n{display_content[:1000]}\n"
                 if len(display_content) > 1000:
                     result_text += f"...(truncated - {len(display_content)} total chars)\n"
-                    result_text += f"💡 Tip: Use get_yaml_definition tool with chunk_id='{chunk_id}' to retrieve the complete definition with breadcrumb comments.\n"
+                    if chunk_type == "prose" and "position" in (metadata or {}):
+                        result_text += f"💡 Tip: Use get_section(chunk_id='{chunk_id}') to read the whole section.\n"
+                    else:
+                        result_text += f"💡 Tip: Use get_yaml_definition tool with chunk_id='{chunk_id}' to retrieve the complete definition with breadcrumb comments.\n"
                 elif chunk_type in ("crd_definition", "openapi_spec", "json_schema"):
                     result_text += f"💡 Tip: Use get_yaml_definition(chunk_id='{chunk_id}') to see this with breadcrumb comments showing its location in the YAML tree and neighbor chunks.\n"
                 if chunk_type == "table_row":
@@ -1563,17 +1566,26 @@ def _resolve_section(arguments: dict, permitted: set | None):
     return _section_head(head), (clause if candidate != clause else None)
 
 
+def _page_title(row: dict) -> str:
+    return (row["metadata"].get("heading_path") or "").split(" > ")[0]
+
+
 def _page_groups(rows: list[dict]) -> dict:
-    """Group rows by page: ``(source_name, source_url)`` -> rows."""
+    """Group rows by page: ``(source_name, source_url, page title)`` -> rows.
+
+    The title is part of the key because pages can share a URL (a synthesized
+    llms.txt index repeats the source's docs_url for every page).
+    """
     pages: dict = {}
     for r in rows:
-        pages.setdefault((r.get("source_name") or "", r["metadata"].get("source_url") or ""), []).append(r)
+        key = (r.get("source_name") or "", r["metadata"].get("source_url") or "", _page_title(r))
+        pages.setdefault(key, []).append(r)
     return pages
 
 
 def _ambiguous_clause(clause: str, pages: dict) -> str:
     lines = [f"Clause {clause!r} appears in {len(pages)} documents; pass source to pick one:"]
-    for (name, url), members in pages.items():
+    for (name, url, _), members in pages.items():
         head = min(members, key=lambda m: m["metadata"].get("position", 0))
         title = (head["metadata"].get("heading_path") or "").split(" > ")[0]
         lines.append(f"  - {title or url or name} | source={name or '-'} | url={url or '-'} | chunk_id={head['chunk_id']}")

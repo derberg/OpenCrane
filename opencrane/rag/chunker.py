@@ -140,7 +140,7 @@ def _annotate_prose_navigation(chunks, config) -> None:
     """Record heading ancestry, clause id and neighbour links on prose chunks.
 
     Walks chunks in document order keeping a heading stack per page (reset when
-    the ``source_url`` changes). For each prose chunk it records:
+    the ``source_url`` changes or a page-title H1 starts a new page). For each prose chunk it records:
 
     - ``heading_path``: the heading ancestry of the chunk's section joined by
       `` > `` (the chunk's own first heading when its content opens with one,
@@ -169,15 +169,21 @@ def _annotate_prose_navigation(chunks, config) -> None:
             continue
         metadata = chunk.metadata
         url = metadata.get("source_url")
-        if url != page:
+        preceding = [
+            (len(m.group(1)), m.group(2).strip())
+            for m in map(_NAV_HEADING_RE.match, chunk._preceding_headings) if m
+        ]
+        opens, headings = _content_headings(chunk.content)
+        # An H1 is a page title, so it starts a new page even when the URL does
+        # not change (pages missing from llms.txt have none, and a synthesized
+        # index repeats the source's docs_url for every page).
+        starts_page = any(level == 1 for level, _ in preceding) or (opens and headings[0][0] == 1)
+        if url != page or starts_page:
             page, stack, previous, position = url, [], None, 0
 
-        for line in chunk._preceding_headings:
-            match = _NAV_HEADING_RE.match(line)
-            if match:
-                _push_heading(stack, len(match.group(1)), match.group(2).strip(), None)
+        for level, title in preceding:
+            _push_heading(stack, level, title, None)
 
-        opens, headings = _content_headings(chunk.content)
         if opens:
             _push_heading(stack, *headings[0], chunk.chunk_id)
             headings = headings[1:]

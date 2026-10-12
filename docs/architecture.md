@@ -192,13 +192,13 @@ Neither setting needs re-indexing.
 
 The BM25 index uses the `simple` tokenizer by default. This tokenizer lowercases text and splits it on every non-alphanumeric character, so `5.4.1` and `4.5.1` produce the same tokens. To keep dotted, hyphenated, and underscored identifiers as one token, set the `BM25_TOKENIZER` environment variable to `identifier`. This tokenizer also emits the parts of each identifier, so a query for `gtp` still matches `GTP-U`. The server builds the BM25 index in memory, so a change of tokenizer needs a server restart but no re-indexing.
 
-An optional reranker reorders the results of every search mode. Use a reranker when search ranks the right chunk too low to return it. The reranker scores the query together with each candidate result, so it can move that chunk up. Reranking is off by default and needs no re-indexing.
+An optional reranker reorders the results of every search mode. Use a reranker when search ranks the right chunk too low to return it. The reranker scores the query with each candidate, so it can move that chunk up. Reranking is off by default and needs no re-indexing.
 
-To turn on the built-in reranker, set the `RERANKER_MODEL` environment variable to a sentence-transformers cross-encoder model, for example `cross-encoder/ms-marco-MiniLM-L-6-v2`. The server loads the model on the first search, not at startup. To use your own reranker, see [Custom reranker](#custom-reranker).
+To turn on the built-in reranker, set the `RERANKER_MODEL` environment variable to a sentence-transformers cross-encoder model, for example `cross-encoder/ms-marco-MiniLM-L-6-v2`. To use your own reranker, see [Custom reranker](#custom-reranker).
 
-With a reranker on, each search mode fetches `RERANK_DEPTH` candidates instead of **limit**. The default is `50`, and the server never fetches fewer than **limit**. In hybrid mode, the server fuses the two arms first. The reranker then reorders the candidates, and the server returns the first **limit** of them. The built-in reranker shows its own score on the `Score` line of each result. The built-in reranker runs on the CPU, so a higher `RERANK_DEPTH` makes each search slower.
+The server reranks the first `RERANK_DEPTH` candidates, `50` by default, and returns the top **limit** results. The built-in reranker runs on the CPU, so a higher `RERANK_DEPTH` makes each search slower. The `Score` line shows the score of the built-in reranker.
 
-If the reranker raises an exception or returns something other than a list, the server logs the `Reranker failed, returning unreranked results` warning. The server then returns the results in their original order. The test search of the health check skips the reranker.
+If the reranker fails, the server logs the `Reranker failed, returning unreranked results` warning and returns the results in search order.
 
 To narrow the results, pass the following `search_docs` parameters:
 
@@ -346,7 +346,7 @@ class TerraformTreeWalker(YamlTreeWalker):
 
 ### Custom reranker
 
-A custom reranker replaces the built-in reranker, for example to call a hosted rerank API or a large language model (LLM). To add one, set the `reranker` attribute on your `Config` class. This attribute takes precedence over the `RERANKER_MODEL` environment variable. The reranker is a function, or an object with a `rerank` method, that takes the query and the list of candidates.
+A custom reranker replaces the built-in reranker, for example to call a hosted rerank API or a large language model. Set the `reranker` attribute on your `Config` class to a function or an object with a `rerank` method. The reranker takes the query and the list of candidates. This attribute takes precedence over `RERANKER_MODEL`.
 
 Each candidate is a search result dictionary with the following keys:
 
@@ -355,7 +355,7 @@ Each candidate is a search result dictionary with the following keys:
 - `source_file`, `source_name`, `chunk_type`, and `metadata_json`: the chunk fields from the index
 - `distance`: the search score, where a higher value is better
 
-Return the candidates best first. You can drop candidates, and you can set `distance` to your own score. The following example moves candidates that contain the query text to the top:
+Return the candidates best first. You can drop candidates or set `distance` to your own score. The following example moves candidates that contain the query text to the top:
 
 ```python
 def my_reranker(query: str, candidates: list[dict]) -> list[dict]:

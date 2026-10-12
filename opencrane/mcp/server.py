@@ -515,9 +515,8 @@ def _alpha_description(config) -> str:
         # The reranker replaces the fused order (and usually the score), so the
         # RRF score-scale hint above would describe a Score agents never see.
         description += (
-            " This server reranks the results of every search mode. The result order and, "
-            "usually, the Score come from the reranker, so alpha only decides which candidates "
-            "reach the reranker."
+            " This server reranks the results: the order and usually the Score come from the "
+            "reranker, so alpha only selects which candidates reach the reranker."
         )
     return description
 

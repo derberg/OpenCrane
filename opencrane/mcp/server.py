@@ -733,6 +733,7 @@ BUILTIN_TOOL_NAMES = frozenset({
     "get_metadata_schema",
     "get_list_members",
     "get_table_members",
+    "get_section",
 })
 
 # Project-defined tools from ``OpenCraneConfig.extra_tools``: name ->

@@ -175,6 +175,8 @@ final_score = alpha × vector_score + (1 − alpha) × bm25_score
 
 The default **alpha** is `0.6`, which means 60% semantic and 40% keyword. To override it for a single query, pass the **alpha** parameter. To set a different default, use the `HYBRID_ALPHA` environment variable.
 
+The BM25 index uses the `simple` tokenizer by default. This tokenizer lowercases text and splits it on every non-alphanumeric character, so `5.4.1` and `4.5.1` produce the same tokens. To keep dotted, hyphenated, and underscored identifiers as one token, set the `BM25_TOKENIZER` environment variable to `identifier`. This tokenizer also emits the parts of each identifier, so a query for `gtp` still matches `GTP-U`. The server builds the BM25 index in memory, so a change of tokenizer needs a server restart but no re-indexing.
+
 To narrow the results, pass the following `search_docs` parameters:
 
 - **chunk_types**: limits the results to the given chunk types

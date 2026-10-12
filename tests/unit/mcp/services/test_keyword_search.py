@@ -136,6 +136,99 @@ def test_keyword_search_with_mixed_content_types():
     assert len(results) >= 3  # at least string, dict, list should match
 
 
+# --- BM25 tokenizer selection (BM25_TOKENIZER) ---
+
+from opencrane.mcp.services.keyword_search import (  # noqa: E402
+    _identifier_tokenize,
+    _resolve_tokenizer,
+    _simple_tokenize,
+)
+
+
+def test_simple_tokenizer_splits_identifiers():
+    """The default tokenizer is unchanged: identifiers are split into fragments."""
+    assert _simple_tokenize("See clause 5.4.1 for GTP-U.") == ["see", "clause", "5", "4", "1", "for", "gtp", "u"]
+
+
+@pytest.mark.parametrize("text, expected", [
+    # Clause numbers keep their identity and strip trailing sentence punctuation
+    ("as specified in clause 5.4.1.", ["as", "specified", "in", "clause", "5.4.1", "5", "4", "1"]),
+    # Spec references
+    ("3GPP TS 29.244 v16.5.0", ["3gpp", "ts", "29.244", "29", "244", "v16.5.0", "v16", "5", "0"]),
+    # Hyphenated protocol names and compounds, trailing comma stripped
+    ("GTP-U, Sx-based", ["gtp-u", "gtp", "u", "sx-based", "sx", "based"]),
+    # Underscored identifiers
+    ("call get_yaml_definition()", ["call", "get_yaml_definition", "get", "yaml", "definition"]),
+    # Alphanumeric identifiers without joiners stay single tokens
+    ("N4 v1alpha1 PFCP", ["n4", "v1alpha1", "pfcp"]),
+    # Parts are de-duplicated per compound occurrence
+    ("5.5.5", ["5.5.5", "5"]),
+    # Dangling joiners are separators, not part of a token
+    ("GTP- -U _x_ a..b", ["gtp", "u", "x", "a", "b"]),
+    ("", []),
+])
+def test_identifier_tokenizer(text, expected):
+    assert _identifier_tokenize(text) == expected
+
+
+def test_resolve_tokenizer_default_is_simple(monkeypatch):
+    monkeypatch.delenv("BM25_TOKENIZER", raising=False)
+    assert _resolve_tokenizer() is _simple_tokenize
+
+
+def test_resolve_tokenizer_from_env(monkeypatch):
+    monkeypatch.setenv("BM25_TOKENIZER", " Identifier ")
+    assert _resolve_tokenizer() is _identifier_tokenize
+    assert _resolve_tokenizer("simple") is _simple_tokenize
+
+
+def test_resolve_tokenizer_rejects_unknown():
+    with pytest.raises(ValueError, match="Unknown BM25_TOKENIZER 'stemmed'"):
+        _resolve_tokenizer("stemmed")
+
+
+_SPEC_CHUNKS = [
+    {"chunk_id": "clause", "content": "5.4.1 General. The SMF shall send the PFCP Session Establishment Request over N4.",
+     "source_file": "ts_29244.md", "chunk_type": "prose", "metadata": {}},
+    {"chunk_id": "scattered", "content": "Step 5 of 4 retries, then 1 more attempt per clause 4.5.1.",
+     "source_file": "ts_23502.md", "chunk_type": "prose", "metadata": {}},
+    {"chunk_id": "gtpu", "content": "The UPF encapsulates user plane packets in GTP-U towards the gNB.",
+     "source_file": "ts_29281.md", "chunk_type": "prose", "metadata": {}},
+    {"chunk_id": "gtpc", "content": "GTP control plane messages are defined for GTPv2 on S5 and S8.",
+     "source_file": "ts_29274.md", "chunk_type": "prose", "metadata": {}},
+    # Fillers keep the corpus large enough for BM25 IDF to stay positive
+    {"chunk_id": "amf", "content": "The AMF handles registration and mobility management.",
+     "source_file": "ts_23501.md", "chunk_type": "prose", "metadata": {}},
+    {"chunk_id": "nrf", "content": "The NRF supports network function discovery.",
+     "source_file": "ts_29510.md", "chunk_type": "prose", "metadata": {}},
+]
+
+
+def test_identifier_tokenizer_ranks_exact_clause_number_first(monkeypatch):
+    monkeypatch.setenv("BM25_TOKENIZER", "identifier")
+    results = KeywordSearchService(chunks=_SPEC_CHUNKS).search("5.4.1", limit=2)
+    assert results[0]["chunk_id"] == "clause"
+    assert results[0]["distance"] > results[1]["distance"]
+
+
+def test_simple_tokenizer_cannot_tell_clause_numbers_apart(monkeypatch):
+    """Baseline for the test above: with the default tokenizer 5.4.1 and 4.5.1 look the same."""
+    monkeypatch.delenv("BM25_TOKENIZER", raising=False)
+    results = KeywordSearchService(chunks=_SPEC_CHUNKS).search("5.4.1", limit=4)
+    scores = {r["chunk_id"]: r["distance"] for r in results}
+    assert scores["scattered"] >= scores["clause"]
+
+
+def test_identifier_tokenizer_part_query_still_matches_compound(monkeypatch):
+    monkeypatch.setenv("BM25_TOKENIZER", "identifier")
+    svc = KeywordSearchService(chunks=_SPEC_CHUNKS)
+    # A bare "gtp" query matches both the GTP-U and the GTP chunk
+    ids = {r["chunk_id"] for r in svc.search("gtp", limit=4) if r["distance"] > 0}
+    assert {"gtpu", "gtpc"} <= ids
+    # The exact compound ranks the GTP-U chunk first
+    assert svc.search("GTP-U", limit=1)[0]["chunk_id"] == "gtpu"
+
+
 _BUILD_CHUNKS = [
     {"chunk_id": "a", "content": "alpha beta", "source_file": "a.md", "chunk_type": "prose", "metadata": {}},
     {"chunk_id": "b", "content": "gamma delta", "source_file": "b.md", "chunk_type": "prose", "metadata": {}},

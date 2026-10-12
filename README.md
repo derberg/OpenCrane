@@ -387,7 +387,7 @@ opencrane visualize --file {PATH_TO_FILE}
 echo "{PARAGRAPH}" | opencrane visualize
 ```
 
-The command encodes the paragraph as a search query, with the same model and `EMBEDDING_QUERY_PROMPT` as the server. It then renders an interactive HTML page with the following views side by side:
+The command encodes the paragraph the way the server encodes a search query. It then renders an interactive HTML page with the following views side by side:
 
 - Scatter: a projection of the indexed chunks, or of a random sample of them when you set `--sample`. The new paragraph is a highlighted diamond, and the chart draws a ring around each nearest neighbor.
 - Local neighborhood: a projection of only the paragraph and its nearest neighbors. Because the projection uses only these points, the distances between the neighbors are meaningful.

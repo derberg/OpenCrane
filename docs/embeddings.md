@@ -21,12 +21,12 @@ To use a different model, set the `EMBEDDING_MODEL` environment variable.
 
 ## Embedding prompts
 
-Many retrieval models need one prompt for documents and another for queries. Without these prompts, search returns less relevant results. OpenCrane reads the prompts from the following environment variables:
+Many retrieval models need one prompt for documents and another for queries. Without these prompts, search returns less relevant results. The following environment variables set the prompts:
 
-- `EMBEDDING_DOCUMENT_PROMPT` is a prefix that the `embed` step adds to every chunk.
-- `EMBEDDING_QUERY_PROMPT` is a prompt that `serve` and `visualize` apply to each query. Write it as a template with a `{query}` placeholder, or as a plain prefix.
+- `EMBEDDING_DOCUMENT_PROMPT` is a prefix that `embed` adds to every chunk.
+- `EMBEDDING_QUERY_PROMPT` is a `{query}` template or a prefix that `serve` and `visualize` apply to each query.
 
-Both variables are empty by default, so OpenCrane encodes text as it is. A literal `\n` in either value becomes a newline.
+Both variables are empty by default. A literal `\n` in either value becomes a newline.
 
 The following table lists the prompts for common 768-dimension models:
 
@@ -35,7 +35,7 @@ The following table lists the prompts for common 768-dimension models:
 | `nomic-ai/nomic-embed-text-v1.5`, the default | `search_document: ` | `search_query: ` |
 | `intfloat/e5-base-v2` | `passage: ` | `query: ` |
 
-The document prompt is part of every stored vector, so a change to `EMBEDDING_DOCUMENT_PROMPT` requires new embeddings and a new index. The `embed` step detects the change and regenerates the embeddings. The `index` step keeps a collection that already has rows, so run it with `DROP_EXISTING=true`. The following commands set the prompts for the default model and rebuild the index:
+A new document prompt needs new embeddings and a rebuilt collection, so run `index` with `DROP_EXISTING=true`. The following commands set the prompts for the default model and rebuild the index:
 
 ```bash
 export EMBEDDING_DOCUMENT_PROMPT="search_document: "
@@ -43,7 +43,7 @@ export EMBEDDING_QUERY_PROMPT="search_query: "
 opencrane embed && DROP_EXISTING=true opencrane index
 ```
 
-A change to `EMBEDDING_QUERY_PROMPT` takes effect when you restart the server. The `docker-compose.yml` file that `opencrane init` generates passes `EMBEDDING_QUERY_PROMPT` from your shell to the container. If you set a document prompt without a query prompt, `serve` logs a warning.
+A new query prompt takes effect when you restart the server. The `docker-compose.yml` file from `opencrane init` passes `EMBEDDING_QUERY_PROMPT` from your shell to the container.
 
 ## Collection schema
 

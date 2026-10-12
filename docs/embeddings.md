@@ -16,7 +16,7 @@ The `opencrane embed` command performs the following steps:
 
 ## Choose an embedding model
 
-To use a different model, set the `EMBEDDING_MODEL` environment variable. Any vector size works. A larger model can improve results, and a smaller one embeds faster.
+To use a different model, set the `EMBEDDING_MODEL` environment variable to a Hugging Face model ID or a local path that the `sentence-transformers` library can load. Any vector size works. A larger model can improve results, and a smaller one embeds faster.
 
 > [!CAUTION]
 > `opencrane index` deletes the collection before a rebuild. Searches fail until the Model Context Protocol (MCP) server uses the new model and collection. Check that `MILVUS_COLLECTION` and the [connection variables](../README.md#variables-for-the-index-and-serve-steps) point to the collection to replace.

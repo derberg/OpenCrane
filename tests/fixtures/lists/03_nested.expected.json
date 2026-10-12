@@ -1,12 +1,5 @@
 [
   {
-    "chunk_id": "$prose_intro",
-    "content": "## Options",
-    "source_file": "tests/fixtures/lists/03_nested.md",
-    "chunk_type": "prose",
-    "metadata": {}
-  },
-  {
     "chunk_id": "$item_A",
     "content": "# Options\nOption A: retry policy",
     "source_file": "tests/fixtures/lists/03_nested.md",

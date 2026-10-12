@@ -581,7 +581,7 @@ The following table lists the variables:
 | `HYBRID_FUSION` | `minmax` | How hybrid search merges the two arms. `minmax` blends normalized scores, and `rrf` blends ranks with Reciprocal Rank Fusion. See [Search modes](docs/architecture.md#search-modes). |
 | `HYBRID_RRF_K` | `60` | The RRF smoothing constant `k`. OpenCrane uses it only when `HYBRID_FUSION` is `rrf`. |
 | `BM25_TOKENIZER` | `simple` | Keyword (BM25) tokenizer. `simple` lowercases text and splits it on every non-alphanumeric character. `identifier` keeps dotted, hyphenated, and underscored identifiers such as `5.4.1`, `TS 29.244`, `GTP-U`, or `get_yaml_definition` as one token and also emits their parts. With `identifier`, `gtp` still matches `GTP-U`, and `5.4.1` no longer matches `4.5.1`. The MCP server builds the BM25 index in memory, so a change of tokenizer needs a server restart but no re-chunking, re-embedding, or re-indexing. |
-| `RERANKER_MODEL` | none | Cross-encoder model that reranks search results, for example `cross-encoder/ms-marco-MiniLM-L-6-v2`. Without it, reranking is off. See [Search modes](docs/architecture.md#search-modes). |
+| `RERANKER_MODEL` | none | Cross-encoder model of the built-in reranker, for example `cross-encoder/ms-marco-MiniLM-L-6-v2`. Without it, the built-in reranker is off. See [Search modes](docs/architecture.md#search-modes). |
 | `RERANK_DEPTH` | `50` | Number of candidates that the reranker reorders. OpenCrane uses it only when a reranker is set. |
 | `DROP_EXISTING` | `false` | When `true`, `index` deletes and rebuilds the Milvus collection. Without it, `index` skips a collection that already has rows. See [`opencrane index`](#index-the-embeddings-in-milvus-with-opencrane-index). |
 

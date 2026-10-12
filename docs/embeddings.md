@@ -14,10 +14,14 @@ The `opencrane embed` command performs the following steps:
 2. Generates a vector embedding for each chunk, in batches to limit memory use. The default model is Nomic Embed, `nomic-ai/nomic-embed-text-v1.5`.
 3. Saves the embeddings to `.opencrane/embeddings.json`.
 
-To use a different model, set the `EMBEDDING_MODEL` environment variable.
+## Choose an embedding model
 
-> [!IMPORTANT]
-> The Milvus collection stores 768-dimension vectors, which matches the default model. Choose a model that produces 768-dimension vectors. If the model produces vectors of another size, the `index` step cannot load them.
+To use a different model, set the `EMBEDDING_MODEL` environment variable to a Hugging Face model ID or a local path that the `sentence-transformers` library can load. Any vector size works. A larger model can improve results, and a smaller one embeds faster.
+
+> [!CAUTION]
+> `opencrane index` deletes the collection before a rebuild. Searches fail until the Model Context Protocol (MCP) server uses the new model and collection. Check that `MILVUS_COLLECTION` and the [connection variables](../README.md#variables-for-the-index-and-serve-steps) point to the collection to replace.
+
+After you change the model, run `opencrane embed` and `opencrane index` again. If the vector size stays the same, set `DROP_EXISTING=true`, or `index` keeps the old vectors. Then restart the MCP server with the same `EMBEDDING_MODEL`.
 
 ## Embedding prompts
 
@@ -28,7 +32,7 @@ Many embedding models need one prompt for documents and another for queries, or 
 
 Both default to empty. A literal `\n` in either value becomes a newline.
 
-The following table lists prompts for common 768-dimension models:
+The following table lists prompts for common models:
 
 | Model | `EMBEDDING_DOCUMENT_PROMPT` | `EMBEDDING_QUERY_PROMPT` |
 |---|---|---|
@@ -57,7 +61,7 @@ When the `index` step loads the embeddings into Milvus, each chunk becomes one r
 | Field | Type | Notes |
 |---|---|---|
 | `chunk_id` | `VARCHAR` | Primary key. `max_length` 64 |
-| `embedding` | `FLOAT_VECTOR` | 768 dimensions |
+| `embedding` | `FLOAT_VECTOR` | Vector size of the model, 768 by default |
 | `content` | `VARCHAR` | `max_length` 65,535 |
 | `source_file` | `VARCHAR` | `max_length` 512 |
 | `source_name` | `VARCHAR` | `max_length` 256 |

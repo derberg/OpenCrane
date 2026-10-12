@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from opencrane.mcp.services.milvus_client import MilvusService
 from opencrane.mcp.services.embeddings import EmbeddingService
-from opencrane.shared.models.vector_chunk import VectorChunk
+from opencrane.shared.models.vector_chunk import DEFAULT_EMBEDDING_DIM, VectorChunk
 from opencrane.shared.logging_config import setup_logging
 
 # Scalar columns added so the MCP server can serve chunk lookups from Milvus
@@ -43,6 +43,13 @@ def main():
 
     embeddings_service = EmbeddingService()
     embeddings = embeddings_service.load_embeddings(str(embeddings_file))
+    # The collection's vector size comes from the model that produced the
+    # embeddings, not a fixed constant. Prefer the actual vectors over the
+    # recorded header; fall back to the default only for an empty file.
+    if embeddings.embeddings:
+        dim = len(embeddings.embeddings[0].vector)
+    else:
+        dim = embeddings.dimensions or DEFAULT_EMBEDDING_DIM
     if embeddings.document_prompt:
         logger.info(
             f"The embeddings use document prompt {embeddings.document_prompt!r}; "
@@ -72,7 +79,19 @@ def main():
             milvus.client.drop_collection(milvus.collection_name)
         else:
             stats = milvus.get_collection_stats()
-            if stats.get('row_count', 0) > 0:
+            populated = stats.get('row_count', 0) > 0
+            existing_dim = milvus.vector_dim()
+            # Only real vectors identify the model. Without them the dim is a
+            # guess, and a guess must not wipe a populated collection.
+            if populated and embeddings.embeddings and existing_dim not in (None, dim):
+                # Vector size is fixed by the schema; a different embedding model
+                # is a schema change, so rebuild like any other schema upgrade.
+                logger.info(
+                    f"Collection has {existing_dim}-dimensional vectors but the embeddings "
+                    f"are {dim}-dimensional (embedding model changed); dropping and rebuilding."
+                )
+                milvus.client.drop_collection(milvus.collection_name)
+            elif populated:
                 logger.info(f"Collection already initialized with {stats['row_count']} vectors")
                 logger.info("Skipping initialization (collection already populated)")
                 logger.info("To force reinit, set DROP_EXISTING=true")
@@ -82,7 +101,7 @@ def main():
                 milvus.client.drop_collection(milvus.collection_name)
 
     logger.info("Creating collection...")
-    milvus.create_collection()
+    milvus.create_collection(dim=dim)
 
     logger.info("Building vector chunks...")
     vector_chunks = []

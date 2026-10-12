@@ -278,9 +278,7 @@ opencrane index [--config {MODULE}:{CLASS}]
 When the Milvus collection already has rows, the command skips indexing and keeps the existing data. This also applies to the index step of `opencrane build`. As a result, after a documentation update, `opencrane build` leaves the old data in Milvus.
 
 > [!CAUTION]
-> After an OpenCrane upgrade, `opencrane index` can delete and rebuild the collection. On a Milvus server that an MCP server already uses, searches fail until the rebuild finishes.
-
-When the collection lacks fields that the current OpenCrane version needs, the command drops and rebuilds the collection automatically.
+> When the collection has a different vector size or lacks fields that this OpenCrane version needs, the command deletes and rebuilds the collection. Searches fail until the rebuild finishes and the MCP server uses the same model. First, check that the embeddings come from the model you want to serve.
 
 The command reads the chunks and embeddings from the paths in the `AI_DOCS_CHUNKS_FILE` and `AI_DOCS_EMBEDDINGS_FILE` environment variables, by default `.opencrane/chunks.json` and `.opencrane/embeddings.json`.
 
@@ -559,7 +557,7 @@ You need the following variables only if you run the `embed` step, directly or t
 |---|---|---|
 | `AI_DOCS_CHUNKS_FILE` | `.opencrane/chunks.json` | Input chunks JSON file. See also the `--chunks-file` flag. |
 | `AI_DOCS_EMBEDDINGS_FILE` | `.opencrane/embeddings.json` | Output path for the generated embeddings. See also the `--embeddings-file` flag. |
-| `EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | Hugging Face embedding model to use |
+| `EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | Hugging Face embedding model. See [Choose an embedding model](docs/embeddings.md#choose-an-embedding-model). |
 | `EMBEDDING_DOCUMENT_PROMPT` | none | Prefix that `embed` adds to every chunk. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
 
 #### Variables for the `index` and `serve` steps
@@ -586,7 +584,7 @@ The following table lists the variables:
 | `HYBRID_FUSION` | `minmax` | How hybrid search merges the two arms. `minmax` blends normalized scores, and `rrf` blends ranks with Reciprocal Rank Fusion. See [Search modes](docs/architecture.md#search-modes). |
 | `HYBRID_RRF_K` | `60` | The RRF smoothing constant `k`. OpenCrane uses it only when `HYBRID_FUSION` is `rrf`. |
 | `BM25_TOKENIZER` | `simple` | Keyword (BM25) tokenizer. `simple` lowercases text and splits it on every non-alphanumeric character. `identifier` keeps dotted, hyphenated, and underscored identifiers such as `5.4.1`, `TS 29.244`, `GTP-U`, or `get_yaml_definition` as one token and also emits their parts. With `identifier`, `gtp` still matches `GTP-U`, and `5.4.1` no longer matches `4.5.1`. The MCP server builds the BM25 index in memory, so a change of tokenizer needs a server restart but no re-chunking, re-embedding, or re-indexing. |
-| `DROP_EXISTING` | `false` | When `true`, `index` deletes and rebuilds the Milvus collection. Without it, `index` skips a collection that already has rows. See [`opencrane index`](#index-the-embeddings-in-milvus-with-opencrane-index). |
+| `DROP_EXISTING` | `false` | When `true`, `index` deletes and rebuilds the Milvus collection. When `false`, `index` skips a collection that already has rows, unless the vector size changed. See [`opencrane index`](#index-the-embeddings-in-milvus-with-opencrane-index). |
 
 #### Variables for the health check
 

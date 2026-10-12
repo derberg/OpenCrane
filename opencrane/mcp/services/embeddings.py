@@ -7,7 +7,7 @@ import yaml
 from typing import List, Dict, Any, Union
 from sentence_transformers import SentenceTransformer
 from opencrane.shared.config import get_config
-from opencrane.shared.models.vector_chunk import EmbeddingRecord, EmbeddingsFile, generate_chunk_id
+from opencrane.shared.models.vector_chunk import DEFAULT_EMBEDDING_DIM, EmbeddingRecord, EmbeddingsFile, generate_chunk_id
 from opencrane.shared.utils.embedding_prompts import format_document
 import json
 import hashlib
@@ -82,7 +82,7 @@ class EmbeddingService:
 
         try:
             if self.backend == "mock" or self.model_name == "mock":
-                dimensions = 768
+                dimensions = DEFAULT_EMBEDDING_DIM
                 vectors = [self._mock_vector(text, dimensions) for text in texts]
                 logger.info(f"Generated {len(vectors)} mock vectors")
             else:

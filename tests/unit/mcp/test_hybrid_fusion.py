@@ -164,3 +164,77 @@ class TestFusion:
         res, _, _ = await _run(monkeypatch, SEM, KEY, {"HYBRID_FUSION": "bogus"}, limit=1, alpha=0.6)
         assert _ids(res) == ["s1"]
         assert "Unknown HYBRID_FUSION 'bogus'" in caplog.text
+
+
+class TestFusionRobustness:
+    @pytest.mark.anyio
+    async def test_rrf_ignores_keyword_hits_with_zero_score(self, monkeypatch):
+        """Keyword padding that matches no query term must not earn RRF rank credit."""
+        sem = [_hit("s1", 0.9), _hit("s2", 0.8), _hit("s3", 0.7)]
+        key = [_hit("k1", 5.0), _hit("pad", 0.0), _hit("s3", 0.0)]
+        res, _, _ = await _run(
+            monkeypatch, sem, key,
+            {"HYBRID_CANDIDATE_POOL": "3", "HYBRID_FUSION": "rrf"}, limit=5, alpha=0.5,
+        )
+        assert "pad" not in _ids(res)
+        # s3 keeps only its semantic rank; the score-0 keyword hit adds nothing.
+        assert dict(zip(_ids(res), _scores(res)))["s3"] == pytest.approx(1 / 63)
+
+    @pytest.mark.anyio
+    async def test_minmax_without_keyword_match_keeps_semantic_order(self, monkeypatch):
+        """When no chunk matches a query term, min-max must not boost the padding to 1.0."""
+        sem = [_hit("s1", 0.9), _hit("s2", 0.5)]
+        key = [_hit("s2", 0.0), _hit("pad", 0.0)]
+        res, _, _ = await _run(monkeypatch, sem, key, {}, limit=3, alpha=0.6)
+        assert _ids(res) == ["s1", "s2"]
+
+    @pytest.mark.anyio
+    async def test_negative_rrf_k_is_clamped(self, monkeypatch):
+        res, _, _ = await _run(
+            monkeypatch, SEM, [], {"HYBRID_FUSION": "rrf", "HYBRID_RRF_K": "-1"}, limit=2, alpha=1.0,
+        )
+        assert _ids(res) == ["s1", "s2"]
+        assert _scores(res) == [pytest.approx(2.0), pytest.approx(1.0)]
+
+    @pytest.mark.anyio
+    async def test_pool_capped_at_milvus_topk_limit(self, monkeypatch):
+        _, sem, key = await _run(monkeypatch, SEM, KEY, {"HYBRID_CANDIDATE_POOL": "100000"}, limit=2)
+        assert sem.limits == [mcp_server.MAX_HYBRID_CANDIDATE_POOL]
+        assert key.limits == [mcp_server.MAX_HYBRID_CANDIDATE_POOL]
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("sem_id, key_id", [("z", "a"), ("a", "z")])
+    async def test_ties_break_by_chunk_id(self, monkeypatch, sem_id, key_id):
+        """Equal RRF scores order by chunk_id, whichever arm each chunk came from."""
+        res, _, _ = await _run(
+            monkeypatch, [_hit(sem_id, 0.9)], [_hit(key_id, 5.0)],
+            {"HYBRID_FUSION": "rrf"}, limit=2, alpha=0.5,
+        )
+        assert _ids(res) == ["a", "z"]
+        assert _scores(res)[0] == pytest.approx(_scores(res)[1])
+
+
+class TestAlphaSchema:
+    def _alpha(self, monkeypatch, env: dict) -> dict:
+        for name in ("HYBRID_FUSION", "HYBRID_RRF_K", "HYBRID_ALPHA"):
+            monkeypatch.delenv(name, raising=False)
+        for name, value in env.items():
+            monkeypatch.setenv(name, value)
+        with patch.object(mcp_server, "_get_source_keys", return_value=[]), \
+             patch.object(mcp_server, "_get_source_topics", return_value=[]), \
+             patch.object(mcp_server, "_get_indexed_chunk_types", return_value={"prose"}), \
+             patch.object(mcp_server, "_has_yaml_chunks", return_value=False):
+            return mcp_server._build_search_tool().inputSchema["properties"]["alpha"]
+
+    def test_minmax_schema_advertises_configured_default(self, monkeypatch):
+        alpha = self._alpha(monkeypatch, {"HYBRID_ALPHA": "0.7"})
+        assert alpha["default"] == 0.7
+        assert "Default 0.7 " in alpha["description"]
+        assert "rank fusion" not in alpha["description"]
+
+    def test_rrf_schema_explains_rank_fusion_and_score_scale(self, monkeypatch):
+        alpha = self._alpha(monkeypatch, {"HYBRID_FUSION": "rrf", "HYBRID_RRF_K": "60"})
+        assert alpha["default"] == 0.6
+        assert "reciprocal rank fusion" in alpha["description"]
+        assert "at most 0.033" in alpha["description"]
+        assert "a low score does not mean a weak match" in alpha["description"]

@@ -1,379 +1,167 @@
 # Chunk Metadata Schema
 
-This document defines the metadata schema for all chunk types. Metadata fields enable programmatic navigation, context expansion, and hierarchical relationships in the RAG system.
-
-## Universal Metadata (All Chunk Types)
-
-### `source_url` (string, optional)
-- **Purpose**: Link to original documentation page (a clean page URL, no `#fragment`)
-- **Usage**: Provide source attribution in RAG responses
-- **Example**: `"https://github.com/org/repo/blob/main/docs/config.md"`
-
-### `section_anchor` (string, optional)
-- **Purpose**: In-page anchor slug for this chunk's section, so links can point at the exact section rather than the page top
-- **Present when**: the chunk comes from a markdown sub-section (under a level ≥ 2 heading) and section anchors are enabled (default; see `section_anchor_style`)
-- **Usage**: Build a direct section link by joining it to `source_url`: `{source_url}#{section_anchor}`
-- **Example**: `source_url` `"https://docs.example.com/guide/about"` + `section_anchor` `"who-we-serve"` → `"https://docs.example.com/guide/about#who-we-serve"`
-
-### `original_format` (string, optional)
-- **Purpose**: Original serialization format of content
-- **Values**: `"yaml"` for structured schema chunks
-- **Usage**: Guide re-hydration process (e.g., convert dict back to YAML)
-
-### `schema_type` (string, optional)
-- **Purpose**: High-level schema category for YAML content
-- **Values**: `"k8s_crd"`, `"openapi"`, `"json_schema"`
-- **Usage**: Route to appropriate validators and processors
-
-## Hierarchical Navigation Metadata
-
-These fields enable tree traversal and context reconstruction:
-
-### `breadcrumb_path` (string)
-- **Purpose**: Exact location in the document/YAML tree structure
-- **Format**:
-  - list_item/table_row chunks: heading ancestry joined by ` > `, i.e. `page title > … > section`
-  - prose chunks: `page title > section`, only two levels, where the section is the first level ≥ 2 heading in the chunk. The full ancestry is in `heading_path` (see Prose Navigation Metadata)
-  - Structured YAML chunks (crd/openapi/json_schema): dot-separated data-tree path with array indices
-- **Usage**:
-  - **Location Display**: label a citation as "page › section" (the last segment is the section heading)
-  - **Re-hydration**: Reconstruct complete YAML tree from chunks
-  - **Precise Lookup**: Find exact position in nested structures
-- **Examples**:
-  - Prose/list/table: `"VAT in Europe and How It Works in OCE > General Principles"`
-  - CRD: `"spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.replicas"`
-  - OpenAPI: `"paths./users/{id}.get"`
-  - JSON Schema: `"properties.config.properties.database"`
-
-### `logical_parent` (string)
-- **Purpose**: Parent node in tree hierarchy (one level up)
-- **Format**: Same as breadcrumb_path but without final segment
-- **Usage**:
-  - **Parent Context**: Navigate up to parent for additional context
-  - **Grouping**: Identify sibling chunks (chunks with same parent)
-  - **Hierarchy Display**: Build visual tree representations
-- **Examples**:
-  - For `spec.replicas` → parent is `"spec.versions[0].schema.openAPIV3Schema.properties.spec.properties"`
-  - For `paths./users.get` → parent is `"paths./users"`
-
-### `neighbor_chunks` (array of UUIDs)
-- **Purpose**: Sibling chunks at same tree level
-- **Definition**: All chunks sharing the same `logical_parent`
-- **Format**: Array of chunk_id UUIDs
-- **Usage**:
-  - **Context Expansion**: Automatically fetch related properties/siblings
-  - **Related Info**: Show users other properties at same level
-  - **Completeness**: Ensure all related config options are retrieved
-- **Example**: For CRD property `spec.replicas`, neighbors include `spec.image`, `spec.config`, etc.
-- **Empty Array**: Indicates chunk has no siblings (only child under parent)
-
-## CRD-Specific Metadata (`chunk_type: "crd_definition"`)
-
-### `crd_kind` (string)
-- **Purpose**: Kubernetes resource kind
-- **Example**: `"MyResource"`, `"Deployment"`, `"Service"`
-- **Usage**: Filter by resource type
-
-### `crd_api_version` (string)
-- **Purpose**: Full API group and version
-- **Format**: `{group}/{version}`
-- **Example**: `"mygroup.example.com/v1"`
-- **Usage**: Version-specific property lookup
-
-### `crd_version` (string)
-- **Purpose**: Version identifier only
-- **Example**: `"v1"`, `"v1alpha1"`, `"v1beta1"`
-- **Usage**: Quick version filtering
-
-### `crd_property_path` (string)
-- **Purpose**: User-friendly property path (simplified)
-- **Format**: Starts from `spec.`, shows property hierarchy
-- **Examples**:
-  - Top-level: `"spec.replicas"`
-  - Nested: `"spec.config.database"`
-  - Array items: `"spec.volumes.items.name"`
-- **Usage**: Display concise paths in RAG responses
-- **Note**: For recursively chunked properties, shows full nested path
-
-## OpenAPI-Specific Metadata (`chunk_type: "openapi_spec"`)
-
-### `openapi_version` (string)
-- **Purpose**: OpenAPI specification version
-- **Examples**: `"3.0.1"`, `"3.1.0"`
-- **Usage**: Ensure compatibility with spec version
-
-### `openapi_element` (string, enum)
-- **Purpose**: Top-level OpenAPI element type
-- **Values**: `"info"`, `"servers"`, `"security"`, `"tags"`, `"paths"`, `"components"`
-- **Usage**: Categorize and filter chunks by element type
-
-### `server_url` (string, optional)
-- **Present in**: Server chunks
-- **Example**: `"https://api.example.com/v1"`
-
-### `endpoint_path` (string, optional)
-- **Present in**: Path operation chunks
-- **Example**: `"/users/{id}/settings"`
-
-### `http_method` (string, optional)
-- **Present in**: Path operation chunks
-- **Values**: `"get"`, `"post"`, `"put"`, `"delete"`, `"patch"`, etc.
-
-### `component_type` (string, optional)
-- **Present in**: Component chunks
-- **Values**: `"schemas"`, `"securitySchemes"`, `"responses"`, `"parameters"`, etc.
-
-### `schema_name` (string, optional)
-- **Present in**: Schema component chunks
-- **Example**: `"User"`, `"Order"`, `"ErrorResponse"`
-
-### `property_name` (string, optional)
-- **Present in**: Recursively chunked schema property chunks
-- **Example**: `"email"`, `"profile"`, `"settings"`
-
-### `property_path` (string, optional)
-- **Present in**: Recursively chunked schema property chunks
-- **Format**: Dot-separated path within schema
-- **Examples**:
-  - `"User.profile.address"`
-  - `"Order.items.quantity"`
-
-## JSON Schema-Specific Metadata (`chunk_type: "json_schema"`)
-
-### `schema_version` (string)
-- **Purpose**: JSON Schema draft version
-- **Example**: `"https://json-schema.org/draft/2020-12/schema"`
-- **Usage**: Parse schema according to correct draft
-
-### `schema_id` (string, optional)
-- **Purpose**: Schema identifier from `$id` field
-- **Example**: `"https://example.com/schemas/user.json"`
-
-### `schema_title` (string, optional)
-- **Purpose**: Schema title from root `title` field
-- **Example**: `"User Configuration Schema"`
-
-### `schema_element` (string, enum)
-- **Purpose**: Schema element type
-- **Values**: `"root"`, `"properties"`, `"definitions"`
-- **Usage**: Categorize chunks by element type
-
-### `property_name` (string, optional)
-- **Present in**: Property chunks
-- **Example**: `"username"`, `"config"`, `"settings"`
-
-### `property_path` (string, optional)
-- **Present in**: Property chunks
-- **Format**: Dot-separated path (no "properties" keywords)
-- **Examples**:
-  - Simple: `"username"`
-  - Nested: `"config.database"`
-  - Array items: `"volumes.items.name"`
-- **Usage**: Display clean property paths
-
-### `definition_name` (string, optional)
-- **Present in**: Definition chunks
-- **Example**: `"address"`, `"phoneNumber"`
-- **Usage**: Reference schema definitions
-
-## Prose Navigation Metadata (`chunk_type: "prose"`)
-
-Prose chunks record where they sit in their page's heading tree and link to
-the chunks around them, so a hit can be expanded to its whole section, its
-parent or its neighbours. The fields are set at chunking time (on by default,
-turned off with `OpenCraneConfig.prose_navigation = False`), so an existing
-corpus gets them after a re-chunk and re-index. They are not embedded and not
-BM25-indexed, so they do not affect ranking. Use the MCP `get_section` tool to
-read a section by `chunk_id` or `clause_id`.
-
-A chunk's *section* is the heading its content opens with. A chunk that does
-not open with a heading (for example prose that resumes after a code block)
-continues the section before it and repeats that section's `heading_path`,
-`clause_id` and `parent_chunk_id`.
-
-### `heading_path` (string, optional)
-- **Purpose**: Full heading ancestry of the chunk's section within its page, joined by ` > `
-- **Example**: `"TS 23.501 System architecture > 5 Functional description > 5.2 Network access control"`
-- **Absent**: for prose before the page's first heading
-- **Note**: Unlike `breadcrumb_path`, it includes every intermediate heading, including headings that have no chunk of their own (sections with no text before their first sub-section, and headings deeper than the chunking boundary that sit inside an earlier chunk).
-
-### `clause_id` (string, optional)
-- **Purpose**: Section/clause number taken from the section heading
-- **Examples**: `"5.4.1.2.2.8"`, `"4c.4.3"`, `"6.1.1.2a"`, `"16.1.4B.1"`, `"C.4.4.2"`, `"Annex C"`
-- **Extraction**: the regex in `section_clause_pattern` (in `.opencrane/config.yaml` or on `OpenCraneConfig`), matched at the start of the heading title; its first capture group is the id. `none` disables clause ids.
-- **Usage**: `get_section(clause_id=..., source=...)`. A clause with no chunk of its own is answered with its sub-sections; a clause inside an enclosing chunk is cut out of that chunk's text.
-
-### `parent_chunk_id` (chunk_id string, or null)
-- **Purpose**: The chunk that holds the nearest enclosing section's heading (a heading with no chunk of its own is skipped)
-- **Values**: `null` for top-level sections (and prose before the first heading)
-- **Usage**: Walk up to the enclosing section. Direct sub-sections of a chunk are the chunks whose `parent_chunk_id` is that chunk.
-
-### `position` (integer, 1-indexed)
-- **Purpose**: Order of this chunk among the prose chunks of its page
-
-### `prev_chunk_id` / `next_chunk_id` (chunk_id string, or null)
-- **Purpose**: The previous and next prose chunk of the same page, in document order
-- **Values**: `null` at the start/end of the page
-- **Note**: Only prose chunks are linked. Code, list and table chunks between them are skipped.
-
-## List Item Metadata (`chunk_type: "list_item"`)
-
-A `list_item` chunk represents a single markdown bullet or numbered list item.
-Each item of a list is indexed as its own chunk so semantic search can match
-individual items precisely. Metadata links each item back to its list so the
-full list can be reconstructed when needed.
-
-### `breadcrumb_path` (string)
-- **Purpose**: Heading ancestry above the list, for context anchoring
-- **Format**: Heading titles joined by ` > `
-- **Example**: `"Migration guide > 1.6 -> 1.7"`
-- **Usage**: Already prefixed to the chunk's content as a `#` line so the
-  embedding captures domain context. Agents can display it as the "where in
-  the docs" locator.
-
-### `list_id` (string)
-- **Purpose**: Stable identifier grouping all items that belong to the same list
-- **Format**: Deterministic hash of `(breadcrumb_path, list_ordinal_within_section, depth)`
-- **Usage**:
-  - Pass to `get_list_members(list_id=...)` to fetch all items of the list
-  - Detect when multiple search hits belong to the same list (MCP does this
-    automatically and groups them)
-- **Note**: Nested lists have a different `list_id` from their parent list.
-  Siblings share a `list_id`; a parent and its children do NOT.
-
-### `list_style` (string, enum)
-- **Values**: `"ordered"` (numbered: `1.`, `2.`), `"unordered"` (bulleted: `-`, `*`, `+`)
-- **Usage**: Hint to the agent about the list's nature. Ordered lists are
-  typically procedures (sequence matters); unordered lists are typically
-  enumerations (order less important).
-
-### `position` (integer, 1-indexed)
-- **Purpose**: Position of this item within its list
-- **Example**: `1` for the first item
-- **Usage**: Reconstruct the list in order; render "item N of M" displays.
-
-### `total_siblings` (integer)
-- **Purpose**: Total number of items in this list (including self)
-- **Example**: `5` means the list has 5 items; this item is one of them
-- **Usage**: Show "item 3 of 5" context; decide whether to fetch the full list.
-
-### `sibling_ids` (array of chunk_id strings)
-- **Purpose**: chunk_ids of every OTHER item in the same list, in list order
-- **Length**: Always `total_siblings - 1` (self excluded)
-- **Usage**: Follow these to fetch specific sibling chunks. For bulk fetch,
-  use `get_list_members(list_id=...)` instead — it's one call.
-
-### `sibling_previews` (array of strings)
-- **Purpose**: Short text previews of each sibling, same order as `sibling_ids`
-- **Format**: Preview line capped at 30 display characters; ordered items
-  include their `N.` prefix. `…` appended when the body is truncated;
-  ` …` appended when the body fits but the item has additional paragraphs /
-  code beyond the first line.
-- **Cap**: 15 entries maximum
-  - If fewer than 15 siblings: one preview per sibling (length matches `sibling_ids`)
-  - If more than 15 siblings: first 15 previews + a 16th entry literally
-    `"... +N more"` where N is the overflow count
-- **Usage**: Give the agent an at-a-glance "table of contents" for the rest
-  of the list so it can decide whether the other items matter WITHOUT making a
-  follow-up tool call.
-
-### `parent_item_id` (chunk_id string, or null)
-- **Purpose**: For nested items, the chunk_id of the enclosing bullet
-- **Values**: `null` at top level (depth 0); a real chunk_id for nested items
-- **Usage**: Walk up from a sub-bullet to its parent bullet. Note: the parent's
-  `list_id` is different from this item's `list_id` (parent belongs to the
-  outer list; this item belongs to an inner list grouped by shared parent).
-
-### `depth` (integer)
-- **Purpose**: Nesting level of this item
-- **Values**: `0` for top-level items; `1` for first-nested; etc.
-- **Usage**: Render indented displays; filter by level.
-
-### When Multiple List Items Match One Query
-
-When top-K search results contain two or more items sharing the same `list_id`,
-the MCP `search_docs` tool **auto-groups them into a single result slot** with
-all matched items inline. Unmatched items appear as `sibling_previews` in the
-grouped output. This prevents duplicate content from consuming multiple result
-slots. No agent action needed — the grouping is automatic.
-
-## Table Row Metadata (`chunk_type: "table_row"`)
-
-A `table_row` chunk represents a single data row of a markdown table. Each row
-is indexed as its own chunk so semantic search can match individual rows
-precisely. Metadata links each row back to its table so the full table can be
-reconstructed when needed.
-
-### `table_id` (string)
-- **Purpose**: Stable identifier shared by all `table_row` chunks of the same table (used by `get_table_members`)
-- **Usage**:
-  - Pass to `get_table_members(table_id=...)` to fetch the whole table
-  - Detect when multiple search hits belong to the same table
-
-### `columns` (array of strings)
-- **Purpose**: Ordered list of column header names, repeated on every row chunk
-- **Usage**: Interpret the row's field values so a row's values can be interpreted without fetching sibling rows
-
-### `row_index` (integer, 1-indexed)
-- **Purpose**: Position of this row within the table
-- **Example**: `1` for the first data row
-- **Usage**: Reconstruct the table in order; render "row N of M" displays
-
-### `total_rows` (integer)
-- **Purpose**: Total number of data rows in the table
-- **Usage**: Show "row 3 of 12" context; decide whether to fetch the full table
-
-### `row_key` (string)
-- **Purpose**: Value of the first column for this row, used as a concise label
-- **Example**: `"replicas"` (if the first column is "Field")
-- **Usage**: Quick identification without parsing the full row content
-
-### `sibling_ids` (array of chunk_id strings)
-- **Purpose**: chunk_ids of every OTHER row in the same table, in row order
-- **Length**: Always `total_rows - 1` (self excluded)
-- **Usage**: Follow these to fetch specific sibling row chunks. For bulk fetch,
-  use `get_table_members(table_id=...)` instead — it is one call.
-
-### `sibling_previews` (array of strings)
-- **Purpose**: Short text previews of other rows in the same table, in row order
-- **Format**: Preview capped at 30 display characters; `…` appended when
-  truncated
-- **Cap**: 15 entries maximum
-  - If fewer than 15 siblings: one preview per sibling (length matches `sibling_ids`)
-  - If more than 15 siblings: first 15 previews + a 16th entry literally
-    `"... +N more"` where N is the overflow count
-- **Usage**: Give the agent an at-a-glance summary of other rows so it can
-  decide whether to call `get_table_members` without a follow-up tool call
-
-### `breadcrumb_path` (string, optional)
-- **Purpose**: Heading ancestry of the table, joined by ` > ` (for example `DIAMETER Support > AVP types`)
-- **Presence**: Set only when the table sits under one or more headings; omitted otherwise
-- **Usage**: Prefixed to the row content as `# {breadcrumb_path}` so each row is self-locating
-
-### `table_caption` (string, optional)
-- **Purpose**: The table's lead-in sentence, the last non-blank line before the table (for example `The following AVP types are used:`)
-- **Presence**: Set only when a lead-in sentence precedes the table; omitted otherwise
-- **Usage**: Included in the row content so a row embeds with the sentence that introduces the table
-
-### Rehydration Tool
-
-Use `get_table_members(table_id=...)` to fetch all `table_row` chunks for a
-given `table_id`, returned in `row_index` order.
-The MCP `search_docs` tool appends a tip automatically when a result is a
-`table_row` chunk.
-
-### When Multiple Table Rows Match One Query
-
-When top-K search results contain two or more rows sharing the same `table_id`,
-the MCP `search_docs` tool **auto-groups them into a single result slot** with
-all matched rows inline. Unmatched rows appear as `sibling_previews` in the
-grouped output. This prevents duplicate content from consuming multiple result
-slots. Use `get_table_members(table_id=...)` to retrieve the full table.
-
-## Programmatic Usage Examples
-
-### Context Expansion (Python)
+This document lists the metadata fields of each chunk type. Use these fields to move between related chunks and to add context to a search result. Retrieval-augmented generation (RAG) responses use them to link to the source page.
+
+## Universal Metadata
+
+The following table lists the metadata fields that can appear on every chunk type:
+
+| Field | Type | Description | Example |
+|---|---|---|---|
+| `source_url` | string, optional | Link to the documentation page that the chunk came from, without an in-page anchor. Use it for source attribution in RAG responses. | `"https://docs.example.com/guide/about"` |
+| `section_anchor` | string, optional | In-page anchor of the section that the chunk came from. Only prose, list item, and table row chunks that have a `source_url` and sit under a heading of level two or deeper have it. To build a direct section link, join it to `source_url` as `{SOURCE_URL}#{SECTION_ANCHOR}`. | `"who-we-serve"` |
+| `original_format` | string, optional | Original format of the content. Only CustomResourceDefinition (CRD), OpenAPI, and JSON Schema chunks have it. Use it to convert the content back to that format, for example from a dictionary to YAML. | `"yaml"` |
+| `schema_type` | string, enum, optional | Schema category of YAML content: `"k8s_crd"`, `"openapi"`, or `"json_schema"`. Use it to tell the schema formats apart. | `"openapi"` |
+
+Section anchors are on by default. To turn them off, set `section_anchor_style: none` in `.opencrane/config.yaml`.
+
+### Hierarchical navigation metadata
+
+The following fields describe where a chunk sits in a page or in a YAML tree:
+
+| Field | Type | Description | Example |
+|---|---|---|---|
+| `breadcrumb_path` | string, optional | Location of the chunk. Prose chunks use `page title > section`. List item and table row chunks use the heading ancestry, joined by ` > `. CRD, OpenAPI, and JSON Schema chunks use a dot-separated path with array indices. Code and generic YAML chunks have no breadcrumb. Prose chunks whose page is not in the `llms.txt` index, and table rows with no heading above them, have none either. Use it to label a citation, where the last segment is the section heading. For all headings above a prose chunk, see `heading_path`. | Prose: `"Install the server > Prerequisites"`<br>CRD: `"spec.versions[0].schema.openAPIV3Schema.properties.spec.replicas"`<br>OpenAPI: `"paths./users/{id}.get"`<br>JSON Schema: `"properties.config.properties.database"` |
+| `logical_parent` | string | Dot-separated path of the parent node. It does not always equal `breadcrumb_path` without its final segment. A top-level CRD property keeps the trailing `properties` segment, and a top-level JSON Schema property has the parent `"root"`. Use it to find sibling chunks and to build a tree view. | For `spec.replicas`: `"spec.versions[0].schema.openAPIV3Schema.properties.spec.properties"`<br>For `paths./users.get`: `"paths./users"` |
+| `neighbor_chunks` | array of chunk IDs | The `chunk_id` values of the chunks that share the same `logical_parent`. An empty array means that the chunk is the only child of its parent. Use it to fetch related properties for more context. | For `spec.replicas`, the ID of the `spec.image` chunk |
+
+## CRD-Specific Metadata
+
+The following table lists the metadata fields of `crd_definition` chunks:
+
+| Field | Type | Description | Example |
+|---|---|---|---|
+| `crd_kind` | string | Kubernetes resource kind. Use it to filter by resource type. | `"MyResource"`, `"Certificate"` |
+| `crd_api_version` | string | Full API group and version, in the format `{GROUP}/{VERSION}`. Use it to look up a property in one API version. | `"mygroup.example.com/v1"` |
+| `crd_version` | string | Version identifier only. Use it to filter by version. | `"v1"`, `"v1alpha1"`, `"v1beta1"` |
+| `crd_property_path` | string | Short property path that starts at `spec.`. For a recursively split property, it shows the full nested path. Use it to show a short path in RAG responses. | Top-level: `"spec.replicas"`<br>Nested: `"spec.config.database"`<br>Array items: `"spec.volumes.items.name"` |
+
+## OpenAPI-Specific Metadata
+
+The following table lists the metadata fields of `openapi_spec` chunks:
+
+| Field | Type | Description | Example |
+|---|---|---|---|
+| `openapi_version` | string | OpenAPI specification version. Use it to tell OpenAPI 3.0 and 3.1 content apart. | `"3.0.1"`, `"3.1.0"` |
+| `openapi_element` | string, enum | Top-level element type: `"info"`, `"servers"`, `"security"`, `"tags"`, `"paths"`, or `"components"`. Use it to filter chunks by element type. | `"paths"` |
+| `server_url` | string, optional | URL of the server. Only server chunks have it. | `"https://api.example.com/v1"` |
+| `endpoint_path` | string, optional | Path of the endpoint. Only path operation chunks have it. | `"/users/{id}/settings"` |
+| `http_method` | string, optional | HTTP method of the operation, such as `"get"`, `"post"`, `"put"`, `"delete"`, or `"patch"`. Only path operation chunks have it. | `"get"` |
+| `component_type` | string, optional | Type of the component, such as `"schemas"`, `"securitySchemes"`, `"responses"`, or `"parameters"`. Only component chunks have it. | `"schemas"` |
+| `schema_name` | string, optional | Name of the schema. Only schema component chunks have it. | `"User"`, `"Order"`, `"ErrorResponse"` |
+| `security_scheme_name` | string, optional | Name of the security scheme. Only security scheme component chunks have it. | `"ApiKeyAuth"` |
+| `property_name` | string, optional | Name of the property. Only chunks of recursively split schema properties have it. | `"email"`, `"profile"`, `"settings"` |
+| `property_path` | string, optional | Dot-separated path within the schema. Only chunks of recursively split schema properties have it. | `"User.profile.address"`, `"Order.items.quantity"` |
+
+## JSON Schema-Specific Metadata
+
+The following table lists the metadata fields of `json_schema` chunks:
+
+| Field | Type | Description | Example |
+|---|---|---|---|
+| `schema_version` | string | JSON Schema draft version. Use it to parse the schema with the correct draft. | `"https://json-schema.org/draft/2020-12/schema"` |
+| `schema_id` | string, optional | Schema identifier from the `$id` field. | `"https://example.com/schemas/user.json"` |
+| `schema_title` | string, optional | Schema title from the root `title` field. | `"User Configuration Schema"` |
+| `schema_element` | string, enum | Schema element type: `"root"`, `"properties"`, or `"definitions"`. Use it to filter chunks by element type. | `"properties"` |
+| `property_name` | string, optional | Name of the property. Only property chunks have it. | `"username"`, `"config"`, `"settings"` |
+| `property_path` | string, optional | Dot-separated path, without the `properties` keywords. Only property chunks have it. Use it to show a short property path. | Simple: `"username"`<br>Nested: `"config.database"`<br>Array items: `"volumes.items.name"` |
+| `definition_name` | string, optional | Name of the definition. Only definition chunks have it. | `"address"`, `"phoneNumber"` |
+
+## Prose Navigation Metadata
+
+A `prose` chunk records where it sits in the heading tree of its page and links to the prose chunks around it. Use these fields to expand a search result to its whole section, its parent section, or the sections next to it. To read a section in one call, use the MCP `get_section` tool.
+
+The section of a chunk is the heading that its content starts with. A chunk that does not start with a heading, for example text after a code block, continues the previous section. It repeats the `heading_path`, `clause_id`, and `parent_chunk_id` of that section.
+
+The following table lists the navigation fields of `prose` chunks:
+
+| Field | Type | Description | Example |
+|---|---|---|---|
+| `heading_path` | string, optional | All headings above the section and the section heading itself, joined by ` > `. Unlike `breadcrumb_path`, it keeps every level. Text before the first heading of a page has none. | `"TS 23.501 System architecture > 5 Functional description > 5.2 Network access control"` |
+| `clause_id` | string, optional | Clause number from the section heading. Only a heading that starts with a clause number gives one. Pass it to `get_section(clause_id=...)`. | `"5.4.1.2a"`, `"C.4.4.2"`, `"Annex C"` |
+| `parent_chunk_id` | `chunk_id` string, or null | The chunk that holds the nearest enclosing section heading. The value is `null` for a top-level section. The direct sub-sections of a chunk are the chunks whose `parent_chunk_id` is that chunk. | `null` |
+| `position` | integer, 1-indexed | Position of the chunk among the prose chunks of its page. | `1` for the first prose chunk |
+| `prev_chunk_id`, `next_chunk_id` | `chunk_id` string, or null | The previous and the next prose chunk of the same page. The value is `null` at the start and at the end of the page. Code, list item, and table row chunks between two prose chunks are skipped. | `"a41e…"` (shortened) |
+
+These fields do not change search ranking. Documents chunked by an older version of OpenCrane do not have them until you run `opencrane chunk`, `opencrane embed`, and `opencrane index` again.
+
+## List Item Metadata
+
+A `list_item` chunk holds a single bullet or numbered item of a Markdown list. OpenCrane stores each item as its own chunk, so semantic search can match one item. The metadata links each item to its list, so you can fetch the full list when you need it.
+
+The following table lists the metadata fields of `list_item` chunks:
+
+| Field | Type | Description | Example |
+|---|---|---|---|
+| `breadcrumb_path` | string | Headings that the list sits under, joined by ` > `. OpenCrane also adds it to the chunk content as a `#` line, so the embedding includes the heading context. Show it to tell the user where in the documentation the item is. | `"Migration guide > Upgrade to 1.7"` |
+| `list_id` | string | Stable identifier shared by all items of the same list. Pass it to `get_list_members(list_id=...)` to fetch the whole list. Siblings share a `list_id`, but a nested list has a different `list_id` from its parent list. | `"9f2c4a7e1b0d3c58"` |
+| `list_style` | string, enum | `"ordered"` for a numbered list (`1.`, `2.`), `"unordered"` for a bulleted list (`-`, `*`, `+`). An ordered list is usually a procedure, where the order matters. | `"ordered"` |
+| `position` | integer, 1-indexed | Position of the item in its list. Use it to rebuild the list in order and to show "item N of M". | `1` for the first item |
+| `total_siblings` | integer | Number of items in the list, including this item. Use it to show "item 3 of 5" and to decide whether to fetch the full list. | `5` |
+| `sibling_ids` | array of `chunk_id` strings | The `chunk_id` values of the other items in the same list, in list order. To fetch all items in one call, use `get_list_members(list_id=...)` instead. The array always has `total_siblings - 1` entries. | `["a41e…", "c07b…"]` (shortened) |
+| `sibling_previews` | array of strings | Short previews of the other items, in list order. For the length and the cap, see [Previews of list items](#previews-of-list-items). | `["1. Back up the database", "3. Restart the server"]` |
+| `parent_item_id` | `chunk_id` string, or null | For a nested item, the `chunk_id` of the item that contains it. The value is `null` at the top level. The parent item belongs to the outer list, so its `list_id` differs from the `list_id` of this item. | `null` |
+| `depth` | integer | Nesting level of the item: `0` for a top-level item, `1` for the first nested level, and so on. Use it to indent the display and to filter by level. | `0` |
+
+### Previews of list items
+
+The `sibling_previews` field gives you a short summary of the other items in the list. Use the previews to decide whether the other items matter, without a follow-up tool call. OpenCrane builds each preview as follows:
+
+- Every preview is at most 30 display characters long.
+- An ordered item keeps its `N.` prefix.
+- Cut-off previews end with `…`.
+- If an item has more paragraphs or code after its first line, its preview ends with a space and `…`.
+
+The array holds at most 15 previews. With more than 15 other items, the array holds the first 15 previews and a 16th entry that reads literally `"... +N more"`, where N is the number of remaining items.
+
+### Search results with several items of one list
+
+The top-ranked search results can contain two or more items with the same `list_id`. In that case, the Model Context Protocol (MCP) `search_docs` tool groups them into a single result, with all matched items inline. The grouped result shows the unmatched items as `sibling_previews`. You do not need to group them yourself.
+
+## Table Row Metadata
+
+A `table_row` chunk holds a single data row of a Markdown table. OpenCrane stores each row as its own chunk, so semantic search can match one row. The metadata links each row to its table, so you can fetch the full table when you need it.
+
+The following table lists the metadata fields of `table_row` chunks:
+
+| Field | Type | Description | Example |
+|---|---|---|---|
+| `table_id` | string | Stable identifier shared by all `table_row` chunks of the same table. Pass it to `get_table_members(table_id=...)` to fetch the whole table. | `"3f9a1c0b2e7d4a65"` |
+| `columns` | array of strings | Column header names, in order, repeated on every row chunk. Use it to read the values of a row without fetching the other rows. | `["Field", "Type", "Description"]` |
+| `row_index` | integer, 1-indexed | Position of the row in the table. Use it to rebuild the table in order and to show "row N of M". | `1` for the first data row |
+| `total_rows` | integer | Number of data rows in the table. Use it to show "row 3 of 12" and to decide whether to fetch the full table. | `12` |
+| `row_key` | string | Value of the first column of the row. Use it as a short label for the row. | `"replicas"`, if the first column is "Field" |
+| `sibling_ids` | array of `chunk_id` strings | The `chunk_id` values of the other rows in the same table, in row order. To fetch all rows in one call, use `get_table_members(table_id=...)` instead. The array always has `total_rows - 1` entries. | `["a41e…", "c07b…"]` (shortened) |
+| `sibling_previews` | array of strings | The `row_key` of each other row, shortened, in row order. For the length and the cap, see [Previews of table rows](#previews-of-table-rows). | `["image", "resources"]` |
+| `breadcrumb_path` | string, optional | Headings that the table sits under, joined by ` > `. Only a table under one or more headings has it. OpenCrane adds it to the row content as `# {BREADCRUMB_PATH}`, so each row carries its location. | `"Configuration > Parameters"` |
+| `table_caption` | string, optional | Lead-in sentence of the table, which is the last non-blank line before the table. Only a table with a lead-in sentence has it. OpenCrane adds it to the row content, so the embedding of each row includes it. | `"The following parameters are available:"` |
+
+### Previews of table rows
+
+The `sibling_previews` field gives you a short summary of the other rows. Use the previews to decide whether you need `get_table_members`, without fetching each row. Every preview is at most 30 display characters long, and a cut-off preview ends with `…`.
+
+The array holds at most 15 previews. With more than 15 other rows, the array holds the first 15 previews and a 16th entry that reads literally `"... +N more"`, where N is the number of remaining rows.
+
+### Fetch the full table
+
+Use `get_table_members(table_id=...)` to fetch all `table_row` chunks for a given `table_id`, in `row_index` order. When a search result is a `table_row` chunk, the MCP `search_docs` tool adds a tip that names this tool.
+
+### Search results with several rows of one table
+
+The top-ranked search results can contain two or more rows with the same `table_id`. In that case, the MCP `search_docs` tool groups them into a single result, with all matched rows inline. The grouped result shows the unmatched rows as `sibling_previews`. Use `get_table_members(table_id=...)` to retrieve the full table.
+
+## Programmatic usage examples
+
+The following Python examples show how to use the metadata fields in your own code. They apply to CRD, OpenAPI, and JSON Schema chunks, which carry `breadcrumb_path`, `logical_parent`, and `neighbor_chunks`.
+
+### Expand the context with neighbor chunks
+
+The following function fetches the neighbor chunks of a chunk for more context:
+
 ```python
+from typing import Dict, List
+from opencrane.shared.models.chunk import Chunk
+
 def expand_with_neighbors(chunk: Chunk, chunk_db: Dict[str, Chunk]) -> List[Chunk]:
     """Fetch neighbor chunks for additional context."""
     neighbor_ids = chunk.metadata["neighbor_chunks"]
@@ -381,20 +169,36 @@ def expand_with_neighbors(chunk: Chunk, chunk_db: Dict[str, Chunk]) -> List[Chun
     return [chunk] + neighbors
 ```
 
-### Parent Navigation (Python)
+### Group chunks by parent
+
+The built-in tree walkers split CRD, OpenAPI, and JSON Schema YAML into chunks. They create a chunk only for each property or element that they do not split. A property that they split gets no chunk of its own. So usually no chunk has a `breadcrumb_path` equal to the `logical_parent` of another chunk, and you cannot walk up to a parent chunk. Group chunks by `logical_parent` instead.
+
+The following function groups chunks by their parent node, for example to build a tree view:
+
 ```python
-def get_parent_context(chunk: Chunk, chunk_db: Dict[str, Chunk]) -> Optional[Chunk]:
-    """Navigate up to parent chunk."""
-    parent_path = chunk.metadata["logical_parent"]
-    # Find chunk with breadcrumb_path matching parent_path
-    for candidate in chunk_db.values():
-        if candidate.metadata.get("breadcrumb_path") == parent_path:
-            return candidate
-    return None
+from collections import defaultdict
+
+def group_by_parent(chunks: List[Chunk]) -> Dict[str, List[Chunk]]:
+    """Group chunks by their logical_parent, for example to build a tree view."""
+    groups: Dict[str, List[Chunk]] = defaultdict(list)
+    for chunk in chunks:
+        parent = chunk.metadata.get("logical_parent")
+        if parent is not None:
+            groups[parent].append(chunk)
+    return dict(groups)
 ```
 
-### Re-hydration (Python)
+### Rebuild an approximate YAML tree
+
+The following functions rebuild a nested dictionary from chunks with the `breadcrumb_path` field:
+
 ```python
+def set_nested_value(target: dict, keys: List[str], value) -> None:
+    """Set value at the nested key path, creating dictionaries on the way."""
+    for key in keys[:-1]:
+        target = target.setdefault(key, {})
+    target[keys[-1]] = value
+
 def reconstruct_yaml(chunks: List[Chunk]) -> dict:
     """Reconstruct YAML tree from chunks using breadcrumb paths."""
     result = {}
@@ -404,18 +208,24 @@ def reconstruct_yaml(chunks: List[Chunk]) -> dict:
     return result
 ```
 
-## MCP Server Integration
+The result is a nested dictionary, not an exact copy of the source YAML:
 
-The MCP server uses these metadata fields programmatically:
+- List indices such as `versions[0]` stay plain keys.
+- A key that contains a dot, such as the OpenAPI path `/v1.0/users`, splits at the dot.
+- CRD breadcrumbs leave out every `properties` segment below `spec`.
 
-1. **Search Tool**: Returns chunks with metadata for LLM to understand context
-2. **YAML Definition Tool**: Uses `breadcrumb_path` to add location comments
-3. **Context Expansion**: Automatically fetches `neighbor_chunks` when relevant
-4. **Hierarchical Display**: Uses `logical_parent` to show tree structure
-5. **Section Tool**: `get_section` reads a prose section by `chunk_id` or `clause_id`, lists its sub-sections via `parent_chunk_id` and follows `prev_chunk_id` / `next_chunk_id` to its neighbours
+## MCP server integration
 
-The LLM receives **enriched results** from the MCP server, not raw chunks, so it doesn't need to interpret metadata directly.
+The MCP server uses the metadata fields in the following ways:
 
-## Schema JSON Definition
+| Feature | Use of the metadata |
+|---|---|
+| Search tool | Shows `breadcrumb_path` and `section_anchor` with each result. For CRD, OpenAPI, and JSON Schema results, it adds `breadcrumb_path` and `logical_parent` as comments to the content instead. |
+| YAML definition tool | Adds `breadcrumb_path` and `logical_parent` as location comments. It also lists up to five `neighbor_chunks` IDs, so you can fetch them. |
+| Section tool | Reads a prose section by `chunk_id` or `clause_id`. It follows `parent_chunk_id` to list the sub-sections and `prev_chunk_id` and `next_chunk_id` to read the sections next to it. |
 
-For programmatic validation, see `opencrane/shared/models/chunk.py` for the Pydantic model definition.
+You receive formatted results from the MCP server, not raw chunks. Use this schema when you need the meaning of a metadata field.
+
+## Chunk model definition
+
+For programmatic validation, see the Pydantic model definition in `opencrane/shared/models/chunk.py`.

@@ -16,12 +16,12 @@ The `opencrane embed` command performs the following steps:
 
 ## Choose an embedding model
 
-To use a different model, set the `EMBEDDING_MODEL` environment variable. Models of any vector size work, because the `index` step creates the collection with the vector size of the embeddings file. A larger model can return better search results, and a smaller one embeds faster and uses less memory.
+To use a different model, set the `EMBEDDING_MODEL` environment variable. Models of any vector size work. A larger model can return better search results, and a smaller one embeds faster and uses less memory.
 
-Run the MCP server with the same model that generated the embeddings. If the model of the MCP server produces vectors of a different size than the collection stores, semantic and hybrid searches fail with an error that names both sizes.
+Run the MCP server with the same model that generated the embeddings. If the MCP server uses a model with a different vector size, semantic and hybrid searches fail with an error that names both sizes.
 
 > [!IMPORTANT]
-> After you change the model, run `opencrane embed` and `opencrane index` again. When the vector size changes, the `index` step deletes the existing collection and builds a new one. When the vector size stays the same, the `index` step keeps the existing collection. To rebuild it, set `DROP_EXISTING=true`.
+> After you change the model, run `opencrane embed` and `opencrane index` again. If the new model has a different vector size, the `index` step deletes the old collection and builds a new one. If the vector size stays the same, set `DROP_EXISTING=true` for the `index` step. Without it, the `index` step keeps the vectors of the old model.
 
 ## Collection schema
 

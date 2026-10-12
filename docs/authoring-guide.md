@@ -142,7 +142,7 @@ Set `log_level` to `debug`, `info`, or `warn` to control log verbosity.
 
 ### Add body text under every heading
 
-The prose chunker drops a heading that has no body text, whatever the length of the heading. It also drops any section shorter than 15 characters. Do not leave placeholder headings with no body.
+By default, the prose chunker drops a heading that has no body text, whatever the length of the heading. To keep such headings, see [Prose sections](chunking.md#prose-sections). The chunker always drops any section shorter than 15 characters. Do not leave placeholder headings with no body.
 
 Avoid the following placeholder:
 

@@ -20,8 +20,10 @@ To use a different model, set the `EMBEDDING_MODEL` environment variable. Models
 
 Run the MCP server with the same model that generated the embeddings. If the MCP server uses a model with a different vector size, semantic and hybrid searches fail with an error that names both sizes.
 
-> [!IMPORTANT]
-> After you change the model, run `opencrane embed` and `opencrane index` again. If the new model has a different vector size, the `index` step deletes the old collection and builds a new one. If the vector size stays the same, set `DROP_EXISTING=true` for the `index` step. Without it, the `index` step keeps the vectors of the old model.
+> [!CAUTION]
+> When `opencrane index` rebuilds the collection, the command first deletes the existing Milvus collection. On a Milvus server that an MCP server already uses, searches fail until the rebuild finishes. Before you run the command, confirm that `MILVUS_COLLECTION` and the connection variables point to the collection that you want to replace.
+
+After you change the model, run `opencrane embed` and `opencrane index` again. If the new model has a different vector size, the `index` step deletes the old collection and builds a new one. If the vector size stays the same, set `DROP_EXISTING=true` for the `index` step. Without it, the `index` step keeps the vectors of the old model.
 
 ## Collection schema
 

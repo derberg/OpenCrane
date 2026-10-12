@@ -233,17 +233,17 @@ get_table_members(table_id="{TABLE_ID}")
 
 ### `get_section`
 
-The `get_section` tool returns a whole prose section by the chunk ID of a search result or by its clause number. The tool is available only when the indexed prose chunks have navigation metadata. For the metadata fields, see [Prose navigation metadata](metadata-schema.md#prose-navigation-metadata).
+The `get_section` tool returns a whole prose section. It finds the section by the chunk ID of a search result or by the clause number in the section heading. The tool is available only when the indexed prose chunks have navigation metadata. For the metadata fields, see [Prose navigation metadata](metadata-schema.md#prose-navigation-metadata).
 
-The following table lists the parameters of `get_section`. Pass `chunk_id` or `clause_id`:
+Pass either `chunk_id` or `clause_id`. The following table lists the parameters of `get_section`:
 
 | Parameter | Type | Required | Description | Default value |
 |---|---|---|---|---|
 | `chunk_id` | string | No | The chunk ID of a prose chunk from the search results. It takes precedence over `clause_id`. | none |
 | `clause_id` | string | No | The clause number from the section heading, for example `5.4.1.2a`, `C.4.4.2`, or `Annex C`. | none |
-| `source` | string | No | Narrows a `clause_id` lookup when several pages have the same clause number. The tool looks for this text, ignoring case, in the source name, the page URL, and the page title. | none |
+| `source` | string | No | Narrows a `clause_id` lookup when several pages have the same clause number. The tool looks for this text in the source name, the page URL, and the page title, and ignores case. | none |
 | `include_subsections` | boolean | No | Returns the full text of all nested sub-sections instead of a list of the direct sub-sections. | `false` |
-| `neighbors` | integer | No | The number of sections before and after the section to return as well, from 0 to 5. The tool stops at the start and the end of the page. | `0` |
+| `neighbors` | integer | No | The number of sections to also return before and after the section, from 0 to 5. The tool stops at the start and the end of the page. | `0` |
 
 Call `get_section` when you need one of the following:
 

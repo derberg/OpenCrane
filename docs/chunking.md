@@ -123,7 +123,7 @@ Prose chunks (`chunk_type: "prose"`) carry the following metadata field:
 |---|---|---|---|
 | `breadcrumb_path` | string, optional | Location of the chunk in the page, as `page title > section`. The section is the first heading of level two or deeper in the chunk. When the chunk has no such heading, the value is only the page title. Only chunks whose `source_url` is listed in the `llms.txt` index have it. | `"Setup Guide > Prerequisites"` |
 
-Prose chunks also carry navigation fields, which link each chunk to its section, its parent section, and the prose chunks before and after it. For these fields, see [Prose navigation metadata](metadata-schema.md#prose-navigation-metadata).
+Prose chunks also carry navigation fields. For these fields, see [Prose navigation metadata](metadata-schema.md#prose-navigation-metadata).
 
 ### Code chunks
 
@@ -304,7 +304,7 @@ The `chunk_type` must be one of the values in the `chunk_type` `Literal` in `ope
 - `tab_label`
 - `key`
 
-Prose chunks also accept the prose navigation fields. The chunker adds them after chunking, so a strategy does not set them.
+The chunker adds the prose navigation fields after chunking, so a strategy does not set them.
 
 ### 2. Register the strategy
 

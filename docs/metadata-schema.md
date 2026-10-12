@@ -71,7 +71,7 @@ Chunks of JSON Schema documents, with `chunk_type: "json_schema"`, carry the fol
 
 ## Prose navigation metadata
 
-A `prose` chunk records where it sits in the heading tree of its page and links to the prose chunks around it. Your code can use these fields to expand a search result to its whole section, its parent section, or the sections next to it. The MCP `get_section` tool reads a section in one call.
+A `prose` chunk records where it sits in the heading tree of its page and links to the prose chunks around it. Your code can use these fields to expand a search result to its whole section, its parent section, or the sections next to it.
 
 The section of a chunk is the heading that its content starts with. A chunk that does not start with a heading, for example text after a code block, continues the previous section. It repeats the `heading_path`, `clause_id`, and `parent_chunk_id` of that section.
 

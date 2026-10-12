@@ -746,9 +746,16 @@ An override takes precedence over `section_anchor_style`.
 
 ### Section navigation and clause IDs
 
-OpenCrane records where each prose chunk sits in its page. The MCP server uses this metadata in the `get_section` tool, which returns a whole section, its sub-sections, and the sections before and after it. An AI agent can also open a section by its clause number, for example `5.4.1.2a` or `Annex C`. This helps with specifications and standards, where readers cite clauses by number. For the metadata fields, see [Prose navigation metadata](docs/metadata-schema.md#prose-navigation-metadata). For the tool, see [`get_section`](docs/vector-search.md#get_section).
+OpenCrane records where each prose chunk sits in its page. The `get_section` MCP tool uses this metadata to return a whole section. An AI agent can also open a section by its clause number, for example `5.4.1.2a` or `Annex C`. This helps with specifications and standards, where readers cite clauses by number. For the metadata fields, see [Prose navigation metadata](docs/metadata-schema.md#prose-navigation-metadata). For the tool, see [`get_section`](docs/vector-search.md#get_section).
 
-The `clause_id` of a chunk comes from the start of its section heading. The default pattern recognizes numbered headings such as `5.4.1.2.2.8 Title`, `4c.4.3`, `16.1.4B.1`, `C.4.4.2`, and `Annex C`. To change it, set `section_clause_pattern` in `.opencrane/config.yaml` to a regular expression. OpenCrane matches the expression at the start of the heading text and uses its first capture group as the clause ID. The following example sets a pattern for plain dotted numbers and shows the value that turns clause IDs off:
+The `clause_id` of a chunk comes from the start of its section heading. The default pattern recognizes headings that start with one of the following:
+
+- Dotted numbers, such as `5.4.1.2.2.8 Title`
+- Numbers with letters, such as `4c.4.3` or `16.1.4B.1`
+- Lettered clauses, such as `C.4.4.2`
+- Annex headings, such as `Annex C`
+
+To change the pattern, set `section_clause_pattern` in `.opencrane/config.yaml` to a regular expression. OpenCrane matches the expression at the start of the heading text and uses its first capture group as the clause ID. The following example sets a pattern for plain dotted numbers and shows the value that turns clause IDs off:
 
 ```yaml
 section_clause_pattern: '(\d+(?:\.\d+)*)\s'   # plain dotted numbers only
@@ -757,7 +764,7 @@ section_clause_pattern: '(\d+(?:\.\d+)*)\s'   # plain dotted numbers only
 
 For a rule that a regular expression cannot express, override `section_clause_for(self, heading)` in your config subclass. To turn off the navigation metadata, set `prose_navigation = False` in your config subclass.
 
-An index built by an older OpenCrane version has no navigation metadata, so the server does not offer `get_section`. To add the metadata, run `opencrane chunk`, `opencrane embed`, and `opencrane index` again. The `index` step rebuilds the collection automatically.
+An index built by an older OpenCrane version has no navigation metadata, so the server does not offer `get_section`. To add the metadata, run `opencrane chunk`, `opencrane embed`, and `opencrane index` again. The `index` step rebuilds the collection.
 
 ### Built-in fence types
 

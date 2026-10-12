@@ -21,7 +21,7 @@ To use a different model, set the `EMBEDDING_MODEL` environment variable.
 
 ## Embedding prompts
 
-Many retrieval models need one prompt for documents and another for queries. Without these prompts, search returns less relevant results. The following environment variables set the prompts:
+Many embedding models need one prompt for documents and another for queries. Without these prompts, search returns less relevant results. The following environment variables set the prompts:
 
 - `EMBEDDING_DOCUMENT_PROMPT` is a prefix that `embed` adds to every chunk.
 - `EMBEDDING_QUERY_PROMPT` is a `{query}` template or a prefix that `serve` and `visualize` apply to each query.
@@ -35,7 +35,7 @@ The following table lists the prompts for common 768-dimension models:
 | `nomic-ai/nomic-embed-text-v1.5`, the default | `search_document: ` | `search_query: ` |
 | `intfloat/e5-base-v2` | `passage: ` | `query: ` |
 
-A new document prompt needs new embeddings and a rebuilt collection, so run `index` with `DROP_EXISTING=true`. The following commands set the prompts for the default model and rebuild the index:
+A new document prompt needs new embeddings and a rebuilt collection, so run `index` with `DROP_EXISTING=true`. The following commands set the prompts for the default model and rebuild the collection:
 
 ```bash
 export EMBEDDING_DOCUMENT_PROMPT="search_document: "

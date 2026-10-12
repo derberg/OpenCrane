@@ -45,7 +45,7 @@ def main():
     embeddings = embeddings_service.load_embeddings(str(embeddings_file))
     if embeddings.document_prompt:
         logger.info(
-            f"Embeddings were built with document prompt {embeddings.document_prompt!r}; "
+            f"The embeddings use document prompt {embeddings.document_prompt!r}; "
             "serve with the matching EMBEDDING_QUERY_PROMPT"
         )
 

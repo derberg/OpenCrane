@@ -47,7 +47,7 @@ def warn_if_inconsistent() -> None:
     if config.embedding_document_prompt and not config.embedding_query_prompt:
         logger.warning(
             "EMBEDDING_DOCUMENT_PROMPT is set but EMBEDDING_QUERY_PROMPT is empty; "
-            "queries are encoded without the prompt the model expects"
+            "the server encodes queries with no prompt"
         )
 
 

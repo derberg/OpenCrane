@@ -48,19 +48,25 @@ When no companion `llms.txt` is present, the chunker uses the URL markers inside
 
 ## Prose sections
 
-The prose chunker starts a new chunk at each `#`, `##`, and `###` heading. Each chunk holds one whole section, including its heading. By default, the chunker does not split a section by size, and it drops a section that has a heading but no text of its own.
+The prose chunker puts each section, including its heading, in one chunk. By default, only `#`, `##`, and `###` headings start a new section, and the chunker does not split a section by size.
 
-Some documents, such as converted standards specifications, hold long clauses under `####` and deeper headings. Those clauses stay in the chunk of their parent section, so one chunk can grow very large. A large chunk gets a less precise embedding, and the embedding model ignores the text past its input limit.
+Some documents, such as converted standards specifications, hold long clauses under `####` and deeper headings. Those clauses stay in the chunk of their parent section, so one chunk can grow very large. A large chunk gets a less precise embedding, and the embedding model cuts off any text past its input limit.
 
 To change how the chunker splits prose, set the following environment variables before you run `opencrane chunk`:
 
 | Variable | Default | Description |
 |---|---|---|
 | `PROSE_SPLIT_HEADING_DEPTH` | `3` | Deepest heading level that starts a new chunk. For example, `5` also makes each `####` and `#####` section a chunk of its own. |
-| `PROSE_MAX_CHUNK_TOKENS` | `0` | Maximum number of tokens in a prose chunk, counted the same way as the `token_count` field. `0` or a negative value turns the limit off. The chunker splits a longer section at the blank lines between paragraphs. It splits a paragraph that is still too long at line breaks. When the section has a heading, every piece starts with it. The chunker never cuts a line or a fenced code block, so a line or code block longer than the limit becomes one chunk that exceeds it. |
-| `PROSE_KEEP_HEADING_ONLY_SECTIONS` | `false` | When `true`, the chunker keeps a section that has a heading but no text as a chunk of its own. |
+| `PROSE_MAX_CHUNK_TOKENS` | `0` | Maximum number of tokens in a prose chunk, counted the same way as the `token_count` field. `0` or a negative value turns the limit off. The chunker splits a longer section at the blank lines between paragraphs. It splits a paragraph that is still too long at line breaks. When the section has a heading, every piece starts with that heading. The chunker never cuts a line or a fenced code block, so a line or code block longer than the limit becomes one chunk that exceeds the limit. |
+| `PROSE_KEEP_HEADING_ONLY_SECTIONS` | `false` | When `true`, the chunker keeps a section that has a heading but no text as a chunk of its own. When `false`, the chunker drops that section. In both cases, the chunker drops a section shorter than 15 characters. |
 
-Each of these variables changes the chunks. After you change one, run `opencrane chunk`, `opencrane embed`, and `opencrane index` again.
+After you change any of these variables, run the following commands to rebuild the index:
+
+```bash
+opencrane chunk
+opencrane embed
+opencrane index
+```
 
 ## Table chunks
 

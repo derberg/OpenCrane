@@ -277,14 +277,23 @@ def get_source_url(rel_with_project: Path, project_name: str) -> str | None:
         if subdir:
             repo_prefix = f"{subdir}/"
 
-    if docs_path:
-        docs_prefix = f"{docs_path.rstrip('/')}/"
+    # Fetch copies <docs_path>/ of the repo into sources/<path_key>/ and
+    # defaults a missing docs_path to "docs", so read a missing key the same
+    # way here. A local source is never fetched, so it keeps "" (no docs_path).
+    repo_docs_path = source.get("docs_path", "" if source.get("local") else "docs")
+
+    if repo_docs_path:
+        docs_prefix = f"{repo_docs_path.rstrip('/')}/"
         file_rel = relative_after_key
         if file_rel.startswith(docs_prefix):
             file_rel = file_rel[len(docs_prefix):]
-        return f"{url}/blob/main/{repo_prefix}{docs_path.rstrip('/')}/{file_rel}"
+        return f"{url}/blob/main/{repo_prefix}{repo_docs_path.rstrip('/')}/{file_rel}"
 
-    return f"{url}/blob/main/{repo_prefix}{rel_str}"
+    # Fetched repo root: the path key is only the local directory name and
+    # is not part of the repo path. A local source's path key is a real
+    # directory in the workspace, so it stays in the URL.
+    repo_path = f"{repo_prefix}{rel_str}" if source.get("local") else relative_after_key
+    return f"{url}/blob/main/{repo_path}"
 
 
 def ensure_leading_h1(body: str, title: str) -> str:

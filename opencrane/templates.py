@@ -271,7 +271,7 @@ To build and start the container, run the following command from the project roo
 {container_tool}-compose -f .opencrane/docker-compose.yml up --build
 ```
 
-To change the embedding model, set the `EMBEDDING_MODEL` environment variable before the build, so the image contains the model. Also add `EMBEDDING_MODEL` to the `environment` section of `docker-compose.yml`, because the server reads it at runtime. Use the model that `opencrane embed` used, because the server embeds search queries with it. To add the optional reranker model to the image, set `RERANKER_MODEL` the same way.
+To change the embedding model, set the `EMBEDDING_MODEL` environment variable before the build, so the image contains the model. Also add `EMBEDDING_MODEL` to the `environment` section of `docker-compose.yml`, because the server reads it at runtime. Use the model that `opencrane embed` used, because the server embeds search queries with it. To add the optional reranker model to the image, set `RERANKER_MODEL` before the build. The image passes it to the server, so the `environment` section does not need it.
 
 > [!CAUTION]
 > Do not mount a volume over `/app/milvus_data`. Milvus Lite cannot open a database file on a bind mount and fails with `Open local milvus failed`. Use the database that the image build creates.

@@ -472,5 +472,5 @@ The following notes summarize the security behavior of the HTTP transport:
 - Some problems do not stop the server. OpenCrane serves without the protection in the following cases:
   - OpenCrane cannot parse `.opencrane/config.yaml`, so it treats `auth` as `none` and logs a warning.
   - A `custom` endpoint has no hook. OpenCrane logs a warning.
-  - OpenCrane does not find your `Config` class, so it starts without the middleware and the auth hooks, and logs nothing.
+  - OpenCrane does not find your `Config` class. It starts without the middleware and the auth hooks, and logs no warning about the missing class.
   - Your `Config` class fails to load and no endpoint uses `type: custom`. OpenCrane starts without the middleware and logs a warning.

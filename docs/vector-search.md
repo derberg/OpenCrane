@@ -128,7 +128,7 @@ Each result contains the following fields:
 - `Type`: the chunk type
 - `Chunk ID`: the ID that the other tools take
 - `Token Count`: the size of the chunk
-- `Metadata`: the location and the section anchor of the chunk. CRD, OpenAPI, and JSON Schema results have no `Metadata` block. A chunk from a custom tree walker also shows its parent path and its number of siblings.
+- `Metadata`: the location and the section anchor of the chunk. CRD, OpenAPI, and JSON Schema results have no `Metadata` block. A chunk from a custom tree walker also shows its parent path and its number of siblings, when the walker records them.
 - `Content`: the chunk text, cut at 1,000 characters, with a tip that names the tool that returns the full text
 - `Score`: the score that orders the results. Its scale depends on the search mode and the reranker.
 

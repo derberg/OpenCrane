@@ -209,7 +209,7 @@ The command accepts the following flags:
 
 The `index` step ignores `--chunks-file` and `--embeddings-file` and reads only `AI_DOCS_CHUNKS_FILE` and `AI_DOCS_EMBEDDINGS_FILE`. To build with other paths, set these environment variables instead of the flags.
 
-The `llms` step of the build runs without `--force`. If you pass `--sources-dir` for a directory that Git ignores, or with changes that are already committed, run `opencrane llms --force` before the build. Otherwise, the build keeps the old bundles.
+The `llms` step of the build runs without `--force`. For when to run `opencrane llms --force` first, see the `--force` row of [`opencrane llms`](#generate-llms-fulltxt-bundles-with-opencrane-llms).
 
 #### Fetch documentation from GitHub with `opencrane fetch`
 
@@ -595,7 +595,7 @@ The following table lists the variables:
 | `DROP_EXISTING` | `false` | When `true`, `index` deletes and rebuilds the Milvus collection. When `false`, `index` keeps a collection that already has rows, unless its vector size or its fields no longer match. See [`opencrane index`](#index-the-embeddings-in-milvus-with-opencrane-index). |
 | `EMBEDDING_QUERY_PROMPT` | none | Prompt that `serve` and `visualize` apply to each query. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
 | `HYBRID_ALPHA` | `0.6` | Weight of vector search compared to keyword search. `1.0` is pure vector search, and `0.0` is pure BM25 keyword search. |
-| `HYBRID_CANDIDATE_POOL` | `0` | Number of results that the semantic search and the keyword search each return before hybrid search fuses them. `0` means the requested `limit`. A wider pool, for example `50`, can surface chunks that both searches rank just below `limit`. |
+| `HYBRID_CANDIDATE_POOL` | `0` | Number of results that the semantic search and the keyword search each return before hybrid search fuses them. `0` means the requested `limit`, or `RERANK_DEPTH` when a reranker is on. A wider pool, for example `50`, can surface chunks that both searches rank just below `limit`. |
 | `HYBRID_FUSION` | `minmax` | How hybrid search merges the results of the two searches. `minmax` blends normalized scores, and `rrf` blends ranks with Reciprocal Rank Fusion. See [Search modes](docs/architecture.md#search-modes). |
 | `HYBRID_RRF_K` | `60` | The RRF smoothing constant `k`. OpenCrane uses it only when `HYBRID_FUSION` is `rrf`. |
 | `BM25_TOKENIZER` | `simple` | Keyword (BM25) tokenizer. `simple` splits text on every character that is not a letter, a digit, or an underscore. `identifier` also keeps dotted and hyphenated identifiers such as `5.4.1` or `GTP-U` as one token. A change needs a server restart, but no new index. See [Search modes](docs/architecture.md#search-modes). |

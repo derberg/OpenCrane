@@ -72,7 +72,7 @@ The bundle holds no page URLs. OpenCrane records them in the companion `llms.txt
 
 OpenCrane changes the content of each page in the following ways:
 
-- Images become an `[Image removed: {ALT_TEXT}]` note. Without alt text, the note names the image file for a Markdown image, and reads `image` for an HTML `<img>` tag.
+- Images become an `[Image removed: {ALT_TEXT}]` note. Without alt text, the note names the image file for a Markdown image, and reads `image` for an HTML `<img>` tag without an `alt` attribute.
 - A relative link to a Markdown file or an anchor becomes its link text. A link to a path without an extension counts as a link to a Markdown file.
 - An absolute-path link becomes `{LABEL} (link removed: {PATH})`.
 - A `data:` link becomes `{LABEL} (inline data removed)`.

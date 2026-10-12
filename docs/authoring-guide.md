@@ -4,7 +4,7 @@ This guide describes how to structure Markdown documentation so that OpenCrane p
 
 ## How OpenCrane chunks Markdown
 
-OpenCrane first splits each page at every fenced code block. It then chunks each code block, and each part of the page between two code blocks, on its own. OpenCrane tries the chunking strategies in a fixed order, and the first strategy that matches a part handles it. For the order, see [Chunking strategies](chunking.md#chunking-strategies).
+OpenCrane first splits each page at every fenced code block. It then chunks each code block, and each part of the page between two code blocks, on its own. For the order in which OpenCrane tries the chunking strategies, see [Chunking strategies](chunking.md#chunking-strategies).
 
 How you write the content determines which strategy handles each part and how well each chunk stands alone.
 
@@ -565,7 +565,7 @@ spec:
 
 ### OpenAPI specifications
 
-For an OpenAPI specification, start the block with the `openapi` version as a string, such as `openapi: 3.0.3`. OpenCrane recognizes the specification only when the version is a string that starts with `3.`. YAML reads an unquoted two-part version such as `3.1` as a number, so quote it as `"3.1"`. OpenCrane also recognizes Swagger 2.0 with a `swagger: "2.0"` field, but chunks only its `info` and `paths` sections. To get chunks for the definitions, convert the specification to OpenAPI 3.
+For an OpenAPI specification, start the block with the `openapi` version as a string, such as `openapi: 3.0.3`. OpenCrane recognizes the specification only when the version is a string that starts with `3.`. YAML reads an unquoted two-part version such as `3.1` as a number, so quote it as `"3.1"`. OpenCrane also recognizes Swagger 2.0 with a `swagger: "2.0"` field, but chunks only its `info`, `paths`, `security`, and `tags` sections. To get chunks for the definitions, convert the specification to OpenAPI 3.
 
 Include real versions of the following sections:
 

@@ -98,7 +98,7 @@ To set the clause format, see [Section navigation and clause IDs](../README.md#s
 
 ## List item metadata
 
-A `list_item` chunk holds a single bullet or numbered item of a Markdown list. The chunker stores each item as its own chunk, so semantic search can match one item. The chunk of a top-level item holds the item text up to its first nested item, so it leaves out the nested items and any text after them. The chunk of a nested item holds only the first line of each parent item and of the item itself. The metadata links each item to its list, so you can fetch the full list when you need it.
+A `list_item` chunk holds a single bullet or numbered item of a Markdown list. The chunker stores each item as its own chunk, so semantic search can match one item. The chunk of a top-level item holds the item text up to its first nested item. The chunk leaves out the nested items and any text after them. The chunk of a nested item holds only the first line of each parent item and of the item itself. The metadata links each item to its list, so you can fetch the full list when you need it.
 
 Chunks with `chunk_type: "list_item"` carry the following metadata fields:
 

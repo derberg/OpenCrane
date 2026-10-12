@@ -60,7 +60,7 @@ The fetch never downloads sources marked `local: true`. OpenCrane reads those so
 
 ### Generate `llms-full.txt` bundles
 
-The `opencrane llms` command combines the Markdown files of each source into `llms-full.txt` bundles under `.opencrane/llmstxt/`. It writes one bundle for each source, and a combined `llms-full.txt` with all sources. Next to the combined bundle, it writes a companion `llms.txt` index that maps the title of each page to its URL. The bundles carry no page URLs. The exception is the `### {SOURCE_URL}` heading that a built-in fence type writes before an inlined file.
+The `opencrane llms` command combines the Markdown files of each source into `llms-full.txt` bundles under `.opencrane/llmstxt/`. It writes one bundle for each source, and a combined `llms-full.txt` with all sources. Next to the combined bundle, it writes a companion `llms.txt` index that maps the title of each page to its URL. For the URLs in the bundles, see [`llms-full.txt` generation](llms-generation.md).
 
 When the source mapping file lists no sources, the command combines the `llms-full.txt` bundles that already exist under `.opencrane/llmstxt/`. [Fence type](../README.md#write-a-custom-fence-type) handlers replace structured content in fenced code blocks, such as OpenAPI specs and CRDs. For the bundle format, see [Generate llms-full.txt bundles](llms-generation.md).
 

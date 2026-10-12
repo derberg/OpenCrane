@@ -198,7 +198,7 @@ An optional reranker reorders the results of every search mode. The reranker sco
 
 To turn on the built-in reranker, set the `RERANKER_MODEL` environment variable to a sentence-transformers cross-encoder model, for example `cross-encoder/ms-marco-MiniLM-L-6-v2`. To use your own reranker, see [Custom reranker](#custom-reranker).
 
-The server reranks the first `RERANK_DEPTH` candidates, `50` by default, and returns the top **limit** results. The built-in reranker runs on the CPU, so a higher `RERANK_DEPTH` makes each search slower. The `Score` line shows the score of the built-in reranker.
+The server reranks the first `RERANK_DEPTH` candidates, `50` by default, and returns the top **limit** results. Set `RERANK_DEPTH` to a whole number up to `16384`. A value below **limit** counts as **limit**. The built-in reranker runs on the CPU, so a higher `RERANK_DEPTH` makes each search slower. The `Score` line shows the score of the built-in reranker.
 
 If the reranker fails, the server logs the `Reranker failed, returning unreranked results` warning and returns the results in search order. The health check skips the reranker.
 

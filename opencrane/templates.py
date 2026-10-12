@@ -40,8 +40,10 @@ class Config(OpenCraneConfig):
 
     # Custom MCP tools served next to the built-in ones (stdio and HTTP).
     # The handler (sync or async) gets the call arguments and a ToolContext
-    # (context.milvus, context.embeddings, context.keyword_search, context.config).
-    # Raised exceptions are returned to the client as MCP tool errors.
+    # (context.milvus, context.embeddings, context.keyword_search, context.config,
+    # context.allowed_sources()). OpenCrane does not filter the tool output, so
+    # check context.allowed_sources() when you use scope_sources or a middleware.
+    # The client receives a raised exception as an MCP tool error.
     # from opencrane import ExtraTool
     # extra_tools = [
     #     ExtraTool(

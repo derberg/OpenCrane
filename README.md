@@ -109,7 +109,7 @@ This section is the reference for the OpenCrane CLI and its configuration.
 
 ### CLI
 
-Each pipeline step and each project task has its own `opencrane` command. Commands that show `[--config {MODULE}:{CLASS}]` in their usage line accept the `--config` flag, which loads a custom `OpenCraneConfig` subclass. Pass the module and the class name, or the path to a Python file that defines a class named `Config`. The `OPENCRANE_CONFIG` environment variable takes the same value. For `opencrane serve`, the server takes `middleware`, `token_verifier`, and `auth_provider` only from `OPENCRANE_CONFIG` or the `extensions:` key, not from `--config`.
+Each pipeline step and each project task has its own `opencrane` command. Commands that show `[--config {MODULE}:{CLASS}]` in their usage line accept the `--config` flag, which loads a custom `OpenCraneConfig` subclass. Pass the module and the class name, or the path to a Python file that defines a class named `Config`. The `OPENCRANE_CONFIG` environment variable takes the same value.
 
 #### Create a project with `opencrane init`
 
@@ -836,7 +836,9 @@ The `can_handle` method returns `True` for the documents that the walker support
 
 ### Add custom MCP tools
 
-`extra_tools` adds project-specific tools to the MCP server, served on both the stdio and HTTP transports next to the built-in ones. Each entry is an `ExtraTool` with a name, description, JSON input schema and a handler. The handler may be sync or async and is called as `handler(arguments, context)`, where `context` is a `ToolContext` giving explicit access to the server's services: `context.milvus` (`MilvusService`), `context.embeddings` (`EmbeddingService`), `context.keyword_search` (`KeywordSearchService`), `context.config` (your config instance) and `context.allowed_sources()` (the sources a `middleware` hook permitted for this request, or `None`).
+To serve your own MCP tools next to the built-in tools, add `ExtraTool` entries to `extra_tools`. The server serves the extra tools on both the stdio and the HTTP transport, so you don't need a second MCP server. Use this extension point when your agents need a project-specific lookup that the built-in tools do not offer.
+
+The following example adds a tool that returns the stored content of a chunk:
 
 ```python
 from opencrane import ExtraTool, OpenCraneConfig
@@ -844,7 +846,8 @@ from opencrane import ExtraTool, OpenCraneConfig
 
 def read_chunk(arguments, context):
     chunk = context.milvus.get_chunk(arguments["chunk_id"])
-    if chunk is None:
+    allowed = context.allowed_sources()
+    if chunk is None or (allowed is not None and chunk["source_name"] not in allowed):
         raise ValueError(f"Chunk not found: {arguments['chunk_id']}")
     return {"source": chunk["source_file"], "content": chunk["content"]}
 
@@ -864,11 +867,26 @@ class Config(OpenCraneConfig):
     ]
 ```
 
-- A handler returns a string, an MCP content block, a list of content blocks, or any other JSON-serialisable value (sent as JSON text). Sync handlers run in a worker thread.
-- An exception raised by a handler is returned to the client as an MCP tool error (`isError: true`) on both transports; the message is the exception text.
-- A name that collides with a built-in tool, or appears twice, makes the server fail at startup.
-- Extra tools bypass the built-in source access policy; a tool that returns corpus content should check `context.allowed_sources()` itself when authorization is in use.
-- The config is resolved as for every other extension point (`.opencrane/extensions.py:Config`, `opencrane serve --config`, or `OPENCRANE_CONFIG`). With no `extra_tools`, only the built-in tools are served.
+The following table describes the `ExtraTool` arguments:
+
+| Argument | Description |
+|---|---|
+| `name` | Tool name. If the name matches a built-in tool or another extra tool, the server fails at startup. |
+| `description` | Tool description that MCP clients show to the agent. |
+| `input_schema` | JSON Schema of the tool arguments, with `"type": "object"`. |
+| `handler` | Sync or async function that OpenCrane calls as `handler(arguments, context)`. |
+
+The `context` argument is a `ToolContext`. The following table lists its members:
+
+| Member | Description |
+|---|---|
+| `milvus`, `embeddings`, `keyword_search` | The `MilvusService`, `EmbeddingService`, and `KeywordSearchService` instances of the server. |
+| `config` | Your `OpenCraneConfig` instance. |
+| `allowed_sources()` | Returns the sources that the current caller may read, or `None` if the caller may read all sources. |
+
+The handler can return a string, an MCP content block, or a list of content blocks. OpenCrane sends any other return value as JSON text. If the handler raises an exception, the client receives an MCP tool error with the exception message.
+
+OpenCrane does not filter the output of extra tools. If you limit access with `scope_sources`, `default_sources`, or an authorization middleware, filter the output yourself. In each handler that returns documentation content, call `context.allowed_sources()`, as the `read_chunk` example does. The method returns the sources that `search_docs` allows for the same caller.
 
 ## Authentication and authorization
 

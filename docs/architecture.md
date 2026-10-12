@@ -159,6 +159,8 @@ The tools the server exposes depend on the content of the index. `search_docs` a
 | `get_table_members` | Table row chunks indexed | Returns all rows of a table by table ID. |
 | `health` | Always present | Reports the service status, the Milvus connection state, and collection statistics. |
 
+A project can add its own tools with the `extra_tools` extension point. See [Add custom MCP tools](../README.md#add-custom-mcp-tools).
+
 ### Search modes
 
 `search_docs` supports the following search modes, which you select with the **search_mode** parameter:

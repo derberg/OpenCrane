@@ -299,7 +299,7 @@ If `scope_sources` cannot express your authorization logic, write a middleware. 
 - A custom header
 - A JWT claim
 
-Write the middleware as an Asynchronous Server Gateway Interface (ASGI) application that wraps the OpenCrane application. Add it to the `middleware` list on your `OpenCraneConfig` subclass in `.opencrane/extensions.py`. OpenCrane loads that file only when `.opencrane/config.yaml` sets `extensions: extensions.py`, or when the `OPENCRANE_CONFIG` environment variable points to your config class. The `opencrane serve --config` flag does not load the middleware or the auth hooks. Each entry in the list is a callable `(app) -> asgi_app`. Typically, the entry is a class that stores the wrapped application and implements `async __call__(self, scope, receive, send)`.
+Write the middleware as an Asynchronous Server Gateway Interface (ASGI) application that wraps the OpenCrane application. Add it to the `middleware` list on your `OpenCraneConfig` subclass in `.opencrane/extensions.py`. OpenCrane loads that file when `.opencrane/config.yaml` sets `extensions: extensions.py`. To load another config class, pass the `opencrane serve --config` flag or set the `OPENCRANE_CONFIG` environment variable. Each entry in the list is a callable `(app) -> asgi_app`. Typically, the entry is a class that stores the wrapped application and implements `async __call__(self, scope, receive, send)`.
 
 OpenCrane runs the entries on every endpoint, before it validates the token and before the tool handler. The first entry in the list runs first. A middleware declares the permitted source names for the request by calling `set_allowed_sources(...)`.
 

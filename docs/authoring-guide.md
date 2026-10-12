@@ -20,7 +20,7 @@ Headings are the main chunk boundary. When each heading starts one focused secti
 
 ### Headings that create chunk boundaries
 
-The `#`, `##`, and `###` headings create chunk boundaries. Everything between two such headings, including the opening heading, becomes one chunk.
+By default, the `#`, `##`, and `###` headings create chunk boundaries, as [Prose sections](chunking.md#prose-sections) describes. Everything between two such headings, including the opening heading, becomes one chunk.
 
 The following example produces three chunks:
 
@@ -142,7 +142,7 @@ Set `log_level` to `debug`, `info`, or `warn` to control log verbosity.
 
 ### Add body text under every heading
 
-The prose chunker drops a heading that has no body text, whatever the length of the heading. It also drops any section shorter than 15 characters. Do not leave placeholder headings with no body.
+By default, the prose chunker drops a heading that has no body text, whatever the length of the heading. It always drops any section shorter than 15 characters. Do not leave placeholder headings with no body.
 
 Avoid the following placeholder:
 
@@ -152,7 +152,7 @@ Avoid the following placeholder:
 
 ### Split long sections by topic
 
-OpenCrane does not split a section by size. A long `#`, `##`, or `###` section stays one chunk, however long it is. Keep sections focused, and split them by topic.
+By default, OpenCrane does not split a section by size. A long `#`, `##`, or `###` section stays one chunk, however long it is. Keep sections focused, and split them by topic.
 
 If a section grows past a few hundred words, it usually covers more than one sub-topic. Break it into sibling `###` sections, one for each sub-topic.
 

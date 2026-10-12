@@ -150,3 +150,20 @@ class TestGenerateEmbeddings:
         mock_up_to_date.assert_not_called()
         mock_service.generate_embeddings.assert_called_once()
         mock_service.save_embeddings.assert_called_once()
+
+
+def test_embeddings_up_to_date_false_when_document_prompt_changed(tmp_path, monkeypatch):
+    """A different document prompt makes existing embeddings stale."""
+    chunks_file = tmp_path / "chunks.json"
+    chunks_file.write_bytes(b'[{"content": "x"}]')
+    embeddings_file = tmp_path / "embeddings.json"
+    embeddings_file.write_text(json.dumps({"chunks_sha256": _chunks_sha256(chunks_file)}))
+
+    monkeypatch.setenv("EMBEDDING_DOCUMENT_PROMPT", "search_document: ")
+    assert _embeddings_up_to_date(chunks_file, embeddings_file) is False
+
+    embeddings_file.write_text(json.dumps({
+        "chunks_sha256": _chunks_sha256(chunks_file),
+        "document_prompt": "search_document: ",
+    }))
+    assert _embeddings_up_to_date(chunks_file, embeddings_file) is True

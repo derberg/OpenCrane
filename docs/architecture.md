@@ -103,7 +103,7 @@ Chunking strategies run in priority order. The first strategy that matches a doc
 | 2 | Code | Handles fenced code blocks. Detects the language, and runs tree walkers for structured YAML specs inside code fences. |
 | 3 | Table | Handles Markdown tables. Produces one `table_row` chunk for each data row, written as natural-language `Column: value.` lines. Links each row to the rest of the table through `table_id` and `sibling_ids`. Passes text outside the table to the list and prose strategies. |
 | 4 | List | Handles Markdown lists. Produces one chunk for each top-level list item, and attaches sibling previews and breadcrumb paths. |
-| 5 | Prose | Handles every fragment the other strategies do not match. Splits at heading boundaries (`#`, `##`, `###`) and keeps each section whole. It does not split a section by token count. |
+| 5 | Prose | Handles every fragment the other strategies do not match. By default, splits at `#`, `##`, and `###` headings and keeps each section whole. See [Prose sections](chunking.md#prose-sections). |
 
 Each chunk carries type-specific metadata fields and a `chunk_type` field. The `chunk_type` field takes one of the following values:
 
@@ -120,7 +120,7 @@ For the full field reference, see [Chunk metadata schema](metadata-schema.md).
 
 ### Embed
 
-The `opencrane embed` command generates a vector embedding for each chunk in `.opencrane/chunks.json` and writes the results to `.opencrane/embeddings.json`. It uses the `sentence-transformers` library with `nomic-ai/nomic-embed-text-v1.5` as the default model. To change the model, set the `EMBEDDING_MODEL` environment variable. The Milvus collection stores 768-dimension vectors, so the model must produce vectors of that size. The command processes chunks in batches to limit memory use.
+The `opencrane embed` command generates a vector embedding for each chunk in `.opencrane/chunks.json` and writes the results to `.opencrane/embeddings.json`. It uses the `sentence-transformers` library with `nomic-ai/nomic-embed-text-v1.5` as the default model. To change the model, see [Choose an embedding model](embeddings.md#choose-an-embedding-model). The command processes chunks in batches to limit memory use.
 
 ### Index
 
@@ -158,6 +158,8 @@ The tools the server exposes depend on the content of the index. `search_docs` a
 | `get_list_members` | List chunks indexed | Returns all items in a list by list ID. |
 | `get_table_members` | Table row chunks indexed | Returns all rows of a table by table ID. |
 | `health` | Always present | Reports the service status, the Milvus connection state, and collection statistics. |
+
+To add your own tools, see [Add custom MCP tools](../README.md#add-custom-mcp-tools).
 
 ### Search modes
 

@@ -4,6 +4,11 @@ from typing import List
 import os
 
 
+def _prompt_env(name: str) -> str:
+    """Read an embedding prompt from env, unescaping a literal ``\\n`` to a newline."""
+    return os.getenv(name, "").replace("\\n", "\n")
+
+
 @dataclass
 class Config:
     org_name: str = field(default_factory=lambda: os.getenv("ORG_NAME", ""))
@@ -26,6 +31,12 @@ class Config:
     # Chunker configuration
     yaml_crd_threshold_tokens: int = field(default_factory=lambda: int(os.getenv("YAML_CRD_THRESHOLD_TOKENS", "1000")))
     yaml_tree_chunking_enabled: bool = field(default_factory=lambda: os.getenv("YAML_TREE_CHUNKING_ENABLED", "true").lower() == "true")
+    # Prose chunking: deepest heading level that starts a new chunk (3 = #, ##, ###)
+    prose_split_heading_depth: int = field(default_factory=lambda: int(os.getenv("PROSE_SPLIT_HEADING_DEPTH", "3")))
+    # Prose chunking: token cap per chunk; oversized sections split at paragraph/line boundaries (0 = off)
+    prose_max_chunk_tokens: int = field(default_factory=lambda: int(os.getenv("PROSE_MAX_CHUNK_TOKENS", "0")))
+    # Prose chunking: emit sections that hold only a heading instead of dropping them
+    prose_keep_heading_only_sections: bool = field(default_factory=lambda: os.getenv("PROSE_KEEP_HEADING_ONLY_SECTIONS", "false").lower() == "true")
     default_output_format: str = field(default_factory=lambda: os.getenv("DEFAULT_OUTPUT_FORMAT", "json"))
     # Milvus configuration
     milvus_host: str = field(default_factory=lambda: os.getenv("MILVUS_HOST", "localhost"))
@@ -34,6 +45,10 @@ class Config:
     milvus_insert_batch_size: int = field(default_factory=lambda: int(os.getenv("MILVUS_INSERT_BATCH_SIZE", "2000")))
     # Embedding configuration
     embedding_model: str = field(default_factory=lambda: os.getenv("EMBEDDING_MODEL", "nomic-ai/nomic-embed-text-v1.5"))
+    # Task prompts for asymmetric embedding models (empty = encode text as-is).
+    # A literal backslash-n in the env value becomes a newline (for Qwen3-style templates).
+    embedding_document_prompt: str = field(default_factory=lambda: _prompt_env("EMBEDDING_DOCUMENT_PROMPT"))
+    embedding_query_prompt: str = field(default_factory=lambda: _prompt_env("EMBEDDING_QUERY_PROMPT"))
     # Search configuration
     hybrid_alpha: float = field(default_factory=lambda: float(os.getenv("HYBRID_ALPHA", "0.6")))
     # Results fetched per arm (semantic, keyword) before hybrid fusion; 0 = the requested limit

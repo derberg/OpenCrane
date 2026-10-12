@@ -8,6 +8,7 @@ from typing import List, Dict, Any, Union
 from sentence_transformers import SentenceTransformer
 from opencrane.shared.config import get_config
 from opencrane.shared.models.vector_chunk import EmbeddingRecord, EmbeddingsFile, generate_chunk_id
+from opencrane.shared.utils.embedding_prompts import format_document
 import json
 import hashlib
 from datetime import datetime, timezone
@@ -76,6 +77,8 @@ class EmbeddingService:
                 texts.append(yaml.dump(content, default_flow_style=False, allow_unicode=True))
             else:
                 texts.append(content)
+        document_prompt = self.config.embedding_document_prompt
+        texts = [format_document(text, document_prompt) for text in texts]
 
         try:
             if self.backend == "mock" or self.model_name == "mock":
@@ -122,6 +125,7 @@ class EmbeddingService:
             dimensions=len(vectors[0]) if vectors else 0,
             created_at=datetime.now(timezone.utc).isoformat(),
             chunks_sha256=chunks_sha256,
+            document_prompt=document_prompt,
             embeddings=embeddings
         )
 

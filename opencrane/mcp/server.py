@@ -19,6 +19,7 @@ from opencrane.mcp.services.embeddings import EmbeddingService
 from opencrane.mcp.services.milvus_client import MilvusService
 from opencrane.mcp.services.keyword_search import KeywordSearchService
 from opencrane.shared.config import get_config
+from opencrane.shared.utils.embedding_prompts import format_query, warn_if_inconsistent
 
 import sys
 
@@ -114,6 +115,7 @@ def get_embeddings_service():
         with _service_init_lock:
             if _embeddings_service is None:
                 _embeddings_service = EmbeddingService()
+                warn_if_inconsistent()
     return _embeddings_service
 
 def get_milvus_service():
@@ -876,7 +878,7 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
 
         def _semantic_results(arm_limit: int = limit) -> list[dict]:
             embeddings_service = get_embeddings_service()
-            query_embedding = embeddings_service.model.encode([query], batch_size=8, show_progress_bar=False)
+            query_embedding = embeddings_service.model.encode([format_query(query)], batch_size=8, show_progress_bar=False)
             if hasattr(query_embedding, 'tolist'):
                 query_embedding = query_embedding.tolist()
             query_vec = query_embedding[0]

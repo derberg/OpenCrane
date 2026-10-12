@@ -93,7 +93,6 @@ To build an index, install the `pipeline` extra. The following commands need it:
 - `fetch`
 - `llms`
 - `chunk`
-- `embed`
 - `tokens`
 
 To install the `pipeline` extra, run one of the following commands:
@@ -137,7 +136,7 @@ The command creates the `.opencrane/` directory with the following files:
 
 | Generated file | Description |
 |---|---|
-| `.opencrane/config.yaml` | Template for the source mapping and the project configuration, with commented examples of remote and local sources |
+| `.opencrane/config.yaml` | Template for the source mapping and the project configuration, with commented examples of a GitHub source and an `llmstxt` source |
 | `.opencrane/README.md` | Quick reference for the `.opencrane/` directory |
 | `.opencrane/Dockerfile` | Multi-stage build: dependencies → model download → Milvus index → runtime |
 | `.opencrane/docker-compose.yml` | Builds and runs the MCP server on port 8000 |
@@ -187,7 +186,12 @@ After each source, the command asks whether to add another source.
 
 #### Run the full pipeline with `opencrane build`
 
-The `opencrane build` command runs all steps in sequence: fetch → llms → chunk → embed → index. It has the following syntax:
+The `opencrane build` command runs all steps in sequence: fetch → llms → chunk → embed → index.
+
+> [!CAUTION]
+> The fetch step deletes the fetched files of every auto-discovered source that auto-discovery no longer returns, and removes its entry from the source mapping file. The build never passes `--org`. If `AUTO_DISCOVERY_ORGS` does not list the `ORG_NAME` organization, the fetch step deletes every auto-discovered source of that organization. To keep a source, set `manual: true` on its entry. See [How the fetch removes stale sources](docs/fetching.md#how-the-fetch-removes-stale-sources).
+
+The command has the following syntax:
 
 ```bash
 opencrane build [--config {MODULE}:{CLASS}] [--sources-dir {PATH}]... [--llmstxt-dir {PATH}]
@@ -205,11 +209,16 @@ The command accepts the following flags:
 
 The `index` step ignores `--chunks-file` and `--embeddings-file` and reads only `AI_DOCS_CHUNKS_FILE` and `AI_DOCS_EMBEDDINGS_FILE`. To build with other paths, set these environment variables instead of the flags.
 
-The `llms` step of the build runs without `--force`. If you pass `--sources-dir` for a directory that Git ignores, run `opencrane llms --force` before the build, or the build keeps the old bundles.
+The `llms` step of the build runs without `--force`. If you pass `--sources-dir` for a directory that Git ignores, or with changes that are already committed, run `opencrane llms --force` before the build. Otherwise, the build keeps the old bundles.
 
 #### Fetch documentation from GitHub with `opencrane fetch`
 
-The `opencrane fetch` command fetches documentation from GitHub repositories. It has the following syntax:
+The `opencrane fetch` command fetches documentation from GitHub repositories.
+
+> [!CAUTION]
+> The command deletes the fetched files of every auto-discovered source that auto-discovery no longer returns, and removes its entry from the source mapping file. To keep a source, set `manual: true` on its entry. See [How the fetch removes stale sources](docs/fetching.md#how-the-fetch-removes-stale-sources).
+
+The command has the following syntax:
 
 ```bash
 opencrane fetch [--config {MODULE}:{CLASS}] [--org {NAME}] [--source {NAMES}]
@@ -240,7 +249,7 @@ The command accepts the following flags:
 |---|---|
 | `--sources-dir {PATH}` | Source directory to process. Repeat the flag for several directories. Overrides the `AI_DOCS_SOURCES_DIRS` environment variable. |
 | `--llmstxt-dir {PATH}` | Output directory for the `llms-full.txt` files. Overrides the `AI_DOCS_LLMSTXT_DIR` environment variable. |
-| `--force` | Regenerates the bundles even when Git detects no changes in the directories passed with `--sources-dir` or set in `AI_DOCS_SOURCES_DIRS`. Without either, the step always regenerates the bundles. Git never reports changes in directories it ignores, so pass `--force` for those directories. |
+| `--force` | Regenerates the bundles even when Git detects no changes in the directories passed with `--sources-dir` or set in `AI_DOCS_SOURCES_DIRS`. Without either, the step always regenerates the bundles. Git compares the directories with the last commit only. Pass `--force` for a directory that Git ignores, and after changes that are already committed, for example after `git pull`. |
 
 #### Count tokens with `opencrane tokens`
 
@@ -262,7 +271,7 @@ The command accepts the following flags:
 The `opencrane chunk` command splits the documentation into chunks and writes them to `.opencrane/chunks.json`. It has the following syntax:
 
 ```bash
-opencrane chunk [--config {MODULE}:{CLASS}] [--llmstxt-dir {PATH}] [--chunks-file {PATH}]
+opencrane chunk [--config {MODULE}:{CLASS}] [--llmstxt-dir {PATH}] [--chunks-file {PATH}] [--force]
 ```
 
 The command reads the combined `llms-full.txt` and its companion `llms.txt` index, and assigns each chunk the `source_url` of its page. For a bundle from an earlier OpenCrane version, which has no index, the command reads the page URLs from the bundle itself.
@@ -273,7 +282,7 @@ The command accepts the following flags:
 |---|---|
 | `--llmstxt-dir {PATH}` | Directory with `llms-full.txt` and its companion `llms.txt`. Overrides the `AI_DOCS_LLMSTXT_DIR` environment variable. |
 | `--chunks-file {PATH}` | Output path for the chunks JSON file. Overrides the `AI_DOCS_CHUNKS_FILE` environment variable. |
-| `--force` | Has no effect. The command always regenerates the chunks. |
+| `--force` | Has no effect, because the command always regenerates the chunks. |
 
 > [!TIP]
 > To learn how to structure Markdown so that its chunks are high quality and easy to retrieve, see the [authoring guide](docs/authoring-guide.md).
@@ -292,7 +301,7 @@ The command accepts the following flags:
 |---|---|
 | `--chunks-file {PATH}` | Input chunks JSON file. Overrides the `AI_DOCS_CHUNKS_FILE` environment variable. |
 | `--embeddings-file {PATH}` | Output embeddings JSON file. Overrides the `AI_DOCS_EMBEDDINGS_FILE` environment variable. |
-| `--force` | Regenerates the embeddings. The command currently regenerates them on every run, with or without this flag. |
+| `--force` | Has no effect, because the command regenerates the embeddings on every run. |
 
 #### Index the embeddings in Milvus with `opencrane index`
 
@@ -586,10 +595,10 @@ The following table lists the variables:
 | `DROP_EXISTING` | `false` | When `true`, `index` deletes and rebuilds the Milvus collection. When `false`, `index` keeps a collection that already has rows, unless its vector size or its fields no longer match. See [`opencrane index`](#index-the-embeddings-in-milvus-with-opencrane-index). |
 | `EMBEDDING_QUERY_PROMPT` | none | Prompt that `serve` and `visualize` apply to each query. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
 | `HYBRID_ALPHA` | `0.6` | Weight of vector search compared to keyword search. `1.0` is pure vector search, and `0.0` is pure BM25 keyword search. |
-| `HYBRID_CANDIDATE_POOL` | `0` | Number of results that hybrid search fetches from each arm before it fuses them. `0` means the requested `limit`. A wider pool, for example `50`, can surface chunks that both arms rank just below `limit`. |
-| `HYBRID_FUSION` | `minmax` | How hybrid search merges the two arms. `minmax` blends normalized scores, and `rrf` blends ranks with Reciprocal Rank Fusion. See [Search modes](docs/architecture.md#search-modes). |
+| `HYBRID_CANDIDATE_POOL` | `0` | Number of results that the semantic search and the keyword search each return before hybrid search fuses them. `0` means the requested `limit`. A wider pool, for example `50`, can surface chunks that both searches rank just below `limit`. |
+| `HYBRID_FUSION` | `minmax` | How hybrid search merges the results of the two searches. `minmax` blends normalized scores, and `rrf` blends ranks with Reciprocal Rank Fusion. See [Search modes](docs/architecture.md#search-modes). |
 | `HYBRID_RRF_K` | `60` | The RRF smoothing constant `k`. OpenCrane uses it only when `HYBRID_FUSION` is `rrf`. |
-| `BM25_TOKENIZER` | `simple` | Keyword (BM25) tokenizer. `simple` splits text on every non-alphanumeric character. `identifier` also keeps identifiers such as `5.4.1` or `GTP-U` as one token. A change needs a server restart, but no new index. See [Search modes](docs/architecture.md#search-modes). |
+| `BM25_TOKENIZER` | `simple` | Keyword (BM25) tokenizer. `simple` splits text on every character that is not a letter, a digit, or an underscore. `identifier` also keeps dotted and hyphenated identifiers such as `5.4.1` or `GTP-U` as one token. A change needs a server restart, but no new index. See [Search modes](docs/architecture.md#search-modes). |
 | `RERANKER_MODEL` | none | Cross-encoder model that turns on the built-in reranker. See [Search modes](docs/architecture.md#search-modes). |
 | `RERANK_DEPTH` | `50` | Number of candidates the reranker reorders |
 
@@ -679,7 +688,7 @@ class Config(OpenCraneConfig):
 To use the subclass, pass it to the `--config` flag:
 
 ```bash
-opencrane build --config myproject.config:MyConfig
+opencrane build --config myproject.config:Config
 ```
 
 Python must be able to import the `myproject` module, as described in [CLI](#cli). OpenCrane tries the chunking strategies in list order and uses the first one that matches the content. Put a custom strategy before the general strategies that would otherwise match first.
@@ -774,7 +783,7 @@ A fence type is the language identifier after the opening backticks of a code bl
 - `crd`
 - `json-schema`
 
-Each type uses the `opencrane.fences.inline_file` handler. The handler reads the file path written inside the fence block and replaces the block with the file content. The path is relative to the Markdown file, and the file must be inside the project. If the file is missing or outside the project, the handler writes a `# Source missing` comment instead. When OpenCrane can build the source URL of the file, the handler adds it as a `### {source_url}` heading, so the chunks from the file get that URL.
+Each type uses the `opencrane.fences.inline_file` handler. The handler reads the file path written inside the fence block and replaces the block with the file content. The path is relative to the Markdown file, and the file must be inside the project. If the file is missing or outside the project, the handler writes a `# Source missing` comment instead. When OpenCrane can build the source URL of the file, the handler adds the URL as a `### {source_url}` heading. The chunks from the file then get that URL.
 
 The following Markdown example uses two of the built-in fence types:
 
@@ -881,7 +890,7 @@ class Config(OpenCraneConfig):
     ]
 ```
 
-OpenCrane calls the synchronous or asynchronous `handler` as `handler(arguments, context)`. If `name` matches a built-in tool or another extra tool, the server does not start.
+OpenCrane calls the synchronous or asynchronous `handler` as `handler(arguments, context)`. If `name` matches another extra tool or a built-in tool other than `get_section`, the server does not start.
 
 The `context` argument is a `ToolContext` with the following members:
 

@@ -4,15 +4,9 @@ This guide describes how to structure Markdown documentation so that OpenCrane p
 
 ## How OpenCrane chunks Markdown
 
-OpenCrane first splits each page at every fenced code block. OpenCrane then chunks each code block, and each part of the page between two code blocks, on its own. OpenCrane tries the following chunking strategies in this order, and the first strategy that matches a part handles it:
+OpenCrane first splits each page at every fenced code block. It then chunks each code block, and each part of the page between two code blocks, on its own. OpenCrane tries the chunking strategies in a fixed order, and the first strategy that matches a part handles it. For the order, see [Chunking strategies](chunking.md#chunking-strategies).
 
-1. Fenced `yaml` and `yml` blocks that start at the beginning of a line go to the YAML chunker. OpenCrane takes these blocks out of the page before the other strategies run. [Embedded specifications](#embedded-specifications) describes how the YAML chunker handles each kind of YAML.
-2. Other fenced code blocks usually go to the code chunker. A block whose first lines look like `key: value` pairs can go to the YAML chunker instead.
-3. A part that contains a Markdown table goes to the table chunker. It emits one chunk for each table data row and passes the surrounding text to the list and prose chunkers.
-4. A part that contains a Markdown list goes to the list chunker. It emits one chunk for each list item. It also emits the text around the list as prose chunks, but it does not split that text at headings.
-5. All remaining content goes to the prose chunker. It splits the text into chunks at heading boundaries.
-
-How you write the content determines which strategy handles each part and how well each chunk stands alone. For the details of each strategy, see [Split documentation into chunks for RAG](chunking.md).
+How you write the content determines which strategy handles each part and how well each chunk stands alone.
 
 ## Headings
 
@@ -338,7 +332,7 @@ Install the CLI first, then initialize the project.
 
 ### Use one marker for each indentation level
 
-Use the same marker for all items at the same indentation level. If you mix `1.` and `-` at the same level of one list, the items of that list get different `list_style` values. Mixing markers across levels is fine, for example ordered top-level steps with unordered nested options, because OpenCrane finds the nesting from the indentation.
+Use the same marker for all items at the same indentation level. If you mix `1.` and `-` at the same level of one list, the items of that list get different `list_style` values. You can use different markers on different levels, for example ordered top-level steps with unordered nested options, because OpenCrane finds the nesting from the indentation.
 
 The following list mixes markers across levels correctly:
 
@@ -420,7 +414,7 @@ The following rules apply to the columns and placement of a table:
 
 - Put the identifying value in the first column. The first column is the `row_key` of the row, and the sibling previews show up to 30 characters of it, including the ellipsis. Start with the name or key, not a description.
 - Give every column a header. OpenCrane renders each cell as `Header: value.`, so a blank header produces an unlabeled `: value.` line that reads poorly.
-- Give every row as many cells as the header. A row with a different number of cells ends the table, and OpenCrane chunks the rest as prose.
+- Match the number of cells in every row to the header. A row with a different number of cells ends the table, and OpenCrane chunks the rest as prose.
 - Leave the `|` character out of cells, even escaped as `\|` or inside backticks. OpenCrane splits cells at every `|`, so the row gets an extra cell and ends the table.
 - Keep tables out of code fences. OpenCrane treats a table inside a code fence as code and does not chunk it into rows.
 - Add at least one data row. OpenCrane chunks a header line and separator with no data rows as prose, not as a table.
@@ -437,7 +431,7 @@ The following code block is correct:
 
 ````md
 ```python
-from opencrane import OpenCrane
+from opencrane import OpenCraneConfig
 ```
 ````
 
@@ -445,7 +439,7 @@ Avoid the following code block:
 
 ````md
 ```
-from opencrane import OpenCrane
+from opencrane import OpenCraneConfig
 ```
 ````
 
@@ -571,7 +565,7 @@ spec:
 
 ### OpenAPI specifications
 
-For an OpenAPI specification, start the block with the `openapi` version as a string, such as `openapi: 3.0.3`. OpenCrane recognizes the specification only when the version is a string that starts with `3.`. YAML reads an unquoted two-part version such as `3.1` as a number, so quote it as `"3.1"`. Swagger 2.0 specifications with a `swagger: 2.0` field also work.
+For an OpenAPI specification, start the block with the `openapi` version as a string, such as `openapi: 3.0.3`. OpenCrane recognizes the specification only when the version is a string that starts with `3.`. YAML reads an unquoted two-part version such as `3.1` as a number, so quote it as `"3.1"`. OpenCrane also recognizes Swagger 2.0 with a `swagger: "2.0"` field, but chunks only its `info` and `paths` sections. To get chunks for the definitions, convert the specification to OpenAPI 3.
 
 Include real versions of the following sections:
 
@@ -618,7 +612,7 @@ paths:
 
 ### JSON Schema
 
-For a JSON Schema, set `$schema` to a `json-schema.org` URL, and fill in `title` and `description` at the root and on each property. A schema with empty or generic descriptions produces low-quality chunks.
+For a JSON Schema, set `$schema` to a `json-schema.org` URL. Fill in `title` and `description` at the root and on each property. A schema with empty or generic descriptions produces low-quality chunks.
 
 The following schema is correct:
 
@@ -662,7 +656,10 @@ $defs:
   DatabaseConfig:
     type: object
     description: Database connection configuration.
-    properties: { ... }
+    properties:
+      host:
+        type: string
+        description: Database host name.
 ```
 ````
 

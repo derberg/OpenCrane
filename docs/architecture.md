@@ -60,7 +60,7 @@ The fetch never downloads sources marked `local: true`. OpenCrane reads those so
 
 ### Generate `llms-full.txt` bundles
 
-The `opencrane llms` command combines the Markdown files of each source into `llms-full.txt` bundles under `.opencrane/llmstxt/`. It writes one bundle for each source, and a combined `llms-full.txt` with all sources. Next to the combined bundle, it writes a companion `llms.txt` index that maps the title of each page to its URL. The bundles carry no URLs.
+The `opencrane llms` command combines the Markdown files of each source into `llms-full.txt` bundles under `.opencrane/llmstxt/`. It writes one bundle for each source, and a combined `llms-full.txt` with all sources. Next to the combined bundle, it writes a companion `llms.txt` index that maps the title of each page to its URL. The bundles carry no page URLs. The exception is the `### {SOURCE_URL}` heading that a built-in fence type writes before an inlined file.
 
 When the source mapping file lists no sources, the command combines the `llms-full.txt` bundles that already exist under `.opencrane/llmstxt/`. [Fence type](../README.md#write-a-custom-fence-type) handlers replace structured content in fenced code blocks, such as OpenAPI specs and CRDs. For the bundle format, see [Generate llms-full.txt bundles](llms-generation.md).
 
@@ -89,8 +89,6 @@ The `opencrane index` command loads `.opencrane/embeddings.json` into a Milvus v
 - A vector index on the embeddings, with cosine similarity as the distance metric
 - `INVERTED` scalar indexes on the ID columns that the lookup tools query
 
-With the scalar indexes, the member and section lookup tools find chunks without a scan of the whole collection. OpenCrane uses `INVERTED` because Milvus Lite accepts `AUTOINDEX` only on vector fields.
-
 > [!CAUTION]
 > In the following cases, `opencrane index` deletes the existing collection and builds it again:
 >
@@ -110,7 +108,7 @@ Milvus runs in one of the following deployment modes:
 The `opencrane serve` command starts the MCP server on top of the indexed data. The server supports the following transport modes:
 
 - stdio: for local MCP clients such as Claude Code or Cursor
-- HTTP: for containerized or remote deployments, and used by the `Dockerfile` and `docker-compose.yml` that `opencrane init` creates
+- HTTP: for containerized or remote deployments, such as the container that `opencrane init` sets up
 
 ## MCP tools
 
@@ -126,7 +124,7 @@ The server always lists `search_docs` and `health`. It lists the other tools onl
 | `get_section` | Prose chunks with navigation metadata indexed | Returns a whole prose section by chunk ID or clause number. |
 | `health` | Always present | Reports whether the server can serve queries, with Milvus and collection checks. |
 
-The server reads the indexed chunk types from Milvus on the first request for the tool list. It keeps that answer until the process stops, so restart the server after you run `opencrane index`.
+The stdio server reads the indexed chunk types from Milvus on the first request for the tool list, and keeps them until the process stops. The HTTP server builds its tool list once, at startup. Restart the server after you run `opencrane index`.
 
 For the tool parameters, see [MCP tools](vector-search.md#mcp-tools). To add your own tools, see [Add custom MCP tools](../README.md#add-custom-mcp-tools).
 
@@ -146,11 +144,11 @@ final_score = alpha × vector_score + (1 − alpha) × bm25_score
 
 The default **alpha** is `0.6`, which means 60% semantic and 40% keyword. To override it for a single query, pass the **alpha** parameter. To set a different default, use the `HYBRID_ALPHA` environment variable.
 
-By default, each arm of hybrid search returns **limit** results before the fusion. A chunk that both arms rank slightly below **limit** then can't reach the fused list. To fetch more candidates from each arm, set the `HYBRID_CANDIDATE_POOL` environment variable, for example to `50`.
+By default, the semantic search and the keyword search each return **limit** results before the fusion. A chunk that both searches rank slightly below **limit** then can't reach the fused list. To fetch more candidates from each search, set the `HYBRID_CANDIDATE_POOL` environment variable, for example to `50`.
 
-The `HYBRID_FUSION` environment variable selects how hybrid search merges the two arms:
+The `HYBRID_FUSION` environment variable selects how hybrid search merges the results of the two searches:
 
-- `minmax`: the default. It normalizes the scores of each arm to the range 0 to 1 and applies the previous formula.
+- `minmax`: the default. It normalizes the scores of each search to the range 0 to 1 and applies the previous formula.
 - `rrf`: Reciprocal Rank Fusion (RRF), which blends the ranks of a chunk instead of its scores:
 
   ```text
@@ -161,7 +159,7 @@ The `HYBRID_FUSION` environment variable selects how hybrid search merges the tw
 
 A change to any `HYBRID_*` variable needs a server restart but no re-indexing.
 
-The BM25 index uses the `simple` tokenizer by default. This tokenizer lowercases text and splits it on every non-alphanumeric character, so `5.4.1` and `4.5.1` produce the same tokens. To keep dotted, hyphenated, and underscored identifiers as one token, set the `BM25_TOKENIZER` environment variable to `identifier`. This tokenizer also emits the parts of each identifier, so a query for `gtp` still matches `GTP-U`. A change of tokenizer needs a server restart but no re-indexing.
+The BM25 index uses the `simple` tokenizer by default. This tokenizer lowercases text and splits it on every character that is not a letter, a digit, or an underscore, so `5.4.1` and `4.5.1` produce the same tokens. To keep dotted and hyphenated identifiers as one token, set the `BM25_TOKENIZER` environment variable to `identifier`. This tokenizer also emits the parts of each identifier, so a query for `gtp` still matches `GTP-U`. A change of tokenizer needs a server restart but no re-indexing.
 
 An optional reranker reorders the results of every search mode. The reranker scores each candidate against the query, and can move up a chunk that search ranks too low. Reranking is off by default and needs no re-indexing.
 
@@ -198,14 +196,12 @@ The `opencrane/rag/` package implements the retrieval-augmented generation (RAG)
 | `opencrane/rag/chunker.py` | Runs the `chunk` step: loads the bundle, assigns page URLs and source names, adds navigation metadata, and writes `chunks.json`. |
 | `opencrane/rag/services/file_processor.py` | Runs the chunking strategies in order. |
 | `opencrane/rag/services/chunking_strategies/` | Holds the YAML tree walkers. |
-| `opencrane/rag/generate_embeddings.py` | Generates the embeddings in batches. |
+| `opencrane/rag/generate_embeddings.py` | Generates the embeddings. |
 | `opencrane/rag/services/source_mapping.py` | Reads and updates the source mapping file. |
 
 ### MCP server
 
-The MCP server is in `opencrane/mcp/`. The stdio server loads its backing services on first use, which keeps startup fast. The HTTP server loads them at startup.
-
-The vector database serves `search_docs` in `semantic` mode and the lookup tools. Keyword and hybrid search also use a BM25 index, which the server builds in memory from `chunks.json` on the first keyword or hybrid query. The server rebuilds the BM25 index only when the modification time or size of `chunks.json` changes. The server needs `chunks.json` for keyword and hybrid search.
+The MCP server is in `opencrane/mcp/`. The vector database serves `search_docs` in `semantic` mode and the lookup tools. Keyword and hybrid search also use a BM25 index, which the server builds in memory from `chunks.json` on the first keyword or hybrid query. The server rebuilds the BM25 index only when the modification time or size of `chunks.json` changes.
 
 The following table lists the backing services in `opencrane/mcp/services/`:
 
@@ -222,17 +218,7 @@ The following table lists the backing services in `opencrane/mcp/services/`:
 
 ## Extension points
 
-You extend OpenCrane with a subclass of `OpenCraneConfig` named `Config` in `.opencrane/extensions.py`. To load the file, set `extensions: extensions.py` in `.opencrane/config.yaml`. The following table lists where each extension point is described:
-
-| Extension point | Reference |
-|---|---|
-| `fence_types` | [Write a custom fence type](../README.md#write-a-custom-fence-type) |
-| `chunking_strategies` | [Add a processing strategy](chunking.md#add-a-processing-strategy) |
-| `yaml_tree_walkers` | [Write a custom YAML tree walker](../README.md#write-a-custom-yaml-tree-walker) |
-| `section_anchor_for`, `section_clause_for` | [Extension points](../README.md#extension-points) |
-| `extra_tools` | [Add custom MCP tools](../README.md#add-custom-mcp-tools) |
-| `middleware`, `token_verifier`, `auth_provider` | [Authentication and authorization](auth.md) |
-| `reranker` | [Custom reranker](#custom-reranker) |
+You extend OpenCrane with a subclass of `OpenCraneConfig` named `Config` in `.opencrane/extensions.py`. To load the file, set `extensions: extensions.py` in `.opencrane/config.yaml`. For the extension points, see [Extension points](../README.md#extension-points).
 
 ### Custom reranker
 

@@ -19,7 +19,7 @@ The command regenerates the embeddings on every run, with or without the `--forc
 
 ## Choose an embedding model
 
-To use a different model, set the `EMBEDDING_MODEL` environment variable to a Hugging Face model ID or a local path that the `sentence-transformers` library can load. Any vector size works, because `opencrane index` sizes the collection from the embeddings. A larger model can improve results, and a smaller one embeds faster.
+To use a different model, set the `EMBEDDING_MODEL` environment variable. The value is a Hugging Face model ID or a local path that the `sentence-transformers` library can load. Any vector size works, because `opencrane index` sizes the collection from the embeddings. A larger model can improve results, and a smaller one embeds faster.
 
 OpenCrane loads the model with `trust_remote_code=True`, so the model can run its own Python code on your machine. Use only models whose code you trust.
 
@@ -72,18 +72,18 @@ When the `index` step loads the embeddings into Milvus, each chunk becomes one r
 
 | Field | Type | Notes |
 |---|---|---|
-| `chunk_id` | `VARCHAR` | Primary key. `max_length` 64 |
+| `chunk_id` | `VARCHAR` | Primary key |
 | `embedding` | `FLOAT_VECTOR` | Vector size of the model, 768 by default |
-| `content` | `VARCHAR` | `max_length` 65,535. OpenCrane truncates longer content. |
-| `source_file` | `VARCHAR` | `max_length` 512 |
-| `source_name` | `VARCHAR` | `max_length` 256 |
-| `chunk_type` | `VARCHAR` | `max_length` 32. One of `prose`, `code_snippet`, `crd_definition`, `openapi_spec`, `json_schema`, `yaml_content`, `list_item`, or `table_row` |
-| `metadata_json` | `VARCHAR` | `max_length` 65,535 |
+| `content` | `VARCHAR` | OpenCrane truncates content longer than 65,535 characters. |
+| `source_file` | `VARCHAR` | none |
+| `source_name` | `VARCHAR` | none |
+| `chunk_type` | `VARCHAR` | One of `prose`, `code_snippet`, `crd_definition`, `openapi_spec`, `json_schema`, `yaml_content`, `list_item`, or `table_row` |
+| `metadata_json` | `VARCHAR` | none |
 | `token_count` | `INT64` | none |
 | `line_start` | `INT64` | `0` when the chunk has no line number |
-| `list_id` | `VARCHAR` | `max_length` 64 |
-| `table_id` | `VARCHAR` | `max_length` 64 |
-| `clause_id` | `VARCHAR` | `max_length` 64 |
-| `parent_chunk_id` | `VARCHAR` | `max_length` 64 |
+| `list_id` | `VARCHAR` | none |
+| `table_id` | `VARCHAR` | none |
+| `clause_id` | `VARCHAR` | none |
+| `parent_chunk_id` | `VARCHAR` | none |
 
-The `index` step creates an `AUTOINDEX` vector index with the cosine metric, and `INVERTED` indexes on `list_id`, `table_id`, `clause_id`, and `parent_chunk_id`. It then loads the collection into memory. For how the MCP server searches the collection, see [Vector search and the MCP server](vector-search.md).
+The `index` step indexes the `embedding` field with the cosine metric. For how the MCP server searches the collection, see [Vector search and the MCP server](vector-search.md).

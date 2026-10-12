@@ -30,7 +30,7 @@ OpenCrane needs Python 3.11 or later, and the continuous integration (CI) workfl
    pip install -e '.[dev]'
    ```
 
-The `.venv` directory now contains OpenCrane, the test tools, and the dependencies of the `pipeline`, `viz`, and `auth` extras that the full test suite needs. The CI workflow installs the same extra.
+The `.venv` directory now contains OpenCrane with every dependency that the full test suite needs. The CI workflow installs the same extra.
 
 ## Work in a separate worktree
 
@@ -47,7 +47,7 @@ scripts/worktree.sh list
 scripts/worktree.sh rm {BRANCH_NAME}
 ```
 
-Git refuses to remove a worktree that has uncommitted changes.
+The `rm` command fails for a worktree that has uncommitted changes.
 
 ## Write commit messages for releases
 

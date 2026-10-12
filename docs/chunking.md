@@ -51,7 +51,7 @@ The chunker uses the URL markers inside the bundle instead of the index in the f
 - No companion `llms.txt` is present, for example in a bundle that an older OpenCrane version built. Regenerate the bundle with `opencrane llms` to get an index.
 - The number of source blocks in `llms-full.txt` differs from the number of source sections in `llms.txt`. The chunker logs a warning.
 
-In this mode, each URL marker heading, such as `### https://...`, starts a new document, and the chunker takes the source URL from it.
+In this mode, each URL marker heading, such as `### https://...`, starts a new page, and the chunker takes the source URL from it.
 
 ## Prose sections
 
@@ -62,29 +62,25 @@ The following variables control how the prose chunker splits text:
 | Variable | Default | Description |
 |---|---|---|
 | `PROSE_SPLIT_HEADING_DEPTH` | `3` | Sets the deepest heading level that starts a new chunk. A deeper heading stays in the chunk of the heading above it. For example, with `3`, a `####` section is part of its `###` chunk. Raise the value to make search return smaller sections of deeply nested docs. Lower it to keep more context in each result. Documents converted from other formats can have headings seven or eight levels deep, so values up to `8` are useful. `0` turns off splitting at headings. |
-| `PROSE_MAX_CHUNK_TOKENS` | `0` | Sets a token limit for each chunk, as a positive whole number. `0` turns the limit off. Set it below the input limit of your embedding model, so the model reads all of each chunk. OpenCrane counts tokens with the `TOKEN_ENCODING` tiktoken encoding, `cl100k_base` by default, not with the tokenizer of the model, so leave a margin. A section over the limit splits at paragraphs, then at lines, and each chunk repeats the section heading. Lines and code blocks never split. A table in a split section loses its header row in every chunk after the first. |
+| `PROSE_MAX_CHUNK_TOKENS` | `0` | Sets a token limit for each chunk, as a positive whole number. `0` turns the limit off. Set it below the input limit of your embedding model, so the model reads all of each chunk. OpenCrane counts tokens with the `TOKEN_ENCODING` tiktoken encoding, `cl100k_base` by default, not with the tokenizer of the model, so leave a margin. A section over the limit splits at paragraphs, then at lines, and each chunk repeats the section heading. Lines and code blocks never split. |
 | `PROSE_KEEP_HEADING_ONLY_SECTIONS` | `false` | `true` keeps a section that has a heading but no text, when the heading line is 15 characters or longer. Any other value drops such sections. Turn it on when headings carry meaning on their own, such as numbered clauses in a specification, so search can find them. |
 
 The prose chunker always drops a chunk shorter than 15 characters.
 
 The variables do not apply to the text around a Markdown list. The list chunker emits that text as prose chunks without splitting it at headings. See [Chunking strategies](#chunking-strategies).
 
-After you change a variable, run `opencrane chunk` and `opencrane embed` again, then rebuild the Milvus collection as [`opencrane index`](../README.md#index-the-embeddings-in-milvus-with-opencrane-index) describes.
-
 > [!CAUTION]
 > Rebuilding deletes the Milvus collection, and searches fail until the rebuild finishes. Before you rebuild, confirm that `MILVUS_COLLECTION` and the connection variables name the collection that you want to replace.
 
+After you change a variable, run `opencrane chunk` and `opencrane embed` again, then rebuild the Milvus collection as [`opencrane index`](../README.md#index-the-embeddings-in-milvus-with-opencrane-index) describes.
+
 ## Table chunks
 
-Every Markdown table becomes one `table_row` chunk for each data row. The chunker renders each row as natural-language `Column: value.` lines and leaves out empty cells. Each row chunk carries the section heading and the lead-in sentence from the source, so search can return the row on its own. Rows link to each other through a shared `table_id` field and through `sibling_ids`.
-
-To fetch the full table, pass the `table_id` from the metadata of a row chunk to the `get_table_members(table_id=...)` Model Context Protocol (MCP) tool. The call returns all row chunks of the table, ordered by `row_index`.
+Every Markdown table becomes one `table_row` chunk for each data row. The chunker renders each row as natural-language `Column: value.` lines and leaves out empty cells. Each row chunk carries the section heading and the lead-in sentence from the source, so search can return the row on its own. For the fields that link the rows of a table, see [Table row metadata](metadata-schema.md#table-row-metadata).
 
 A table ends at the first row whose number of cells differs from the header. The chunker splits cells at every `|`, including an escaped `\|`. A cell that contains a pipe therefore ends the table, and the remaining rows become prose.
 
 A table with no heading or lead-in sentence still produces `table_row` chunks, but those chunks have no `breadcrumb_path` or `table_caption` metadata. To make them retrievable by semantic search, add a heading and a lead-in sentence to the source.
-
-The fixtures `tests/fixtures/markdown_with_table.md` and `tests/fixtures/expected_table_chunks.json` are a generated baseline. When you change the chunking behavior on purpose, regenerate `expected_table_chunks.json` with `ChunkSerializer.serialize_chunks`.
 
 ## Chunking strategies
 
@@ -94,7 +90,7 @@ The chunker evaluates the following strategies in this order. The first strategy
 
 | Strategy | Content it handles |
 |---|---|
-| `YamlChunkingStrategy` | YAML content, including any code block whose first lines look like `key: value` pairs. Structured YAML specifications, such as Kubernetes CustomResourceDefinitions (CRDs) and OpenAPI specifications, go to every configured tree walker. Other YAML becomes one `yaml_content` chunk. |
+| `YamlChunkingStrategy` | YAML content, including any code block whose first lines look like `key: value` pairs. Structured YAML specifications, such as Kubernetes CustomResourceDefinitions (CRDs) and OpenAPI specifications, go to the first configured tree walker whose `can_handle` method accepts them. Other YAML becomes one `yaml_content` chunk. |
 | `CodeChunkingStrategy` | Fenced code blocks, with the language from the opening fence. For a `yaml` or `yml` block that the YAML strategy did not handle, it passes CRDs and OpenAPI specifications to the built-in tree walkers. |
 | `TableChunkingStrategy` | Markdown tables. The strategy emits one `table_row` chunk for each data row. It passes the text outside the tables to the list and prose strategies. |
 | `ListChunkingStrategy` | Markdown lists. The strategy emits one chunk for each list item, nested items included. It emits the text around the lists as prose chunks, without splitting the text at headings and without the prose variables. |
@@ -430,7 +426,7 @@ class Config(OpenCraneConfig):
 Document the chunk type in the following places:
 
 - Add the new chunk type and its metadata fields to [Chunk metadata schema](metadata-schema.md).
-- Add the same chunk type and fields to `opencrane/mcp/metadata-schema.md`, which the `get_metadata_schema` MCP tool returns.
+- Add the same chunk type and fields to `opencrane/mcp/metadata-schema.md`, which the `get_metadata_schema` Model Context Protocol (MCP) tool returns.
 - Add the chunk type to `_CHUNK_TYPE_SECTION_HEADINGS` in `opencrane/mcp/server.py`, so `get_metadata_schema(chunk_type=...)` returns its section.
 
 The MCP server shows only `crd_definition`, `openapi_spec`, and `json_schema` chunks as YAML with location comments. To show the new chunk type the same way, add it to `_YAML_CHUNK_TYPES` and to the matching chunk type checks in `opencrane/mcp/server.py`.

@@ -10,8 +10,9 @@ from opencrane import OpenCraneConfig
 class Config(OpenCraneConfig):
     """Project-specific OpenCrane configuration.
 
-    OpenCrane loads this class only when the `extensions` key in
-    config.yaml names this file, and only under the name Config.
+    OpenCrane loads this class when the `extensions` key in config.yaml
+    names this file, or when --config or OPENCRANE_CONFIG passes its path.
+    The class must be named Config.
     For all extension points with examples, see
     https://github.com/derberg/OpenCrane#extend-opencrane
     """
@@ -71,7 +72,8 @@ ignore_patterns:
   - devel
 
 # Optional: Python file with your Config class, relative to .opencrane/.
-# OpenCrane ignores extensions.py until this key names it.
+# OpenCrane ignores extensions.py until this key names it, or until
+# --config or OPENCRANE_CONFIG passes its path.
 # To create a starter file, run `opencrane init --extensions`.
 # extensions: extensions.py
 
@@ -232,14 +234,19 @@ The following table lists the files in this directory and whether to commit them
 |---|---|---|
 | `config.yaml` | Sources, ignore patterns, and other settings | Yes |
 | `extensions.py` | Optional Python extensions, created by `opencrane init --extensions` | Yes |
-| `Dockerfile` or `Containerfile`, `docker-compose.yml` | Container build for the HTTP MCP server | Yes |
+| `Dockerfile` or `Containerfile`, `docker-compose.yml` | Container build for the HTTP Model Context Protocol (MCP) server | Yes |
 | `sources/`, `llmstxt/` | Fetched sources and generated `llms-full.txt` files | Optional |
-| `chunks.json`, `embeddings.json` | Chunks and their embedding vectors, which `opencrane index` loads | Yes, if a CI pipeline builds the container image |
+| `chunks.json`, `embeddings.json` | Chunks and their embedding vectors, which `opencrane index` loads | Yes, if a continuous integration (CI) pipeline builds the container image |
 | `milvus.db` | Milvus Lite database that `opencrane index` writes | No, the image build creates its own |
 
 ## Build and serve the index
 
-The `build` command needs the `pipeline` extra, which `pip install 'opencrane[pipeline]'` installs. To build the index and start the server, run the following commands:
+The `build` command needs the `pipeline` extra, which `pip install 'opencrane[pipeline]'` installs.
+
+> [!CAUTION]
+> The fetch step of `opencrane build` deletes the fetched files of every auto-discovered source that auto-discovery no longer returns. To keep a source, set `manual: true` on its entry in `config.yaml`. See [How the fetch removes stale sources](https://github.com/derberg/OpenCrane/blob/main/docs/fetching.md#how-the-fetch-removes-stale-sources).
+
+To build the index and start the server, run the following commands:
 
 ```bash
 # 1. Add documentation sources interactively
@@ -256,13 +263,15 @@ opencrane serve
 
 ## Run the server in a container
 
-The container image serves MCP over HTTP on port 8000. The image build creates the Milvus Lite database inside the image, so the container starts without indexing. To build and start the container, run the following command from the project root:
+The container image serves MCP over HTTP on port 8000. The image build creates the Milvus Lite database inside the image, so the container starts without indexing. If you ran `opencrane init --podman`, first change the `dockerfile` value in `docker-compose.yml` to `.opencrane/Containerfile`.
+
+To build and start the container, run the following command from the project root:
 
 ```bash
 {container_tool}-compose -f .opencrane/docker-compose.yml up --build
 ```
 
-To change the embedding model, set the `EMBEDDING_MODEL` environment variable before the build. Use the model that `opencrane embed` used, because the server embeds search queries with it. To add the optional reranker model to the image, set `RERANKER_MODEL` the same way.
+To change the embedding model, set the `EMBEDDING_MODEL` environment variable before the build, so the image contains the model. Also add `EMBEDDING_MODEL` to the `environment` section of `docker-compose.yml`, because the server reads it at runtime. Use the model that `opencrane embed` used, because the server embeds search queries with it. To add the optional reranker model to the image, set `RERANKER_MODEL` the same way.
 
 > [!CAUTION]
 > Do not mount a volume over `/app/milvus_data`. Milvus Lite cannot open a database file on a bind mount and fails with `Open local milvus failed`. Use the database that the image build creates.
@@ -370,7 +379,7 @@ include = ["{module_name}*"]
 PACK_README = '''\
 # {name}
 
-This package is an MCP server for documentation search, built with [OpenCrane](https://github.com/derberg/OpenCrane). It contains the search index, so it needs no build step.
+This package is a Model Context Protocol (MCP) server for documentation search, built with [OpenCrane](https://github.com/derberg/OpenCrane). It contains the search index, so it needs no build step.
 
 ## Use the package locally
 
@@ -389,6 +398,9 @@ claude mcp add {name} -- uvx --from "git+https://github.com/{{OWNER}}/{name}" {n
 ```
 
 ## Share the package through PyPI
+
+> [!CAUTION]
+> `twine upload` publishes the package, including the search index of your documentation, on the public PyPI. PyPI does not accept the same version again, even after you delete it. Upload only documentation that anyone may read.
 
 To build the package and upload it to PyPI, run the following commands in this directory:
 

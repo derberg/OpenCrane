@@ -3,7 +3,7 @@
 The OpenCrane HTTP transport supports two independent layers of access control:
 
 - Authentication controls who can connect. OpenCrane implements it with OAuth 2.1 through the Model Context Protocol (MCP) Python software development kit (SDK). The `auth.type` key selects the mode.
-- Authorization controls which sources a caller can retrieve. A mapping from each OAuth scope to a list of source names sets the policy. The server applies it to every `search_docs` and `get_section` call. The other tools that fetch content by ID do not apply it. For details, see [Security notes](#security-notes).
+- Authorization controls which sources a caller can retrieve. A mapping from each OAuth scope to a list of source names sets the policy. For the tools that apply it, see [Security notes](#security-notes).
 
 The standard input/output (stdio) transport is always unauthenticated. For the sources that a stdio caller gets, see [Access control over the stdio transport](#access-control-over-the-stdio-transport).
 
@@ -12,7 +12,7 @@ The standard input/output (stdio) transport is always unauthenticated. For the s
 The `auth:` block sets the authentication mode. Place it at the top level of the `.opencrane/config.yaml` file.
 
 > [!CAUTION]
-> With the default `type: none`, OpenCrane has no authentication. Anyone who can reach the HTTP port can read every source. Before you expose the server on a network, set another type, or index only sources that anyone may read. `default_sources` limits `search_docs` and `get_section` only. The `get_yaml_definition`, `get_list_members`, and `get_table_members` tools still return chunks from any indexed source. Custom MCP tools must filter their own output. See [Add custom MCP tools](../README.md#add-custom-mcp-tools).
+> With the default `type: none`, OpenCrane has no authentication. Anyone who can reach the HTTP port can read every source. Before you expose the server on a network, set another type, or index only sources that anyone may read. `default_sources` limits `search_docs` and `get_section` only. The other built-in lookup tools still return chunks from any indexed source. Custom MCP tools must filter their own output. See [Add custom MCP tools](../README.md#add-custom-mcp-tools).
 
 The following example sets the default mode:
 
@@ -150,7 +150,7 @@ Some MCP clients request a scope only when the server lists one as `scopes_suppo
 
 To publish scopes as `scopes_supported`, list the scopes that a client should request in `oidc.advertised_scopes`. For an example with `openid`, see [Connect OpenCrane to the identity provider](#connect-opencrane-to-the-identity-provider).
 
-A client that wants a refresh token then requests the advertised scope, and adds `offline_access` when the IdP's metadata lists it. OpenCrane does not reject a token that lacks an advertised scope. Tokens issued before you advertised the scope keep working.
+A client that needs a refresh token then requests the advertised scope, and adds `offline_access` when the IdP's metadata lists it. OpenCrane does not reject a token that lacks an advertised scope. Tokens issued before you advertised the scope keep working.
 
 Do not list `offline_access` in `advertised_scopes`. The MCP authorization specification says that a protected resource should not advertise it, because a refresh token serves the client session, not the resource.
 
@@ -180,7 +180,7 @@ For the middleware check, see [Authorize requests with custom middleware](#autho
 By default, the `oauth` mode requires a valid bearer token on every request. A request without a token gets `401`.
 
 > [!CAUTION]
-> With `allow_anonymous: true`, anyone can read the sources in `default_sources` without a token. If you set neither `scope_sources` nor `default_sources`, anyone can read every source. Set `default_sources`, and list only public documentation in it. For both keys, see [Restrict sources by scope](#restrict-sources-by-scope).
+> With `allow_anonymous: true`, anyone can read the sources in `default_sources` without a token. Set `default_sources`, and list only public documentation in it. For both keys, see [Restrict sources by scope](#restrict-sources-by-scope).
 
 To make the token optional, set `allow_anonymous: true`:
 
@@ -332,7 +332,7 @@ A common pattern has the following steps:
 With this pattern, you keep your authorization logic out of OpenCrane. A missing token or a failed lookup sets no source set. The request then falls back to the endpoint's `scope_sources` and `default_sources` policy.
 
 > [!CAUTION]
-> The fallback is restricted only if the endpoint sets `scope_sources` or `default_sources`. Without them, any request that the middleware does not resolve, such as a failed lookup, gives the caller every source. The same happens if OpenCrane does not load your `Config` class. When neither `OPENCRANE_CONFIG` nor the `extensions:` key is set, or the file is missing, OpenCrane starts without the middleware and logs nothing. When the class fails to load, it logs a warning. Set `default_sources` on the endpoint before you rely on this middleware.
+> Without `scope_sources` or `default_sources` on the endpoint, a request that the middleware does not resolve gets every source. This includes a failed lookup, and every request when OpenCrane does not load your `Config` class. Set `default_sources` on the endpoint before you rely on this middleware.
 
 The following example implements this pattern:
 
@@ -460,7 +460,7 @@ The following notes summarize the security behavior of the HTTP transport:
 - The HTTP server does not check the `Host` header, so DNS-rebinding protection is off. To turn it on, set `MCP_ALLOWED_HOSTS` to a comma-separated list of the hosts that clients use, for example `docs-mcp.example.com` or `localhost:*`. OpenCrane then rejects requests for other hosts.
 - In the `local` mode, `PUBLIC_URL` must use HTTPS outside local development. Credentials come only from environment variables, and token matching uses a constant-time comparison.
 - The `oauth` mode rejects tokens that were not issued for `oidc.audience`, which prevents confused-deputy attacks. The exception is `oidc.verify_audience: false`.
-- Only `search_docs` and `get_section` apply the source policy. The `get_yaml_definition`, `get_list_members`, and `get_table_members` tools return any chunk whose ID, `list_id`, or `table_id` the caller supplies, whatever its source.
+- Only `search_docs` and `get_section` apply the source policy. The other built-in lookup tools return chunks from any source, by the ID that the caller supplies.
 - An open endpoint without `default_sources`, or `allow_anonymous: true` without a source policy, gives anyone every source.
 - Misconfigured authentication fails closed. OpenCrane raises an error at startup and refuses to serve in the following cases:
   - A missing `PUBLIC_URL`
@@ -468,7 +468,9 @@ The following notes summarize the security behavior of the HTTP transport:
   - A missing `opencrane[auth]` extra
   - `allow_anonymous` on a named `oauth` endpoint
   - More than one authenticated endpoint
+  - A `Config` class that fails to load, when an endpoint uses `type: custom`
 - Some problems do not stop the server. OpenCrane serves without the protection in the following cases:
   - OpenCrane cannot parse `.opencrane/config.yaml`, so it treats `auth` as `none` and logs a warning.
   - A `custom` endpoint has no hook. OpenCrane logs a warning.
-  - OpenCrane does not load your `Config` class, so it starts without the middleware and the auth hooks. It logs a warning only when the class fails to load, or when a `custom` endpoint has no hook.
+  - OpenCrane does not find your `Config` class, so it starts without the middleware and the auth hooks, and logs nothing.
+  - Your `Config` class fails to load and no endpoint uses `type: custom`. OpenCrane starts without the middleware and logs a warning.

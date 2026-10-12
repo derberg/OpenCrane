@@ -12,6 +12,7 @@ The following table lists the metadata fields that can appear on every chunk typ
 | `section_anchor` | string, optional | In-page anchor of the section that the chunk came from. Only chunks with a `source_url` have it. A prose chunk takes it from the first heading of level two or deeper in its content. A list item or table row chunk takes it from the last segment of its `breadcrumb_path`, when the breadcrumb has two or more segments. | `"prerequisites"` |
 | `original_format` | string, optional | Original format of the content. Only CRD, OpenAPI, and JSON Schema chunks have it. Use it to convert the content back to that format, for example from a dictionary to YAML. | `"yaml"` |
 | `schema_type` | string, enum, optional | Schema category of YAML content: `"k8s_crd"`, `"openapi"`, or `"json_schema"`. Only CRD, OpenAPI, and JSON Schema chunks have it. | `"openapi"` |
+| `root_identity` | object, optional | Identity of a Kubernetes resource: its `apiVersion`, `kind`, `name`, and `namespace`. Only `yaml_content` chunks of a YAML document with `apiVersion`, `kind`, and `metadata.name` have it. | `{"apiVersion": "v1", "kind": "ConfigMap", "name": "app-config", "namespace": null}` |
 
 To link to a section, join the two fields as `{SOURCE_URL}#{SECTION_ANCHOR}`. Section anchors are on by default. To turn them off, set `section_anchor_style: none` in `.opencrane/config.yaml`.
 
@@ -93,14 +94,14 @@ A chunk without a leading heading continues the previous section and repeats its
 
 ## List Item Metadata
 
-A `list_item` chunk holds a single bullet or numbered item of a Markdown list. The chunker stores each item as its own chunk, so semantic search can match one item. The chunk of a top-level item holds the full item. The chunk of a nested item holds only the first line of each parent item and of the item itself. The metadata links each item to its list, so you can fetch the full list when you need it.
+A `list_item` chunk holds a single bullet or numbered item of a Markdown list. The chunker stores each item as its own chunk, so semantic search can match one item. The chunk of a top-level item holds the item text up to its first nested item, so it leaves out the nested items and any text after them. The chunk of a nested item holds only the first line of each parent item and of the item itself. The metadata links each item to its list, so you can fetch the full list when you need it.
 
 The following table lists the metadata fields of `list_item` chunks:
 
 | Field | Type | Description | Example |
 |---|---|---|---|
 | `breadcrumb_path` | string | Headings that the list sits under, joined by ` > `, or an empty string when no heading precedes the list. The chunker also adds it to the chunk content as a `#` line, so the embedding includes the heading context. | `"Migration guide > Upgrade to 1.7"` |
-| `list_id` | string | Stable identifier shared by all items of the same list. Pass it to `get_list_members(list_id=...)` to fetch the whole list. A nested list has a different `list_id` from its parent list. | `"9f2c4a7e1b0d3c58"` |
+| `list_id` | string | Stable identifier shared by all items of the same list. Lists on different pages with the same `breadcrumb_path` can share a `list_id`. Pass it to `get_list_members(list_id=...)` to fetch the whole list. A nested list has a different `list_id` from its parent list. | `"9f2c4a7e1b0d3c58"` |
 | `list_style` | string, enum | `"ordered"` for a numbered item (`1.`), `"unordered"` for a bulleted item (`-`, `*`, `+`). An ordered list is usually a procedure, where the order matters. | `"ordered"` |
 | `position` | integer, 1-indexed | Position of the item in its list. Use it to rebuild the list in order. | `1` for the first item |
 | `total_siblings` | integer | Number of items in the list, including this item. | `5` |
@@ -146,10 +147,6 @@ The following table lists the metadata fields of `table_row` chunks:
 The `sibling_previews` field gives you a short summary of the other rows. Use the previews to decide whether you need `get_table_members`, without fetching each row. Every preview is at most 30 characters long, and a cut-off preview ends with `…`.
 
 The array holds at most 15 previews. With more than 15 other rows, the array holds the first 15 previews and a 16th entry that reads literally `"... +N more"`, where N is the number of remaining rows.
-
-### Fetch the full table
-
-To fetch all `table_row` chunks of a table, call `get_table_members(table_id=...)`. The tool returns the chunks in `row_index` order. When a search result is a `table_row` chunk, the MCP `search_docs` tool adds a tip that names this tool.
 
 ### Search results with several rows of one table
 

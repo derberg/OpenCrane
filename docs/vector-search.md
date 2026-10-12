@@ -128,7 +128,7 @@ Each result contains the following fields:
 - `Type`: the chunk type
 - `Chunk ID`: the ID that the other tools take
 - `Token Count`: the size of the chunk
-- `Metadata`: the location, the section anchor, and the parent of a chunk that is not CRD, OpenAPI, or JSON Schema
+- `Metadata`: the location and the section anchor of the chunk. CRD, OpenAPI, and JSON Schema results have no `Metadata` block. A chunk from a custom tree walker also shows its parent path and its number of siblings.
 - `Content`: the chunk text, cut at 1,000 characters, with a tip that names the tool that returns the full text
 - `Score`: the score that orders the results. Its scale depends on the search mode and the reranker.
 
@@ -157,7 +157,7 @@ get_yaml_definition(chunk_id="{CHUNK_ID}")
 
 ### `get_metadata_schema`
 
-The `get_metadata_schema` tool returns the reference of the chunk metadata fields. [Chunk metadata schema](metadata-schema.md) has the same reference. The tool is available only when the index contains CRD, OpenAPI, JSON Schema, `list_item`, or `table_row` chunks, or prose chunks with navigation metadata.
+The `get_metadata_schema` tool returns the reference of the chunk metadata fields. [Chunk metadata schema](metadata-schema.md) has the same reference. The tool is available only when at least one other conditional tool is available. See [MCP tools](architecture.md#mcp-tools).
 
 The following table lists the parameter of `get_metadata_schema`:
 
@@ -215,7 +215,7 @@ The following table lists the parameters of `get_section`. Pass **chunk_id** or 
 | **chunk_id** | string | No | The chunk ID of a prose search result. It overrides **clause_id**. | none |
 | **clause_id** | string | No | The clause number from the section heading, for example `5.4.1.2a` or `Annex C`. | none |
 | **source** | string | No | Limits a **clause_id** lookup to pages whose source name, page URL, or page title contains this text. The match ignores case. | none |
-| **include_subsections** | boolean | No | Returns the full text of all sub-sections instead of a list of the direct sub-sections. | `false` |
+| **include_subsections** | boolean | No | Returns the full text of up to 50 sub-section chunks instead of a list of the direct sub-sections. | `false` |
 | **neighbors** | integer | No | The number of sections on the same page, from `0` to `5`, to add before and after the section. | `0` |
 
 The following example opens a clause:

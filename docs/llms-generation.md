@@ -25,9 +25,9 @@ In this mode, the step skips regeneration when Git reports no uncommitted or unt
 
 ## Choose what each bundle contains
 
-The source mapping file, `.opencrane/config.yaml` by default, controls which directories get an `llms-full.txt` file. The file shapes the output in the following ways:
+The source mapping file, `.opencrane/config.yaml` by default, controls which directories get a bundle. The file shapes the output in the following ways:
 
-- Only paths listed under the `sources:` key get an `llms-full.txt` file.
+- Only paths listed under the `sources:` key get a bundle.
 - Each bundle includes every `.md` file from the directory of the source and its subdirectories, except files under a directory listed in `ignore_patterns`. See [Top-level keys](source-mapping.md#top-level-keys).
 - Subdirectories do not get their own bundles.
 
@@ -53,8 +53,6 @@ From this file, the `llms` step generates the following bundles:
 - `.opencrane/llmstxt/another-project/llms-full.txt`, from `.opencrane/sources/another-project/`
 - `.opencrane/llmstxt/content-guidelines/writing/llms-full.txt`, from the local `content-guidelines/writing/` directory of the project
 
-A file in a subdirectory, for example `.opencrane/sources/my-project/guides/setup.md`, goes into the `my-project` bundle. OpenCrane writes no `.opencrane/llmstxt/my-project/guides/llms-full.txt`.
-
 If the source mapping file lists no sources, the step combines the `llms-full.txt` files that already exist in the subdirectories of `.opencrane/llmstxt/`.
 
 ## Bundle structure
@@ -66,7 +64,7 @@ The following table lists the markers that separate content within `llms-full.tx
 | `<!-- opencrane:page -->` | The individual files (pages) that make up one source |
 | `======` | One source's block from the next in the combined bundle |
 
-The page marker is an HTML comment, so it does not show when the Markdown is rendered. To split a bundle into pages, split on the page marker, not on `---`, because page content can contain Markdown thematic breaks.
+To split a bundle into pages, split on the page marker, not on `---`, because page content can contain Markdown thematic breaks.
 
 Each page begins with a `# {TITLE}` heading. See [Page titles](#page-titles).
 
@@ -74,7 +72,7 @@ The bundle holds no page URLs. OpenCrane records them in the companion `llms.txt
 
 OpenCrane changes the content of each page in the following ways:
 
-- Images become an `[Image removed: {ALT_TEXT}]` note. Without alt text, the note names the image file.
+- Images become an `[Image removed: {ALT_TEXT}]` note. Without alt text, the note names the image file for a Markdown image, and reads `image` for an HTML `<img>` tag.
 - A relative link to a Markdown file or an anchor becomes its link text. A link to a path without an extension counts as a link to a Markdown file.
 - An absolute-path link becomes `{LABEL} (link removed: {PATH})`.
 - A `data:` link becomes `{LABEL} (inline data removed)`.

@@ -528,3 +528,32 @@ class TestProseSplittingConfig:
         text = "## A heading that is longer than the token cap"
         chunks = ProseChunkingStrategy().process(_prose_node(text), Path("t.md"))
         assert [c.content for c in chunks] == [text]
+
+    def test_negative_cap_is_treated_as_off(self, monkeypatch):
+        monkeypatch.setenv("PROSE_MAX_CHUNK_TOKENS", "-1")
+        text = "## Section\n\nFirst paragraph here.\n\nSecond paragraph here."
+        chunks = ProseChunkingStrategy().process(_prose_node(text), Path("t.md"))
+        assert [c.content for c in chunks] == [text]
+
+    @pytest.mark.parametrize("marker", ["```", "~~~"])
+    def test_cap_never_splits_inside_a_code_fence(self, monkeypatch, marker):
+        monkeypatch.setenv("PROSE_MAX_CHUNK_TOKENS", "60")
+        code = "\n".join(f"x{i} = compute_value({i}, argument)" for i in range(4))
+        fence = f"{marker}python\n{code}\n\n{code}\n{marker}"
+        text = f"## Setup\n\n<Tabs>\nIntro sentence for the tab block.\n\n{fence}\n</Tabs>"
+        chunks = ProseChunkingStrategy().process(_prose_node(text), Path("t.md"))
+        assert len(chunks) > 1
+        assert sum(fence in c.content for c in chunks) == 1
+        for c in chunks:
+            assert c.content.count(marker) % 2 == 0
+
+    def test_cap_keeps_unclosed_fence_whole(self, monkeypatch):
+        monkeypatch.setenv("PROSE_MAX_CHUNK_TOKENS", "30")
+        code = "\n".join(f"step {i} runs a longer command line" for i in range(3))
+        fence = f"~~~~\n```\n{code}\n\n{code}\n```"  # backticks inside, never closed
+        text = f"## Steps\n\nIntro sentence before the steps.\n{fence}"
+        chunks = ProseChunkingStrategy().process(_prose_node(text), Path("t.md"))
+        assert [c.content for c in chunks] == [
+            "## Steps\n\nIntro sentence before the steps.",
+            f"## Steps\n\n{fence}",
+        ]

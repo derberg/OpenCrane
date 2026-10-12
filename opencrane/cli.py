@@ -48,7 +48,7 @@ def _read_config_yaml() -> dict:
 def _apply_config_yaml_settings(cfg) -> None:
     """Apply plain-data settings from ``.opencrane/config.yaml`` onto *cfg*.
 
-    Currently ``section_anchor_style`` and ``section_clause_pattern`` — so
+    Currently ``section_anchor_style`` and ``section_clause_pattern``, so
     anchors and clause ids can be tuned (or turned off with ``none``) from
     config.yaml without writing a Config subclass. A missing file/key leaves
     the class default in place.

@@ -165,7 +165,7 @@ get_yaml_definition(chunk_id="{CHUNK_ID}")
 
 ### `get_metadata_schema`
 
-The `get_metadata_schema` tool returns documentation of all metadata fields available in chunks. The tool is available only when the index contains CRD, OpenAPI, JSON Schema, `list_item`, or `table_row` chunks.
+The `get_metadata_schema` tool returns documentation of all metadata fields available in chunks. The tool is available only when the index contains CRD, OpenAPI, JSON Schema, `list_item`, or `table_row` chunks, or prose chunks with navigation metadata.
 
 The following table lists the parameter of `get_metadata_schema`:
 
@@ -177,7 +177,7 @@ The returned documentation covers the following:
 
 - Universal metadata fields (`source_url`, `original_format`, `schema_type`)
 - Hierarchical navigation metadata (`breadcrumb_path`, `logical_parent`, `neighbor_chunks`)
-- Type-specific metadata for CRD, OpenAPI, JSON Schema, `list_item`, and `table_row` chunks
+- Type-specific metadata for CRD, OpenAPI, JSON Schema, `list_item`, and `table_row` chunks, and the navigation metadata of prose chunks
 - Programmatic usage examples
 - MCP server integration patterns
 
@@ -229,6 +229,35 @@ The following example calls the tool:
 
 ```python
 get_table_members(table_id="{TABLE_ID}")
+```
+
+### `get_section`
+
+The `get_section` tool returns a whole prose section by the chunk ID of a search result or by its clause number. The tool is available only when the indexed prose chunks have navigation metadata. For the metadata fields, see [Prose navigation metadata](metadata-schema.md#prose-navigation-metadata).
+
+The following table lists the parameters of `get_section`. Pass `chunk_id` or `clause_id`:
+
+| Parameter | Type | Required | Description | Default value |
+|---|---|---|---|---|
+| `chunk_id` | string | No | The chunk ID of a prose chunk from the search results. It takes precedence over `clause_id`. | none |
+| `clause_id` | string | No | The clause number from the section heading, for example `5.4.1.2a`, `C.4.4.2`, or `Annex C`. | none |
+| `source` | string | No | Narrows a `clause_id` lookup when several pages have the same clause number. The tool looks for this text, ignoring case, in the source name, the page URL, and the page title. | none |
+| `include_subsections` | boolean | No | Returns the full text of all nested sub-sections instead of a list of the direct sub-sections. | `false` |
+| `neighbors` | integer | No | The number of sections before and after the section to return as well, from 0 to 5. The tool stops at the start and the end of the page. | `0` |
+
+Call `get_section` when you need one of the following:
+
+- The whole section around a prose search result, for example when the search result is truncated
+- A section that the user cites by its clause number
+- The sub-sections of a section, or the sections before and after it
+
+The tool returns the section text with its heading path, its source URL, and its chunk IDs. A clause with no text of its own, such as a `5` heading directly followed by `5.1`, returns a list of its sub-sections. If the clause number is on several pages, the tool lists the pages, so you can repeat the call with `source`. With authentication, the tool returns only sections from sources that the caller can search.
+
+The following example reads a section and the sections next to it, and then opens a clause by its number:
+
+```python
+get_section(chunk_id="{CHUNK_ID}", neighbors=1)
+get_section(clause_id="5.4.1.2a", source="{SOURCE_NAME}")
 ```
 
 ### `health`

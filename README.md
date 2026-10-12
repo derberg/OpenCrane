@@ -39,6 +39,7 @@ This README covers the following topics:
 - [Extend OpenCrane](#extend-opencrane)
   - [Extension points](#extension-points)
   - [Section anchors](#section-anchors)
+  - [Section navigation and clause IDs](#section-navigation-and-clause-ids)
   - [Built-in fence types](#built-in-fence-types)
   - [Built-in YAML tree walkers](#built-in-yaml-tree-walkers)
   - [Write a custom fence type](#write-a-custom-fence-type)
@@ -319,7 +320,8 @@ The server adds the following tools only when the index contains the chunk types
 | `get_list_members` | Returns every chunk of a Markdown list, in order. | List item |
 | `get_table_members` | Returns every row chunk of a Markdown table, in order. | Table row |
 | `get_yaml_definition` | Returns the full YAML definition behind a structured YAML chunk, for example a field of a Kubernetes CustomResourceDefinition. | CustomResourceDefinition, OpenAPI, or JSON Schema |
-| `get_metadata_schema` | Describes the metadata fields of the chunks. | List item, table row, CustomResourceDefinition, OpenAPI, or JSON Schema |
+| `get_section` | Returns a whole prose section by chunk ID or clause number, with its sub-sections and, on request, the sections before and after it. | Prose chunks with navigation metadata |
+| `get_metadata_schema` | Describes the metadata fields of the chunks. | List item, table row, CustomResourceDefinition, OpenAPI, JSON Schema, or prose with navigation metadata |
 
 The HTTP transport also exposes a health endpoint. For details, see [Health endpoint](#health-endpoint).
 
@@ -742,18 +744,20 @@ class Config(OpenCraneConfig):
 
 An override takes precedence over `section_anchor_style`.
 
-### Section navigation and clause ids
+### Section navigation and clause IDs
 
-Each prose chunk also records where it sits in its page: `heading_path` (the full heading ancestry, e.g. `TS 23.501 > 5 Functional description > 5.2 Network access control`), a `clause_id` taken from its section heading (e.g. `5.4.1.2a`, `C.4.4.2`, `Annex C`), `parent_chunk_id`, `position`, and `prev_chunk_id` / `next_chunk_id` links to the neighbouring prose chunks. `breadcrumb_path` keeps its existing `page title > section` form. This metadata is not embedded and not keyword-indexed, so search ranking is unchanged. The MCP server then offers a `get_section` tool that reads a section by `chunk_id` or by `clause_id` (optionally narrowed by `source`), with its sub-sections and its previous/next sections (a clause with no text of its own, such as a `5` heading directly followed by `5.1`, is answered with its sub-sections). Corpora chunked by an older version need a re-chunk and re-index (`opencrane chunk`, `opencrane embed`, `opencrane index`) before the tool appears; the index step rebuilds the collection automatically for the new columns.
+OpenCrane records where each prose chunk sits in its page. The MCP server uses this metadata in the `get_section` tool, which returns a whole section, its sub-sections, and the sections before and after it. An AI agent can also open a section by its clause number, for example `5.4.1.2a` or `Annex C`. This helps with specifications and standards, where readers cite clauses by number. For the metadata fields, see [Prose navigation metadata](docs/metadata-schema.md#prose-navigation-metadata). For the tool, see [`get_section`](docs/vector-search.md#get_section).
 
-**Choosing the clause pattern** — `section_clause_pattern` in `.opencrane/config.yaml` takes a regex matched at the start of each heading title (the first capture group is the id). The default recognises numbered headings like `5.4.1.2.2.8 Title`, `4c.4.3`, `6.1.1.2a`, `16.1.4B.1`, `C.4.4.2` and `Annex C`:
+The `clause_id` of a chunk comes from the start of its section heading. The default pattern recognizes numbered headings such as `5.4.1.2.2.8 Title`, `4c.4.3`, `16.1.4B.1`, `C.4.4.2`, and `Annex C`. To change it, set `section_clause_pattern` in `.opencrane/config.yaml` to a regular expression. OpenCrane matches the expression at the start of the heading text and uses its first capture group as the clause ID. The following example sets a pattern for plain dotted numbers and shows the value that turns clause IDs off:
 
 ```yaml
-# section_clause_pattern: '(\d+(?:\.\d+)*)\s'  # custom: plain dotted numbers only
-# section_clause_pattern: none                    # record no clause ids
+section_clause_pattern: '(\d+(?:\.\d+)*)\s'   # plain dotted numbers only
+# section_clause_pattern: none                # no clause IDs
 ```
 
-To turn the navigation metadata off entirely, set `prose_navigation = False` on your config subclass; override `section_clause_for(heading)` for a custom extraction rule.
+For a rule that a regular expression cannot express, override `section_clause_for(self, heading)` in your config subclass. To turn off the navigation metadata, set `prose_navigation = False` in your config subclass.
+
+An index built by an older OpenCrane version has no navigation metadata, so the server does not offer `get_section`. To add the metadata, run `opencrane chunk`, `opencrane embed`, and `opencrane index` again. The `index` step rebuilds the collection automatically.
 
 ### Built-in fence types
 

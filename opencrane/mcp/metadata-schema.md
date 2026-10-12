@@ -81,9 +81,9 @@ The following table lists the navigation fields of `prose` chunks:
 | `clause_id` | string, optional | Clause number from the section heading. Only a heading that starts with a clause number gives one. Pass it to `get_section(clause_id=...)`. | `"5.4.1.2a"`, `"C.4.4.2"`, `"Annex C"` |
 | `parent_chunk_id` | `chunk_id` string, or null | The chunk that holds the nearest enclosing section heading. The value is `null` for a top-level section. The direct sub-sections of a chunk are the chunks whose `parent_chunk_id` is that chunk. | `null` |
 | `position` | integer, 1-indexed | Position of the chunk among the prose chunks of its page. | `1` for the first prose chunk |
-| `prev_chunk_id`, `next_chunk_id` | `chunk_id` string, or null | The previous and the next prose chunk of the same page. The value is `null` at the start and at the end of the page. Code, list item, and table row chunks between two prose chunks are skipped. | `"a41e…"` (shortened) |
+| `prev_chunk_id`, `next_chunk_id` | `chunk_id` string, or null | The previous and the next prose chunk of the same page. The value is `null` at the start and at the end of the page. The links skip code, list item, and table row chunks between two prose chunks. | `"a41e…"` (shortened) |
 
-These fields do not change search ranking. Documents chunked by an older version of OpenCrane do not have them until you run `opencrane chunk`, `opencrane embed`, and `opencrane index` again.
+These fields do not change search ranking.
 
 ## List Item Metadata
 

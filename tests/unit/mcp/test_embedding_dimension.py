@@ -139,3 +139,17 @@ async def test_server_search_reports_dim_mismatch():
         out = await server._search_documentation_impl({"query": "q", "search_mode": "semantic"})
     assert "Search failed" in out[0].text
     assert "1024-dimensional" in out[0].text
+
+
+def test_empty_embeddings_keep_populated_collection_of_other_dim():
+    """An embeddings file without vectors says nothing about the model, so it
+    must not count as a model change and wipe a populated collection."""
+    milvus = MagicMock()
+    milvus.client.has_collection.return_value = True
+    milvus.field_names.return_value = {"list_id", "table_id"}
+    milvus.get_collection_stats.return_value = {"row_count": 65}
+    milvus.vector_dim.return_value = 1024
+    with patch('opencrane.mcp.init_vector_db.json.load', return_value=[]):
+        _run_init(milvus, [], dimensions=0)
+    milvus.client.drop_collection.assert_not_called()
+    milvus.create_collection.assert_not_called()

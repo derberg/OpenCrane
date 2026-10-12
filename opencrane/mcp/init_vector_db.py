@@ -76,7 +76,9 @@ def main():
             stats = milvus.get_collection_stats()
             populated = stats.get('row_count', 0) > 0
             existing_dim = milvus.vector_dim()
-            if populated and existing_dim not in (None, dim):
+            # Only real vectors identify the model. Without them the dim is a
+            # guess, and a guess must not wipe a populated collection.
+            if populated and embeddings.embeddings and existing_dim not in (None, dim):
                 # Vector size is fixed by the schema; a different embedding model
                 # is a schema change, so rebuild like any other schema upgrade.
                 logger.info(

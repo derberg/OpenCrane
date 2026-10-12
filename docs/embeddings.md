@@ -16,14 +16,14 @@ The `opencrane embed` command performs the following steps:
 
 ## Choose an embedding model
 
-To use a different model, set the `EMBEDDING_MODEL` environment variable. Models of any vector size work. A larger model can return better search results, and a smaller one embeds faster and uses less memory.
+To use a different model, set the `EMBEDDING_MODEL` environment variable.
 
-Run the MCP server with the same model that generated the embeddings. If the MCP server uses a model with a different vector size, semantic and hybrid searches fail with an error that names both sizes.
+Any vector size works. A larger model can improve results, and a smaller one embeds faster. Run the MCP server with the same model.
 
 > [!CAUTION]
-> When `opencrane index` rebuilds the collection, the command first deletes the existing Milvus collection. On a Milvus server that an MCP server already uses, searches fail until the rebuild finishes. Before you run the command, confirm that `MILVUS_COLLECTION` and the connection variables point to the collection that you want to replace.
+> Each rebuild by `opencrane index` deletes the collection first, and searches fail until the rebuild finishes. Check that `MILVUS_COLLECTION` and the connection variables name the collection to replace.
 
-After you change the model, run `opencrane embed` and `opencrane index` again. If the new model has a different vector size, the `index` step deletes the old collection and builds a new one. If the vector size stays the same, set `DROP_EXISTING=true` for the `index` step. Without it, the `index` step keeps the vectors of the old model.
+After you change the model, run `opencrane embed` and `opencrane index` again. If the vector size stays the same, set `DROP_EXISTING=true`, or `index` keeps the old vectors.
 
 ## Collection schema
 
@@ -32,7 +32,7 @@ When the `index` step loads the embeddings into Milvus, each chunk becomes one r
 | Field | Type | Notes |
 |---|---|---|
 | `chunk_id` | `VARCHAR` | Primary key. `max_length` 64 |
-| `embedding` | `FLOAT_VECTOR` | Vector size of the embedding model. 768 for the default model |
+| `embedding` | `FLOAT_VECTOR` | Vector size of the model, 768 by default |
 | `content` | `VARCHAR` | `max_length` 65,535 |
 | `source_file` | `VARCHAR` | `max_length` 512 |
 | `source_name` | `VARCHAR` | `max_length` 256 |

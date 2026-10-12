@@ -120,7 +120,7 @@ For the full field reference, see [Chunk metadata schema](metadata-schema.md).
 
 ### Embed
 
-The `opencrane embed` command generates a vector embedding for each chunk in `.opencrane/chunks.json` and writes the results to `.opencrane/embeddings.json`. It uses the `sentence-transformers` library with `nomic-ai/nomic-embed-text-v1.5` as the default model. To change the model, set the `EMBEDDING_MODEL` environment variable, as described in [Choose an embedding model](embeddings.md#choose-an-embedding-model). The command processes chunks in batches to limit memory use.
+The `opencrane embed` command generates a vector embedding for each chunk in `.opencrane/chunks.json` and writes the results to `.opencrane/embeddings.json`. It uses the `sentence-transformers` library with `nomic-ai/nomic-embed-text-v1.5` as the default model. To change the model, see [Choose an embedding model](embeddings.md#choose-an-embedding-model). The command processes chunks in batches to limit memory use.
 
 ### Index
 

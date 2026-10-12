@@ -164,3 +164,13 @@ def test_build_env_var_dir_without_output_stops(runner, tmp_path, monkeypatch):
     assert result.exit_code == 0
     assert "Nothing to process" in result.output
     chunk_main.assert_not_called()
+
+
+def test_runtime_image_uses_the_embedding_model_it_downloaded():
+    """The runtime stage sets EMBEDDING_MODEL, so the server encodes queries with
+    the model the build baked in, not the default."""
+    from opencrane.templates import DOCKERFILE
+
+    runtime = DOCKERFILE.split("# Stage 4", 1)[1]
+    assert "ARG EMBEDDING_MODEL=" in runtime
+    assert "ENV EMBEDDING_MODEL=${EMBEDDING_MODEL}" in runtime

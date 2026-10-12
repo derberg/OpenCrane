@@ -163,6 +163,8 @@ RUN mkdir -p /build/milvus_data && opencrane index
 # =============================================================================
 FROM python:3.11-slim
 
+# The server must encode queries with the model that built the index.
+ARG EMBEDDING_MODEL=nomic-ai/nomic-embed-text-v1.5
 ARG RERANKER_MODEL=
 
 WORKDIR /app
@@ -185,6 +187,7 @@ ENV MILVUS_COLLECTION=opencrane_chunks
 ENV MCP_HTTP_PORT=8000
 ENV PYTHONUNBUFFERED=1
 ENV TRANSFORMERS_OFFLINE=1
+ENV EMBEDDING_MODEL=${EMBEDDING_MODEL}
 ENV RERANKER_MODEL=${RERANKER_MODEL}
 
 EXPOSE 8000

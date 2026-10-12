@@ -237,13 +237,13 @@ The `get_section` tool returns a whole prose section, for example when a search 
 
 The following table lists the parameters of `get_section`. Pass `chunk_id` or `clause_id`:
 
-| Parameter | Type | Required | Description | Default value |
-|---|---|---|---|---|
-| `chunk_id` | string | No | Chunk ID of a prose search result. It overrides `clause_id`. | none |
-| `clause_id` | string | No | Clause number from the section heading. | none |
-| `source` | string | No | Part of the source name, page URL, or page title. | none |
-| `include_subsections` | boolean | No | Returns the sub-sections in full instead of as a list. | `false` |
-| `neighbors` | integer | No | Number of sections, `0` to `5`, to add before and after. | `0` |
+| Parameter | Type | Description | Default value |
+|---|---|---|---|
+| `chunk_id` | string | Chunk ID of a prose search result. It overrides `clause_id`. | none |
+| `clause_id` | string | Clause number from the section heading. | none |
+| `source` | string | Part of the source name, page URL, or page title. | none |
+| `include_subsections` | boolean | Returns the sub-sections in full instead of as a list. | `false` |
+| `neighbors` | integer | Number of sections, `0` to `5`, to add before and after. | `0` |
 
 The following example opens a clause:
 

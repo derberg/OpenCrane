@@ -71,10 +71,6 @@ Chunks of JSON Schema documents, with `chunk_type: "json_schema"`, carry the fol
 
 ## Prose navigation metadata
 
-Use the navigation fields to find the whole section of a prose search result and the chunks around it.
-
-A chunk without a leading heading continues the previous section and repeats its `heading_path`, `clause_id`, and `parent_chunk_id`.
-
 Chunks with `chunk_type: "prose"` carry the following navigation fields:
 
 | Field | Type | Description | Example |
@@ -84,6 +80,8 @@ Chunks with `chunk_type: "prose"` carry the following navigation fields:
 | `parent_chunk_id` | `chunk_id` string, or null | Chunk of the enclosing section, or `null` at the top level. | `null` |
 | `position` | integer, 1-indexed | Position of the chunk among the prose chunks of its page. | `1` |
 | `prev_chunk_id`, `next_chunk_id` | `chunk_id` string, or null | Previous and next prose chunk of the page, or `null` at the page edges. | `"a41e…"` (shortened) |
+
+A chunk without a leading heading continues the previous section and repeats its `heading_path`, `clause_id`, and `parent_chunk_id`.
 
 To set the clause format, see [Section navigation and clause IDs](../README.md#section-navigation-and-clause-ids).
 

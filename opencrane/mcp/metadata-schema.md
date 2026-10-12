@@ -69,10 +69,6 @@ The following table lists the metadata fields of `json_schema` chunks:
 
 ## Prose Navigation Metadata
 
-Use the navigation fields to find the whole section of a prose search result and the chunks around it.
-
-A chunk without a leading heading continues the previous section and repeats its `heading_path`, `clause_id`, and `parent_chunk_id`.
-
 The following table lists the navigation fields of `prose` chunks:
 
 | Field | Type | Description | Example |
@@ -82,6 +78,8 @@ The following table lists the navigation fields of `prose` chunks:
 | `parent_chunk_id` | `chunk_id` string, or null | Chunk of the enclosing section, or `null` at the top level. | `null` |
 | `position` | integer, 1-indexed | Position of the chunk among the prose chunks of its page. | `1` |
 | `prev_chunk_id`, `next_chunk_id` | `chunk_id` string, or null | Previous and next prose chunk of the page, or `null` at the page edges. | `"a41e…"` (shortened) |
+
+A chunk without a leading heading continues the previous section and repeats its `heading_path`, `clause_id`, and `parent_chunk_id`.
 
 ## List Item Metadata
 

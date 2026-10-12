@@ -472,6 +472,11 @@ class FileProcessor:
                 for line in page_text.split('\n'):
                     stripped_line = line.lstrip()
                     if stripped_line.startswith('<Tabs>') or stripped_line.startswith('<Tabs '):
+                        if not in_html_block and not in_code_block:
+                            # Flush the prose before the block so it is not
+                            # merged into it (and claimed by the code strategy).
+                            emit('\n'.join(current_section).strip())
+                            current_section = []
                         in_html_block = True
                         html_block_depth += line.count('<Tabs')
 
@@ -615,6 +620,13 @@ class FileProcessor:
                     # Ignore inline mentions like "use the `<Tabs>` tag"
                     stripped_line = line.lstrip()
                     if stripped_line.startswith('<Tabs>') or stripped_line.startswith('<Tabs '):
+                        if not in_html_block and not in_code_block:
+                            # Flush the prose before the block so it is not
+                            # merged into it (and claimed by the code strategy).
+                            section_text = '\n'.join(current_section).strip()
+                            if section_text:
+                                sections.append(_emit(section_text))
+                            current_section = []
                         in_html_block = True
                         html_block_depth += line.count('<Tabs')
                     

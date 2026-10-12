@@ -19,6 +19,30 @@ To use a different model, set the `EMBEDDING_MODEL` environment variable.
 > [!IMPORTANT]
 > The Milvus collection stores 768-dimension vectors, which matches the default model. Choose a model that produces 768-dimension vectors. If the model produces vectors of another size, the `index` step cannot load them.
 
+## Embedding prompts
+
+Many retrieval models expect one prompt on documents and another on queries, and they return worse results without them. OpenCrane reads the prompts from the following environment variables:
+
+- `EMBEDDING_DOCUMENT_PROMPT`: a prefix that the `embed` step adds to every chunk.
+- `EMBEDDING_QUERY_PROMPT`: applied to each query by `serve` and `visualize`. Write it as a template with a `{query}` placeholder, or as a plain prefix.
+
+Both variables are empty by default, so OpenCrane encodes text as it is. A literal `\n` in either value becomes a newline. The following table lists the prompts for common models:
+
+| Model | `EMBEDDING_DOCUMENT_PROMPT` | `EMBEDDING_QUERY_PROMPT` |
+|---|---|---|
+| `nomic-ai/nomic-embed-text-v1.5`, the default | `search_document: ` | `search_query: ` |
+| Qwen3-Embedding | empty | `Instruct: Given a question, retrieve passages that answer it\nQuery: {query}` |
+
+The document prompt is part of every stored vector, so a change to `EMBEDDING_DOCUMENT_PROMPT` requires new embeddings and a new index. The `embed` step records the prompt in `embeddings.json` and regenerates the embeddings when the prompt changes. The `index` step keeps a collection that already has rows, so run it with `DROP_EXISTING=true`:
+
+```bash
+export EMBEDDING_DOCUMENT_PROMPT="search_document: "
+export EMBEDDING_QUERY_PROMPT="search_query: "
+opencrane embed && DROP_EXISTING=true opencrane index
+```
+
+A change to `EMBEDDING_QUERY_PROMPT` takes effect when you restart the server. When a document prompt is set without a query prompt, `serve` logs a warning.
+
 ## Collection schema
 
 When the `index` step loads the embeddings into Milvus, each chunk becomes one record in the collection. The following table lists the fields of each record:

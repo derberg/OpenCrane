@@ -69,6 +69,22 @@ Chunks of JSON Schema documents, with `chunk_type: "json_schema"`, carry the fol
 | `property_path` | string, optional | Dot-separated path without the `properties` keywords. Only property chunks have it. Use it to show a short property path. | Simple: `"username"`<br>Nested: `"config.database"`<br>Array items: `"volumes.items.name"` |
 | `definition_name` | string, optional | Definition name. Only definition chunks have it. | `"address"`, `"phoneNumber"` |
 
+## Prose navigation metadata
+
+Chunks with `chunk_type: "prose"` carry the following navigation fields:
+
+| Field | Type | Description | Example |
+|---|---|---|---|
+| `heading_path` | string, optional | Section heading and the headings above it, joined by ` > `. | `"Setup Guide > Install > Prerequisites"` |
+| `clause_id` | string, optional | Clause number at the start of the section heading. Pass it to `get_section(clause_id=...)`. | `"5.4.1.2a"`, `"Annex C"` |
+| `parent_chunk_id` | `chunk_id` string, or null | Chunk of the enclosing section, or `null` at the top level. | `null` |
+| `position` | integer, 1-indexed | Position of the chunk among the prose chunks of its page. | `1` |
+| `prev_chunk_id`, `next_chunk_id` | `chunk_id` string, or null | Previous and next prose chunk of the page, or `null` at the page edges. | `"a41e…"` (shortened) |
+
+A chunk without a leading heading continues the previous section and repeats its `heading_path`, `clause_id`, and `parent_chunk_id`.
+
+To set the clause format, see [Section navigation and clause IDs](../README.md#section-navigation-and-clause-ids).
+
 ## List item metadata
 
 A `list_item` chunk holds a single bullet or numbered item of a Markdown list. The chunker stores each item as its own chunk, so semantic search can match one item. The metadata links each item to its list, so you can fetch the full list when you need it.

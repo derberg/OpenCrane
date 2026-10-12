@@ -154,7 +154,13 @@ def _register_tools(mcp, source_keys=None):
         _register(mcp, "get_yaml_definition", s.GET_YAML_DEFINITION_TOOL_DESCRIPTION,
                   s.GET_YAML_DEFINITION_TOOL_SCHEMA, s.get_yaml_definition)
 
-    if s._has_yaml_chunks() or s._has_list_item_chunks() or s._has_table_row_chunks():
+    has_prose_navigation = s._has_prose_navigation()
+    if has_prose_navigation:
+        _register(mcp, "get_section", s.GET_SECTION_TOOL_DESCRIPTION,
+                  s.GET_SECTION_TOOL_SCHEMA, s.get_section)
+
+    if (s._has_yaml_chunks() or s._has_list_item_chunks() or s._has_table_row_chunks()
+            or has_prose_navigation):
         _register(mcp, "get_metadata_schema", s.GET_METADATA_SCHEMA_TOOL_DESCRIPTION,
                   s.GET_METADATA_SCHEMA_TOOL_SCHEMA, s.get_metadata_schema)
 

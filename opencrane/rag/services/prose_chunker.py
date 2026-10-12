@@ -11,6 +11,16 @@ from opencrane.shared.utils.token_counter import get_token_count
 
 logger = logging.getLogger(__name__)
 
+_HEADING_LINE_RE = re.compile(r'^#{1,6}[ \t]+\S')
+
+
+def _strip_heading_urls(text: str) -> str:
+    """Strip source-URL markers from headings (they're already in source_url metadata)."""
+    # Bracketed URL: # [https://...] Title -> # Title
+    text = re.sub(r'^(#{1,6})\s+\[https?://[^\]]+\]\s+', r'\1 ', text, flags=re.MULTILINE)
+    # Bare URL: # https://github.com/... Title -> # Title
+    return re.sub(r'^(#{1,6})\s+https://[^\s]+\s+', r'\1 ', text, flags=re.MULTILINE)
+
 
 def _heading_level(stripped: str) -> int:
     """Return the number of leading ``#`` characters (0 for a non-heading line)."""
@@ -104,6 +114,10 @@ class ProseChunkingStrategy(ProcessingStrategy):
         self._current_tokens = 0
         self._current_source_url = None
         self._node_source_url = getattr(node, 'source_url', None)
+        # Headings of sections dropped for having no text of their own (e.g. a
+        # "## 5 Title" directly followed by "### 5.1 ..."). They are handed to the
+        # next chunk (never serialized) so its heading ancestry stays complete.
+        self._skipped_headings = []
         config = get_config()
         self._split_depth = config.prose_split_heading_depth
         self._max_tokens = config.prose_max_chunk_tokens
@@ -165,12 +179,18 @@ class ProseChunkingStrategy(ProcessingStrategy):
 
         A heading-only section is dropped unless heading-only sections are
         kept; a section over the token cap is split by ``_split_oversized``.
+        The headings of a section that produces no chunk are handed to the next
+        chunk, so its heading ancestry stays complete.
         """
+        emitted = False
         if self._keep_heading_only or self._has_content():
             for piece in self._split_oversized(self._current_chunk):
                 chunk = self._create_chunk(source_file, piece)
                 if chunk:
                     chunks.append(chunk)
+                    emitted = True
+        if not emitted:
+            self._skip_headings()
         self._current_chunk = ""
         self._current_tokens = 0
 
@@ -229,12 +249,7 @@ class ProseChunkingStrategy(ProcessingStrategy):
         if not content:
             return None  # pragma: no cover
         
-        # Strip source URLs from headings (they're already in source_url metadata)
-        # Bracketed URL: # [https://...] Title -> # Title
-        content = re.sub(r'^(#{1,6})\s+\[https?://[^\]]+\]\s+', r'\1 ', content, flags=re.MULTILINE)
-        # Bare URL: # https://github.com/... Title -> # Title
-        content = re.sub(r'^(#{1,6})\s+https://[^\s]+\s+', r'\1 ', content, flags=re.MULTILINE)
-        content = content.strip()
+        content = _strip_heading_urls(content).strip()
         
         # Garbage filtering
         if len(content) < 15:
@@ -265,7 +280,7 @@ class ProseChunkingStrategy(ProcessingStrategy):
             metadata=metadata
         )
 
-        return Chunk(
+        chunk = Chunk(
             chunk_id=chunk_id,
             content=content,
             source_file=str(source_file),
@@ -273,6 +288,15 @@ class ProseChunkingStrategy(ProcessingStrategy):
             metadata=metadata,
             token_count=get_token_count(content),
         )
+        chunk._preceding_headings = getattr(self, "_skipped_headings", [])
+        self._skipped_headings = []
+        return chunk
+
+    def _skip_headings(self) -> None:
+        """Remember the heading lines of accumulated text that produced no chunk."""
+        for line in _strip_heading_urls(self._current_chunk).split('\n'):
+            if _HEADING_LINE_RE.match(line.strip()):
+                self._skipped_headings.append(line.strip())
 
     def _has_content(self) -> bool:
         """Return True when current chunk has non-header content."""

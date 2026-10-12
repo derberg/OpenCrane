@@ -58,7 +58,7 @@ class TestInitVectorDb:
         mock_milvus = MagicMock()
         mock_milvus_class.return_value = mock_milvus
         mock_milvus.client.has_collection.return_value = True
-        mock_milvus.field_names.return_value = {"list_id", "table_id"}
+        mock_milvus.field_names.return_value = {"list_id", "table_id", "clause_id", "parent_chunk_id"}
         mock_milvus.get_collection_stats.return_value = {"row_count": 65}
         mock_milvus.vector_dim.return_value = 768
         mock_embedding_service.load_embeddings.return_value.embeddings = [
@@ -119,7 +119,7 @@ class TestInitVectorDb:
         mock_milvus = MagicMock()
         mock_milvus_class.return_value = mock_milvus
         mock_milvus.client.has_collection.return_value = True
-        mock_milvus.field_names.return_value = {"list_id", "table_id"}
+        mock_milvus.field_names.return_value = {"list_id", "table_id", "clause_id", "parent_chunk_id"}
         mock_milvus.get_collection_stats.return_value = {"row_count": 0}
 
         main()

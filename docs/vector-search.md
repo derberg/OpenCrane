@@ -166,7 +166,7 @@ get_yaml_definition(chunk_id="{CHUNK_ID}")
 
 ### `get_metadata_schema`
 
-The `get_metadata_schema` tool returns documentation of all metadata fields available in chunks. The tool is available only when the index contains CRD, OpenAPI, JSON Schema, `list_item`, or `table_row` chunks.
+The `get_metadata_schema` tool returns documentation of all metadata fields available in chunks. The tool is available only when the index contains CRD, OpenAPI, JSON Schema, `list_item`, or `table_row` chunks, or prose chunks with navigation metadata.
 
 The following table lists the parameter of `get_metadata_schema`:
 
@@ -178,7 +178,7 @@ The returned documentation covers the following:
 
 - Universal metadata fields (`source_url`, `original_format`, `schema_type`)
 - Hierarchical navigation metadata (`breadcrumb_path`, `logical_parent`, `neighbor_chunks`)
-- Type-specific metadata for CRD, OpenAPI, JSON Schema, `list_item`, and `table_row` chunks
+- Type-specific metadata for CRD, OpenAPI, JSON Schema, `list_item`, `table_row`, and prose chunks
 - Programmatic usage examples
 - MCP server integration patterns
 
@@ -230,6 +230,26 @@ The following example calls the tool:
 
 ```python
 get_table_members(table_id="{TABLE_ID}")
+```
+
+### `get_section`
+
+The `get_section` tool returns a whole prose section, for example when a search result is truncated. The tool is available only when the prose chunks have [navigation metadata](metadata-schema.md#prose-navigation-metadata).
+
+The following table lists the parameters of `get_section`. Pass `chunk_id` or `clause_id`:
+
+| Parameter | Type | Description | Default value |
+|---|---|---|---|
+| `chunk_id` | string | Chunk ID of a prose search result. It overrides `clause_id`. | none |
+| `clause_id` | string | Clause number from the section heading. | none |
+| `source` | string | Part of the source name, page URL, or page title. | none |
+| `include_subsections` | boolean | Returns the sub-sections in full instead of as a list. | `false` |
+| `neighbors` | integer | Number of sections, `0` to `5`, to add before and after. | `0` |
+
+The following example opens a clause:
+
+```python
+get_section(clause_id="5.4.1.2a", source="{SOURCE_NAME}")
 ```
 
 ### `health`

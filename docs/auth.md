@@ -3,7 +3,7 @@
 The OpenCrane HTTP transport supports two independent layers of access control:
 
 - Authentication controls who can connect. OpenCrane implements it with OAuth 2.1 through the Model Context Protocol (MCP) Python software development kit (SDK). The `auth.type` key selects the mode.
-- Authorization controls which sources a caller can retrieve. A mapping from each OAuth scope to a list of source names sets the policy. The server applies it to every `search_docs` call. The tools that fetch a chunk, list, or table by ID do not apply it. For details, see [Security notes](#security-notes).
+- Authorization controls which sources a caller can retrieve. A mapping from each OAuth scope to a list of source names sets the policy. The server applies it to every `search_docs` and `get_section` call. The other tools that fetch content by ID do not apply it. For details, see [Security notes](#security-notes).
 
 The standard input/output (stdio) transport is always unauthenticated. According to the MCP specification, the stdio transport uses credentials from the environment instead. For details, see [Access control over the stdio transport](#access-control-over-the-stdio-transport).
 
@@ -12,7 +12,7 @@ The standard input/output (stdio) transport is always unauthenticated. According
 The `auth:` block sets the authentication mode. Place it at the top level of the `.opencrane/config.yaml` file.
 
 > [!CAUTION]
-> With the default `type: none`, OpenCrane has no authentication. Anyone who can reach the HTTP port can read every source. Before you expose the server on a network, set another type, or index only sources that anyone may read. `default_sources` limits `search_docs` only. The `get_yaml_definition`, `get_list_members`, and `get_table_members` tools still return chunks from any indexed source. Custom MCP tools must filter their own output. See [Add custom MCP tools](../README.md#add-custom-mcp-tools).
+> With the default `type: none`, OpenCrane has no authentication. Anyone who can reach the HTTP port can read every source. Before you expose the server on a network, set another type, or index only sources that anyone may read. `default_sources` limits `search_docs` and `get_section` only. The `get_yaml_definition`, `get_list_members`, and `get_table_members` tools still return chunks from any indexed source. Custom MCP tools must filter their own output. See [Add custom MCP tools](../README.md#add-custom-mcp-tools).
 
 The following example sets the default mode:
 
@@ -473,7 +473,7 @@ The following notes summarize the security behavior of authentication and author
 - The `oauth` mode rejects tokens that were not issued for `oidc.audience`, which prevents confused-deputy attacks. The exception is `oidc.verify_audience: false`, which skips this check.
 - In the `local` mode, credentials come only from environment variables, never from the `.opencrane/config.yaml` file. Token matching uses a constant-time comparison.
 - OpenCrane enforces authorization by source on the server. The `source_names` parameter from the client can only narrow the set of accessible sources, never expand it.
-- The source policy applies to `search_docs` only. The `get_yaml_definition`, `get_list_members`, and `get_table_members` tools return any chunk whose ID, `list_id`, or `table_id` the caller supplies, whatever its source.
+- The source policy applies to `search_docs` and `get_section` only. The `get_yaml_definition`, `get_list_members`, and `get_table_members` tools return any chunk whose ID, `list_id`, or `table_id` the caller supplies, whatever its source.
 - An open endpoint without `default_sources`, or `allow_anonymous: true` without a source policy, gives anyone every source.
 - Misconfigured authentication fails closed. OpenCrane raises an error at startup and refuses to serve in the following cases:
   - A missing `PUBLIC_URL`

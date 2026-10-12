@@ -460,6 +460,17 @@ def _has_yaml_chunks() -> bool:
     return bool(_get_indexed_chunk_types() & _YAML_CHUNK_TYPES)
 
 
+def _has_prose_navigation() -> bool:
+    """Check whether indexed prose chunks carry navigation metadata (``get_section``).
+
+    Indexes chunked before prose navigation existed have none, so the tool stays
+    hidden until the corpus is re-chunked and re-indexed.
+    """
+    if "prose" not in _get_indexed_chunk_types():
+        return False
+    return get_milvus_service().has_prose_navigation() is True
+
+
 def _topic_name(key: str) -> str:
     """Human-readable topic name from a source path key.
 
@@ -679,6 +690,38 @@ GET_METADATA_SCHEMA_TOOL_SCHEMA = {
     "required": []
 }
 
+GET_SECTION_TOOL_DESCRIPTION = "Read a whole documentation section by chunk_id or by clause number. Use search_docs to find information. Use get_section when a prose search result is cut off, when the question names a clause such as '5.4.1.2a' or 'Annex C', or when you need the sub-sections or the sections before and after a result. Returns the section text with its heading path and a list of its direct sub-sections."
+GET_SECTION_TOOL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "chunk_id": {
+            "type": "string",
+            "description": "Prose chunk ID from search results (the 'Chunk ID:' field); overrides clause_id"
+        },
+        "clause_id": {
+            "type": "string",
+            "description": "Clause number as written in the heading, for example '5.4.1.2.2.8', '6.1.1.2a', 'C.4.4.2', or 'Annex C'"
+        },
+        "source": {
+            "type": "string",
+            "description": "Narrows a clause_id lookup to pages whose source name, page URL, or page title contains this text. The match ignores case."
+        },
+        "include_subsections": {
+            "type": "boolean",
+            "description": "Returns the full text of all nested sub-sections instead of a list of the direct sub-sections.",
+            "default": False
+        },
+        "neighbors": {
+            "type": "integer",
+            "description": "Number of sections to return before and after the section on the same page, in document order",
+            "default": 0,
+            "minimum": 0,
+            "maximum": 5
+        }
+    },
+    "required": []
+}
+
 
 # Names of every built-in tool, whether or not it is currently advertised.
 # Project ``extra_tools`` may not reuse these. Add every new built-in tool here
@@ -744,7 +787,15 @@ async def list_tools() -> list[Tool]:
             inputSchema=GET_YAML_DEFINITION_TOOL_SCHEMA,
         ))
 
-    if _has_yaml_chunks() or _has_list_item_chunks() or _has_table_row_chunks():
+    has_prose_navigation = _has_prose_navigation()
+    if has_prose_navigation:
+        tools.append(Tool(
+            name="get_section",
+            description=GET_SECTION_TOOL_DESCRIPTION,
+            inputSchema=GET_SECTION_TOOL_SCHEMA,
+        ))
+
+    if _has_yaml_chunks() or _has_list_item_chunks() or _has_table_row_chunks() or has_prose_navigation:
         tools.append(Tool(
             name="get_metadata_schema",
             description=GET_METADATA_SCHEMA_TOOL_DESCRIPTION,
@@ -776,6 +827,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         "get_metadata_schema": get_metadata_schema,
         "get_list_members": get_list_members,
         "get_table_members": get_table_members,
+        "get_section": get_section,
     }
 
     handler = _TOOL_HANDLERS.get(name)
@@ -929,7 +981,10 @@ async def _search_documentation_impl(
                 result_text += f"Content:\n{display_content[:1000]}\n"
                 if len(display_content) > 1000:
                     result_text += f"...(truncated - {len(display_content)} total chars)\n"
-                    result_text += f"💡 Tip: Use get_yaml_definition tool with chunk_id='{chunk_id}' to retrieve the complete definition with breadcrumb comments.\n"
+                    if chunk_type == "prose" and "position" in (metadata or {}):
+                        result_text += f"💡 Tip: Use get_section(chunk_id='{chunk_id}') to read the whole section.\n"
+                    else:
+                        result_text += f"💡 Tip: Use get_yaml_definition tool with chunk_id='{chunk_id}' to retrieve the complete definition with breadcrumb comments.\n"
                 elif chunk_type in ("crd_definition", "openapi_spec", "json_schema"):
                     result_text += f"💡 Tip: Use get_yaml_definition(chunk_id='{chunk_id}') to see this with breadcrumb comments showing its location in the YAML tree and neighbor chunks.\n"
                 if chunk_type == "table_row":
@@ -1322,7 +1377,7 @@ _CHUNK_TYPE_SECTION_HEADINGS = {
     "crd_definition": "CRD-Specific Metadata",
     "openapi_spec": "OpenAPI-Specific Metadata",
     "json_schema": "JSON Schema-Specific Metadata",
-    "prose": "Universal Metadata",
+    "prose": "Prose Navigation Metadata",
     "code_snippet": "Universal Metadata",
     "yaml_content": "Universal Metadata",
 }
@@ -1438,6 +1493,371 @@ async def get_table_members(arguments: dict) -> list[TextContent]:
         lines.append(content)
         lines.append("")
     return [TextContent(type="text", text="\n".join(lines).strip() + "\n")]
+
+
+# get_section limits: neighbour sections per side, sub-section chunks returned
+# in full, and chunks walked when following continuation links.
+_SECTION_MAX_NEIGHBORS = 5
+_SECTION_MAX_SUBSECTION_CHUNKS = 50
+_SECTION_WALK_CAP = 200
+
+_SECTION_HEADING_LINE_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*$")
+
+
+def _with_metadata(row: dict) -> dict:
+    """Copy a Milvus row and attach its parsed ``metadata`` dict."""
+    meta = row.get("metadata_json")
+    try:
+        metadata = json.loads(meta) if isinstance(meta, str) else (meta or {})
+    except (json.JSONDecodeError, TypeError, ValueError):
+        metadata = {}
+    out = dict(row)
+    out["metadata"] = metadata if isinstance(metadata, dict) else {}
+    return out
+
+
+def _fetch_prose(chunk_id: str | None) -> dict | None:
+    """Fetch a prose chunk by primary key (with parsed metadata), or None."""
+    if not chunk_id:
+        return None
+    row = get_milvus_service().get_chunk(chunk_id)
+    if not row or row.get("chunk_type") != "prose":
+        return None
+    return _with_metadata(row)
+
+
+def _opens_with_heading(content) -> bool:
+    """True when the first non-blank line of *content* is a markdown heading."""
+    for line in str(content or "").split("\n"):
+        if line.strip():
+            return bool(_SECTION_HEADING_LINE_RE.match(line.strip()))
+    return False
+
+
+def _section_head(row: dict) -> dict:
+    """Walk back over continuation chunks to the chunk that opens the section."""
+    for _ in range(_SECTION_WALK_CAP):
+        if _opens_with_heading(row.get("content")):
+            break
+        previous = _fetch_prose(row["metadata"].get("prev_chunk_id"))
+        if previous is None:
+            break
+        row = previous
+    return row
+
+
+def _section_chunks(head: dict) -> list[dict]:
+    """The section's chunks: *head* plus the continuation chunks that follow it."""
+    rows = [head]
+    for _ in range(_SECTION_WALK_CAP):
+        following = _fetch_prose(rows[-1]["metadata"].get("next_chunk_id"))
+        if following is None or _opens_with_heading(following.get("content")):
+            break
+        rows.append(following)
+    return rows
+
+
+def _permitted_sources() -> set | None:
+    """Source names the caller may read (``None`` = unrestricted).
+
+    Mirrors search_docs' Layer-2 authorization so get_section cannot read a
+    section of a source the caller could not find through search.
+    """
+    from opencrane.mcp.auth.runtime import (
+        current_allowed_sources,
+        current_scopes,
+        get_access_policy,
+    )
+    allowed = current_allowed_sources()
+    if allowed is not None:
+        return set(allowed)
+    decision = get_access_policy().authorize(current_scopes(), None)
+    return None if decision is None else set(decision)
+
+
+def _clause_candidates(clause: str) -> list[str]:
+    """The clause itself, then its enclosing clauses (``5.4.1`` → ``5.4`` → ``5``).
+
+    Headings deeper than the chunking boundary live inside their parent's chunk,
+    so a clause with no chunk of its own is found through its nearest enclosing
+    clause. An annex clause (``C.4``) also falls back to ``Annex C``.
+    """
+    parts = clause.split(".")
+    candidates = [".".join(parts[:i]) for i in range(len(parts), 0, -1)]
+    if re.fullmatch(r"[A-Z]{1,2}", parts[0]):
+        candidates.append(f"Annex {parts[0]}")
+    return candidates
+
+
+def _source_matches(row: dict, source: str | None) -> bool:
+    """Case-insensitive substring match on source name, page URL or page title."""
+    if not source:
+        return True
+    needle = source.lower()
+    meta = row["metadata"]
+    title = (meta.get("heading_path") or "").split(" > ")[0]
+    haystacks = (row.get("source_name") or "", meta.get("source_url") or "", title)
+    return any(needle in h.lower() for h in haystacks)
+
+
+def _slice_clause(text: str, clause: str) -> str | None:
+    """Cut the section headed by *clause* out of *text* (heading to next same-or-higher heading)."""
+    title_re = re.compile(re.escape(clause) + r"\.?(?=\s|:|$)")
+    lines = text.split("\n")
+    start = level = None
+    in_fence = False
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+        match = None if in_fence else _SECTION_HEADING_LINE_RE.match(stripped)
+        if not match:
+            continue
+        if start is None:
+            if title_re.match(match.group(2)):
+                start, level = i, len(match.group(1))
+        elif len(match.group(1)) <= level:
+            return "\n".join(lines[start:i]).strip()
+    return "\n".join(lines[start:]).strip() if start is not None else None
+
+
+def _resolve_section(arguments: dict, permitted: set | None):
+    """Return ``(head_row, inner_clause)`` for the request, or an error string.
+
+    ``inner_clause`` is set when the clause was found inside an enclosing
+    section's chunk rather than as a chunk of its own.
+    """
+    def allowed(row: dict) -> bool:
+        return permitted is None or row.get("source_name") in permitted
+
+    chunk_id = arguments.get("chunk_id")
+    if chunk_id:
+        row = _fetch_prose(chunk_id)
+        if row is None or not allowed(row):
+            return f"No prose section found for chunk_id={chunk_id!r}."
+        return _section_head(row), None
+
+    clause = str(arguments.get("clause_id") or "").strip()
+    if not clause:
+        return "Error: provide chunk_id or clause_id."
+    source = arguments.get("source")
+
+    def lookup(rows: list) -> list[dict]:
+        return [r for r in map(_with_metadata, rows) if allowed(r) and _source_matches(r, source)]
+
+    def heading_only() -> str | None:
+        # A heading with no text of its own (e.g. "5" directly followed by
+        # "5.1") has no chunk; answer with its sub-sections instead.
+        annex = re.fullmatch(r"Annex\s+([A-Z]{1,2})", clause)
+        prefix = f"{annex.group(1) if annex else clause}."
+        subs = lookup(get_milvus_service().query_by_prefix("clause_id", prefix, chunk_type="prose"))
+        if not subs:
+            return None
+        pages = _page_groups(subs)
+        return _ambiguous_clause(clause, pages) if len(pages) > 1 else _format_heading_only_section(clause, subs)
+
+    rows: list[dict] = []
+    for i, candidate in enumerate(_clause_candidates(clause)):
+        rows = lookup(get_milvus_service().query_by_values("clause_id", [candidate], chunk_type="prose"))
+        if rows:
+            break
+        if i == 0:
+            listing = heading_only()
+            if listing is not None:
+                return listing
+    if not rows:
+        return f"No section found for clause_id={clause!r}" + (f" in source {source!r}." if source else ".")
+
+    pages = _page_groups(rows)
+    if len(pages) > 1:
+        return _ambiguous_clause(candidate, pages)
+
+    members = sorted(rows, key=lambda m: m["metadata"].get("position", 0))
+    head = next((m for m in members if _opens_with_heading(m.get("content"))), members[0])
+    return _section_head(head), (clause if candidate != clause else None)
+
+
+def _page_title(row: dict) -> str:
+    return (row["metadata"].get("heading_path") or "").split(" > ")[0]
+
+
+def _page_groups(rows: list[dict]) -> dict:
+    """Group rows by page: ``(source_name, source_url, page title)`` -> rows.
+
+    The title is part of the key because pages can share a URL (a synthesized
+    llms.txt index repeats the source's docs_url for every page).
+    """
+    pages: dict = {}
+    for r in rows:
+        key = (r.get("source_name") or "", r["metadata"].get("source_url") or "", _page_title(r))
+        pages.setdefault(key, []).append(r)
+    return pages
+
+
+def _ambiguous_clause(clause: str, pages: dict) -> str:
+    lines = [f"Clause {clause!r} appears in {len(pages)} documents; pass source to pick one:"]
+    for (name, url, _), members in pages.items():
+        head = min(members, key=lambda m: m["metadata"].get("position", 0))
+        title = (head["metadata"].get("heading_path") or "").split(" > ")[0]
+        lines.append(f"  - {title or url or name} | source={name or '-'} | url={url or '-'} | chunk_id={head['chunk_id']}")
+    return "\n".join(lines)
+
+
+def _format_heading_only_section(clause: str, rows: list[dict]) -> str:
+    """List the top-level sub-sections of a clause that has no chunk of its own."""
+    depth = min(r["metadata"].get("clause_id", "").count(".") for r in rows)
+    subs = sorted(
+        (r for r in rows
+         if r["metadata"].get("clause_id", "").count(".") == depth and _opens_with_heading(r.get("content"))),
+        key=lambda r: r["metadata"].get("position", 0),
+    )
+    first = subs[0] if subs else min(rows, key=lambda r: r["metadata"].get("position", 0))
+    path = (first["metadata"].get("heading_path") or "").rsplit(" > ", 1)[0]
+    lines = [f"Section: {path}", f"Clause: {clause}", f"Source: {first['metadata'].get('source_url') or first.get('source_file') or ''}"]
+    lines.append("")
+    lines.append("This section has no text of its own; read a sub-section with get_section.")
+    lines.append("")
+    lines.append(f"Sub-sections ({len(subs)}):")
+    for r in subs:
+        lines.append(f"  - {(r['metadata'].get('heading_path') or '').split(' > ')[-1]} (chunk_id={r['chunk_id']})")
+    return "\n".join(lines) + "\n"
+
+
+def _section_source(row: dict) -> str:
+    meta = row["metadata"]
+    url = meta.get("source_url") or row.get("source_file") or ""
+    anchor = meta.get("section_anchor")
+    return f"{url}#{anchor}" if url and anchor else url
+
+
+def _format_section(rows: list[dict], text: str | None = None, clause: str | None = None) -> str:
+    """Render a section (head + continuation chunks) with its location header."""
+    head = rows[0]
+    meta = head["metadata"]
+    clause = clause or meta.get("clause_id")
+    lines = [f"Section: {meta.get('heading_path') or '(before the first heading)'}"]
+    if clause:
+        lines.append(f"Clause: {clause}")
+    lines.append(f"Source: {_section_source(head)}")
+    if head.get("source_name"):
+        lines.append(f"Source Name: {head['source_name']}")
+    chunk_line = f"Chunk ID: {head.get('chunk_id')}"
+    if len(rows) > 1:
+        chunk_line += f" (continued in {', '.join(r['chunk_id'] for r in rows[1:])})"
+    lines.append(chunk_line)
+    if meta.get("parent_chunk_id"):
+        lines.append(f"Parent Chunk ID: {meta['parent_chunk_id']}")
+    body = text if text is not None else "\n\n".join(str(r.get("content", "")) for r in rows)
+    return "\n".join(lines) + "\n\n" + body + "\n"
+
+
+def _subsection_rows(section: list[dict], recursive: bool) -> list[dict]:
+    """Prose chunks below *section* via ``parent_chunk_id``, in document order."""
+    seen = {r["chunk_id"] for r in section}
+    frontier = list(seen)
+    collected: list[dict] = []
+    while frontier:
+        found = get_milvus_service().query_by_values("parent_chunk_id", frontier, chunk_type="prose")
+        children = [r for r in map(_with_metadata, found) if r["chunk_id"] not in seen]
+        seen.update(r["chunk_id"] for r in children)
+        collected.extend(children)
+        frontier = [r["chunk_id"] for r in children] if recursive else []
+    collected.sort(key=lambda r: r["metadata"].get("position", 0))
+    return collected
+
+
+def _format_subsections(rows: list[dict], include: bool) -> str:
+    if not include:
+        heads = [r for r in rows if _opens_with_heading(r.get("content"))]
+        lines = [f"Sub-sections ({len(heads)}):"]
+        for r in heads:
+            path = r["metadata"].get("heading_path") or ""
+            lines.append(f"  - {path.split(' > ')[-1]} (chunk_id={r['chunk_id']})")
+        return "\n".join(lines) + "\n"
+    shown = rows[:_SECTION_MAX_SUBSECTION_CHUNKS]
+    parts = [f"Sub-sections ({len(rows)} chunks):"]
+    for r in shown:
+        parts.append(f"--- {r['metadata'].get('heading_path') or ''} (chunk_id={r['chunk_id']}) ---\n{r.get('content', '')}")
+    if len(rows) > len(shown):
+        parts.append(
+            f"... {len(rows) - len(shown)} more sub-section chunks not shown; "
+            "call get_section on a sub-section chunk_id to read further."
+        )
+    return "\n\n".join(parts) + "\n"
+
+
+def _neighbor_sections(section: list[dict], count: int) -> tuple[list, list]:
+    """Up to *count* whole sections before and after *section* on the same page."""
+    before: list = []
+    head = section[0]
+    for _ in range(count):
+        previous = _fetch_prose(head["metadata"].get("prev_chunk_id"))
+        if previous is None:
+            break
+        head = _section_head(previous)
+        before.insert(0, _section_chunks(head))
+    after: list = []
+    tail = section[-1]
+    for _ in range(count):
+        following = _fetch_prose(tail["metadata"].get("next_chunk_id"))
+        if following is None:
+            break
+        rows = _section_chunks(following)
+        after.append(rows)
+        tail = rows[-1]
+    return before, after
+
+
+async def get_section(arguments: dict) -> list[TextContent]:
+    """Return a prose section (by chunk_id or clause id) with optional sub-sections and neighbours."""
+    arguments = arguments or {}
+    logger.info(
+        f"   📑 get_section: chunk_id={arguments.get('chunk_id')!r} "
+        f"clause_id={arguments.get('clause_id')!r} source={arguments.get('source')!r}"
+    )
+    try:
+        permitted = _permitted_sources()
+        if permitted is not None and not permitted:
+            return [TextContent(type="text", text="No section found.")]
+        resolved = _resolve_section(arguments, permitted)
+        if isinstance(resolved, str):
+            return [TextContent(type="text", text=resolved)]
+        head, inner = resolved
+        section = _section_chunks(head)
+
+        text = None
+        if inner is not None:
+            text = _slice_clause("\n\n".join(str(r.get("content", "")) for r in section), inner)
+            if text is None:
+                enclosing = head["metadata"].get("clause_id")
+                return [TextContent(
+                    type="text",
+                    text=f"No section found for clause_id={inner!r} "
+                         f"(nearest enclosing clause: {enclosing!r}, chunk_id={head['chunk_id']}).",
+                )]
+
+        parts = [_format_section(section, text, inner)]
+        if inner is None:
+            include = bool(arguments.get("include_subsections", False))
+            subsections = _subsection_rows(section, recursive=include)
+            if subsections:
+                parts.append(_format_subsections(subsections, include))
+
+        try:
+            count = int(arguments.get("neighbors") or 0)
+        except (TypeError, ValueError):
+            count = 0
+        count = max(0, min(_SECTION_MAX_NEIGHBORS, count))
+        if count:
+            before, after = _neighbor_sections(section, count)
+            for label, sections in (("Previous section", before), ("Next section", after)):
+                for rows in sections:
+                    parts.append(f"=== {label} ===\n" + _format_section(rows))
+
+        return [TextContent(type="text", text="\n".join(parts))]
+    except Exception as e:
+        logger.error(f"get_section failed: {e}")
+        return [TextContent(type="text", text=f"Failed to fetch section: {str(e)}")]
 
 
 async def main():

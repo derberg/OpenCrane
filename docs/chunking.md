@@ -137,6 +137,8 @@ Prose chunks (`chunk_type: "prose"`) carry the following metadata field:
 |---|---|---|---|
 | `breadcrumb_path` | string, optional | Location of the chunk in the page, as `page title > section`. The section is the first heading of level two or deeper in the chunk. When the chunk has no such heading, the value is only the page title. Only chunks whose `source_url` is listed in the `llms.txt` index have it. | `"Setup Guide > Prerequisites"` |
 
+For the navigation fields, see [Prose navigation metadata](metadata-schema.md#prose-navigation-metadata).
+
 ### Code chunks
 
 Code chunks (`chunk_type: "code_snippet"`) carry the following metadata fields:

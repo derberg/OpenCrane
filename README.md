@@ -39,6 +39,7 @@ This README covers the following topics:
 - [Extend OpenCrane](#extend-opencrane)
   - [Extension points](#extension-points)
   - [Section anchors](#section-anchors)
+  - [Section navigation and clause IDs](#section-navigation-and-clause-ids)
   - [Built-in fence types](#built-in-fence-types)
   - [Built-in YAML tree walkers](#built-in-yaml-tree-walkers)
   - [Write a custom fence type](#write-a-custom-fence-type)
@@ -318,7 +319,8 @@ The server adds the following tools only when the index contains the chunk types
 | `get_list_members` | Returns every chunk of a Markdown list, in order. | List item |
 | `get_table_members` | Returns every row chunk of a Markdown table, in order. | Table row |
 | `get_yaml_definition` | Returns the full YAML definition behind a structured YAML chunk, for example a field of a Kubernetes CustomResourceDefinition. | CustomResourceDefinition, OpenAPI, or JSON Schema |
-| `get_metadata_schema` | Describes the metadata fields of the chunks. | List item, table row, CustomResourceDefinition, OpenAPI, or JSON Schema |
+| `get_section` | Returns a whole prose section by chunk ID or clause number. | Prose with navigation metadata |
+| `get_metadata_schema` | Describes the metadata fields of the chunks. | List item, table row, CustomResourceDefinition, OpenAPI, JSON Schema, or prose with navigation metadata |
 
 The HTTP transport also exposes a health endpoint. For details, see [Health endpoint](#health-endpoint).
 
@@ -701,6 +703,7 @@ Each extension point is an attribute or a method of `OpenCraneConfig`. The follo
 | `chunking_strategies` | `chunk` | Adds or replaces chunking strategies for different content types. |
 | `yaml_tree_walkers` | `chunk` | Adds walkers for custom YAML document formats. |
 | `section_anchor_for` | `chunk` | Builds the in-page anchor that each chunk records in its `section_anchor` metadata. |
+| `section_clause_for` | `chunk` | Extracts the `clause_id` from a section heading. |
 | `middleware` | `serve` | Adds Asynchronous Server Gateway Interface (ASGI) middleware around the HTTP MCP server, for example for custom authorization. See [Authentication and authorization](#authentication-and-authorization). |
 | `token_verifier`, `auth_provider` | `serve` | Replaces token validation or the authorization server in `custom` authentication mode. See [Authentication and authorization](#authentication-and-authorization). |
 | `reranker` | `serve` | Reorders the `search_docs` results. See [Custom reranker](docs/architecture.md#custom-reranker). |
@@ -747,6 +750,23 @@ class Config(OpenCraneConfig):
 ```
 
 An override takes precedence over `section_anchor_style`.
+
+### Section navigation and clause IDs
+
+Each prose chunk records its heading path and clause number. The [`get_section`](docs/vector-search.md#get_section) tool uses them to return whole sections. For the fields, see [Prose navigation metadata](docs/metadata-schema.md#prose-navigation-metadata).
+
+To change the clause format, set `section_clause_pattern` in `.opencrane/config.yaml` to a regular expression whose first capture group is the clause ID. The value `none` turns clause IDs off. The following example matches plain dotted numbers:
+
+```yaml
+section_clause_pattern: '(\d+(?:\.\d+)*)\s'
+```
+
+To turn the navigation metadata off, set `prose_navigation = False` in your config subclass.
+
+> [!CAUTION]
+> `opencrane index` deletes a collection that an older version built, and searches fail until the rebuild finishes. First confirm that `MILVUS_COLLECTION` and the connection variables name the collection to replace.
+
+For an older index, run `opencrane chunk`, `opencrane embed`, and `opencrane index` again.
 
 ### Built-in fence types
 

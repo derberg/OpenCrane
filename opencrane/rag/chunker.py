@@ -101,6 +101,112 @@ def _annotate_section_anchors(chunks, config) -> None:
             metadata["section_anchor"] = anchor
 
 
+_NAV_HEADING_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*$")
+
+
+def _content_headings(content: str) -> tuple[bool, list[tuple[int, str]]]:
+    """Return ``(opens_with_heading, [(level, title), ...])`` for prose content.
+
+    Headings inside fenced code blocks are ignored. ``opens_with_heading`` is
+    True when the first non-blank line is a heading (the chunk starts its own
+    section rather than continuing the previous one).
+    """
+    headings: list[tuple[int, str]] = []
+    opens = False
+    seen_text = False
+    in_fence = False
+    for line in content.split("\n"):
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+        match = None if in_fence else _NAV_HEADING_RE.match(stripped)
+        if match:
+            if not seen_text:
+                opens = True
+            headings.append((len(match.group(1)), match.group(2).strip()))
+        if stripped:
+            seen_text = True
+    return opens, headings
+
+
+def _push_heading(stack: list, level: int, title: str, owner: str) -> None:
+    """Pop headings at the same or deeper level, then push ``(level, title, owner)``."""
+    while stack and stack[-1][0] >= level:
+        stack.pop()
+    stack.append((level, title, owner))
+
+
+def _annotate_prose_navigation(chunks, config) -> None:
+    """Record heading ancestry, clause id and neighbour links on prose chunks.
+
+    Walks chunks in document order keeping a heading stack per page (reset when
+    the ``source_url`` changes or a page-title H1 starts a new page). For each prose chunk it records:
+
+    - ``heading_path``: the heading ancestry of the chunk's section joined by
+      `` > `` (the chunk's own first heading when its content opens with one,
+      otherwise the section it continues). Omitted before the first heading.
+    - ``clause_id``: the clause id of that section's heading, extracted by
+      ``config.section_clause_for`` (omitted when the heading has none).
+    - ``parent_chunk_id``: the chunk holding the nearest enclosing section's
+      heading (``None`` at the top of the page). Headings of sections the
+      prose chunker dropped for having no text (``chunk._preceding_headings``)
+      appear in ``heading_path`` but hold no chunk, so they are skipped here.
+    - ``position``: 1-based order among the page's prose chunks.
+    - ``prev_chunk_id`` / ``next_chunk_id``: the adjacent prose chunks of the
+      same page (``None`` at the page edges).
+
+    ``breadcrumb_path`` is left untouched. No-op when ``config.prose_navigation``
+    is off.
+    """
+    if not config.prose_navigation:
+        return
+    stack: list = []
+    page = object()
+    previous = None
+    position = 0
+    for chunk in chunks:
+        if chunk.chunk_type != "prose" or not isinstance(chunk.content, str):
+            continue
+        metadata = chunk.metadata
+        url = metadata.get("source_url")
+        preceding = [
+            (len(m.group(1)), m.group(2).strip())
+            for m in map(_NAV_HEADING_RE.match, chunk._preceding_headings) if m
+        ]
+        opens, headings = _content_headings(chunk.content)
+        # An H1 is a page title, so it starts a new page even when the URL does
+        # not change (pages missing from llms.txt have none, and a synthesized
+        # index repeats the source's docs_url for every page).
+        starts_page = any(level == 1 for level, _ in preceding) or (opens and headings[0][0] == 1)
+        if url != page or starts_page:
+            page, stack, previous, position = url, [], None, 0
+
+        for level, title in preceding:
+            _push_heading(stack, level, title, None)
+
+        if opens:
+            _push_heading(stack, *headings[0], chunk.chunk_id)
+            headings = headings[1:]
+
+        if stack:
+            metadata["heading_path"] = " > ".join(title for _, title, _ in stack)
+            clause = config.section_clause_for(stack[-1][1])
+            if clause:
+                metadata["clause_id"] = clause
+        # Nearest enclosing section that has a chunk (a dropped heading has none).
+        metadata["parent_chunk_id"] = next((o for _, _, o in reversed(stack[:-1]) if o), None)
+        position += 1
+        metadata["position"] = position
+        metadata["prev_chunk_id"] = previous.chunk_id if previous else None
+        metadata["next_chunk_id"] = None
+        if previous is not None:
+            previous.metadata["next_chunk_id"] = chunk.chunk_id
+        previous = chunk
+
+        for level, title in headings:
+            _push_heading(stack, level, title, chunk.chunk_id)
+
+
 def _annotate_source_names(chunks, mapping_file: Path) -> None:
     """Set ``source_name`` on each chunk using its metadata source_url."""
     if not mapping_file.exists():
@@ -153,7 +259,9 @@ def main(config=None, llmstxt_dir=None, chunks_file=None):
         _annotate_breadcrumb_paths(chunks, index)
 
         from opencrane.config import OpenCraneConfig
-        _annotate_section_anchors(chunks, config if config is not None else OpenCraneConfig())
+        cfg = config if config is not None else OpenCraneConfig()
+        _annotate_section_anchors(chunks, cfg)
+        _annotate_prose_navigation(chunks, cfg)
 
         mapping_file = get_config().mapping_file
         if not mapping_file.is_absolute():

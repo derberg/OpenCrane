@@ -127,12 +127,12 @@ The `opencrane embed` command generates a vector embedding for each chunk in `.o
 The `opencrane index` command loads `.opencrane/embeddings.json` into a Milvus vector database. It creates a collection with the following indexes:
 
 - A vector index on the embeddings, with cosine similarity as the distance metric
-- `INVERTED` scalar indexes on the `list_id` and `table_id` columns
+- `INVERTED` scalar indexes on the `list_id`, `table_id`, `clause_id`, and `parent_chunk_id` columns
 
-With the scalar indexes, the `get_list_members` and `get_table_members` MCP tools run an indexed lookup instead of scanning all chunks in memory. OpenCrane uses `INVERTED` rather than `AUTOINDEX` because Milvus Lite accepts `AUTOINDEX` only on vector fields.
+With the scalar indexes, the `get_list_members`, `get_table_members`, and `get_section` MCP tools run an indexed lookup instead of scanning all chunks in memory. OpenCrane uses `INVERTED` rather than `AUTOINDEX` because Milvus Lite accepts `AUTOINDEX` only on vector fields.
 
-> [!NOTE]
-> OpenCrane stores `list_id` and `table_id` in their own columns. If an older OpenCrane version built the collection without these columns, the next `index` run drops the collection and rebuilds it. This happens once after the upgrade, and the logs report it.
+> [!CAUTION]
+> OpenCrane stores `list_id`, `table_id`, `clause_id`, and `parent_chunk_id` in their own columns. If an older OpenCrane version built the collection without these columns, the next `index` run drops the collection and rebuilds it. Searches on that collection fail until the rebuild finishes.
 
 Milvus runs in one of the following deployment modes:
 
@@ -154,9 +154,10 @@ The tools the server exposes depend on the content of the index. `search_docs` a
 |---|---|---|
 | `search_docs` | Always present | Searches all indexed chunks in semantic, keyword, or hybrid mode. |
 | `get_yaml_definition` | YAML chunks indexed | Returns a complete YAML document by chunk ID, with breadcrumb comments that show its location. |
-| `get_metadata_schema` | YAML, list, or table row chunks indexed | Returns the reference documentation for all chunk metadata fields. |
+| `get_metadata_schema` | YAML, list, or table row chunks indexed, or prose chunks with navigation metadata | Returns the reference documentation for all chunk metadata fields. |
 | `get_list_members` | List chunks indexed | Returns all items in a list by list ID. |
 | `get_table_members` | Table row chunks indexed | Returns all rows of a table by table ID. |
+| `get_section` | Prose chunks with navigation metadata indexed | Returns a whole prose section by chunk ID or clause number. |
 | `health` | Always present | Reports the service status, the Milvus connection state, and collection statistics. |
 
 To add your own tools, see [Add custom MCP tools](../README.md#add-custom-mcp-tools).

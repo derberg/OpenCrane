@@ -175,6 +175,21 @@ final_score = alpha × vector_score + (1 − alpha) × bm25_score
 
 The default **alpha** is `0.6`, which means 60% semantic and 40% keyword. To override it for a single query, pass the **alpha** parameter. To set a different default, use the `HYBRID_ALPHA` environment variable.
 
+Before the fusion, hybrid search fetches results from each arm and then cuts the fused list to the requested **limit**. By default, each arm returns **limit** results, so a chunk that both arms rank just below **limit** can't reach the fused list. To fetch a wider pool from each arm, set the `HYBRID_CANDIDATE_POOL` environment variable, for example to `50`. A value below **limit** has no effect.
+
+The `HYBRID_FUSION` environment variable selects how hybrid search merges the two arms:
+
+- `minmax`: the default. It normalizes the scores of each arm to the range 0 to 1 and applies the formula above.
+- `rrf`: weighted Reciprocal Rank Fusion (RRF). It combines the ranks of a chunk in each arm instead of the scores, as follows:
+
+  ```text
+  final_score = 2 × alpha / (k + vector_rank) + 2 × (1 − alpha) / (k + bm25_rank)
+  ```
+
+  With `rrf`, an **alpha** of `0.5` gives classic unweighted RRF. A higher **alpha** favors the vector ranks, and a lower one favors the BM25 ranks. The `HYBRID_RRF_K` environment variable sets the smoothing constant `k`, and the default is `60`.
+
+Neither setting needs re-indexing.
+
 The BM25 index uses the `simple` tokenizer by default. This tokenizer lowercases text and splits it on every non-alphanumeric character, so `5.4.1` and `4.5.1` produce the same tokens. To keep dotted, hyphenated, and underscored identifiers as one token, set the `BM25_TOKENIZER` environment variable to `identifier`. This tokenizer also emits the parts of each identifier, so a query for `gtp` still matches `GTP-U`. The server builds the BM25 index in memory, so a change of tokenizer needs a server restart but no re-indexing.
 
 To narrow the results, pass the following `search_docs` parameters:

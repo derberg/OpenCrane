@@ -699,7 +699,7 @@ Each extension point is an attribute or a method of `OpenCraneConfig`. The follo
 | `section_anchor_for` | `chunk` | Builds the in-page anchor that each chunk records in its `section_anchor` metadata. |
 | `middleware` | `serve` | Adds Asynchronous Server Gateway Interface (ASGI) middleware around the HTTP MCP server, for example for custom authorization. See [Authentication and authorization](#authentication-and-authorization). |
 | `token_verifier`, `auth_provider` | `serve` | Replaces token validation or the authorization server in `custom` authentication mode. See [Authentication and authorization](#authentication-and-authorization). |
-| `extra_tools` | `serve` | Adds custom MCP tools to the server, next to the built-in tools. See [Add custom MCP tools](#add-custom-mcp-tools). |
+| `extra_tools` | `serve` | Adds custom MCP tools to the server. See [Add custom MCP tools](#add-custom-mcp-tools). |
 
 ### Section anchors
 
@@ -836,7 +836,7 @@ The `can_handle` method returns `True` for the documents that the walker support
 
 ### Add custom MCP tools
 
-To serve your own MCP tools from the OpenCrane server, list `ExtraTool` entries in `extra_tools`. The server offers them next to the built-in tools on both the stdio and the HTTP transport, so you don't need a second MCP server. Use this extension point when your agents need a project-specific lookup that the built-in tools do not offer.
+To serve your own MCP tools next to the built-in tools on both transports, list `ExtraTool` entries in `extra_tools`. Your agents then get project-specific lookups without a second MCP server.
 
 The following example adds a tool that returns the stored content of a chunk:
 
@@ -867,32 +867,26 @@ class Config(OpenCraneConfig):
     ]
 ```
 
-The following table describes the `ExtraTool` arguments:
+OpenCrane calls the sync or async `handler` as `handler(arguments, context)`. If `name` matches a built-in tool or another extra tool, the server fails at startup.
 
-| Argument | Description |
-|---|---|
-| `name` | Tool name. If the name matches a built-in tool or another extra tool, the server fails at startup. |
-| `description` | Tool description that MCP clients show to the agent. |
-| `input_schema` | JSON Schema of the tool arguments, with `"type": "object"`. |
-| `handler` | Sync or async function that OpenCrane calls as `handler(arguments, context)`. |
-
-The `context` argument is a `ToolContext`. The following table lists its members:
+The `context` argument is a `ToolContext` with the following members:
 
 | Member | Description |
 |---|---|
-| `milvus`, `embeddings`, `keyword_search` | The `MilvusService`, `EmbeddingService`, and `KeywordSearchService` instances of the server. |
-| `config` | Your `OpenCraneConfig` instance. |
-| `allowed_sources()` | Returns the sources that `search_docs` allows for the current caller, or `None` if the caller may read all sources. |
+| `milvus`, `embeddings`, `keyword_search` | The `MilvusService`, `EmbeddingService`, and `KeywordSearchService` instances of the server |
+| `config` | Your `OpenCraneConfig` instance |
+| `allowed_sources()` | The sources that `search_docs` allows for the current caller, or `None` for all sources |
 
 OpenCrane sends the return value of the handler to the client as follows:
 
 - A string becomes a text content block.
-- An MCP content block, or a list of content blocks, stays unchanged.
+- An MCP content block, or a list of them, stays unchanged.
 - Any other value becomes JSON text.
 
 If the handler raises an exception, the client receives an MCP tool error with the exception message.
 
-OpenCrane does not filter the output of extra tools. If you limit which sources a caller can read, for example with `scope_sources` or a middleware, filter the output yourself. In each handler that returns documentation content, call `context.allowed_sources()` and drop content from other sources, as the `read_chunk` example does.
+> [!CAUTION]
+> OpenCrane does not filter the output of extra tools. If you limit sources with `scope_sources` or a middleware, filter in each handler that returns documentation content. Call `context.allowed_sources()` and drop content from other sources, as `read_chunk` does.
 
 ## Authentication and authorization
 

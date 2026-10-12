@@ -117,9 +117,9 @@ Subclass `OpenCraneConfig` in `.opencrane/extensions.py` to customize:
 3. **`yaml_tree_walkers`**: custom YAML tree walkers for structured docs (K8s CRD, OpenAPI, JSON Schema built-in)
 4. **`section_anchor_for`**: builds the in-page anchor slug recorded on each chunk
 5. **`middleware`, `token_verifier`, `auth_provider`**: authentication and authorization hooks for the HTTP transport, see `docs/auth.md`
-6. **`extra_tools`**: custom MCP tools (`ExtraTool`) served on stdio and HTTP next to the built-ins
+6. **`extra_tools`**: custom MCP tools (`ExtraTool`) served on both transports. An extra tool may not reuse a built-in tool name, so add every new built-in tool to `BUILTIN_TOOL_NAMES` in `mcp/server.py` (a test guards it). OpenCrane does not filter their output
 
-Config is auto-discovered from the file that the `extensions` key in `.opencrane/config.yaml` names, for example `extensions: extensions.py`. The class in that file must be named `Config`. The `opencrane init` template ships the key commented out. Config can also be set with `--config` / `OPENCRANE_CONFIG` env var. `opencrane serve --config` exports the value as `OPENCRANE_CONFIG`, because the server modules resolve the config themselves.
+Config is auto-discovered from the file that the `extensions` key in `.opencrane/config.yaml` names, for example `extensions: extensions.py`. The class in that file must be named `Config`. The `opencrane init` template ships the key commented out. Config can also be set with `--config` / `OPENCRANE_CONFIG` env var.
 
 ## Key design decisions
 
@@ -132,7 +132,6 @@ Config is auto-discovered from the file that the `extensions` key in `.opencrane
 - **Prose chunks split at heading boundaries only**: preserves complete sections for semantic coherence, no token-based splitting within sections
 - **MCP server is fully vector-DB-backed**: search, `get_yaml_definition`, `get_list_members`, and `get_table_members` all read from Milvus (chunk lookups by primary key, members by `list_id`/`table_id` scalar columns, `INVERTED`-indexed so lookups don't scan the corpus, because Milvus Lite rejects `AUTOINDEX` on scalar fields); the server holds no in-memory copy of the corpus. Member queries interpolate a sanitized, width-capped id into the filter (Milvus Lite has no `filter_params` templating). `list_id`/`table_id` are lifted into their own columns at index time; adding them is a schema change, so a collection built by an older version is dropped and rebuilt on the next `index` run
 - **Per-page `source_url` from the companion `llms.txt`**: `llms-full.txt` stays clean (no URLs injected into headings); each chunk's page URL is recovered by joining the clean content to the standard `llms.txt` index, matched positionally per source and validated by H1 title. External `llmstxt` sources contribute their fetched companion `llms.txt` (real per-page URLs) or a synthesized index from their `docs_url`
-- **`extra_tools` sit beside the built-in tools**: both transports register them from `load_extra_tools()` in `mcp/server.py`. An extra tool whose name is in `BUILTIN_TOOL_NAMES` fails startup, so add every new built-in tool to that set (a test guards it). OpenCrane does not filter extra-tool output; `ToolContext.allowed_sources()` returns the same `resolve_allowed_sources()` decision that `search_docs` applies. Sync handlers run in worker threads, so the service getters initialize under a lock
 
 ## CI/CD
 

@@ -38,12 +38,9 @@ class Config(OpenCraneConfig):
     #     # e.g. a host that keeps case and uses underscores:
     #     return heading.strip().replace(" ", "_")
 
-    # Custom MCP tools served next to the built-in ones (stdio and HTTP).
-    # The handler (sync or async) gets the call arguments and a ToolContext
-    # (context.milvus, context.embeddings, context.keyword_search, context.config,
-    # context.allowed_sources()). OpenCrane does not filter the tool output, so
-    # check context.allowed_sources() when you use scope_sources or a middleware.
-    # The client receives a raised exception as an MCP tool error.
+    # Custom MCP tools served next to the built-in tools. See "Add custom MCP
+    # tools" in the README. OpenCrane does not filter the tool output, so check
+    # context.allowed_sources() when you use scope_sources or a middleware.
     # from opencrane import ExtraTool
     # extra_tools = [
     #     ExtraTool(

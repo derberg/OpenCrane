@@ -88,7 +88,7 @@ class OpenCraneConfig:
     # Custom MCP tools served next to the built-in ones on both transports
     # (stdio and HTTP). Each entry is an ``opencrane.ExtraTool``; see
     # ``opencrane/mcp/extra_tools.py``. A name that collides with a built-in
-    # tool or another extra tool fails at server startup. Default empty.
+    # tool or another extra tool stops the server at startup. Default empty.
     extra_tools: list = []
 
     # Each markdown sub-section chunk records a ``section_anchor`` in its

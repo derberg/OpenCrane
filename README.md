@@ -867,7 +867,7 @@ class Config(OpenCraneConfig):
     ]
 ```
 
-OpenCrane calls the sync or async `handler` as `handler(arguments, context)`. If `name` matches a built-in tool or another extra tool, the server fails at startup.
+OpenCrane calls the synchronous or asynchronous `handler` as `handler(arguments, context)`. If `name` matches a built-in tool or another extra tool, the server does not start.
 
 The `context` argument is a `ToolContext` with the following members:
 
@@ -886,7 +886,7 @@ OpenCrane sends the return value of the handler to the client as follows:
 If the handler raises an exception, the client receives an MCP tool error with the exception message.
 
 > [!CAUTION]
-> OpenCrane does not filter the output of extra tools. If you limit sources with `scope_sources` or a middleware, filter in each handler that returns documentation content. Call `context.allowed_sources()` and drop content from other sources, as `read_chunk` does.
+> OpenCrane does not filter the output of extra tools. If you limit sources with `scope_sources` or a middleware, filter the output in each handler that returns documentation content. Call `context.allowed_sources()` and drop content from other sources, as `read_chunk` does.
 
 ## Authentication and authorization
 

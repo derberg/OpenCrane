@@ -104,7 +104,7 @@ def validate_extra_tools(tools: Iterable, builtin_names: Iterable[str]) -> dict[
         if tool.name in builtin:
             raise ValueError(f"extra tool {tool.name!r} collides with a built-in OpenCrane tool")
         if tool.name in by_name:
-            raise ValueError(f"extra tool {tool.name!r} is registered more than once")
+            raise ValueError(f"extra tool {tool.name!r} appears more than once in extra_tools")
         if not isinstance(tool.input_schema, dict) or tool.input_schema.get("type") != "object":
             raise ValueError(f"extra tool {tool.name!r}: input_schema must be a JSON Schema object "
                              "with \"type\": \"object\"")

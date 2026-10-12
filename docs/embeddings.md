@@ -21,17 +21,19 @@ To use a different model, set the `EMBEDDING_MODEL` environment variable.
 
 ## Embedding prompts
 
-Many retrieval models expect one prompt on documents and another on queries. Without these prompts, search returns less relevant results. OpenCrane reads the prompts from the following environment variables:
+Many retrieval models need one prompt for documents and another for queries. Without these prompts, search returns less relevant results. OpenCrane reads the prompts from the following environment variables:
 
-- `EMBEDDING_DOCUMENT_PROMPT`: a prefix that the `embed` step adds to every chunk.
-- `EMBEDDING_QUERY_PROMPT`: a prompt that `serve` and `visualize` apply to each query. Write it as a template with a `{query}` placeholder, or as a plain prefix.
+- `EMBEDDING_DOCUMENT_PROMPT` is a prefix that the `embed` step adds to every chunk.
+- `EMBEDDING_QUERY_PROMPT` is a prompt that `serve` and `visualize` apply to each query. Write it as a template with a `{query}` placeholder, or as a plain prefix.
 
-Both variables are empty by default, so OpenCrane encodes text as it is. A literal `\n` in either value becomes a newline. The following table lists the prompts for common models:
+Both variables are empty by default, so OpenCrane encodes text as it is. A literal `\n` in either value becomes a newline.
+
+The following table lists the prompts for common 768-dimension models:
 
 | Model | `EMBEDDING_DOCUMENT_PROMPT` | `EMBEDDING_QUERY_PROMPT` |
 |---|---|---|
 | `nomic-ai/nomic-embed-text-v1.5`, the default | `search_document: ` | `search_query: ` |
-| Qwen3-Embedding | none | `Instruct: Given a question, retrieve passages that answer it\nQuery: {query}` |
+| `intfloat/e5-base-v2` | `passage: ` | `query: ` |
 
 The document prompt is part of every stored vector, so a change to `EMBEDDING_DOCUMENT_PROMPT` requires new embeddings and a new index. The `embed` step detects the change and regenerates the embeddings. The `index` step keeps a collection that already has rows, so run it with `DROP_EXISTING=true`. The following commands set the prompts for the default model and rebuild the index:
 

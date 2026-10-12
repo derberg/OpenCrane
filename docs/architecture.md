@@ -103,7 +103,7 @@ Chunking strategies run in priority order. The first strategy that matches a doc
 | 2 | Code | Handles fenced code blocks. Detects the language, and runs tree walkers for structured YAML specs inside code fences. |
 | 3 | Table | Handles Markdown tables. Produces one `table_row` chunk for each data row, written as natural-language `Column: value.` lines. Links each row to the rest of the table through `table_id` and `sibling_ids`. Passes text outside the table to the list and prose strategies. |
 | 4 | List | Handles Markdown lists. Produces one chunk for each top-level list item, and attaches sibling previews and breadcrumb paths. |
-| 5 | Prose | Handles every fragment the other strategies do not match. [By default](chunking.md#prose-sections), splits at `#`, `##`, and `###` headings and keeps each section whole. |
+| 5 | Prose | Handles every fragment the other strategies do not match. By default, splits at `#`, `##`, and `###` headings and keeps each section whole. See [Prose sections](chunking.md#prose-sections). |
 
 Each chunk carries type-specific metadata fields and a `chunk_type` field. The `chunk_type` field takes one of the following values:
 

@@ -20,7 +20,7 @@ Headings are the main chunk boundary. When each heading starts one focused secti
 
 ### Headings that create chunk boundaries
 
-[By default](chunking.md#prose-sections), the `#`, `##`, and `###` headings create chunk boundaries. Everything between two such headings, including the opening heading, becomes one chunk.
+By default, the `#`, `##`, and `###` headings create chunk boundaries, as [Prose sections](chunking.md#prose-sections) describes. Everything between two such headings, including the opening heading, becomes one chunk.
 
 The following example produces three chunks:
 

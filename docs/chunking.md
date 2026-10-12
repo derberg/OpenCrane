@@ -55,7 +55,7 @@ The following variables control the split:
 | Variable | Default | Description |
 |---|---|---|
 | `PROSE_SPLIT_HEADING_DEPTH` | `3` | Sets the deepest heading level that starts a chunk. |
-| `PROSE_MAX_CHUNK_TOKENS` | `0` (off) | Sets the token limit for a chunk. A section over the limit splits at paragraphs, then at lines. Each piece repeats the section heading. Lines and code blocks never split. |
+| `PROSE_MAX_CHUNK_TOKENS` | `0` (off) | Sets the token limit for a chunk. A section over the limit splits at paragraphs, then at lines. Each chunk repeats the section heading. Lines and code blocks never split. |
 | `PROSE_KEEP_HEADING_ONLY_SECTIONS` | `false` | Keeps heading-only sections of 15 characters or more. |
 
 After you change a variable, rerun `chunk` and `embed`, then [rebuild the Milvus collection](../README.md#index-the-embeddings-in-milvus-with-opencrane-index).

@@ -49,7 +49,7 @@ class K8sCRDTreeWalker(YamlTreeWalker):
         # Get all versions
         versions = self.yaml_dict.get("spec", {}).get("versions", [])
         
-        for version_obj in versions:
+        for version_index, version_obj in enumerate(versions):
             version_name = version_obj.get("name", "v1")
             schema = version_obj.get("schema", {}).get("openAPIV3Schema", {})
             properties = schema.get("properties", {})
@@ -58,11 +58,15 @@ class K8sCRDTreeWalker(YamlTreeWalker):
             if "spec" in properties and isinstance(properties["spec"], dict):
                 spec_props = properties["spec"].get("properties", {})
                 if spec_props:
+                    # Each version's path uses its own index in spec.versions, so
+                    # breadcrumb_path and logical_parent differ per version and
+                    # neighbors (grouped by logical_parent) never mix versions.
+                    version_path = ["spec", f"versions[{version_index}]", "schema", "openAPIV3Schema", "properties", "spec", "properties"]
                     self._walk_properties(
                         spec_props,
-                        path=["spec", "versions[0]", "schema", "openAPIV3Schema", "properties", "spec", "properties"],
+                        path=version_path,
                         version=version_name,
-                        parent_path=["spec", "versions[0]", "schema", "openAPIV3Schema", "properties", "spec", "properties"],
+                        parent_path=list(version_path),
                         spec_relative_path=["spec"]  # Track path relative to spec for crd_property_path
                     )
         

@@ -6,6 +6,7 @@ parent (when nested), and carries short previews of the rest of the list so
 agents can reconstruct the group without extra tool calls.
 """
 
+import hashlib
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -294,6 +295,10 @@ class ListChunkingStrategy(ProcessingStrategy):
             return []  # pragma: no cover - defensive, can_process guards
 
         chunks: List[Chunk] = []
+        # Fingerprint of this list block's raw lines: tells apart lists that share
+        # a page, breadcrumb and ordinal because they sit in separate nodes (e.g.
+        # each list directly after a code block, where the breadcrumb is empty).
+        block_fingerprint = hashlib.sha256("\n".join(list_lines).encode("utf-8")).hexdigest()[:16]
 
         # Walk top-level first, then children — parents need ids for their children's metadata.
         def walk(items: List[_Item], parent: Optional[_Item]):
@@ -308,6 +313,8 @@ class ListChunkingStrategy(ProcessingStrategy):
                 list_ordinal=list_ordinal,
                 depth=items[0].depth,
                 parent_id=parent.chunk_id if parent else None,
+                source_url=source_url,
+                block_fingerprint=block_fingerprint,
             )
             for it in items:
                 it.list_id = group_list_id
@@ -455,9 +462,17 @@ class ListChunkingStrategy(ProcessingStrategy):
     # --- metadata + chunk assembly -------------------------------------------
 
     @staticmethod
-    def _compute_list_id(breadcrumb: str, list_ordinal: int, depth: int, parent_id: Optional[str]) -> str:
-        import hashlib
-        key = f"{breadcrumb}|{list_ordinal}|{depth}|{parent_id or ''}"
+    def _compute_list_id(
+        breadcrumb: str,
+        list_ordinal: int,
+        depth: int,
+        parent_id: Optional[str],
+        source_url: Optional[str] = None,
+        block_fingerprint: str = "",
+    ) -> str:
+        # source_url scopes the id to its page, so lists under the same breadcrumb
+        # on different pages never share an id (get_list_members would merge them).
+        key = f"{source_url or ''}|{block_fingerprint}|{breadcrumb}|{list_ordinal}|{depth}|{parent_id or ''}"
         return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
 
     def _build_item_chunk(

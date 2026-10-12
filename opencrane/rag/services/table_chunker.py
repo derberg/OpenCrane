@@ -37,11 +37,23 @@ def _split_row(line: str) -> List[str]:
     return [c.strip() for c in s.split("|")]
 
 
-def _table_id(breadcrumb: str, caption: str, columns: List[str], row_keys: List[str], table_ordinal: int) -> str:
+def _table_id(
+    breadcrumb: str,
+    caption: str,
+    columns: List[str],
+    row_keys: List[str],
+    table_ordinal: int,
+    source_url: Optional[str] = None,
+    rows: Optional[List[List[str]]] = None,
+) -> str:
     # table_ordinal disambiguates two structurally identical tables in the same
     # section (same heading, caption, columns, and first-column values), mirroring
     # list_id's list_ordinal. Without it they would collapse to one table_id.
-    key = f"{breadcrumb}|{caption}|{table_ordinal}|{'|'.join(columns)}|{'|'.join(row_keys)}"
+    # source_url scopes the id to its page, so tables under the same breadcrumb on
+    # different pages never share an id; the full row cells tell apart tables on
+    # one page that differ only outside the first column.
+    cells = "|".join("\x1f".join(r) for r in (rows or []))
+    key = f"{source_url or ''}|{breadcrumb}|{caption}|{table_ordinal}|{'|'.join(columns)}|{'|'.join(row_keys)}|{cells}"
     return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
 
 
@@ -102,7 +114,7 @@ def build_table_chunks(
     columns = _split_row(data_lines[0])
     rows = [_split_row(ln) for ln in data_lines[2:]]
     row_keys = [cells[0] for cells in rows]
-    table_id = _table_id(breadcrumb, caption, columns, row_keys, table_ordinal)
+    table_id = _table_id(breadcrumb, caption, columns, row_keys, table_ordinal, source_url, rows)
 
     chunks: List[Chunk] = []
 

@@ -224,6 +224,7 @@ When `.opencrane/config.yaml` has an `extensions` key, for example `extensions: 
 - Fence types
 - Chunking strategies
 - YAML tree walkers
+- Reranker
 
 ### Retrieval-augmented generation pipeline
 
@@ -277,6 +278,7 @@ The configuration is in `opencrane/config.py` and `opencrane/shared/config.py`. 
 | `fence_types` | A dictionary of fence type handlers. The defaults include OpenAPI, AsyncAPI, CRD, and JSON Schema. |
 | `chunking_strategies` | An ordered list of chunking strategy instances. OpenCrane evaluates them in order, and the first match handles the fragment. |
 | `yaml_tree_walkers` | A list of tree walker classes. OpenCrane evaluates them in the order listed. |
+| `reranker` | An optional `search_docs` reranker. See [Custom reranker](#custom-reranker). |
 
 `Config` in `opencrane/shared/config.py` is the runtime configuration that comes from the environment. It reads all settings from environment variables when the process starts. This runtime `Config` is a different class from the `Config` subclass in `.opencrane/extensions.py`.
 

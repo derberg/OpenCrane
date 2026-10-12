@@ -275,3 +275,71 @@ class TestHttp:
                 patch.object(s, "_get_indexed_chunk_types", return_value=set()):
             with pytest.raises(ValueError, match="collides"):
                 build_app()
+
+
+# --- review follow-ups ---------------------------------------------------------------
+
+
+class TestReviewFollowUps:
+    def test_allowed_sources_applies_scope_sources_policy(self, tmp_path, monkeypatch):
+        """Without a middleware override, allowed_sources() reflects the endpoint's
+        scope_sources policy, exactly as built-in search does."""
+        from opencrane.mcp.auth import reset_auth_runtime
+        from opencrane.mcp.auth.runtime import set_optional_scopes
+
+        config_yaml = tmp_path / "config.yaml"
+        config_yaml.write_text(
+            "sources:\n"
+            "  cgw:\n    url: https://github.com/org/cgw\n"
+            "  other:\n    url: https://github.com/org/other\n"
+            "auth:\n  scope_sources:\n    docs:tp:\n      - cgw\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("MAPPING_FILE", str(config_yaml))
+        reset_auth_runtime()
+        try:
+            set_optional_scopes(("docs:tp",))
+            assert ToolContext(None).allowed_sources() == ("cgw",)
+            set_optional_scopes(())
+            assert ToolContext(None).allowed_sources() == ()
+        finally:
+            reset_auth_runtime()
+
+    def test_service_getters_create_one_instance_across_threads(self, monkeypatch):
+        """Sync handlers run in worker threads; concurrent first use must not build
+        a second MilvusService."""
+        import threading
+        import time
+
+        created = []
+
+        class SlowMilvus:
+            def __init__(self):
+                time.sleep(0.05)
+                created.append(self)
+
+        monkeypatch.setattr(s, "MilvusService", SlowMilvus)
+        monkeypatch.setattr(s, "_milvus_service", None)
+        barrier = threading.Barrier(4)
+        results = []
+
+        def worker():
+            barrier.wait()
+            results.append(s.get_milvus_service())
+
+        threads = [threading.Thread(target=worker) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert len(created) == 1
+        assert all(r is created[0] for r in results)
+
+    @pytest.mark.anyio
+    async def test_sync_handler_returning_coroutine_is_awaited(self):
+        async def fetch(arguments, context):
+            return f"async {arguments['x']}"
+
+        handler = lambda arguments, context: fetch(arguments, context)  # noqa: E731
+        result = await et.bind_handler(_tool(handler=handler), None)({"x": "1"})
+        assert result == [TextContent(type="text", text="async 1")]

@@ -75,13 +75,16 @@ class ToolContext:
 
     @staticmethod
     def allowed_sources() -> tuple[str, ...] | None:
-        """Source names the current request may access, as declared by a project
-        middleware via ``set_allowed_sources``; ``None`` when no middleware set one.
-        Built-in search enforces access policy itself; an extra tool that returns
-        corpus content should honour this too."""
-        from opencrane.mcp.auth.runtime import current_allowed_sources
+        """Source names the current request may read, or ``None`` when every
+        source is allowed. This is the same decision built-in search applies:
+        a middleware's ``set_allowed_sources`` value, else the endpoint's
+        ``scope_sources`` / ``default_sources`` policy. An empty tuple means no
+        source is permitted. Extra tools are not filtered by OpenCrane, so a
+        tool that returns document content must check this itself."""
+        from opencrane.mcp.auth.runtime import resolve_allowed_sources
 
-        return current_allowed_sources()
+        allowed = resolve_allowed_sources()
+        return None if allowed is None else tuple(allowed)
 
 
 def validate_extra_tools(tools: Iterable, builtin_names: Iterable[str]) -> dict[str, ExtraTool]:
@@ -114,8 +117,8 @@ def validate_extra_tools(tools: Iterable, builtin_names: Iterable[str]) -> dict[
 def load_extra_tools(builtin_names: Iterable[str]) -> tuple[dict[str, ExtraTool], ToolContext | None]:
     """Load and validate ``extra_tools`` from the project's ``OpenCraneConfig``.
 
-    The config is resolved like every other extension point (``OPENCRANE_CONFIG``
-    or ``.opencrane/extensions.py:Config``). A config that fails to load is logged
+    The config is resolved like every other extension point (``OPENCRANE_CONFIG``,
+    or the ``extensions`` key in ``.opencrane/config.yaml``). A config that fails to load is logged
     and treated as having no extra tools, matching the ``middleware`` hook; an
     invalid ``extra_tools`` list (e.g. a name collision) raises so the server
     fails at startup.
@@ -128,7 +131,7 @@ def load_extra_tools(builtin_names: Iterable[str]) -> tuple[dict[str, ExtraTool]
 
         config = load_config(None)
     except Exception as exc:
-        logger.warning(f"Failed to load project config for extra_tools: {exc} — skipping")
+        logger.warning(f"Failed to load project config for extra_tools: {exc}; skipping")
         return {}, None
     tools = validate_extra_tools(getattr(config, "extra_tools", None) or [], builtin_names)
     if not tools:
@@ -169,6 +172,9 @@ def bind_handler(tool: ExtraTool, context: ToolContext) -> Callable[[dict], Any]
                 result = await fn(arguments or {}, context)
             else:
                 result = await asyncio.to_thread(fn, arguments or {}, context)
+                if inspect.isawaitable(result):
+                    # A sync wrapper (for example a lambda) around an async function.
+                    result = await result
         except Exception as exc:
             logger.error(f"Extra tool {tool.name!r} failed: {exc}")
             raise

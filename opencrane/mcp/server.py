@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 import yaml
 from pathlib import Path
@@ -33,6 +34,9 @@ logger = logging.getLogger(__name__)
 _embeddings_service = None
 _milvus_service = None
 _keyword_service = None
+# Sync extra_tools handlers run in worker threads and may reach these getters
+# while the event loop does too; the lock keeps each service a singleton.
+_service_init_lock = threading.Lock()
 _chunk_types_cache: set[str] | None = None
 
 def _extract_source_url(text: str) -> str | None:
@@ -107,19 +111,25 @@ def _rehydrate_to_yaml(content: dict | str, metadata: dict, chunk_type: str = ""
 def get_embeddings_service():
     global _embeddings_service
     if _embeddings_service is None:
-        _embeddings_service = EmbeddingService()
+        with _service_init_lock:
+            if _embeddings_service is None:
+                _embeddings_service = EmbeddingService()
     return _embeddings_service
 
 def get_milvus_service():
     global _milvus_service
     if _milvus_service is None:
-        _milvus_service = MilvusService()
+        with _service_init_lock:
+            if _milvus_service is None:
+                _milvus_service = MilvusService()
     return _milvus_service
 
 def get_keyword_service():
     global _keyword_service
     if _keyword_service is None:
-        _keyword_service = KeywordSearchService()
+        with _service_init_lock:
+            if _keyword_service is None:
+                _keyword_service = KeywordSearchService()
     return _keyword_service
 
 _YAML_CHUNK_TYPES = {"crd_definition", "openapi_spec", "json_schema"}
@@ -751,23 +761,10 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
     chunk_types = arguments.get("chunk_types")
     source_names = arguments.get("source_names")
     # --- Layer 2: content authorization ---
-    from opencrane.mcp.auth.runtime import (
-        current_allowed_sources,
-        current_scopes,
-        get_access_policy,
-    )
-    allowed = current_allowed_sources()
-    if allowed is not None:
-        # A project middleware declared the permitted sources for this request —
-        # highest precedence. Narrow-only: intersect with any client-supplied
-        # source_names (the client can restrict, never expand).
-        allowed_set = set(allowed)
-        if source_names is not None:
-            decision = [s for s in source_names if s in allowed_set]
-        else:
-            decision = list(allowed)
-    else:
-        decision = get_access_policy().authorize(current_scopes(), source_names)
+    from opencrane.mcp.auth.runtime import resolve_allowed_sources
+    # A project middleware's declared sources take precedence over the scope
+    # policy; client-supplied source_names can narrow, never expand.
+    decision = resolve_allowed_sources(source_names)
     # SECURITY: an empty allowlist means zero permitted sources — short-circuit,
     # because passing [] to the search backends is falsy and would DISABLE the
     # source filter (leaking all sources). None = no restriction (AllowAll).

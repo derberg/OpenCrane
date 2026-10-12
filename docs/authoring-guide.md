@@ -20,7 +20,7 @@ Headings are the main chunk boundary. When each heading starts one focused secti
 
 ### Headings that create chunk boundaries
 
-The `#`, `##`, and `###` headings create chunk boundaries. Everything between two such headings, including the opening heading, becomes one chunk.
+The `#`, `##`, and `###` headings create chunk boundaries. Everything between two such headings, including the opening heading, becomes one chunk. These are the default boundaries. A project can change them, as described in [Prose sections](chunking.md#prose-sections).
 
 The following example produces three chunks:
 
@@ -152,7 +152,7 @@ Avoid the following placeholder:
 
 ### Split long sections by topic
 
-OpenCrane does not split a section by size. A long `#`, `##`, or `###` section stays one chunk, however long it is. Keep sections focused, and split them by topic.
+By default, OpenCrane does not split a section by size. A long `#`, `##`, or `###` section stays one chunk, however long it is. Keep sections focused, and split them by topic.
 
 If a section grows past a few hundred words, it usually covers more than one sub-topic. Break it into sibling `###` sections, one for each sub-topic.
 

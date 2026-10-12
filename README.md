@@ -547,11 +547,9 @@ You need the following variables only if you run the `chunk` step, directly or t
 |---|---|---|
 | `AI_DOCS_LLMSTXT_DIR` | `.opencrane/llmstxt` | Directory with the `llms-full.txt` files. See also the `--llmstxt-dir` flag. |
 | `AI_DOCS_CHUNKS_FILE` | `.opencrane/chunks.json` | Output path for the generated chunks. See also the `--chunks-file` flag. |
-| `PROSE_SPLIT_HEADING_DEPTH` | `3` | Deepest markdown heading level that starts a new prose chunk (`3` = `#`, `##`, `###`). Raise it (up to `8`) for documents with deeply numbered clauses, so e.g. `##### 5.4.1.2` sections become their own chunks instead of merging into their parent |
-| `PROSE_MAX_CHUNK_TOKENS` | `0` | Token cap per prose chunk (`0` = off). A section over the cap is split at paragraph boundaries, then line boundaries (lines are never cut, so a single line longer than the cap stays whole); every piece repeats the section heading |
-| `PROSE_KEEP_HEADING_ONLY_SECTIONS` | `false` | Emit a section that has a heading but no body of its own as a chunk instead of dropping it |
-
-Changing any `PROSE_*` setting changes the chunks, so re-run `chunk`, `embed` and `index` afterwards.
+| `PROSE_SPLIT_HEADING_DEPTH` | `3` | Deepest heading level that starts a new prose chunk. See [Prose sections](docs/chunking.md#prose-sections). |
+| `PROSE_MAX_CHUNK_TOKENS` | `0` | Maximum number of tokens in a prose chunk. `0` turns the limit off. See [Prose sections](docs/chunking.md#prose-sections). |
+| `PROSE_KEEP_HEADING_ONLY_SECTIONS` | `false` | Keeps a section that has a heading but no text as a prose chunk. See [Prose sections](docs/chunking.md#prose-sections). |
 
 #### Variables for the `embed` step
 

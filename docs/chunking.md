@@ -46,6 +46,22 @@ Output (.opencrane/chunks.json):
 
 When no companion `llms.txt` is present, the chunker uses the URL markers inside the bundle instead. It treats each `### https://...` marker line as a document boundary and takes the source URL from it. An older bundle keeps working this way until you regenerate it with `opencrane llms`.
 
+## Prose sections
+
+The prose chunker starts a new chunk at each `#`, `##`, and `###` heading. Each chunk holds one whole section, including its heading. By default, the chunker does not split a section by size, and it drops a section that has a heading but no text of its own.
+
+Some documents, such as converted standards specifications, hold long clauses under `####` and deeper headings. Those clauses stay in the chunk of their parent section, so one chunk can grow very large. A large chunk gets a less precise embedding, and the embedding model ignores the text past its input limit.
+
+To change how the chunker splits prose, set the following environment variables before you run `opencrane chunk`:
+
+| Variable | Default | Description |
+|---|---|---|
+| `PROSE_SPLIT_HEADING_DEPTH` | `3` | Deepest heading level that starts a new chunk. For example, `5` also makes each `####` and `#####` section a chunk of its own. |
+| `PROSE_MAX_CHUNK_TOKENS` | `0` | Maximum number of tokens in a prose chunk, counted the same way as the `token_count` field. `0` or a negative value turns the limit off. The chunker splits a longer section at the blank lines between paragraphs. It splits a paragraph that is still too long at line breaks. When the section has a heading, every piece starts with it. The chunker never cuts a line or a fenced code block, so a line or code block longer than the limit becomes one chunk that exceeds it. |
+| `PROSE_KEEP_HEADING_ONLY_SECTIONS` | `false` | When `true`, the chunker keeps a section that has a heading but no text as a chunk of its own. |
+
+Each of these variables changes the chunks. After you change one, run `opencrane chunk`, `opencrane embed`, and `opencrane index` again.
+
 ## Table chunks
 
 Every Markdown table becomes one `table_row` chunk per data row. The chunker renders each row as natural-language `Column: value.` lines. Each row chunk carries the section heading and the lead-in sentence from the source, so search can return the row on its own. Rows link to each other through a shared `table_id` field and through `sibling_ids`, the same way `list_item` chunks do.

@@ -387,7 +387,7 @@ opencrane visualize --file {PATH_TO_FILE}
 echo "{PARAGRAPH}" | opencrane visualize
 ```
 
-The command encodes the paragraph with the same model as the indexed chunks. It then renders an interactive HTML page with the following views side by side:
+The command encodes the paragraph the way the server encodes a search query. It then renders an interactive HTML page with the following views side by side:
 
 - Scatter: a projection of the indexed chunks, or of a random sample of them when you set `--sample`. The new paragraph is a highlighted diamond, and the chart draws a ring around each nearest neighbor.
 - Local neighborhood: a projection of only the paragraph and its nearest neighbors. Because the projection uses only these points, the distances between the neighbors are meaningful.
@@ -557,6 +557,7 @@ You need the following variables only if you run the `embed` step, directly or t
 | `AI_DOCS_CHUNKS_FILE` | `.opencrane/chunks.json` | Input chunks JSON file. See also the `--chunks-file` flag. |
 | `AI_DOCS_EMBEDDINGS_FILE` | `.opencrane/embeddings.json` | Output path for the generated embeddings. See also the `--embeddings-file` flag. |
 | `EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | Hugging Face embedding model to use |
+| `EMBEDDING_DOCUMENT_PROMPT` | none | Prefix that `embed` adds to every chunk. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
 
 #### Variables for the `index` and `serve` steps
 
@@ -576,6 +577,7 @@ The following table lists the variables:
 | `AI_DOCS_CHUNKS_FILE` | `.opencrane/chunks.json` | Chunks file that `index` loads and that the MCP server reads for keyword search. `index` reads only this variable, not the `--chunks-file` flag. |
 | `AI_DOCS_EMBEDDINGS_FILE` | `.opencrane/embeddings.json` | Embeddings file that `index` loads. `index` reads only this variable, not the `--embeddings-file` flag. |
 | `MILVUS_INSERT_BATCH_SIZE` | `2000` | Maximum number of chunks in each insert call during `index`. This limit keeps each call short enough to finish before the Milvus keepalive timeouts. A timeout makes the client retry, and the retries duplicate rows. If `index` creates duplicate rows, lower this value. |
+| `EMBEDDING_QUERY_PROMPT` | none | Prompt that `serve` and `visualize` apply to each query. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
 | `HYBRID_ALPHA` | `0.6` | Weight of vector search compared to keyword search. `1.0` is pure vector search, and `0.0` is pure BM25 keyword search. |
 | `HYBRID_CANDIDATE_POOL` | `0` | Number of results that hybrid search fetches from each arm before it fuses them. `0` means the requested `limit`. A wider pool, for example `50`, can surface chunks that both arms rank just below `limit`. |
 | `HYBRID_FUSION` | `minmax` | How hybrid search merges the two arms. `minmax` blends normalized scores, and `rrf` blends ranks with Reciprocal Rank Fusion. See [Search modes](docs/architecture.md#search-modes). |

@@ -8,8 +8,8 @@ callable, both with the signature::
 
     (query: str, candidates: list[dict]) -> list[dict]
 
-Each candidate is a search-result dict as produced by the backends: it carries
-``chunk_id``, ``content`` (str, or dict/list for YAML chunks), ``chunk_type``,
+Each candidate is a search-result dict from the search backends. It carries
+``chunk_id``, ``content`` (a string; YAML chunks arrive as JSON strings), ``chunk_type``,
 ``source_file``, ``source_name``, ``metadata_json`` and ``distance`` (the
 pre-rerank score, higher is better). The reranker returns the candidates it
 wants to keep, best first. It may rescore them by setting ``distance`` (shown
@@ -30,7 +30,11 @@ logger = logging.getLogger(__name__)
 
 
 def candidate_text(candidate: dict) -> str:
-    """Return the text of a search candidate as a string (YAML-dumps dict/list content)."""
+    """Return the text of a search candidate as a string.
+
+    Search backends always return ``content`` as a string. The dict/list branch
+    is defensive: it YAML-dumps structured content if a caller passes it.
+    """
     content = candidate.get("content", "")
     if isinstance(content, (dict, list)):
         return yaml.dump(content, default_flow_style=False, allow_unicode=True)

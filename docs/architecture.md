@@ -192,7 +192,13 @@ Neither setting needs re-indexing.
 
 The BM25 index uses the `simple` tokenizer by default. This tokenizer lowercases text and splits it on every non-alphanumeric character, so `5.4.1` and `4.5.1` produce the same tokens. To keep dotted, hyphenated, and underscored identifiers as one token, set the `BM25_TOKENIZER` environment variable to `identifier`. This tokenizer also emits the parts of each identifier, so a query for `gtp` still matches `GTP-U`. The server builds the BM25 index in memory, so a change of tokenizer needs a server restart but no re-indexing.
 
-An optional reranking stage (off by default) reorders the final candidate list of any mode before it is cut to `limit`. Enable the built-in cross-encoder with the `RERANKER_MODEL` environment variable, or register your own on `OpenCraneConfig.reranker`. See [Reranking](../README.md#reranking).
+An optional reranker reorders the results of every search mode. Consider it when search finds the right chunk but ranks it below **limit**. The reranker compares the query with each candidate and can move that chunk up. Reranking is off by default and needs no re-indexing.
+
+To turn on the built-in reranker, set the `RERANKER_MODEL` environment variable to a sentence-transformers cross-encoder model, for example `cross-encoder/ms-marco-MiniLM-L-6-v2`. The server loads the model on the first search, not at startup. To use your own reranker, see [Custom reranker](#custom-reranker).
+
+With a reranker on, each search mode fetches `RERANK_DEPTH` candidates instead of **limit**. The default is `50`, and the server never fetches fewer than **limit**. Hybrid mode fuses the two arms first. The reranker then reorders the candidates, and the server returns the first **limit** of them. The built-in reranker writes its own score to the `Score` line of each result. It runs on the CPU, so a higher `RERANK_DEPTH` makes each search slower.
+
+If the reranker fails, the server logs a warning and returns the results in their original order. The test search of the health check skips the reranker.
 
 To narrow the results, pass the following `search_docs` parameters:
 
@@ -337,6 +343,30 @@ class TerraformTreeWalker(YamlTreeWalker):
     def walk(self) -> list[Chunk]:
         ...
 ```
+
+### Custom reranker
+
+A custom reranker replaces the built-in cross-encoder, for example to call a hosted rerank API or a large language model (LLM). To add one, set the `reranker` attribute on your `Config` class. This attribute takes precedence over the `RERANKER_MODEL` environment variable. The reranker is a function, or an object with a `rerank` method, that takes the query and the list of candidates.
+
+Each candidate is a search result dictionary with the following keys:
+
+- `chunk_id`: the ID of the chunk
+- `content`: the chunk text, or a dictionary or list for YAML chunks
+- `source_file`, `source_name`, `chunk_type`, and `metadata_json`: the chunk fields from the index
+- `distance`: the search score, where a higher value is better
+
+Return the candidates best first. You can drop candidates, and you can set `distance` to your own score. The following example moves candidates that contain the query text to the top:
+
+```python
+def my_reranker(query: str, candidates: list[dict]) -> list[dict]:
+    return sorted(candidates, key=lambda c: query.lower() in str(c["content"]).lower(), reverse=True)
+
+
+class Config(OpenCraneConfig):
+    reranker = my_reranker
+```
+
+If the reranker raises an exception or returns something other than a list, the server logs the `Reranker failed, returning unreranked results` warning and returns the results in their original order.
 
 ## Data model
 

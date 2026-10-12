@@ -38,7 +38,6 @@ This README covers the following topics:
   - [Source mapping file](#source-mapping-file)
 - [Extend OpenCrane](#extend-opencrane)
   - [Extension points](#extension-points)
-  - [Reranking](#reranking)
   - [Section anchors](#section-anchors)
   - [Built-in fence types](#built-in-fence-types)
   - [Built-in YAML tree walkers](#built-in-yaml-tree-walkers)
@@ -582,8 +581,8 @@ The following table lists the variables:
 | `HYBRID_FUSION` | `minmax` | How hybrid search merges the two arms. `minmax` blends normalized scores, and `rrf` blends ranks with Reciprocal Rank Fusion. See [Search modes](docs/architecture.md#search-modes). |
 | `HYBRID_RRF_K` | `60` | The RRF smoothing constant `k`. OpenCrane uses it only when `HYBRID_FUSION` is `rrf`. |
 | `BM25_TOKENIZER` | `simple` | Keyword (BM25) tokenizer. `simple` lowercases text and splits it on every non-alphanumeric character. `identifier` keeps dotted, hyphenated, and underscored identifiers such as `5.4.1`, `TS 29.244`, `GTP-U`, or `get_yaml_definition` as one token and also emits their parts. With `identifier`, `gtp` still matches `GTP-U`, and `5.4.1` no longer matches `4.5.1`. The MCP server builds the BM25 index in memory, so a change of tokenizer needs a server restart but no re-chunking, re-embedding, or re-indexing. |
-| `RERANKER_MODEL` | `` | sentence-transformers CrossEncoder model (e.g. `cross-encoder/ms-marco-MiniLM-L-6-v2`) used to rerank search results. Unset = no reranking. Loaded lazily on the first search. See [Reranking](#reranking) |
-| `RERANK_DEPTH` | `50` | With a reranker active: how many candidates are fetched and reranked before cutting to `limit` (never fewer than `limit`). Ignored without a reranker |
+| `RERANKER_MODEL` | none | Cross-encoder model that reranks search results, for example `cross-encoder/ms-marco-MiniLM-L-6-v2`. Without it, reranking is off. See [Search modes](docs/architecture.md#search-modes). |
+| `RERANK_DEPTH` | `50` | Number of candidates that the reranker reorders. OpenCrane uses it only when a reranker is set. |
 | `DROP_EXISTING` | `false` | When `true`, `index` deletes and rebuilds the Milvus collection. Without it, `index` skips a collection that already has rows. See [`opencrane index`](#index-the-embeddings-in-milvus-with-opencrane-index). |
 
 #### Variables for the health check
@@ -701,29 +700,7 @@ Each extension point is an attribute or a method of `OpenCraneConfig`. The follo
 | `section_anchor_for` | `chunk` | Builds the in-page anchor that each chunk records in its `section_anchor` metadata. |
 | `middleware` | `serve` | Adds Asynchronous Server Gateway Interface (ASGI) middleware around the HTTP MCP server, for example for custom authorization. See [Authentication and authorization](#authentication-and-authorization). |
 | `token_verifier`, `auth_provider` | `serve` | Replaces token validation or the authorization server in `custom` authentication mode. See [Authentication and authorization](#authentication-and-authorization). |
-| `reranker` | `serve` | Rerank `search_docs` candidates (see [Reranking](#reranking)) |
-
-### Reranking
-
-`search_docs` can run an optional reranking stage. It is off by default, and with it off search behaves exactly as without it. When on, every search mode (semantic, keyword and hybrid, after fusion) fetches `RERANK_DEPTH` candidates, passes them to the reranker, and returns the top `limit` of its output. No re-indexing is needed.
-
-The built-in reranker uses a sentence-transformers CrossEncoder. Turn it on with `RERANKER_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2` (any CrossEncoder model works). The model loads lazily on the first search, and the reranker score becomes the result `Score`.
-
-To plug in your own reranker (an LLM, a hosted rerank API), set `reranker` on your config subclass. It takes precedence over `RERANKER_MODEL`. It is an object with a `rerank(query, candidates)` method or a plain function with that signature. `candidates` is a list of result dicts (`chunk_id`, `content`, `chunk_type`, `source_file`, `source_name`, `metadata_json`, `distance`). Return them best first; you may drop candidates or set `distance` to your own score:
-
-```python
-from opencrane import OpenCraneConfig
-
-
-def my_reranker(query: str, candidates: list[dict]) -> list[dict]:
-    return sorted(candidates, key=lambda c: query.lower() in str(c["content"]).lower(), reverse=True)
-
-
-class Config(OpenCraneConfig):
-    reranker = staticmethod(my_reranker)
-```
-
-**Failures do not break search.** If the reranker raises, or returns something other than a list, the server logs a warning (`Reranker failed, returning unreranked results: ...`) and returns the unreranked results cut to `limit`. Watch for that warning in the server logs. The `/health` query probe also runs through the reranker, so reranking latency counts toward its budget.
+| `reranker` | `serve` | Reorders the `search_docs` results. See [Custom reranker](docs/architecture.md#custom-reranker). |
 
 ### Section anchors
 

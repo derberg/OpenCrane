@@ -18,7 +18,7 @@ The `opencrane embed` command performs the following steps:
 
 To use a different model, set the `EMBEDDING_MODEL` environment variable.
 
-The model can produce vectors of any size. A larger model can improve results, and a smaller one embeds faster. Set the same `EMBEDDING_MODEL` for the Model Context Protocol (MCP) server.
+Any vector size works. A larger model can improve results, and a smaller one embeds faster. Set the same `EMBEDDING_MODEL` for the Model Context Protocol (MCP) server.
 
 > [!CAUTION]
 > Before each rebuild, `opencrane index` deletes the collection, and searches fail until the rebuild finishes. Check that `MILVUS_COLLECTION` and the connection variables point to the collection to replace.

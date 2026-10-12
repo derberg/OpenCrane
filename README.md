@@ -279,7 +279,7 @@ When the Milvus collection already has rows, the command skips indexing and keep
 > [!CAUTION]
 > After you upgrade OpenCrane or change the model, `opencrane index` can delete and rebuild the collection. On a Milvus server that an MCP server already uses, searches fail until the rebuild finishes.
 
-When the collection has a different vector size or lacks fields that the current OpenCrane version needs, the command deletes and rebuilds the collection automatically.
+When the collection has a different vector size or lacks fields that the current OpenCrane version needs, the command deletes and rebuilds the collection.
 
 The command reads the chunks and embeddings from the paths in the `AI_DOCS_CHUNKS_FILE` and `AI_DOCS_EMBEDDINGS_FILE` environment variables, by default `.opencrane/chunks.json` and `.opencrane/embeddings.json`.
 

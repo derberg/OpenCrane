@@ -37,6 +37,22 @@ class Config(OpenCraneConfig):
     #         return None
     #     # e.g. a host that keeps case and uses underscores:
     #     return heading.strip().replace(" ", "_")
+
+    # Custom MCP tools served next to the built-in tools. OpenCrane does not
+    # filter the tool output: if you restrict sources, call
+    # context.allowed_sources() in each handler that returns documentation.
+    # For a handler that does this, see "Add custom MCP tools" in the README.
+    # from opencrane import ExtraTool
+    # extra_tools = [
+    #     ExtraTool(
+    #         name="read_chunk",
+    #         description="Returns the full stored content of a chunk by its ID.",
+    #         input_schema={"type": "object",
+    #                       "properties": {"chunk_id": {"type": "string"}},
+    #                       "required": ["chunk_id"]},
+    #         handler=read_chunk,
+    #     ),
+    # ]
 '''
 
 CONFIG_YAML = '''\
@@ -108,16 +124,22 @@ RUN --mount=type=cache,target=/root/.cache/pip \\
     pip install opencrane
 
 # =============================================================================
-# Stage 2: Model download (cached unless EMBEDDING_MODEL changes)
+# Stage 2: Model download (cached unless EMBEDDING_MODEL or RERANKER_MODEL changes)
 # =============================================================================
 FROM deps AS model
 
 ARG EMBEDDING_MODEL=nomic-ai/nomic-embed-text-v1.5
 ENV EMBEDDING_MODEL=${EMBEDDING_MODEL}
+# Optional reranker. The runtime image is offline, so the model must be baked in.
+ARG RERANKER_MODEL=
 
 RUN --mount=type=cache,target=/root/.cache/huggingface \\
     echo "Downloading embedding model..." && \\
     python3 -c "from sentence_transformers import SentenceTransformer; SentenceTransformer(\'${EMBEDDING_MODEL}\', trust_remote_code=True)" && \\
+    if [ -n "${RERANKER_MODEL}" ]; then \\
+        echo "Downloading reranker model..." && \\
+        python3 -c "from sentence_transformers import CrossEncoder; CrossEncoder(\'${RERANKER_MODEL}\', trust_remote_code=True)"; \\
+    fi && \\
     mkdir -p /build/hf_cache && cp -r /root/.cache/huggingface /build/hf_cache/
 
 # =============================================================================
@@ -141,6 +163,8 @@ RUN mkdir -p /build/milvus_data && opencrane index
 # =============================================================================
 FROM python:3.11-slim
 
+ARG RERANKER_MODEL=
+
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \\
@@ -161,6 +185,7 @@ ENV COLLECTION_NAME=opencrane_chunks
 ENV MCP_HTTP_PORT=8000
 ENV PYTHONUNBUFFERED=1
 ENV TRANSFORMERS_OFFLINE=1
+ENV RERANKER_MODEL=${RERANKER_MODEL}
 
 EXPOSE 8000
 
@@ -176,11 +201,13 @@ services:
       dockerfile: .opencrane/Dockerfile
       args:
         EMBEDDING_MODEL: "${EMBEDDING_MODEL:-nomic-ai/nomic-embed-text-v1.5}"
+        RERANKER_MODEL: "${RERANKER_MODEL:-}"
     ports:
       - "8000:8000"
     environment:
       MILVUS_DB_PATH: /app/milvus_data/milvus.db
       COLLECTION_NAME: opencrane_chunks
+      EMBEDDING_QUERY_PROMPT: "${EMBEDDING_QUERY_PROMPT:-}"
 '''
 
 README_MD = '''\

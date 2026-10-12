@@ -11,6 +11,7 @@ The following table lists the search modes and filters that the MCP server suppo
 | Semantic search | Vector similarity with Nomic Embed v1.5 embeddings |
 | Keyword search | Best Matching 25 (BM25) ranking, without a dependency on the vector database. The `BM25_TOKENIZER` environment variable selects the tokenizer. The `identifier` tokenizer keeps identifiers such as `5.4.1` or `GTP-U` as one token. |
 | Hybrid search | Weighted combination of the semantic and keyword results |
+| Reranking | Optional stage that reorders the results with a cross-encoder or your own reranker. See [Search modes](architecture.md#search-modes). |
 | Filters | Restrict results by chunk type, source name, and metadata content |
 
 ## Start the MCP server

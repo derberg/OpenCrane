@@ -5,6 +5,7 @@ import re
 from typing import List
 from pathlib import Path
 from opencrane.rag.services.base_strategy import ProcessingStrategy
+from opencrane.shared.config import get_config
 from opencrane.shared.models.chunk import Chunk
 from opencrane.shared.utils.token_counter import get_token_count
 
@@ -21,6 +22,73 @@ def _strip_heading_urls(text: str) -> str:
     return re.sub(r'^(#{1,6})\s+https://[^\s]+\s+', r'\1 ', text, flags=re.MULTILINE)
 
 
+def _heading_level(stripped: str) -> int:
+    """Return the number of leading ``#`` characters (0 for a non-heading line)."""
+    return len(stripped) - len(stripped.lstrip('#'))
+
+
+_FENCE_RE = re.compile(r'^\s*(`{3,}|~{3,})')
+
+
+def _fence_state(line: str, fence: str | None) -> str | None:
+    """Return the open fence marker after ``line`` (``None`` outside a fence).
+
+    A fence opens on a line starting with three or more backticks or tildes and
+    closes on a bare line of the same character that is at least as long.
+    """
+    match = _FENCE_RE.match(line)
+    if not match:
+        return fence
+    marker = match.group(1)
+    if fence is None:
+        return marker
+    if marker[0] == fence[0] and len(marker) >= len(fence) and line.strip() == marker:
+        return None
+    return fence
+
+
+def _paragraphs(lines: List[str]) -> List[List[str]]:
+    """Group lines into blank-line separated paragraphs.
+
+    Blank lines inside a code fence do not end a paragraph, so a fenced block
+    always stays within one paragraph.
+    """
+    paragraphs: List[List[str]] = []
+    current: List[str] = []
+    fence = None
+    for line in lines:
+        if fence is None and not line.strip():
+            if current:
+                paragraphs.append(current)
+                current = []
+            continue
+        current.append(line)
+        fence = _fence_state(line, fence)
+    if current:
+        paragraphs.append(current)
+    return paragraphs
+
+
+def _atoms(paragraph: List[str]) -> List[str]:
+    """Split a paragraph into its lines, keeping each fenced block as one atom."""
+    atoms: List[str] = []
+    fence_lines: List[str] = []
+    fence = None
+    for line in paragraph:
+        new_fence = _fence_state(line, fence)
+        if fence is None and new_fence is None:
+            atoms.append(line)
+        else:
+            fence_lines.append(line)
+            if new_fence is None:
+                atoms.append('\n'.join(fence_lines))
+                fence_lines = []
+        fence = new_fence
+    if fence_lines:
+        atoms.append('\n'.join(fence_lines))
+    return atoms
+
+
 class ProseChunkingStrategy(ProcessingStrategy):
     """Strategy for processing prose/text content."""
 
@@ -32,6 +100,10 @@ class ProseChunkingStrategy(ProcessingStrategy):
         """Process prose node into chunks.
         
         Chunks are created at heading boundaries, preserving complete sections.
+        The deepest heading level that starts a new chunk, an optional token
+        cap per chunk and whether heading-only sections are kept come from
+        ``PROSE_SPLIT_HEADING_DEPTH``, ``PROSE_MAX_CHUNK_TOKENS`` and
+        ``PROSE_KEEP_HEADING_ONLY_SECTIONS``.
         
         Args:
             node: Docling document node to process.
@@ -46,6 +118,10 @@ class ProseChunkingStrategy(ProcessingStrategy):
         # "## 5 Title" directly followed by "### 5.1 ..."). They are handed to the
         # next chunk (never serialized) so its heading ancestry stays complete.
         self._skipped_headings = []
+        config = get_config()
+        self._split_depth = config.prose_split_heading_depth
+        self._max_tokens = config.prose_max_chunk_tokens
+        self._keep_heading_only = config.prose_keep_heading_only_sections
         
         # Get text content
         text = node.text if hasattr(node, 'text') else str(node)
@@ -59,16 +135,10 @@ class ProseChunkingStrategy(ProcessingStrategy):
             stripped = line.strip()
             
             # Check for markdown headers
-            if stripped.startswith('#') and not stripped.startswith('####'):
+            if 0 < _heading_level(stripped) <= self._split_depth:
                 # Save accumulated chunk before starting new section
                 if self._current_chunk.strip():
-                    chunk = self._create_chunk(source_file) if self._has_content() else None
-                    if chunk:
-                        chunks.append(chunk)
-                    else:
-                        self._skip_headings()
-                    self._current_chunk = ""
-                    self._current_tokens = 0
+                    self._flush(source_file, chunks)
             
             # Source separator resets URL context so content from one source
             # does not inherit the previous source's URL.
@@ -99,19 +169,82 @@ class ProseChunkingStrategy(ProcessingStrategy):
             self._current_tokens += get_token_count(line)
         
         # Save final chunk
-        if self._current_chunk.strip() and self._has_content():
-            chunk = self._create_chunk(source_file)
-            if chunk:
-                chunks.append(chunk)
+        if self._current_chunk.strip():
+            self._flush(source_file, chunks)
         
         return chunks
 
-    def _create_chunk(self, source_file: Path) -> Chunk | None:
-        """Create a prose chunk from accumulated content.
+    def _flush(self, source_file: Path, chunks: List[Chunk]) -> None:
+        """Emit the accumulated section as one or more chunks, then reset it.
+
+        A heading-only section is dropped unless heading-only sections are
+        kept; a section over the token cap is split by ``_split_oversized``.
+        The headings of a section that produces no chunk are handed to the next
+        chunk, so its heading ancestry stays complete.
+        """
+        emitted = False
+        if self._keep_heading_only or self._has_content():
+            for piece in self._split_oversized(self._current_chunk):
+                chunk = self._create_chunk(source_file, piece)
+                if chunk:
+                    chunks.append(chunk)
+                    emitted = True
+        if not emitted:
+            self._skip_headings()
+        self._current_chunk = ""
+        self._current_tokens = 0
+
+    def _split_oversized(self, text: str) -> List[str]:
+        """Split a section larger than the token cap at paragraph/line boundaries.
+
+        Paragraphs (blank-line separated) are packed greedily up to the cap; a
+        paragraph that alone exceeds it is packed line by line. Lines and fenced
+        code blocks are never cut, so a single line or code block longer than
+        the cap becomes its own piece. A cap of zero or less turns this off. When
+        the section starts with a heading, every piece is prefixed with it so
+        each piece carries the same heading context as a normal chunk.
+        """
+        if self._max_tokens <= 0 or get_token_count(text.strip()) <= self._max_tokens:
+            return [text]
+
+        lines = text.strip().split('\n')
+        heading = lines[0] if _heading_level(lines[0].strip()) else None
+        prefix = f"{heading}\n\n" if heading else ""
+        body = lines[1:] if heading else lines
+
+        def fits(candidate: str) -> bool:
+            return get_token_count(prefix + candidate) <= self._max_tokens
+
+        # Units are (text, starts_paragraph); a paragraph over the cap
+        # contributes one unit per line (or per fenced block) instead of one
+        # for the whole paragraph.
+        units = []
+        for paragraph in _paragraphs(body):
+            joined = '\n'.join(paragraph)
+            if fits(joined):
+                units.append((joined, True))
+            else:
+                units.extend((atom, i == 0) for i, atom in enumerate(_atoms(paragraph)))
+
+        pieces: List[str] = []
+        current = ""
+        for unit_text, starts_paragraph in units:
+            candidate = current + ('\n\n' if starts_paragraph else '\n') + unit_text if current else unit_text
+            if current and not fits(candidate):
+                pieces.append(current)
+                candidate = unit_text
+            current = candidate
+        if current:
+            pieces.append(current)
+
+        return [prefix + piece for piece in pieces] or [text]
+
+    def _create_chunk(self, source_file: Path, text: str | None = None) -> Chunk | None:
+        """Create a prose chunk from accumulated content (or ``text`` when given).
         
         Strips GitHub URLs from heading content since they're already in metadata.
         """
-        content = self._current_chunk.strip()
+        content = (self._current_chunk if text is None else text).strip()
         
         if not content:
             return None  # pragma: no cover

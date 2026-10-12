@@ -200,3 +200,37 @@ class TestEmbeddingService:
         assert len(result.embeddings) == 2
         # Verify vectors were converted from numpy
         assert isinstance(result.embeddings[0].vector, list)
+
+@patch('opencrane.mcp.services.embeddings.SentenceTransformer')
+def test_generate_embeddings_applies_and_records_document_prompt(mock_transformer, monkeypatch):
+    """The configured document prompt is prepended to every chunk and recorded in the file."""
+    monkeypatch.setenv("EMBEDDING_DOCUMENT_PROMPT", "search_document: ")
+    mock_model = Mock()
+    mock_model.encode.return_value = [[0.1] * 768, [0.2] * 768]
+    mock_transformer.return_value = mock_model
+
+    service = EmbeddingService()
+    result = service.generate_embeddings([
+        {"content": "plain", "chunk_id": "a", "source_file": "a.md", "chunk_type": "prose"},
+        {"content": {"k": "v"}, "chunk_id": "b", "source_file": "b.yaml", "chunk_type": "yaml_content"},
+    ])
+
+    texts = mock_model.encode.call_args.args[0]
+    assert texts == ["search_document: plain", "search_document: k: v\n"]
+    assert result.document_prompt == "search_document: "
+
+
+@patch.dict('os.environ', {'AI_DOCS_EMBEDDINGS_BACKEND': 'mock'}, clear=False)
+def test_generate_embeddings_records_empty_document_prompt_by_default(monkeypatch):
+    """Without a document prompt, the file records an empty prompt."""
+    monkeypatch.delenv("EMBEDDING_DOCUMENT_PROMPT", raising=False)
+    result = EmbeddingService("mock").generate_embeddings(
+        [{"content": "x", "chunk_id": "a", "source_file": "a.md", "chunk_type": "prose"}]
+    )
+    assert result.document_prompt == ""
+
+
+def test_embeddings_file_without_document_prompt_loads_as_empty():
+    """Embeddings files written before the field existed still load."""
+    ef = EmbeddingsFile(model="m", dimensions=1, created_at="t", chunks_sha256="s", embeddings=[])
+    assert ef.document_prompt == ""

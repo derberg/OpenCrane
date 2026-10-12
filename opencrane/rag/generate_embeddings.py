@@ -7,6 +7,7 @@ import json
 import logging
 from pathlib import Path
 from opencrane.mcp.services.embeddings import EmbeddingService
+from opencrane.shared.config import get_config
 from opencrane.shared.logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
@@ -19,13 +20,16 @@ def _chunks_sha256(chunks_file: Path) -> str:
 
 
 def _embeddings_up_to_date(chunks_file: Path, embeddings_file: Path) -> bool:
-    """Check if embeddings were already generated from the current chunks file."""
+    """Check if embeddings were already generated from the current chunks file and document prompt."""
     if not embeddings_file.exists():
         return False
     try:
         with open(embeddings_file, 'r') as f:
             data = json.load(f)
-        return data.get("chunks_sha256") == _chunks_sha256(chunks_file)
+        return (
+            data.get("chunks_sha256") == _chunks_sha256(chunks_file)
+            and data.get("document_prompt", "") == get_config().embedding_document_prompt
+        )
     except Exception:
         return False
 
@@ -51,7 +55,7 @@ def main(chunks_file=None, embeddings_file=None, force=False):
         sys.exit(1)
 
     if not force and _embeddings_up_to_date(chunks_file, embeddings_file):
-        logger.info("⊘ Skipping embedding generation: chunks unchanged since last run")
+        logger.info("⊘ Skipping embedding generation: chunks and document prompt unchanged since last run")
         logger.info("  To force regeneration, use: --force")
         return
 

@@ -103,7 +103,7 @@ Chunking strategies run in priority order. The first strategy that matches a doc
 | 2 | Code | Handles fenced code blocks. Detects the language, and runs tree walkers for structured YAML specs inside code fences. |
 | 3 | Table | Handles Markdown tables. Produces one `table_row` chunk for each data row, written as natural-language `Column: value.` lines. Links each row to the rest of the table through `table_id` and `sibling_ids`. Passes text outside the table to the list and prose strategies. |
 | 4 | List | Handles Markdown lists. Produces one chunk for each top-level list item, and attaches sibling previews and breadcrumb paths. |
-| 5 | Prose | Handles every fragment the other strategies do not match. Splits at heading boundaries (`#`, `##`, `###`) and keeps each section whole. It does not split a section by token count. |
+| 5 | Prose | Handles every fragment the other strategies do not match. By default, splits at `#`, `##`, and `###` headings and keeps each section whole. See [Prose sections](chunking.md#prose-sections). |
 
 Each chunk carries type-specific metadata fields and a `chunk_type` field. The `chunk_type` field takes one of the following values:
 
@@ -120,7 +120,7 @@ For the full field reference, see [Chunk metadata schema](metadata-schema.md).
 
 ### Embed
 
-The `opencrane embed` command generates a vector embedding for each chunk in `.opencrane/chunks.json` and writes the results to `.opencrane/embeddings.json`. It uses the `sentence-transformers` library with `nomic-ai/nomic-embed-text-v1.5` as the default model. To change the model, set the `EMBEDDING_MODEL` environment variable. The Milvus collection stores 768-dimension vectors, so the model must produce vectors of that size. The command processes chunks in batches to limit memory use.
+The `opencrane embed` command generates a vector embedding for each chunk in `.opencrane/chunks.json` and writes the results to `.opencrane/embeddings.json`. It uses the `sentence-transformers` library with `nomic-ai/nomic-embed-text-v1.5` as the default model. To change the model, see [Choose an embedding model](embeddings.md#choose-an-embedding-model). The command processes chunks in batches to limit memory use.
 
 ### Index
 
@@ -160,6 +160,8 @@ The tools the server exposes depend on the content of the index. `search_docs` a
 | `get_section` | Prose chunks with navigation metadata indexed | Returns a whole prose section by chunk ID or clause number. |
 | `health` | Always present | Reports the service status, the Milvus connection state, and collection statistics. |
 
+To add your own tools, see [Add custom MCP tools](../README.md#add-custom-mcp-tools).
+
 ### Search modes
 
 `search_docs` supports the following search modes, which you select with the **search_mode** parameter:
@@ -193,6 +195,14 @@ Neither setting needs re-indexing.
 
 The BM25 index uses the `simple` tokenizer by default. This tokenizer lowercases text and splits it on every non-alphanumeric character, so `5.4.1` and `4.5.1` produce the same tokens. To keep dotted, hyphenated, and underscored identifiers as one token, set the `BM25_TOKENIZER` environment variable to `identifier`. This tokenizer also emits the parts of each identifier, so a query for `gtp` still matches `GTP-U`. The server builds the BM25 index in memory, so a change of tokenizer needs a server restart but no re-indexing.
 
+An optional reranker reorders the results of every search mode. The reranker scores each candidate against the query and can move up a chunk that search ranks too low. Reranking is off by default and needs no re-indexing.
+
+To turn on the built-in reranker, set the `RERANKER_MODEL` environment variable to a sentence-transformers cross-encoder model, for example `cross-encoder/ms-marco-MiniLM-L-6-v2`. To use your own reranker, see [Custom reranker](#custom-reranker). The Docker image from `opencrane init` runs offline, so set `RERANKER_MODEL` before you build the image. The build then downloads the model into the image.
+
+The server reranks the first `RERANK_DEPTH` candidates, `50` by default, and returns the top **limit** results. Set `RERANK_DEPTH` to a whole number up to `16384`. A value below **limit** counts as **limit**. The built-in reranker runs on the CPU, so a higher `RERANK_DEPTH` makes each search slower. The `Score` line shows the score of the built-in reranker.
+
+If the reranker fails, the server logs the `Reranker failed, returning unreranked results` warning and returns the results in search order. The health check skips the reranker.
+
 To narrow the results, pass the following `search_docs` parameters:
 
 - **chunk_types**: limits the results to the given chunk types
@@ -217,6 +227,7 @@ When `.opencrane/config.yaml` has an `extensions` key, for example `extensions: 
 - Fence types
 - Chunking strategies
 - YAML tree walkers
+- Reranker
 
 ### Retrieval-augmented generation pipeline
 
@@ -270,6 +281,7 @@ The configuration is in `opencrane/config.py` and `opencrane/shared/config.py`. 
 | `fence_types` | A dictionary of fence type handlers. The defaults include OpenAPI, AsyncAPI, CRD, and JSON Schema. |
 | `chunking_strategies` | An ordered list of chunking strategy instances. OpenCrane evaluates them in order, and the first match handles the fragment. |
 | `yaml_tree_walkers` | A list of tree walker classes. OpenCrane evaluates them in the order listed. |
+| `reranker` | An optional `search_docs` reranker. See [Custom reranker](#custom-reranker). |
 
 `Config` in `opencrane/shared/config.py` is the runtime configuration that comes from the environment. It reads all settings from environment variables when the process starts. This runtime `Config` is a different class from the `Config` subclass in `.opencrane/extensions.py`.
 
@@ -335,6 +347,29 @@ class TerraformTreeWalker(YamlTreeWalker):
 
     def walk(self) -> list[Chunk]:
         ...
+```
+
+### Custom reranker
+
+A custom reranker replaces the built-in reranker, for example to call a hosted rerank API or a large language model. Set the `reranker` attribute on your `Config` class to a function or an object with a `rerank` method. The reranker takes the query and a list of candidates. Each candidate is a dictionary with the following keys:
+
+- `chunk_id`: the chunk ID
+- `content`: the chunk text, which is a JSON string for YAML chunks
+- `source_file`: the source file path
+- `source_name`: the documentation source
+- `chunk_type`: the chunk type
+- `metadata_json`: the chunk metadata as JSON
+- `distance`: the search score, where a higher value is better
+
+Return the candidates best first. You can drop candidates or set `distance` to your own score. The following example moves candidates that contain the query text to the top:
+
+```python
+def my_reranker(query: str, candidates: list[dict]) -> list[dict]:
+    return sorted(candidates, key=lambda c: query.lower() in c["content"].lower(), reverse=True)
+
+
+class Config(OpenCraneConfig):
+    reranker = my_reranker
 ```
 
 ## Data model

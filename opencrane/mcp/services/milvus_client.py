@@ -6,7 +6,7 @@ import re
 from typing import List, Optional, Dict
 from pymilvus import MilvusClient, DataType
 from opencrane.shared.config import get_config
-from opencrane.shared.models.vector_chunk import VectorChunk
+from opencrane.shared.models.vector_chunk import DEFAULT_EMBEDDING_DIM, VectorChunk
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +112,8 @@ class MilvusService:
             self.uri = f"http://{self.host}:{self.port}"
         self.collection_name = collection_name or self.config.milvus_collection
         self.client = None
+        # Cached vector dimension of the existing collection (see vector_dim()).
+        self._vector_dim: Optional[int] = None
         self._connect()
 
     def _connect(self):
@@ -124,9 +126,13 @@ class MilvusService:
             logger.error(f"Failed to connect to Milvus: {e}")
             raise
 
-    def create_collection(self):
-        """Create the collection with schema for chunks."""
-        logger.info(f"Creating collection: {self.collection_name}")
+    def create_collection(self, dim: int = DEFAULT_EMBEDDING_DIM):
+        """Create the collection with schema for chunks.
+
+        ``dim`` is the embedding vector size and must match the model that
+        produced the embeddings (it is recorded in the embeddings file).
+        """
+        logger.info(f"Creating collection: {self.collection_name} (vector dim {dim})")
 
         schema = self.client.create_schema(
             auto_id=False,
@@ -134,7 +140,7 @@ class MilvusService:
         )
 
         schema.add_field(field_name="chunk_id", datatype=DataType.VARCHAR, max_length=64, is_primary=True)
-        schema.add_field(field_name="embedding", datatype=DataType.FLOAT_VECTOR, dim=768)
+        schema.add_field(field_name="embedding", datatype=DataType.FLOAT_VECTOR, dim=dim)
         schema.add_field(field_name="content", datatype=DataType.VARCHAR, max_length=65535)
         schema.add_field(field_name="source_file", datatype=DataType.VARCHAR, max_length=512)
         schema.add_field(field_name="source_name", datatype=DataType.VARCHAR, max_length=256)
@@ -175,6 +181,7 @@ class MilvusService:
                 schema=schema,
                 index_params=index_params
             )
+            self._vector_dim = dim
             logger.info("Collection created successfully")
         except Exception as e:
             logger.error(f"Failed to create collection: {e}")
@@ -258,6 +265,18 @@ class MilvusService:
         logger.info(
             f"Searching with limit {limit}, chunk_types: {chunk_types}, source_files: {source_files}, source_names: {source_names}, metadata_contains: {metadata_contains}"
         )
+
+        # A query vector from a model of a different size than the indexed one
+        # makes Milvus reject the search, which the handler below would turn into
+        # a silent empty result. Fail loudly instead, outside that handler.
+        expected_dim = self.vector_dim()
+        if expected_dim is not None and len(query_vector) != expected_dim:
+            raise ValueError(
+                f"Query embedding has {len(query_vector)} dimensions but collection "
+                f"'{self.collection_name}' was indexed with {expected_dim}-dimensional "
+                "vectors. Serve with the same EMBEDDING_MODEL that built the index, "
+                "or re-run 'opencrane embed' and 'opencrane index' with the new model."
+            )
 
         search_params = {
             "metric_type": "COSINE",
@@ -462,6 +481,25 @@ class MilvusService:
         except Exception as e:
             logger.error(f"Failed to describe collection: {e}")
             return set()
+
+    def vector_dim(self) -> Optional[int]:
+        """Return the embedding vector dimension of the existing collection.
+
+        ``None`` when the collection does not exist or its schema cannot be read.
+        A successful lookup is cached: a collection's vector dimension cannot
+        change without dropping and recreating it.
+        """
+        if self._vector_dim is not None:
+            return self._vector_dim
+        try:
+            desc = self.client.describe_collection(collection_name=self.collection_name)
+            for field in desc.get("fields", []):
+                if field.get("name") == "embedding":
+                    self._vector_dim = int(field["params"]["dim"])
+                    return self._vector_dim
+        except Exception as e:
+            logger.debug(f"Could not read vector dimension of collection: {e}")
+        return None
 
     def distinct_chunk_types(self, batch_size: int = 1000) -> set:
         """Return the distinct ``chunk_type`` values present in the collection.

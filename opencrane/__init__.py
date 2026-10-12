@@ -8,6 +8,7 @@ from opencrane.mcp.services.embeddings import EmbeddingService
 from opencrane.mcp.services.milvus_client import MilvusService
 from opencrane.mcp.services.keyword_search import KeywordSearchService
 from opencrane.config import OpenCraneConfig
+from opencrane.mcp.extra_tools import ExtraTool, ToolContext
 
 __all__ = [
     "get_config",
@@ -21,4 +22,6 @@ __all__ = [
     "MilvusService",
     "KeywordSearchService",
     "OpenCraneConfig",
+    "ExtraTool",
+    "ToolContext",
 ]

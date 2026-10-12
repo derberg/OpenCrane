@@ -12,7 +12,7 @@ The standard input/output (stdio) transport is always unauthenticated. According
 The `auth:` block sets the authentication mode. Place it at the top level of the `.opencrane/config.yaml` file.
 
 > [!CAUTION]
-> With the default `type: none`, OpenCrane has no authentication. Anyone who can reach the HTTP port can read every source. Before you expose the server on a network, set another type, or index only sources that anyone may read. `default_sources` limits `search_docs` and `get_section` only. The `get_yaml_definition`, `get_list_members`, and `get_table_members` tools still return chunks from any indexed source.
+> With the default `type: none`, OpenCrane has no authentication. Anyone who can reach the HTTP port can read every source. Before you expose the server on a network, set another type, or index only sources that anyone may read. `default_sources` limits `search_docs` and `get_section` only. The `get_yaml_definition`, `get_list_members`, and `get_table_members` tools still return chunks from any indexed source. Custom MCP tools must filter their own output. See [Add custom MCP tools](../README.md#add-custom-mcp-tools).
 
 The following example sets the default mode:
 
@@ -299,7 +299,7 @@ If `scope_sources` cannot express your authorization logic, write a middleware. 
 - A custom header
 - A JWT claim
 
-Write the middleware as an Asynchronous Server Gateway Interface (ASGI) application that wraps the OpenCrane application. Add it to the `middleware` list on your `OpenCraneConfig` subclass in `.opencrane/extensions.py`. OpenCrane loads that file only when `.opencrane/config.yaml` sets `extensions: extensions.py`, or when the `OPENCRANE_CONFIG` environment variable points to your config class. The `opencrane serve --config` flag does not load the middleware or the auth hooks. Each entry in the list is a callable `(app) -> asgi_app`. Typically, the entry is a class that stores the wrapped application and implements `async __call__(self, scope, receive, send)`.
+Write the middleware as an Asynchronous Server Gateway Interface (ASGI) application that wraps the OpenCrane application. Add it to the `middleware` list on your `OpenCraneConfig` subclass in `.opencrane/extensions.py`. OpenCrane loads that file when `.opencrane/config.yaml` sets `extensions: extensions.py`. The `opencrane serve --config` flag and the `OPENCRANE_CONFIG` environment variable load the config class that you name instead. Each entry in the list is a callable `(app) -> asgi_app`. Typically, the entry is a class that stores the wrapped application and implements `async __call__(self, scope, receive, send)`.
 
 OpenCrane runs the entries on every endpoint, before it validates the token and before the tool handler. The first entry in the list runs first. A middleware declares the permitted source names for the request by calling `set_allowed_sources(...)`.
 

@@ -248,7 +248,7 @@ The following tools read from the vector database and do not keep an in-memory c
 
 - `get_yaml_definition` fetches a single chunk by its primary key.
 - `get_list_members` and `get_table_members` query the indexed `list_id` and `table_id` columns for the members of a list or table. The query reads only chunks of the matching `chunk_type`.
-- `get_section` queries the indexed `clause_id` and `parent_chunk_id` columns, and fetches the sections before and after by primary key.
+- `get_section` queries the indexed `clause_id` and `parent_chunk_id` columns.
 - In `semantic` mode, `search_docs` reads `token_count` and the `source_url` of each chunk directly from the query result.
 
 Keyword and hybrid search are the exception. They use a BM25 index that OpenCrane builds from `chunks.json` and holds in memory.

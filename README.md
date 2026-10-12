@@ -320,7 +320,7 @@ The server adds the following tools only when the index contains the chunk types
 | `get_list_members` | Returns every chunk of a Markdown list, in order. | List item |
 | `get_table_members` | Returns every row chunk of a Markdown table, in order. | Table row |
 | `get_yaml_definition` | Returns the full YAML definition behind a structured YAML chunk, for example a field of a Kubernetes CustomResourceDefinition. | CustomResourceDefinition, OpenAPI, or JSON Schema |
-| `get_section` | Returns a whole prose section by chunk ID or clause number. | Prose chunks with navigation metadata |
+| `get_section` | Returns a whole prose section by chunk ID or clause number. | Prose with navigation metadata |
 | `get_metadata_schema` | Describes the metadata fields of the chunks. | List item, table row, CustomResourceDefinition, OpenAPI, JSON Schema, or prose with navigation metadata |
 
 The HTTP transport also exposes a health endpoint. For details, see [Health endpoint](#health-endpoint).
@@ -698,7 +698,7 @@ Each extension point is an attribute or a method of `OpenCraneConfig`. The follo
 | `chunking_strategies` | `chunk` | Adds or replaces chunking strategies for different content types. |
 | `yaml_tree_walkers` | `chunk` | Adds walkers for custom YAML document formats. |
 | `section_anchor_for` | `chunk` | Builds the in-page anchor that each chunk records in its `section_anchor` metadata. |
-| `section_clause_for` | `chunk` | Extracts the `clause_id` of a prose chunk from its section heading. |
+| `section_clause_for` | `chunk` | Extracts the `clause_id` from a section heading. |
 | `middleware` | `serve` | Adds Asynchronous Server Gateway Interface (ASGI) middleware around the HTTP MCP server, for example for custom authorization. See [Authentication and authorization](#authentication-and-authorization). |
 | `token_verifier`, `auth_provider` | `serve` | Replaces token validation or the authorization server in `custom` authentication mode. See [Authentication and authorization](#authentication-and-authorization). |
 
@@ -746,16 +746,15 @@ An override takes precedence over `section_anchor_style`.
 
 ### Section navigation and clause IDs
 
-Each prose chunk records its place in the heading tree of its page and the clause number of its heading. An AI agent can then read a whole section, or open a clause that a user cites by number. For details, see [Prose navigation metadata](docs/metadata-schema.md#prose-navigation-metadata) and [`get_section`](docs/vector-search.md#get_section).
+Each prose chunk records its heading path and clause number. For details, see [Prose navigation metadata](docs/metadata-schema.md#prose-navigation-metadata) and [`get_section`](docs/vector-search.md#get_section).
 
-The default pattern matches clause numbers such as `5.4.1.2a` or `Annex C` at the start of a heading. To change it, set `section_clause_pattern` in `.opencrane/config.yaml` to a regular expression whose first capture group is the clause ID. The following example matches plain dotted numbers and shows the value that turns clause IDs off:
+To change the clause format, set `section_clause_pattern` in `.opencrane/config.yaml` to a regular expression whose first capture group is the clause ID. The value `none` turns clause IDs off. The following example matches plain dotted numbers:
 
 ```yaml
-section_clause_pattern: '(\d+(?:\.\d+)*)\s'   # plain dotted numbers only
-# section_clause_pattern: none                # no clause IDs
+section_clause_pattern: '(\d+(?:\.\d+)*)\s'
 ```
 
-To turn the navigation metadata off, set `prose_navigation = False` in your config subclass. For an index that an older OpenCrane version built, run `opencrane chunk`, `opencrane embed`, and `opencrane index` again to enable `get_section`.
+To turn the navigation metadata off, set `prose_navigation = False` in your config subclass. For an index that an older version built, run `opencrane chunk`, `opencrane embed`, and `opencrane index` again.
 
 ### Built-in fence types
 

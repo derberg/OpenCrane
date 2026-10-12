@@ -69,19 +69,19 @@ The following table lists the metadata fields of `json_schema` chunks:
 
 ## Prose Navigation Metadata
 
-A `prose` chunk records where it sits in the heading tree of its page and links to the prose chunks around it, so you can expand a search result to its whole section.
+Use the navigation fields to find the whole section of a prose search result, and the prose chunks around it.
 
-A chunk without a heading of its own, for example text after a code block, repeats the `heading_path`, `clause_id`, and `parent_chunk_id` of the previous section.
+A chunk that does not start with a heading continues the previous section and repeats its `heading_path`, `clause_id`, and `parent_chunk_id`.
 
-The following table lists the navigation fields:
+The following table lists the navigation fields of `prose` chunks:
 
 | Field | Type | Description | Example |
 |---|---|---|---|
-| `heading_path` | string, optional | The section heading and every heading above it, joined by ` > `. | `"Setup Guide > Install > Prerequisites"` |
+| `heading_path` | string, optional | Section heading and the headings above it, joined by ` > `. | `"Setup Guide > Install > Prerequisites"` |
 | `clause_id` | string, optional | Clause number at the start of the section heading. Pass it to `get_section(clause_id=...)`. | `"5.4.1.2a"`, `"Annex C"` |
-| `parent_chunk_id` | `chunk_id` string, or null | The chunk of the enclosing section, or `null` for a top-level section. | `null` |
+| `parent_chunk_id` | `chunk_id` string, or null | Chunk of the enclosing section, or `null` at the top level. | `null` |
 | `position` | integer, 1-indexed | Position of the chunk among the prose chunks of its page. | `1` |
-| `prev_chunk_id`, `next_chunk_id` | `chunk_id` string, or null | The previous and the next prose chunk of the same page, or `null` at the page edges. The links skip other chunk types. | `"a41e…"` (shortened) |
+| `prev_chunk_id`, `next_chunk_id` | `chunk_id` string, or null | Previous and next prose chunk of the page, or `null` at the page edges. | `"a41e…"` (shortened) |
 
 ## List Item Metadata
 

@@ -233,24 +233,21 @@ get_table_members(table_id="{TABLE_ID}")
 
 ### `get_section`
 
-The `get_section` tool returns a whole prose section by chunk ID or clause number. Call it when a prose search result is truncated, or when a user cites a clause by number. The tool is available only when the indexed prose chunks have [navigation metadata](metadata-schema.md#prose-navigation-metadata).
+The `get_section` tool returns a whole prose section, for example when a search result is truncated. The tool is available only when the prose chunks have [navigation metadata](metadata-schema.md#prose-navigation-metadata).
 
-Pass either `chunk_id` or `clause_id`. The following table lists the parameters of `get_section`:
+The following table lists the parameters of `get_section`. Pass `chunk_id` or `clause_id`:
 
 | Parameter | Type | Required | Description | Default value |
 |---|---|---|---|---|
-| `chunk_id` | string | No | Chunk ID of a prose search result. It takes precedence over `clause_id`. | none |
-| `clause_id` | string | No | Clause number from the section heading, for example `5.4.1.2a`. | none |
-| `source` | string | No | Limits a `clause_id` lookup to pages whose source name, URL, or title contains this text. When several pages match, the tool lists them. | none |
-| `include_subsections` | boolean | No | Returns the full text of all sub-sections instead of a list of the direct sub-sections. | `false` |
-| `neighbors` | integer | No | Number of sections, from 0 to 5, to also return before and after the section on the same page. | `0` |
+| `chunk_id` | string | No | Chunk ID of a prose search result. It overrides `clause_id`. | none |
+| `clause_id` | string | No | Clause number from the section heading. | none |
+| `source` | string | No | Part of the source name, page URL, or page title. | none |
+| `include_subsections` | boolean | No | Returns the sub-sections in full instead of as a list. | `false` |
+| `neighbors` | integer | No | Number of sections, `0` to `5`, to add before and after. | `0` |
 
-With authentication, the tool returns only sections from sources that the caller can search.
-
-The following example reads a section with its neighbors, and then opens a clause by number:
+The following example opens a clause:
 
 ```python
-get_section(chunk_id="{CHUNK_ID}", neighbors=1)
 get_section(clause_id="5.4.1.2a", source="{SOURCE_NAME}")
 ```
 

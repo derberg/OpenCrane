@@ -628,30 +628,30 @@ GET_METADATA_SCHEMA_TOOL_SCHEMA = {
     "required": []
 }
 
-GET_SECTION_TOOL_DESCRIPTION = "Read a whole documentation section by chunk_id or by clause number. Use search_docs to find information. Use get_section when a prose search result is cut off, when the question names a clause such as '5.4.1.2a' or 'Annex C', or when you need the sub-sections or the sections before and after a result. Returns the section text with its heading path and a list of its direct sub-sections. Set include_subsections for the full text of all sub-sections, and neighbors for that many sections before and after it on the same page."
+GET_SECTION_TOOL_DESCRIPTION = "Read a whole documentation section by chunk_id or by clause number. Use search_docs to find information. Use get_section when a prose search result is cut off, when the question names a clause such as '5.4.1.2a' or 'Annex C', or when you need the sub-sections or the sections before and after a result. Returns the section text with its heading path and a list of its direct sub-sections. Set include_subsections for the full text of all sub-sections, and neighbors for that many sections before and after the section on the same page."
 GET_SECTION_TOOL_SCHEMA = {
     "type": "object",
     "properties": {
         "chunk_id": {
             "type": "string",
-            "description": "A prose chunk ID from search results (the 'Chunk ID:' field). Takes precedence over clause_id."
+            "description": "Prose chunk ID from search results (the 'Chunk ID:' field); overrides clause_id"
         },
         "clause_id": {
             "type": "string",
-            "description": "Clause number as written in the heading, for example '5.4.1.2.2.8', '6.1.1.2a', 'C.4.4.2', or 'Annex C'."
+            "description": "Clause number as written in the heading, for example '5.4.1.2.2.8', '6.1.1.2a', 'C.4.4.2', or 'Annex C'"
         },
         "source": {
             "type": "string",
-            "description": "Narrows a clause_id lookup when several pages share the clause number; matched case-insensitively as a substring of the source name, page URL, or page title."
+            "description": "Narrows a clause_id lookup to pages whose source name, page URL, or page title contains this text. The match ignores case."
         },
         "include_subsections": {
             "type": "boolean",
-            "description": "Returns the full text of all nested sub-sections instead of only listing the direct sub-sections.",
+            "description": "Returns the full text of all nested sub-sections instead of a list of the direct sub-sections.",
             "default": False
         },
         "neighbors": {
             "type": "integer",
-            "description": "Number of sections before and after the section, on the same page, to also return in document order.",
+            "description": "Number of sections to return before and after the section on the same page, in document order",
             "default": 0,
             "minimum": 0,
             "maximum": 5

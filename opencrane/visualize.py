@@ -26,6 +26,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from opencrane.shared.models.vector_chunk import DEFAULT_EMBEDDING_DIM
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_EMBEDDINGS_FILE = Path(".opencrane/embeddings.json")
@@ -578,6 +580,10 @@ def _build_sources_figure(sources: list[str], all_sims, top_n: int = 30):
 # Plain-language explanations rendered inside the generated HTML so anyone can
 # understand the visualization without reading external docs.
 
+# Stands in for the embedding dimension in the static help text below. The
+# page fills in the real size, because any embedding model can build the index.
+_DIM_TOKEN = "__EMBED_DIM__"
+
 GLOSSARY_HTML = """
 <details class="help">
   <summary><strong>Deep-dive glossary</strong> &mdash; click to expand if a term is unclear</summary>
@@ -596,14 +602,14 @@ GLOSSARY_HTML = """
         <span class="tagline">&mdash; the "meaning fingerprint" of a text</span></summary>
       <div class="term-body">
         <p><strong>What it is:</strong> Every piece of text is converted by a language
-        model into a list of 768 numbers (a "vector"). Texts about similar topics produce
+        model into a list of __EMBED_DIM__ numbers (a "vector"). Texts about similar topics produce
         similar lists. The actual numbers are arbitrary &mdash; only relative similarity
         matters.</p>
         <p><strong>Why it's here:</strong> Computers can't compare "meanings" directly,
         but they can compare lists of numbers. Embeddings are how we turn "is this text
         similar to that text?" into "are these two vectors pointing in similar directions?"</p>
         <p><strong>What you can read from it:</strong> Nothing directly &mdash; you never
-        see the 768 numbers. They power every other quantity on this page.</p>
+        see the __EMBED_DIM__ numbers. They power every other quantity on this page.</p>
         <p><strong>How it helps:</strong> The whole search-and-similarity system that
         backs RAG / MCP is built on embeddings. If you trust the embeddings, you can
         trust the rankings.</p>
@@ -707,7 +713,7 @@ GLOSSARY_HTML = """
       <div class="term-body">
         <p><strong>What they are:</strong> The K corpus chunks with the highest cosine
         similarity to your paragraph (default K=12, set with <code>--neighbors</code>).
-        Ranking is always computed on the full 768-number embedding, <em>not</em> on
+        Ranking is always computed on the full __EMBED_DIM__-number embedding, <em>not</em> on
         the 2D/3D picture &mdash; even when they look far apart on screen.</p>
         <p><strong>Where they're shown:</strong> Teal-ringed dots in the global scatter;
         colored dots in the local neighborhood map; the bulleted list in your terminal.</p>
@@ -744,7 +750,7 @@ GLOSSARY_HTML = """
         <p><strong>How it helps:</strong> Quickly spot whether your topic is already
         well-covered or under-served before you commit to writing more.</p>
         <p><strong>Caveat:</strong> Density is computed in the reduced 3D/2D space, not
-        the full 768D. It's a useful approximation, not gospel.</p>
+        the full __EMBED_DIM__D. It's a useful approximation, not gospel.</p>
       </div>
     </details>
 
@@ -777,10 +783,10 @@ GLOSSARY_HTML = """
       <summary><strong>Meaning-differences (and "% kept")</strong>
         <span class="tagline">&mdash; how much real information survives the flattening</span></summary>
       <div class="term-body">
-        <p><strong>What it is:</strong> Each embedding has 768 numbers, all
+        <p><strong>What it is:</strong> Each embedding has __EMBED_DIM__ numbers, all
         carrying tiny bits of "what this text is about". The full set of those
         differences between texts is the raw signal we'd want to draw. We call it
-        meaning-differences. When you flatten 768 dimensions to 2 or 3 to plot,
+        meaning-differences. When you flatten __EMBED_DIM__ dimensions to 2 or 3 to plot,
         you lose some of those differences &mdash; some get merged, some get
         dropped.</p>
         <p><strong>Why it's shown:</strong> The percentage on a chart title
@@ -805,9 +811,9 @@ GLOSSARY_HTML = """
 
     <details class="term">
       <summary><strong>PCA, UMAP, t-SNE</strong>
-        <span class="tagline">&mdash; how 768 dimensions become 2 or 3</span></summary>
+        <span class="tagline">&mdash; how __EMBED_DIM__ dimensions become 2 or 3</span></summary>
       <div class="term-body">
-        <p><strong>What they are:</strong> Algorithms that take the 768-number embedding
+        <p><strong>What they are:</strong> Algorithms that take the __EMBED_DIM__-number embedding
         and squash it down to 2 or 3 numbers we can draw. Each makes different
         trade-offs.</p>
         <ul>
@@ -816,12 +822,12 @@ GLOSSARY_HTML = """
           a stable global view.</li>
           <li><strong>UMAP</strong> (default) &mdash; non-linear, preserves
           <em>local</em> neighborhoods well. Two dots close together really are similar;
-          two dots far apart may or may not be far in 768D. Use for cleaner clusters.</li>
+          two dots far apart may or may not be far in __EMBED_DIM__D. Use for cleaner clusters.</li>
           <li><strong>t-SNE</strong> &mdash; non-linear, slowest, even better at
           revealing tight clusters. Doesn't preserve global distances at all. Use only
           when you specifically want to see groupings.</li>
         </ul>
-        <p><strong>Why they're here:</strong> A 768-dimensional space can't be drawn.
+        <p><strong>Why they're here:</strong> A __EMBED_DIM__-dimensional space can't be drawn.
         Without one of these, there's no scatter chart.</p>
         <p><strong>What you can read from them:</strong> A rough map. The structure of
         clusters and which repos sit near which is meaningful. Exact pixel distances
@@ -895,7 +901,7 @@ SCATTER_HELP = """
       <strong>your paragraph</strong>.</li>
       <li>The <span style="color:#00b4a8">&#9711; teal-ringed dots</span> are your
       <strong>top neighbors</strong> &mdash; the chunks most similar to your paragraph.
-      Their similarity is computed on the full 768-number embedding, <em>not</em> on
+      Their similarity is computed on the full __EMBED_DIM__-number embedding, <em>not</em> on
       where they happen to land in this 3D picture.</li>
       <li><strong>Density coloring</strong> (when active): yellow = crowded region with
       many similar docs (popular topic); dark purple = isolated region (niche or unique
@@ -905,13 +911,13 @@ SCATTER_HELP = """
     </ul>
     <p><strong>About the % on the title (PCA only):</strong> the "keeps about X%" number
     tells you how much of the raw <strong>meaning-differences</strong> between texts
-    survived the squashing from 768 dimensions to 3. PCA on a few thousand points
+    survived the squashing from __EMBED_DIM__ dimensions to 3. PCA on a few thousand points
     typically only keeps 10&ndash;15% &mdash; meaning most of what makes texts
     different got merged or dropped during the flattening. See the local-neighborhood
     chart below for a much higher-fidelity view (typically 35&ndash;60%).</p>
-    <p><strong>Caveat:</strong> reducing 768 dimensions to 3 always loses a lot of
+    <p><strong>Caveat:</strong> reducing __EMBED_DIM__ dimensions to 3 always loses a lot of
     information. UMAP and t-SNE don't expose a % number, but they too distort.
-    Trust the hover similarity numbers (computed on the full 768D) over on-screen
+    Trust the hover similarity numbers (computed on the full __EMBED_DIM__D) over on-screen
     distances.</p>
   </div>
 </details>
@@ -927,11 +933,11 @@ NEIGHBORS_HELP = """
 
     <h4>What "meaning-differences" means</h4>
     <p>Two pieces of text that talk about the same topic have similar embeddings
-    (similar 768-number vectors). Two pieces on totally different topics have
-    very different embeddings. The full set of those differences across all 768
+    (similar __EMBED_DIM__-number vectors). Two pieces on totally different topics have
+    very different embeddings. The full set of those differences across all __EMBED_DIM__
     dimensions is what we call <strong>meaning-differences</strong> &mdash; it's
     the raw information that makes "similar" or "different" meaningful.</p>
-    <p>When we squash 768 dimensions down to 2 or 3 to draw a picture, we
+    <p>When we squash __EMBED_DIM__ dimensions down to 2 or 3 to draw a picture, we
     inevitably lose some of that information. The percentage on the title tells you
     <em>how much survived</em> the flattening. Higher = the picture is closer to
     the truth.</p>
@@ -946,7 +952,7 @@ NEIGHBORS_HELP = """
       (about 13 points by default) into 2D &mdash; typically 35&ndash;60% of the
       meaning-differences survive.</li>
     </ul>
-    <p>Intuition: with thousands of points spread across 768 dimensions, no two
+    <p>Intuition: with thousands of points spread across __EMBED_DIM__ dimensions, no two
     axes can do justice to all the structure. With just 13 points, two well-chosen
     axes can usually capture most of how those 13 differ from one another. That's
     why distances on this close-up are far more trustworthy than on the global view.</p>
@@ -1296,7 +1302,7 @@ _ABBR_CHUNK = (
 _ABBR_COSINE = (
     '<span class="tip" data-tip="A score from 0 to 1 measuring how aligned two text embeddings '
     'are. >0.85 = likely duplicate; 0.4-0.7 = related; below 0.3 = unrelated. '
-    'Computed on the full 768-number embedding, not on this picture.">cosine '
+    'Computed on the full __EMBED_DIM__-number embedding, not on this picture.">cosine '
     'similarity</span>'
 )
 _ABBR_DENSITY = (
@@ -1309,7 +1315,7 @@ _ABBR_PINK_DIAMOND = (
     '<span style="color:#ff2a6d">&#9670; pink diamond</span></span>'
 )
 _ABBR_TEAL_RINGS = (
-    '<span class="tip" data-tip="Top-K nearest neighbors ranked by full-768D cosine similarity. '
+    '<span class="tip" data-tip="Top-K nearest neighbors ranked by full-__EMBED_DIM__D cosine similarity. '
     'They appear here even if visually far away — trust the hover similarity '
     'numbers, not the on-screen distance.">teal-ringed dots</span>'
 )
@@ -2093,6 +2099,11 @@ def _write_combined_html(figs, out_path: Path, ctx: dict):
     import plotly.io as pio
 
     verdict = ctx["verdict"]
+    dim = ctx.get("embedding_dim", DEFAULT_EMBEDDING_DIM)
+
+    def _with_dim(html: str) -> str:
+        return html.replace(_DIM_TOKEN, str(dim))
+
     # Big sim score gets a colored decimal point — split & inject.
     sim_str = f"{ctx['top_sim']:.3f}".replace(
         ".", '<span class="dot">.</span>'
@@ -2119,8 +2130,8 @@ def _write_combined_html(figs, out_path: Path, ctx: dict):
     fig_sections = []
     for i, (title, fig, viz_key) in enumerate(figs):
         fig_num = i + 2  # fig 01 is the spectrum (inside the bento)
-        caption = VIZ_TO_CAPTION.get(viz_key, "")
-        help_html = VIZ_TO_HELP.get(viz_key, "")
+        caption = _with_dim(VIZ_TO_CAPTION.get(viz_key, ""))
+        help_html = _with_dim(VIZ_TO_HELP.get(viz_key, ""))
         debug_html = VIZ_TO_DEBUG.get(viz_key, "")
         fig_sections.append(
             f'<section class="fig">'
@@ -2192,7 +2203,7 @@ def _write_combined_html(figs, out_path: Path, ctx: dict):
         '<summary>How this number is computed</summary>',
         '<ol class="score-howto-steps">',
         f'<li><b>Encode</b> &mdash; your paragraph is turned into a '
-        f'<b>768-number vector</b> by the same model that built the corpus '
+        f'<b>{dim}-number vector</b> by the same model that built the corpus '
         f'(<code>{ctx["model_name"].split("/")[-1]}</code>, locally on CPU).</li>',
         f'<li><b>Score every chunk</b> &mdash; cosine similarity is computed '
         f'between your vector and <em>each of the {ctx["full_size"]:,} corpus '
@@ -2274,7 +2285,7 @@ def _write_combined_html(figs, out_path: Path, ctx: dict):
         '</div>',
         '<div class="stat"><div class="stat-label">Corpus sample</div>'
         f'<div class="stat-value">{ctx["sample_size"]:,}<span class="stat-value-sub">chunks</span></div>'
-        f'<div class="stat-foot">projected from <b>768D</b> embeddings</div>'
+        f'<div class="stat-foot">projected from <b>{dim}D</b> embeddings</div>'
         '</div>',
         '<div class="stat"><div class="stat-label">Top repo match</div>'
         f'<div class="stat-value" style="font-size:18px;line-height:1.3">{ctx["top_source"]}</div>'
@@ -2320,7 +2331,7 @@ def _write_combined_html(figs, out_path: Path, ctx: dict):
         '<p class="appendix-intro">Every term that appears on this page, '
         'with what it means, why it\'s shown, what you can read from it, '
         'and how it helps your work.</p>',
-        GLOSSARY_HTML.replace(chr(10), " "),
+        _with_dim(GLOSSARY_HTML).replace(chr(10), " "),
         '</section>',
 
         # ── COLOPHON ──────────────────────────────────────────────
@@ -2442,6 +2453,7 @@ def main(
         unique_neighbor_sources=unique_neighbor_sources,
         info=info,
         verdict=_verdict_data(top_sim),
+        embedding_dim=int(corpus.vectors.shape[1]),
     )
 
     _write_combined_html(figs, output, ctx)

@@ -131,8 +131,8 @@ The `opencrane index` command loads `.opencrane/embeddings.json` into a Milvus v
 
 With the scalar indexes, the `get_list_members`, `get_table_members`, and `get_section` MCP tools run an indexed lookup instead of scanning all chunks in memory. OpenCrane uses `INVERTED` rather than `AUTOINDEX` because Milvus Lite accepts `AUTOINDEX` only on vector fields.
 
-> [!NOTE]
-> OpenCrane stores `list_id`, `table_id`, `clause_id`, and `parent_chunk_id` in their own columns. If an older OpenCrane version built the collection without these columns, the next `index` run drops the collection and rebuilds it. This happens once after the upgrade, and the logs report it.
+> [!CAUTION]
+> OpenCrane stores `list_id`, `table_id`, `clause_id`, and `parent_chunk_id` in their own columns. If an older OpenCrane version built the collection without these columns, the next `index` run drops the collection and rebuilds it. Searches on that collection fail until the rebuild finishes.
 
 Milvus runs in one of the following deployment modes:
 

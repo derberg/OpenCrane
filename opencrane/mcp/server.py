@@ -628,7 +628,7 @@ GET_METADATA_SCHEMA_TOOL_SCHEMA = {
     "required": []
 }
 
-GET_SECTION_TOOL_DESCRIPTION = "Read a whole documentation section by chunk_id or by clause number. Use search_docs to find information. Use get_section when a prose search result is cut off, when the question names a clause such as '5.4.1.2a' or 'Annex C', or when you need the sub-sections or the sections before and after a result. Returns the section text with its heading path and a list of its direct sub-sections. Set include_subsections for the full text of all sub-sections, and neighbors for that many sections before and after the section on the same page."
+GET_SECTION_TOOL_DESCRIPTION = "Read a whole documentation section by chunk_id or by clause number. Use search_docs to find information. Use get_section when a prose search result is cut off, when the question names a clause such as '5.4.1.2a' or 'Annex C', or when you need the sub-sections or the sections before and after a result. Returns the section text with its heading path and a list of its direct sub-sections."
 GET_SECTION_TOOL_SCHEMA = {
     "type": "object",
     "properties": {

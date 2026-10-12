@@ -746,7 +746,7 @@ An override takes precedence over `section_anchor_style`.
 
 ### Section navigation and clause IDs
 
-Each prose chunk records its heading path and clause number. For details, see [Prose navigation metadata](docs/metadata-schema.md#prose-navigation-metadata) and [`get_section`](docs/vector-search.md#get_section).
+Each prose chunk records its heading path and clause number. The [`get_section`](docs/vector-search.md#get_section) tool uses them to return whole sections. For the fields, see [Prose navigation metadata](docs/metadata-schema.md#prose-navigation-metadata).
 
 To change the clause format, set `section_clause_pattern` in `.opencrane/config.yaml` to a regular expression whose first capture group is the clause ID. The value `none` turns clause IDs off. The following example matches plain dotted numbers:
 
@@ -754,7 +754,12 @@ To change the clause format, set `section_clause_pattern` in `.opencrane/config.
 section_clause_pattern: '(\d+(?:\.\d+)*)\s'
 ```
 
-To turn the navigation metadata off, set `prose_navigation = False` in your config subclass. For an index that an older version built, run `opencrane chunk`, `opencrane embed`, and `opencrane index` again.
+To turn the navigation metadata off, set `prose_navigation = False` in your config subclass.
+
+> [!CAUTION]
+> `opencrane index` deletes a collection that an older version built, and searches fail until the rebuild finishes. First confirm that `MILVUS_COLLECTION` and the connection variables name the collection to replace.
+
+For an older index, run `opencrane chunk`, `opencrane embed`, and `opencrane index` again.
 
 ### Built-in fence types
 

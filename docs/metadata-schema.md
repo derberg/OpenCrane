@@ -71,9 +71,9 @@ Chunks of JSON Schema documents, with `chunk_type: "json_schema"`, carry the fol
 
 ## Prose navigation metadata
 
-Use the navigation fields to find the whole section of a prose search result, and the prose chunks around it.
+Use the navigation fields to find the whole section of a prose search result and the chunks around it.
 
-A chunk that does not start with a heading continues the previous section and repeats its `heading_path`, `clause_id`, and `parent_chunk_id`.
+A chunk without a leading heading continues the previous section and repeats its `heading_path`, `clause_id`, and `parent_chunk_id`.
 
 Chunks with `chunk_type: "prose"` carry the following navigation fields:
 

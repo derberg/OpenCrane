@@ -440,6 +440,36 @@ def _get_source_keys() -> list[str]:
         return []
 
 
+# Milvus rejects a search whose topk exceeds 16384, so a larger candidate pool
+# would make every hybrid query fail.
+MAX_HYBRID_CANDIDATE_POOL = 16384
+
+
+def _effective_rrf_k(config) -> int:
+    """Return ``HYBRID_RRF_K`` clamped to at least 0, so ``k + rank`` stays positive for rank >= 1."""
+    return max(0, config.hybrid_rrf_k)
+
+
+def _alpha_description(config) -> str:
+    """Describe ``alpha`` for the hybrid fusion method this server runs."""
+    description = (
+        "Blend weight for hybrid mode (0-1). Controls the semantic vs keyword balance. "
+        f"Default {config.hybrid_alpha:g} works well for most queries. "
+        "Set alpha=0.2 when you have a specific term but want some fuzzy matching. "
+        "Set alpha=0.9 for conceptual queries that happen to include a known term. "
+        "Set alpha=1.0 for pure semantic within hybrid mode. Only used when search_mode is 'hybrid'."
+    )
+    if config.hybrid_fusion == "rrf":
+        top = 2 / (_effective_rrf_k(config) + 1)
+        description += (
+            " This server fuses hybrid results by rank (reciprocal rank fusion): alpha weights the "
+            "semantic ranking against the keyword ranking, and 0.5 weights them equally. "
+            f"Hybrid scores are therefore small (at most {top:.3f}) and only order the results; "
+            "a low score does not mean a weak match."
+        )
+    return description
+
+
 def _build_search_tool(source_keys: list[str] | None = None) -> Tool:
     """Build the search_docs tool with description and schema derived from indexed data.
 
@@ -450,6 +480,7 @@ def _build_search_tool(source_keys: list[str] | None = None) -> Tool:
             advertise the names of private topics served on another endpoint. When
             ``None`` (default), every configured source is advertised.
     """
+    config = get_config()
     chunk_types = sorted(_get_indexed_chunk_types())
     if source_keys is None:
         source_keys = _get_source_keys()
@@ -517,7 +548,8 @@ def _build_search_tool(source_keys: list[str] | None = None) -> Tool:
                 },
                 "alpha": {
                     "type": "number",
-                    "description": "Blend weight for hybrid mode (0-1). Controls the semantic vs keyword balance. Default 0.6 works well for most queries. Set alpha=0.2 when you have a specific term but want some fuzzy matching. Set alpha=0.9 for conceptual queries that happen to include a known term. Set alpha=1.0 for pure semantic within hybrid mode. Only used when search_mode is 'hybrid'.",
+                    "description": _alpha_description(config),
+                    "default": config.hybrid_alpha,
                     "minimum": 0,
                     "maximum": 1
                 }
@@ -845,7 +877,7 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
                 formatted.append(TextContent(type="text", text=result_text))
             return formatted
 
-        def _semantic_results() -> list[dict]:
+        def _semantic_results(arm_limit: int = limit) -> list[dict]:
             embeddings_service = get_embeddings_service()
             query_embedding = embeddings_service.model.encode([query], batch_size=8, show_progress_bar=False)
             if hasattr(query_embedding, 'tolist'):
@@ -855,17 +887,17 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
             milvus_service = get_milvus_service()
             return milvus_service.search(
                 query_vec,
-                limit=limit,
+                limit=arm_limit,
                 chunk_types=chunk_types,
                 source_names=source_names,
                 metadata_contains=metadata_contains,
             )
 
-        def _keyword_results() -> list[dict]:
+        def _keyword_results(arm_limit: int = limit) -> list[dict]:
             keyword_service = get_keyword_service()
             return keyword_service.search(
                 query,
-                limit=limit,
+                limit=arm_limit,
                 chunk_types=chunk_types,
                 source_names=source_names,
                 metadata_contains=metadata_contains,
@@ -882,10 +914,14 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
                 results = []
             return _format(results)
         elif search_mode == "hybrid":
+            config = get_config()
+            # Fetch a wider candidate pool per arm so a chunk ranked just below
+            # `limit` by both arms can still win after fusion; never below limit.
+            pool = min(max(limit, config.hybrid_candidate_pool), MAX_HYBRID_CANDIDATE_POOL)
             loop = asyncio.get_event_loop()
             sem, key = await asyncio.gather(
-                loop.run_in_executor(None, _semantic_results),
-                loop.run_in_executor(None, _keyword_results),
+                loop.run_in_executor(None, _semantic_results, pool),
+                loop.run_in_executor(None, _keyword_results, pool),
             )
             
             # Handle None results
@@ -893,6 +929,10 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
                 sem = []
             if key is None:
                 key = []
+            # Keyword search pads its results with score-0 chunks that match no
+            # query term. They carry no keyword signal, yet RRF would give them
+            # rank credit, and min-max would score them all 1.0 when nothing matched.
+            key = [r for r in key if float(r.get("distance", 0.0)) > 0]
 
             # Normalize scores and merge by chunk_id
             def _normalize(rs: list[dict]) -> dict[str, float]:
@@ -905,8 +945,27 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
                     return {r.get("chunk_id"): 1.0 for r in rs}
                 return {r.get("chunk_id"): (float(r.get("distance", 0.0)) - min_s) / spread for r in rs}
 
-            sem_norm = _normalize(sem)
-            key_norm = _normalize(key)
+            def _rrf(rs: list[dict]) -> dict[str, float]:
+                # 1 / (k + rank), rank 1-based by descending score; a duplicate
+                # chunk_id keeps its best (first) rank.
+                ordered = sorted(rs, key=lambda r: float(r.get("distance", 0.0)), reverse=True)
+                out: dict[str, float] = {}
+                for rank, r in enumerate(ordered, 1):
+                    out.setdefault(r.get("chunk_id"), 1.0 / (rrf_k + rank))
+                return out
+
+            fusion = config.hybrid_fusion
+            rrf_k = _effective_rrf_k(config)
+            if fusion == "rrf":
+                # Weighted RRF: alpha weights the semantic arm, (1 - alpha) the
+                # keyword arm. Scaled by 2 so alpha=0.5 equals classic RRF.
+                sem_norm, key_norm = _rrf(sem), _rrf(key)
+                sem_w, key_w = 2 * alpha, 2 * (1 - alpha)
+            else:
+                if fusion != "minmax":
+                    logger.warning(f"Unknown HYBRID_FUSION '{fusion}', using 'minmax'")
+                sem_norm, key_norm = _normalize(sem), _normalize(key)
+                sem_w, key_w = alpha, 1 - alpha
             ids = set(sem_norm.keys()) | set(key_norm.keys())
 
             # For assembling final objects, index originals by id
@@ -922,7 +981,7 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
             for cid in ids:
                 s = sem_norm.get(cid, 0.0)
                 k = key_norm.get(cid, 0.0)
-                score = alpha * s + (1 - alpha) * k
+                score = sem_w * s + key_w * k
                 # Prefer semantic record, else keyword
                 rec = sem_map.get(cid) or key_map.get(cid)
                 if not rec:
@@ -931,7 +990,9 @@ async def _search_documentation_impl(arguments: dict, *, raise_on_error: bool = 
                 out["distance"] = score
                 combined.append(out)
 
-            combined.sort(key=lambda r: r.get("distance", 0), reverse=True)
+            # chunk_id breaks ties, which RRF produces often, so the order does
+            # not depend on set iteration and stays stable across restarts.
+            combined.sort(key=lambda r: (-r.get("distance", 0), str(r.get("chunk_id"))))
             return _format(combined[:limit])
         else:
             return [TextContent(type="text", text=f"Invalid search_mode: {search_mode}")]
@@ -1095,11 +1156,13 @@ async def compute_health() -> dict:
             stats_status = "degraded"
 
         # The keyword (BM25) index is the one heavy structure still built lazily
-        # on first use (search no longer loads any chunk map into RAM). Capture its
-        # residency BEFORE the probe, which may build it itself, so the first-query
+        # on first use (search no longer loads any chunk map into RAM), then kept
+        # resident. Capture its residency BEFORE the probe so the first-query
         # memory spike stays visible.
         checks["heavy_maps"] = {
-            "keyword_index_resident": _keyword_service is not None,
+            "keyword_index_resident": (
+                _keyword_service is not None and bool(_keyword_service.index_resident)
+            ),
         }
 
         checks["memory"] = _memory_health()

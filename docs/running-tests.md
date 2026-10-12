@@ -1,13 +1,21 @@
-# Running Tests
+# Run the tests
 
-## Testing Strategy
+The OpenCrane test suite has unit tests and integration tests. The `./pytest.sh --check-coverage` command enforces 100% test coverage.
 
-- **Unit tests** (`tests/unit/`) - Fast, mocked dependencies, run during development (~10s)
-- **Integration tests** (`tests/integration/`) - Real services, slower, marked with `@pytest.mark.integration` (~2-3min)
-  - Includes **acceptance tests** - end-to-end tests via MCP protocol using production data
-- **Coverage requirement** - 100% enforced by pytest.ini
+## Test types
 
-## Quick Reference
+The following table describes the test types:
+
+| Test type | Location | Description |
+|---|---|---|
+| Unit tests | `tests/unit/` | Fast tests with mocked dependencies. |
+| Integration tests | `tests/integration/` | Slower end-to-end tests. Some of them run against an embedded Milvus Lite database. |
+
+The integration tests include acceptance tests. These tests call the tools through the Model Context Protocol (MCP) server, for example `tests/integration/test_mcp_tools_acceptance.py`.
+
+## Common test commands
+
+The following commands cover the common test runs:
 
 ```bash
 # Run all tests (unit + integration)
@@ -16,23 +24,20 @@
 # Run with 100% coverage check
 ./pytest.sh --check-coverage
 
-# Run only unit tests (fast iteration)
+# Run only the unit tests, for quick iterations during development
 ./pytest.sh tests/unit/
-# or
-pytest
 
-# Run only integration tests
-./pytest.sh -m integration
+# Run only the integration tests
+./pytest.sh tests/integration/
 
-# Run specific test file
+# Run a specific test file
 ./pytest.sh tests/integration/test_mcp_tools_acceptance.py
 ```
 
-## Why pytest.sh?
+## What the `pytest.sh` script does
 
-The `./pytest.sh` script runs ALL tests by default (overriding pytest.ini which skips integration tests). It also:
-- Auto-activates `.venv`
-- Sets PYTHONPATH correctly
-- Provides `--check-coverage` flag for CI/CD
+Run the tests with `./pytest.sh`, not with `pytest` directly. The script does the following:
 
-Use `pytest` directly for quick unit-test-only iterations during development.
+- Activates `.venv` if it exists.
+- Adds the project root to `PYTHONPATH`. With this setting, `from opencrane.mcp...` imports work, and `from mcp import Tool` loads the installed `mcp` package instead of the `opencrane/mcp/` directory.
+- Provides the `--check-coverage` flag, which fails the run when coverage is below 100%. The continuous integration and delivery (CI/CD) workflow uses this flag.

@@ -33,7 +33,7 @@ First-run steps go here.
 ````
 
 > [!IMPORTANT]
-> In a part of the page that contains a list, the list chunker emits the text before the list as one prose chunk. This happens even when that text spans several `##` sections. The part starts at the previous code block or at the top of the page. Search then returns those sections as one result.
+> In a part of the page that contains a list, the list chunker emits the text before the list as one prose chunk. This happens even when that text spans several `##` sections. The part starts at the previous code block outside a list, or at the top of the page. Search then returns those sections as one result.
 
 ### Headings that do not split chunks
 

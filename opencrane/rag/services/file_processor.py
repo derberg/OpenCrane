@@ -12,8 +12,8 @@ from opencrane.rag.services.code_chunker import CodeChunkingStrategy
 from opencrane.rag.services.table_chunker import _is_table_separator
 from opencrane.rag.services.llms_index import PAGE_SEPARATOR
 from opencrane.rag.services.utils.markdown_structure import (
+    HeadingTracker,
     list_item_fence_mask,
-    update_heading_stack,
 )
 from opencrane.shared.models.chunk import Chunk
 
@@ -275,12 +275,12 @@ class FileProcessor:
 
         def _assign_heading_ancestry(items):
             """Give each item the headings seen so far on its page."""
-            stack = []
+            tracker = HeadingTracker()
             for item in items:
                 if item.starts_page:
-                    stack = []
-                item.heading_ancestry = list(stack)
-                update_heading_stack(stack, item.text)
+                    tracker = HeadingTracker()
+                item.heading_ancestry = list(tracker.stack)
+                tracker.feed(item.text)
             return items
 
         class FakeDocument:

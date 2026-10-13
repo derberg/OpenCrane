@@ -19,6 +19,7 @@ from opencrane.rag.services.file_processor import FileProcessor
 from opencrane.rag.services.llms_index import LlmsIndex
 from opencrane.rag.services.table_chunker import TableChunkingStrategy
 from opencrane.rag.services.utils.markdown_structure import (
+    HeadingTracker,
     has_fence_outside_list_items,
     list_item_fence_mask,
     update_heading_stack,
@@ -216,3 +217,35 @@ class TestMarkdownStructureHelpers:
         stack = [(1, "Guide")]
         update_heading_stack(stack, "## A\n\n```bash\n# comment\n```\n\n### B\n\n## C\n")
         assert stack == [(1, "Guide"), (2, "C")]
+
+
+@pytest.mark.unit
+class TestNestedFences:
+    """A ```` fence that shows ``` fences inside it is one fence."""
+
+    NESTED = (
+        "# Guide\n\n## A\n\n````md\n```yaml\n## not a heading\n```\n````\n\n- item\n"
+    )
+
+    def test_heading_like_line_in_nested_fence_is_not_ancestry(self, tmp_path):
+        items = _of_type(_chunk_with_index(tmp_path, self.NESTED), "list_item")
+        assert [c.metadata["breadcrumb_path"] for c in items] == ["Guide > A"]
+
+    def test_legacy_heading_like_line_in_nested_fence_is_not_ancestry(self, tmp_path):
+        full = "# [https://x] https://x/guide Guide\n" + self.NESTED.split("\n", 1)[1]
+        items = _of_type(_chunk_legacy(tmp_path, full), "list_item")
+        assert [c.metadata["breadcrumb_path"] for c in items] == ["Guide > A"]
+
+    def test_list_inside_nested_fence_is_not_a_list_item_fence(self):
+        lines = ["````md", "1. Step:", "", "   ```bash", "   x", "   ```", "````"]
+        assert list_item_fence_mask(lines) == [False] * 7
+
+    def test_nested_fence_in_list_item_is_masked_to_its_end(self):
+        lines = ["- item", "", "  ````md", "  ```bash", "  x", "  ```", "  ````", "after"]
+        assert list_item_fence_mask(lines) == [False, False] + [True] * 5 + [False]
+
+    def test_tracker_carries_fence_state_across_parts(self):
+        tracker = HeadingTracker([(1, "Guide")])
+        for part in ["````md\n```yaml", "# not a heading", "```\n````", "## B"]:
+            tracker.feed(part)
+        assert tracker.stack == [(1, "Guide"), (2, "B")]

@@ -676,3 +676,50 @@ def test_generated_source_without_resolvable_url_does_not_poison_mixed_bundle(
         "No chunks with mapped.example.com source_url — "
         "the no-url source poisoned the entire bundle (regression)"
     )
+
+
+@pytest.mark.unit
+def test_single_sources_dir_still_includes_external_llmstxt_source(tmp_path, monkeypatch):
+    """Regression: with one fetched GitHub source (the single .opencrane/sources
+    dir case) plus one ``type: llmstxt`` source, the external bundle must be
+    appended to the combined llms-full.txt and get its own llms.txt section.
+    Re-running must not duplicate it."""
+    opencrane_dir = tmp_path / ".opencrane"
+    opencrane_dir.mkdir()
+    config_yaml = opencrane_dir / "config.yaml"
+    config_yaml.write_text(
+        "sources:\n"
+        "  proj:\n"
+        "    url: https://github.com/org/proj\n"
+        "    docs_path: docs\n"
+        "    manual: true\n"
+        "  likec4:\n"
+        "    type: llmstxt\n"
+        "    url: https://likec4.dev/llms-full.txt\n"
+        "    manual: true\n"
+    )
+    monkeypatch.setenv("MAPPING_FILE", str(config_yaml))
+
+    docs = opencrane_dir / "sources" / "proj" / "docs"
+    docs.mkdir(parents=True)
+    (docs / "index.md").write_text("# Proj Page\n\nProject docs.\n")
+
+    llmstxt_dir = opencrane_dir / "llmstxt"
+    likec4_dir = llmstxt_dir / "likec4"
+    likec4_dir.mkdir(parents=True)
+    (likec4_dir / "llms-full.txt").write_text("# LikeC4 Tutorial\n\nArchitecture as code.\n")
+
+    monkeypatch.chdir(tmp_path)
+
+    for _ in range(2):
+        generate_llms_txt._source_mapping = None
+        generate_outputs(force=True)
+
+        content = (llmstxt_dir / "llms-full.txt").read_text()
+        assert content.count("# Proj Page") == 1
+        assert content.count("# LikeC4 Tutorial") == 1
+        assert content.count("\n\n======\n\n") == 1
+
+        index = (llmstxt_dir / "llms.txt").read_text()
+        assert "## proj" in index
+        assert "## likec4" in index

@@ -87,7 +87,7 @@ For the file `.opencrane/sources/my-project/guides/setup.md`, OpenCrane builds t
 3. Adds `docs_path`, if present: `/docs`
 4. Adds the path of the file relative to the directory of the source: `/guides/setup.md`
 
-When the entry has no `docs_path` or an empty one, step 4 adds the path with the path key in front, for example `/my-project/guides/setup.md`.
+For a fetched source, a missing `docs_path` counts as `docs`, the directory that the fetch copies, and an empty `docs_path` adds nothing in step 3. A local source keeps its path key in the URL, because the key is a directory of the repository.
 
 OpenCrane writes the resulting entry to `llms.txt`:
 

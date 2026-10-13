@@ -536,6 +536,14 @@ Keep the following variables at their defaults in these cases:
 
 Environment variables set persistent defaults, for example in a CI/CD pipeline. For the variables that set file paths, see [Default file and directory names](#default-file-and-directory-names). The following sections list the other variables.
 
+#### Variables for all commands
+
+Every `opencrane` command reads the following variable:
+
+| Variable | Default | Description |
+|---|---|---|
+| `LOG_LEVEL` | `INFO` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`, in uppercase or lowercase. OpenCrane writes its log to stderr and to `.opencrane/fetch_docs.log`. An unknown value logs one warning and uses `INFO`. |
+
 #### Variables for the `fetch` step
 
 You need the following variables only if you run the `fetch` step, directly or through `opencrane build`:

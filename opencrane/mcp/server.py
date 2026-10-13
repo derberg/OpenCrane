@@ -21,13 +21,15 @@ from opencrane.mcp.services.milvus_client import MilvusService
 from opencrane.mcp.services.keyword_search import KeywordSearchService
 from opencrane.mcp.services.reranker import CrossEncoderReranker, apply_reranker
 from opencrane.shared.config import get_config
+from opencrane.shared.logging_config import resolve_log_level
 from opencrane.shared.utils.embedding_prompts import format_query, warn_if_inconsistent
 
 import sys
 
-# Configure logging to stderr (stdout is reserved for MCP stdio transport)
+# Configure logging to stderr (stdout is reserved for MCP stdio transport).
+# LOG_LEVEL sets the level, default INFO.
 logging.basicConfig(
-    level=logging.INFO,
+    level=resolve_log_level(),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     stream=sys.stderr,
 )

@@ -39,11 +39,11 @@ The following table describes each field:
 | Path key, for example `my-project` | The source name. OpenCrane stores a fetched source in `.opencrane/sources/{PATH_KEY}/`. For a local source without `docs_path`, the path key is the directory path relative to the project root. |
 | `url` | The source repository URL, used for page URLs and for the fetch. For a `type: llmstxt` source, the URL or local path of the `llms-full.txt` file. |
 | `type` | `github` (the default) or `llmstxt`. An `llmstxt` source is an existing `llms-full.txt` bundle. The fetch writes it to `.opencrane/llmstxt/{PATH_KEY}/llms-full.txt`, and stale cleanup never removes it. |
-| `docs_url` | The base URL of the published documentation site. When set, OpenCrane builds page URLs from it instead of from `url`. A fetch can remove this field. See [Entries that the fetch maintains](#entries-that-the-fetch-maintains). |
+| `docs_url` | The base URL of the published documentation site. When set, OpenCrane builds page URLs from it instead of from `url`. A fetch removes this field from an entry with `manual: false`. See [Entries that the fetch maintains](#entries-that-the-fetch-maintains). |
 | `docs_path` | The path within the source repository where the documentation is. An empty string means the repository root. If you leave the field out, the fetch uses `docs`. For a local source, `docs_path` names the directory to read, relative to the project root, in place of the path key. |
 | `manual` | `false` means auto-discovery created the entry, and each fetch rewrites or removes it. `true` means you maintain the entry. `opencrane add` sets `true`. |
 | `local` | When `true`, the entry is a directory in the project. OpenCrane does not fetch it, and the `llms` step reads the directory directly. |
-| `ignore_patterns` | More directory names to leave out of this source. OpenCrane adds them to the top-level `ignore_patterns`. A fetch can remove this field. See [Entries that the fetch maintains](#entries-that-the-fetch-maintains). |
+| `ignore_patterns` | More directory names to leave out of this source. OpenCrane adds them to the top-level `ignore_patterns`. A fetch removes this field from an entry with `manual: false`. See [Entries that the fetch maintains](#entries-that-the-fetch-maintains). |
 | `sha`, `tag`, `release`, `branch` | Pin the fetch to one commit, tag, release, or branch. The fetch reads these fields only on entries with `manual: true`. For the order of precedence, see [Fetch documentation sources](fetching.md). |
 
 For which files a bundle includes, see [Choose what each bundle contains](llms-generation.md#choose-what-each-bundle-contains).
@@ -59,14 +59,7 @@ To use a different file, set the `MAPPING_FILE` environment variable. OpenCrane 
 
 For each repository that auto-discovery returns, `opencrane fetch` writes an entry with only `url`, `docs_path: docs`, and `manual: false`. The fetch never changes an entry with `manual: true` into an auto-discovered one, and never removes it. For the cleanup rules, see [How the fetch removes stale sources](fetching.md#how-the-fetch-removes-stale-sources).
 
-Each fetch rewrites every GitHub entry that it fetches, including entries with `manual: true`. The rewritten entry keeps only the following fields:
-
-- `url`
-- `docs_path`
-- `manual`
-- `sha`, `tag`, `release`, and `branch`
-
-The fetch drops every other field, for example `docs_url` and `ignore_patterns`.
+Each fetch rewrites the entries with `manual: false`, so a field that you add to them is lost. On an entry with `manual: true`, the fetch updates only `url`, `docs_path`, `manual`, and the ref fields, and keeps every other field.
 
 ## Page URLs
 

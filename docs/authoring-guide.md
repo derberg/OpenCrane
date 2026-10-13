@@ -415,7 +415,7 @@ The following rules apply to the columns and placement of a table:
 - Put the identifying value in the first column. The first column is the `row_key` of the row, and the sibling previews show up to 30 characters of it, including the ellipsis. Start with the name or key, not a description.
 - Give every column a header. OpenCrane renders each cell as `Header: value.`, so a blank header produces an unlabeled `: value.` line that reads poorly.
 - Match the number of cells in every row to the header. A row with a different number of cells ends the table, and OpenCrane chunks the rest as prose.
-- Leave the `|` character out of cells, even escaped as `\|` or inside backticks. OpenCrane splits cells at every `|`, so the row gets an extra cell and ends the table.
+- To put a `|` character in a cell, escape it as `\|` or put it inside backticks. An unescaped `|` outside backticks starts a new cell, so the row gets an extra cell and ends the table.
 - Keep tables out of code fences. OpenCrane treats a table inside a code fence as code and does not chunk it into rows.
 - Add at least one data row. OpenCrane chunks a header line and separator with no data rows as prose, not as a table.
 

@@ -24,7 +24,11 @@ import yaml
 from opencrane.rag.services.llms_index import PAGE_SEPARATOR, IndexEntry, LlmsIndex, render_llms_txt
 from opencrane.rag.services.source_mapping import SourceMapping
 from opencrane.shared.config import get_config
-from opencrane.shared.utils.git import get_repo_subdir, has_changes
+from opencrane.shared.utils.git import get_repo_subdir, has_changes, ignored_fingerprint, save_fingerprint
+
+# Digests of the Git-ignored source files read by the last --sources-dir run,
+# stored in the output directory. See has_changes.
+FINGERPRINT_FILE_NAME = ".sources-fingerprint.json"
 
 # Default paths are relative to cwd (resolved at call time via generate_outputs).
 # These module-level values are only used as fallbacks and by legacy __main__ invocation.
@@ -417,6 +421,17 @@ def write_outputs(project_outputs: Dict[str, str], output_root: Path = OUTPUT_RO
         target_dir = output_root / project
         target_dir.mkdir(parents=True, exist_ok=True)
         (target_dir / "llms-full.txt").write_text(content, encoding="utf-8")
+        # Companion llms.txt next to each per-project bundle. A later run that
+        # rebuilds only some sources (--sources-dir) re-appends this bundle
+        # through the llmstxt sweep, and _external_index_section reads this
+        # file to keep the real per-page URLs instead of synthesizing them.
+        # It holds the same single ## section the combined index gives this
+        # project, so the sweep's block/section count alignment still holds.
+        entries = project_entries.get(project)
+        if entries:
+            (target_dir / "llms.txt").write_text(
+                render_llms_txt("Documentation", [(project, entries)]), encoding="utf-8"
+            )
 
     # Combined output - concatenate project contents with a ====== separator
     # between each project so the number of ====== blocks equals the number of
@@ -591,6 +606,7 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
         force: When True, skip the git-change check and always regenerate.
     """
     fence_types: Dict[str, CodeFenceConfig] = config.fence_types if config is not None else {}
+    fingerprint: Dict[str, str] | None = None
 
     global SOURCES_BASE, LLMSTXT_BASE, SOURCE_ROOT, OUTPUT_ROOT
 
@@ -650,7 +666,13 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
                 valid_sources.append(src)
         source_dirs = valid_sources
 
-        if not force and not has_changes(source_dirs):
+        # Git reports no changes in ignored files (fetched sources usually are),
+        # so compare their digests with those recorded by the last run. Compute
+        # them once, before reading the sources, and record the same digests
+        # after generation so a change made mid-run is caught next time.
+        fingerprint_file = LLMSTXT_BASE / FINGERPRINT_FILE_NAME
+        fingerprint = ignored_fingerprint(source_dirs)
+        if not force and not has_changes(source_dirs, fingerprint_file, fingerprint):
             print("⊘ Skipping --generate-llms: no changes detected in source directories")
             print("  To force regeneration, use: --force")
             return
@@ -966,6 +988,9 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
         if top_entry_sections and (not single_source_is_base or appended_external):
             index_content = render_llms_txt("Documentation", top_entry_sections)
             (LLMSTXT_BASE / "llms.txt").write_text(index_content, encoding="utf-8")
+
+    if fingerprint is not None:
+        save_fingerprint(LLMSTXT_BASE / FINGERPRINT_FILE_NAME, source_dirs, fingerprint)
 
 
 # IMPORTANT: This block is required for setup.sh to work properly.

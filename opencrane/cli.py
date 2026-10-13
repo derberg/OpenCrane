@@ -337,12 +337,20 @@ def tokens(source_dir, output_file):
 @main.command(cls=_ColorCommand)
 @click.option("--config", "config_path", default=None,
               help="Config class as module:Class, or path to a Python file defining Config")
-def index(config_path):
+@click.option("--chunks-file", default=None, type=click.Path(),
+              help="Input chunks JSON file (overrides AI_DOCS_CHUNKS_FILE)")
+@click.option("--embeddings-file", default=None, type=click.Path(),
+              help="Input embeddings JSON file (overrides AI_DOCS_EMBEDDINGS_FILE)")
+def index(config_path, chunks_file, embeddings_file):
     """Initialize vector database (Milvus) with chunks and embeddings."""
     try:
+        from pathlib import Path
         load_config(config_path)  # validate config; init_vector_db uses env-based config internally
         from opencrane.mcp.init_vector_db import main as index_main
-        index_main()
+        index_main(
+            chunks_file=Path(chunks_file) if chunks_file else None,
+            embeddings_file=Path(embeddings_file) if embeddings_file else None,
+        )
     except Exception as e:
         _error(f"Error: {e}")
         sys.exit(1)
@@ -466,7 +474,10 @@ def build(config_path, sources_dirs, llmstxt_dir, chunks_file, embeddings_file):
 
         _step("Step 5/5: Initializing vector database...")
         from opencrane.mcp.init_vector_db import main as index_main
-        index_main()
+        index_main(
+            chunks_file=Path(chunks_file) if chunks_file else None,
+            embeddings_file=Path(embeddings_file) if embeddings_file else None,
+        )
 
         _success("Build complete.")
     except Exception as e:

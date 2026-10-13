@@ -101,7 +101,7 @@ The `opencrane index` command loads `.opencrane/embeddings.json` into a Milvus v
 Milvus runs in one of the following deployment modes:
 
 - Milvus Lite: an embedded, file-based database at `.opencrane/milvus.db`. It is the default and needs no separate service. To store the file somewhere else, set `MILVUS_DB_PATH`.
-- Milvus Server: a separate Milvus instance. To connect to it, set `MILVUS_DB_PATH` to an empty value, and set `MILVUS_HOST` and `MILVUS_PORT`.
+- Milvus Server: a separate Milvus instance. To connect to it, set `MILVUS_HOST` and `MILVUS_PORT`, and leave `MILVUS_DB_PATH` unset. A `MILVUS_DB_PATH` with a file path takes precedence over `MILVUS_HOST`.
 
 ### Serve
 

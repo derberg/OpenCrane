@@ -33,6 +33,8 @@ export EMBEDDING_MODEL={MODEL_ID}
 opencrane embed --force && DROP_EXISTING=true opencrane index
 ```
 
+If you pass `--embeddings-file` to `opencrane embed`, pass the same flag to `opencrane index`.
+
 Then restart the MCP server with the same `EMBEDDING_MODEL`.
 
 ## Embedding prompts

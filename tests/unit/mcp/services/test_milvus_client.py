@@ -440,6 +440,40 @@ class TestMilvusService:
         mock_client_class.assert_called_once_with(uri="http://myhost:12345")
 
     @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_init_host_without_db_path_uses_server_mode(self, mock_client_class, monkeypatch):
+        """MILVUS_HOST alone, with MILVUS_DB_PATH unset, selects server mode."""
+        monkeypatch.delenv("MILVUS_DB_PATH", raising=False)
+        monkeypatch.setenv("MILVUS_HOST", "milvus.example")
+        monkeypatch.delenv("MILVUS_PORT", raising=False)
+
+        service = MilvusService()
+
+        assert service.uri == "http://milvus.example:19530"
+        mock_client_class.assert_called_once_with(uri="http://milvus.example:19530")
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_init_explicit_db_path_wins_over_host(self, mock_client_class, monkeypatch):
+        """An explicit MILVUS_DB_PATH keeps Lite mode even when MILVUS_HOST is set."""
+        monkeypatch.setenv("MILVUS_DB_PATH", "/tmp/explicit.db")
+        monkeypatch.setenv("MILVUS_HOST", "milvus.example")
+
+        service = MilvusService()
+
+        assert service.uri == "/tmp/explicit.db"
+        mock_client_class.assert_called_once_with(uri="/tmp/explicit.db")
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_init_defaults_to_lite_without_db_path_or_host(self, mock_client_class, monkeypatch):
+        """With neither MILVUS_DB_PATH nor MILVUS_HOST set, Lite mode is the default."""
+        monkeypatch.delenv("MILVUS_DB_PATH", raising=False)
+        monkeypatch.delenv("MILVUS_HOST", raising=False)
+
+        service = MilvusService()
+
+        assert service.uri == ".opencrane/milvus.db"
+        mock_client_class.assert_called_once_with(uri=".opencrane/milvus.db")
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
     def test_get_chunk_found(self, mock_client_class):
         mock_client = Mock()
         mock_client_class.return_value = mock_client

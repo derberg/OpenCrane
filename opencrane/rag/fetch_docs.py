@@ -273,6 +273,9 @@ def main(config=None):
                     # Store files locally using the full path_key so manual entries
                     # with custom directories (e.g. "new/cgw") land in the right place
                     file_manager.store_repo_files(path_key, files)
+                    # Record the ref the files came from, so page URLs link
+                    # to the same content (see get_source_url)
+                    file_manager.write_fetched_ref(path_key, getattr(files, "ref", None))
 
                     ref_fields = {}
                     if ref_config:

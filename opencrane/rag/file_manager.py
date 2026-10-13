@@ -1,3 +1,4 @@
+import json
 import logging
 import shutil
 from pathlib import Path
@@ -6,6 +7,24 @@ from opencrane.shared.config import Config
 from opencrane.shared.models.file import File
 
 logger = logging.getLogger(__name__)
+
+# Written by the fetch next to the files of each GitHub source. Records the
+# Git ref the files were read from, so page URLs link to the same content.
+FETCH_METADATA_FILE = ".opencrane-fetch.json"
+
+
+def read_fetched_ref(source_dir: Path) -> str | None:
+    """Return the Git ref recorded for a fetched source, or ``None``.
+
+    ``None`` means the directory holds no readable record, for example when
+    an older OpenCrane version fetched it.
+    """
+    try:
+        data = json.loads((Path(source_dir) / FETCH_METADATA_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    ref = data.get("ref") if isinstance(data, dict) else None
+    return ref if isinstance(ref, str) and ref else None
 
 
 class FileManager:
@@ -49,3 +68,15 @@ class FileManager:
         except Exception as e:
             logger.error(f"Failed to store file {file_path}: {e}")
             raise
+
+    def write_fetched_ref(self, path_key: str, ref: str | None) -> None:
+        """Record the Git ref the files of ``path_key`` were read from.
+
+        Call it after :meth:`store_repo_files`, which deletes the directory.
+        Does nothing when ``ref`` is unknown.
+        """
+        if not isinstance(ref, str) or not ref:
+            return
+        metadata_file = self.base_dir / path_key / FETCH_METADATA_FILE
+        metadata_file.parent.mkdir(parents=True, exist_ok=True)
+        metadata_file.write_text(json.dumps({"ref": ref}) + "\n", encoding="utf-8")

@@ -204,10 +204,8 @@ The command accepts the following flags:
 |---|---|
 | `--sources-dir {PATH}` | Source directory to process. Repeat the flag for several directories. Overrides the `AI_DOCS_SOURCES_DIRS` environment variable. |
 | `--llmstxt-dir {PATH}` | Output directory for the `llms-full.txt` files, and input directory for the chunk step. Overrides the `AI_DOCS_LLMSTXT_DIR` environment variable. |
-| `--chunks-file {PATH}` | Output path for the chunks JSON file, and input path for the embed step. Overrides the `AI_DOCS_CHUNKS_FILE` environment variable. |
-| `--embeddings-file {PATH}` | Output path for the embeddings JSON file. Overrides the `AI_DOCS_EMBEDDINGS_FILE` environment variable. |
-
-The `index` step ignores `--chunks-file` and `--embeddings-file` and reads only `AI_DOCS_CHUNKS_FILE` and `AI_DOCS_EMBEDDINGS_FILE`. To build with other paths, set these environment variables instead of the flags.
+| `--chunks-file {PATH}` | Output path for the chunks JSON file, and input path for the embed and index steps. Overrides the `AI_DOCS_CHUNKS_FILE` environment variable. |
+| `--embeddings-file {PATH}` | Output path for the embeddings JSON file, and input path for the index step. Overrides the `AI_DOCS_EMBEDDINGS_FILE` environment variable. |
 
 The `llms` step of the build runs without `--force`. For when to run `opencrane llms --force` first, see the `--force` row of [`opencrane llms`](#generate-llms-fulltxt-bundles-with-opencrane-llms).
 
@@ -305,7 +303,7 @@ The command accepts the following flags:
 
 #### Index the embeddings in Milvus with `opencrane index`
 
-The `opencrane index` command loads the chunks and their embeddings into Milvus. It reads them from the paths in the `AI_DOCS_CHUNKS_FILE` and `AI_DOCS_EMBEDDINGS_FILE` environment variables.
+The `opencrane index` command loads the chunks and their embeddings into Milvus. By default, it reads them from `.opencrane/chunks.json` and `.opencrane/embeddings.json`.
 
 > [!CAUTION]
 > When the collection has a different vector size or lacks fields that this OpenCrane version needs, the command deletes and rebuilds the collection. Searches fail until the rebuild finishes and the MCP server uses the same embedding model. First, check that the embeddings come from the model you want to serve.
@@ -313,8 +311,15 @@ The `opencrane index` command loads the chunks and their embeddings into Milvus.
 The command has the following syntax:
 
 ```bash
-opencrane index [--config {MODULE}:{CLASS}]
+opencrane index [--config {MODULE}:{CLASS}] [--chunks-file {PATH}] [--embeddings-file {PATH}]
 ```
+
+The command accepts the following flags:
+
+| Flag | Description |
+|---|---|
+| `--chunks-file {PATH}` | Input chunks JSON file. Overrides the `AI_DOCS_CHUNKS_FILE` environment variable. |
+| `--embeddings-file {PATH}` | Input embeddings JSON file. Overrides the `AI_DOCS_EMBEDDINGS_FILE` environment variable. |
 
 When the Milvus collection already has rows, the command skips indexing and keeps the existing data. This also applies to the index step of `opencrane build`, so after a documentation update, the build leaves the old data in Milvus.
 
@@ -581,14 +586,16 @@ You need the following variables only if you run the `embed` step, directly or t
 You need the following variables when you load data into Milvus or run the MCP server. OpenCrane supports two Milvus modes:
 
 - Lite mode: the default. Milvus Lite stores the data in a local file at `.opencrane/milvus.db` and needs no server.
-- Server mode: a separate Milvus server. To use it, set `MILVUS_DB_PATH` to an empty string, and set `MILVUS_HOST` and `MILVUS_PORT`.
+- Server mode: a separate Milvus server. To use it, set `MILVUS_HOST` and `MILVUS_PORT`, and leave `MILVUS_DB_PATH` unset.
+
+When you set `MILVUS_DB_PATH`, the variable selects the mode, even if `MILVUS_HOST` is also set. A file path selects Lite mode, and an empty string selects server mode.
 
 The following table lists the variables:
 
 | Variable | Default | Description |
 |---|---|---|
-| `MILVUS_DB_PATH` | `.opencrane/milvus.db` | Path to the Milvus Lite database file. To connect to a Milvus server through `MILVUS_HOST` and `MILVUS_PORT`, set it to an empty string. |
-| `MILVUS_HOST` | `localhost` | Milvus server host, in server mode only |
+| `MILVUS_DB_PATH` | `.opencrane/milvus.db` | Path to the Milvus Lite database file. The variable takes precedence over `MILVUS_HOST`. An empty string selects server mode. |
+| `MILVUS_HOST` | `localhost` | Milvus server host. When `MILVUS_DB_PATH` is unset, this variable selects server mode. |
 | `MILVUS_PORT` | `19530` | Milvus server port, in server mode only |
 | `MILVUS_COLLECTION` | `ai_docs_chunks_v1` | Milvus collection name |
 | `MILVUS_INSERT_BATCH_SIZE` | `2000` | Maximum number of chunks in each insert call during `index`. If `index` creates duplicate rows, lower this value. |

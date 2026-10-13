@@ -1,5 +1,6 @@
 """OpenCrane CLI entry point."""
 
+import re
 import sys
 import click
 
@@ -726,7 +727,7 @@ def pack(name, output, version):
 def init(podman, force, no_add, with_extensions):
     """Scaffold a new OpenCrane project with .opencrane/ directory and container files."""
     from pathlib import Path
-    from opencrane.templates import CONFIG_YAML, EXTENSIONS_PY, DOCKERFILE, docker_compose, readme
+    from opencrane.templates import EXTENSIONS_PY, DOCKERFILE, config_yaml, docker_compose, readme
 
     created = []
     skipped = []
@@ -745,7 +746,11 @@ def init(podman, force, no_add, with_extensions):
         created.append(str(path))
 
     opencrane_dir = Path(".opencrane")
-    write_file(opencrane_dir / "config.yaml", CONFIG_YAML, user_managed=True)
+    config_path = opencrane_dir / "config.yaml"
+    config_lacks_extensions = config_path.exists() and not re.search(
+        r"^extensions:", config_path.read_text(), re.MULTILINE
+    )
+    write_file(config_path, config_yaml(extensions=with_extensions), user_managed=True)
     if with_extensions:
         write_file(opencrane_dir / "extensions.py", EXTENSIONS_PY)
     write_file(opencrane_dir / "README.md", readme(podman=podman))
@@ -766,6 +771,8 @@ def init(podman, force, no_add, with_extensions):
         _info("Protected (user-managed, never overwritten):")
         for f in protected:
             click.echo(f"  {f}")
+    if with_extensions and config_lacks_extensions:
+        _hint(f"To load extensions.py, add `extensions: extensions.py` to {config_path}.")
 
     click.echo("")
     if no_add:

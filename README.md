@@ -152,10 +152,10 @@ The command accepts the following flags:
 | `--podman` | Generates `.opencrane/Containerfile` instead of `.opencrane/Dockerfile`. The generated README uses `podman` commands. |
 | `--force` | Overwrites existing generated files. By default, the command skips them. The command never overwrites `.opencrane/config.yaml`. |
 | `--no-add` | Skips the interactive prompt to add sources, which is useful in CI or in scripts. The prompt works like [`opencrane add`](#add-documentation-sources-with-opencrane-add). |
-| `--extensions` | Generates `.opencrane/extensions.py` for custom Python extensions. |
+| `--extensions` | Generates `.opencrane/extensions.py` for custom Python extensions. A new `.opencrane/config.yaml` then sets `extensions: extensions.py`, so OpenCrane loads the file. |
 
 > [!IMPORTANT]
-> To load `.opencrane/extensions.py` without the `--config` flag, uncomment the `extensions: extensions.py` key in `.opencrane/config.yaml`. Name the class in the file `Config`.
+> The command never changes an existing `.opencrane/config.yaml`. To load `.opencrane/extensions.py` in an existing project without the `--config` flag, add the `extensions: extensions.py` key to `.opencrane/config.yaml`. Name the class in the file `Config`.
 
 #### Add documentation sources with `opencrane add`
 
@@ -760,7 +760,7 @@ An override takes precedence over `section_anchor_style`.
 
 ### Section navigation and clause IDs
 
-Each prose chunk records its heading path and clause number. The [`get_section`](docs/vector-search.md#get_section) tool uses them to return whole sections. For the fields, see [Prose navigation metadata](docs/metadata-schema.md#prose-navigation-metadata).
+Each prose chunk records its heading path and clause number. The [`get_section`](docs/vector-search.md#get_section) tool uses them to return whole sections. For the fields, see [Prose navigation metadata](opencrane/mcp/metadata-schema.md#prose-navigation-metadata).
 
 To change the clause format, set `section_clause_pattern` in `.opencrane/config.yaml` to a regular expression whose first capture group is the clause ID. The value `none` turns clause IDs off. The following example matches plain dotted numbers:
 
@@ -857,7 +857,7 @@ class TerraformTreeWalker(YamlTreeWalker):
         ...
 ```
 
-The `can_handle` method returns `True` for the documents that the walker supports. The `walk` method returns the chunks of the document. Each chunk needs a `chunk_type` that the `Chunk` model accepts. A new chunk type needs a change to OpenCrane itself, as described in [Add a tree walker for a YAML specification](docs/chunking.md#add-a-tree-walker-for-a-yaml-specification).
+The `can_handle` method returns `True` for the documents that the walker supports. The `walk` method returns the chunks of the document. Each chunk needs a `chunk_type`. The walker can use a built-in chunk type or its own custom chunk type, such as `terraform_resource`. For the naming rules, see [Custom chunk types](docs/chunking.md#custom-chunk-types).
 
 To register the walker, add it to `yaml_tree_walkers`, as in the example in [Extend OpenCrane](#extend-opencrane).
 
@@ -925,7 +925,7 @@ You choose the authentication mode with the `auth.type` key in `.opencrane/confi
 |---|---|---|
 | `local` | OpenCrane acts as its own authorization server. When an MCP client starts authorization, OpenCrane redirects the browser to its `/login` form. | Set `auth.type: local` and `OPENCRANE_ACCESS_TOKEN`. For a username and password instead of a token, set `auth.local.method: password`, `OPENCRANE_LOGIN_USER`, and `OPENCRANE_LOGIN_PASS`. |
 | `oauth` | An external identity provider, such as Keycloak or Microsoft Entra ID. OpenCrane is an OAuth resource server. | Install the `auth` extra with `pip install 'opencrane[auth]'`. Set `auth.type: oauth` with the OpenID Connect (OIDC) settings `oidc.issuer` and `oidc.audience`. |
-| `custom` | Your own code, for full control over token validation or the authorization server. | Set `auth.type: custom`, and supply your own `token_verifier` or `auth_provider` on `OpenCraneConfig`. Without either, the server runs with no authentication and logs a warning. |
+| `custom` | Your own code, for full control over token validation or the authorization server. | Set `auth.type: custom`, and supply your own `token_verifier` or `auth_provider` on `OpenCraneConfig`. Without either, the server refuses to start. |
 
 To limit which sources a caller can search, set `scope_sources`. It maps OAuth scopes to sets of documentation sources. Callers get content only from the sources that the scopes of their token allow.
 

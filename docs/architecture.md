@@ -76,7 +76,7 @@ Chunking strategies run in the following order, and the first strategy that matc
 4. List: creates one `list_item` chunk for each list item, nested items included.
 5. Prose: handles all other content. By default, it splits at headings down to `###` and keeps each section whole.
 
-For the chunk types and fields, see the [chunking guide](chunking.md). For the metadata fields, see [Chunk metadata schema](metadata-schema.md).
+For the chunk types and fields, see the [chunking guide](chunking.md). For the metadata fields, see [Chunk metadata schema](../opencrane/mcp/metadata-schema.md).
 
 ### Embed
 
@@ -182,7 +182,7 @@ The CLI is in `opencrane/cli.py`. Every subcommand loads the project configurati
 3. The file that the `extensions` key in `.opencrane/config.yaml` names, relative to `.opencrane/`
 4. The base `OpenCraneConfig` class
 
-From a Python file, the CLI loads the class named `Config`. The `config.yaml` that `opencrane init` creates contains the `extensions` key as a comment.
+From a Python file, the CLI loads the class named `Config`. The `config.yaml` that `opencrane init` creates contains the `extensions` key as a comment. With `--extensions`, the command writes the key without the comment marker, so the CLI loads `extensions.py`.
 
 ### Retrieval-augmented generation pipeline
 

@@ -6,6 +6,7 @@ import re
 from typing import List, Optional, Dict
 from pymilvus import MilvusClient, DataType
 from opencrane.shared.config import get_config
+from opencrane.shared.models.chunk import CHUNK_TYPE_MAX_LENGTH
 from opencrane.shared.models.vector_chunk import DEFAULT_EMBEDDING_DIM, VectorChunk
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,34 @@ _CLAUSE_UNSAFE = re.compile(r"[^0-9A-Za-z_. -]")
 def _safe_clause(value: str) -> str:
     """Like :func:`_safe_id`, but keeps the ``.`` and space a clause id uses."""
     return _CLAUSE_UNSAFE.sub("", (value or "")[:_ID_FIELD_MAX])
+
+
+# Characters that can end or escape a double-quoted filter literal, plus control
+# characters. A search filter value (chunk type, source file, source name) that
+# contains one is dropped instead of interpolated, so it can't close the string
+# and add its own expression logic.
+_LITERAL_UNSAFE = re.compile(r'["\\\x00-\x1f\x7f]')
+
+# A scalar field name interpolated into a lookup filter.
+_FIELD_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def _safe_literals(values: List[str]) -> List[str]:
+    """Return the values that are safe inside a double-quoted filter literal.
+
+    Values that are not strings, or that contain a quote, a backslash or a
+    control character, are dropped. Dropping only narrows a filter: the caller
+    must treat a non-empty list that comes back empty as "match nothing", never
+    as "no filter".
+    """
+    return [v for v in values if isinstance(v, str) and not _LITERAL_UNSAFE.search(v)]
+
+
+def _check_field(field: str) -> str:
+    """Return ``field`` if it is a plain scalar field name, else raise ``ValueError``."""
+    if not isinstance(field, str) or not _FIELD_NAME.fullmatch(field):
+        raise ValueError(f"Invalid filter field name: {field!r}")
+    return field
 
 # Fields returned for chunk lookups (get_chunk / query_by_field). Excludes the
 # embedding vector, which is large and never needed by the MCP tools.
@@ -162,7 +191,7 @@ class MilvusService:
         schema.add_field(field_name="content", datatype=DataType.VARCHAR, max_length=MAX_CONTENT_LENGTH)
         schema.add_field(field_name="source_file", datatype=DataType.VARCHAR, max_length=MAX_SOURCE_FILE_LENGTH)
         schema.add_field(field_name="source_name", datatype=DataType.VARCHAR, max_length=MAX_SOURCE_NAME_LENGTH)
-        schema.add_field(field_name="chunk_type", datatype=DataType.VARCHAR, max_length=32)
+        schema.add_field(field_name="chunk_type", datatype=DataType.VARCHAR, max_length=CHUNK_TYPE_MAX_LENGTH)
         schema.add_field(field_name="metadata_json", datatype=DataType.VARCHAR, max_length=MAX_METADATA_LENGTH)
         schema.add_field(field_name="token_count", datatype=DataType.INT64)
         schema.add_field(field_name="line_start", datatype=DataType.INT64)
@@ -299,16 +328,27 @@ class MilvusService:
             "params": {}
         }
 
+        # Every value is interpolated into a double-quoted literal (Milvus Lite
+        # has no filter_params templating), so a value that could close the
+        # literal is dropped. Each clause stays in its own parentheses and the
+        # clauses are ANDed, so no value can lift another clause, such as the
+        # source_names restriction that enforces the source policy.
         filter_clauses = []
-        if chunk_types:
-            type_filter = " || ".join(f'chunk_type == "{t}"' for t in chunk_types)
-            filter_clauses.append(f"({type_filter})")
-        if source_files:
-            file_filter = " || ".join(f'source_file == "{s}"' for s in source_files)
-            filter_clauses.append(f"({file_filter})")
-        if source_names:
-            name_filter = " || ".join(f'source_name == "{s}"' for s in source_names)
-            filter_clauses.append(f"({name_filter})")
+        for field, values in (
+            ("chunk_type", chunk_types),
+            ("source_file", source_files),
+            ("source_name", source_names),
+        ):
+            if not values:
+                continue
+            safe = _safe_literals(values)
+            if not safe:
+                # Every value was unsafe. Dropping the clause would widen the
+                # search, so match nothing instead.
+                logger.warning(f"Search rejected: no safe {field} filter values in {values!r}")
+                return []
+            clause = " || ".join(f'{field} == "{v}"' for v in safe)
+            filter_clauses.append(f"({clause})")
         filter_expr = " && ".join(filter_clauses) if filter_clauses else None
 
         try:
@@ -392,7 +432,12 @@ class MilvusService:
             return None
 
     def query_by_field(
-        self, field: str, value: str, chunk_type: Optional[str] = None, limit: int = 16384
+        self,
+        field: str,
+        value: str,
+        chunk_type: Optional[str] = None,
+        limit: int = 16384,
+        source_names: Optional[List[str]] = None,
     ) -> List[Dict]:
         """Return all chunks whose scalar ``field`` equals ``value``.
 
@@ -401,13 +446,29 @@ class MilvusService:
         default backend) does not support expression templating (filter_params),
         so interpolation is the portable path and the guard keeps it safe. The
         cap also stops a lookup missing a value the insert path truncated.
-        ``field`` and ``chunk_type`` are caller-controlled (never user input), so
-        they stay in the expression directly. Pass ``chunk_type`` to constrain
+        ``field`` and ``chunk_type`` come from the server, never from user input,
+        but are still checked: ``field`` must be a plain field name and
+        ``chunk_type`` is stripped to the id charset. Pass ``chunk_type`` to constrain
         rows in the database instead of post-filtering in Python.
+
+        ``source_names`` (``None`` = any source) restricts rows to the sources
+        the caller may read. Names come from server config or a server-side
+        middleware, never the client; a name that could break the quoted
+        literal is dropped, so it fails closed, and an empty list matches
+        nothing.
         """
-        expr = f'{field} == "{_safe_id(value)}"'
+        expr = f'{_check_field(field)} == "{_safe_id(value)}"'
         if chunk_type is not None:
-            expr += f' and chunk_type == "{chunk_type}"'
+            expr += f' and chunk_type == "{_safe_id(chunk_type)}"'
+        if source_names is not None:
+            names = sorted({
+                _truncate_utf8(n, MAX_SOURCE_NAME_LENGTH)
+                for n in source_names
+                if '"' not in n and "\\" not in n
+            })
+            if not names:
+                return []
+            expr += " and source_name in [" + ", ".join(f'"{n}"' for n in names) + "]"
         try:
             rows = self.client.query(
                 collection_name=self.collection_name,
@@ -438,7 +499,7 @@ class MilvusService:
         safe = sorted({sanitize(v) for v in values} - {""})
         if not safe:
             return []
-        expr = f"{field} in [" + ", ".join(f'"{v}"' for v in safe) + "]"
+        expr = f"{_check_field(field)} in [" + ", ".join(f'"{v}"' for v in safe) + "]"
         return self._query_rows(expr, chunk_type, limit)
 
     def query_by_prefix(
@@ -452,11 +513,11 @@ class MilvusService:
         safe = _safe_clause(prefix)
         if not safe:
             return []
-        return self._query_rows(f'{field} like "{safe}%"', chunk_type, limit)
+        return self._query_rows(f'{_check_field(field)} like "{safe}%"', chunk_type, limit)
 
     def _query_rows(self, expr: str, chunk_type: Optional[str], limit: int) -> List[Dict]:
         if chunk_type is not None:
-            expr += f' and chunk_type == "{chunk_type}"'
+            expr += f' and chunk_type == "{_safe_id(chunk_type)}"'
         try:
             rows = self.client.query(
                 collection_name=self.collection_name,

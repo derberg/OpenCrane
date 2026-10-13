@@ -79,7 +79,7 @@ When the `index` step loads the embeddings into Milvus, each chunk becomes one r
 | `content` | `VARCHAR` | OpenCrane truncates content longer than 65,535 characters. |
 | `source_file` | `VARCHAR` | none |
 | `source_name` | `VARCHAR` | none |
-| `chunk_type` | `VARCHAR` | One of `prose`, `code_snippet`, `crd_definition`, `openapi_spec`, `json_schema`, `yaml_content`, `list_item`, or `table_row` |
+| `chunk_type` | `VARCHAR` | A built-in or custom chunk type, up to 32 characters. See [Chunk types](chunking.md#chunk-types). |
 | `metadata_json` | `VARCHAR` | none |
 | `token_count` | `INT64` | none |
 | `line_start` | `INT64` | `0` when the chunk has no line number |

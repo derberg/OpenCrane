@@ -524,6 +524,31 @@ class TestMilvusService:
         assert mock_client.query.call_args[1]["filter"] == 'list_id == "L1" and chunk_type == "list_item"'
 
     @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_query_by_field_with_source_names(self, mock_client_class):
+        """Allowed sources go into the filter; a name that could break the literal is dropped."""
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        mock_client.query.return_value = []
+
+        service = MilvusService()
+        service.query_by_field("list_id", "L1", chunk_type="list_item",
+                               source_names=["b", "a", 'x" || "1"=="1', "y\\"])
+        assert mock_client.query.call_args[1]["filter"] == (
+            'list_id == "L1" and chunk_type == "list_item" and source_name in ["a", "b"]'
+        )
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_query_by_field_without_usable_source_names_matches_nothing(self, mock_client_class):
+        """An empty (or all-unsafe) allowlist returns no rows and never queries."""
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        service = MilvusService()
+        assert service.query_by_field("list_id", "L1", source_names=[]) == []
+        assert service.query_by_field("list_id", "L1", source_names=['"']) == []
+        mock_client.query.assert_not_called()
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
     def test_query_by_field_sanitizes_value(self, mock_client_class):
         """A value with filter-breaking characters is stripped before interpolation."""
         mock_client = Mock()

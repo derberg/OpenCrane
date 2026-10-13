@@ -98,10 +98,11 @@ class TestBuildFastmcpAuthCustomBranch:
         with pytest.raises(AuthConfigError):
             build_fastmcp_auth(AuthConfig(type="custom"))
 
-    def test_custom_with_neither_hook_returns_empty(self, monkeypatch):
+    def test_custom_with_neither_hook_raises(self, monkeypatch):
+        """No hook means nothing authenticates, so startup fails closed."""
         monkeypatch.setattr(
             "opencrane.cli.load_config",
             lambda _: _StubConfigNeitherHook(),
         )
-        kwargs = build_fastmcp_auth(AuthConfig(type="custom"))
-        assert kwargs == {}
+        with pytest.raises(AuthConfigError, match="would run unauthenticated"):
+            build_fastmcp_auth(AuthConfig(type="custom"))

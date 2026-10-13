@@ -182,7 +182,7 @@ The CLI is in `opencrane/cli.py`. Every subcommand loads the project configurati
 3. The file that the `extensions` key in `.opencrane/config.yaml` names, relative to `.opencrane/`
 4. The base `OpenCraneConfig` class
 
-From a Python file, the CLI loads the class named `Config`. The `config.yaml` that `opencrane init` creates contains the `extensions` key as a comment.
+From a Python file, the CLI loads the class named `Config`. The `config.yaml` that `opencrane init` creates contains the `extensions` key as a comment. With `--extensions`, the command writes the key without the comment marker, so the CLI loads `extensions.py`.
 
 ### Retrieval-augmented generation pipeline
 

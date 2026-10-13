@@ -510,3 +510,9 @@ def readme(podman: bool = False) -> str:
     tool, container_file = ("podman", "Containerfile") if podman else ("docker", "Dockerfile")
     return README_MD.replace("{container_tool}", tool).replace("{container_file}", container_file)
 
+
+def config_yaml(extensions: bool = False) -> str:
+    """Render config.yaml, with the ``extensions`` key enabled when ``init`` wrote extensions.py."""
+    if not extensions:
+        return CONFIG_YAML
+    return CONFIG_YAML.replace("# extensions: extensions.py", "extensions: extensions.py")

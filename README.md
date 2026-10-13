@@ -152,10 +152,10 @@ The command accepts the following flags:
 | `--podman` | Generates `.opencrane/Containerfile` instead of `.opencrane/Dockerfile`. The generated README uses `podman` commands. |
 | `--force` | Overwrites existing generated files. By default, the command skips them. The command never overwrites `.opencrane/config.yaml`. |
 | `--no-add` | Skips the interactive prompt to add sources, which is useful in CI or in scripts. The prompt works like [`opencrane add`](#add-documentation-sources-with-opencrane-add). |
-| `--extensions` | Generates `.opencrane/extensions.py` for custom Python extensions. |
+| `--extensions` | Generates `.opencrane/extensions.py` for custom Python extensions. A new `.opencrane/config.yaml` then sets `extensions: extensions.py`, so OpenCrane loads the file. |
 
 > [!IMPORTANT]
-> To load `.opencrane/extensions.py` without the `--config` flag, uncomment the `extensions: extensions.py` key in `.opencrane/config.yaml`. Name the class in the file `Config`.
+> The command never changes an existing `.opencrane/config.yaml`. To load `.opencrane/extensions.py` in an existing project without the `--config` flag, add the `extensions: extensions.py` key to `.opencrane/config.yaml`. Name the class in the file `Config`.
 
 #### Add documentation sources with `opencrane add`
 

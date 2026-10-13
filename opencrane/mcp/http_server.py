@@ -174,21 +174,14 @@ def _load_auth_config():
     """Read the ``auth`` block from config.yaml the same way runtime.py does.
 
     Reads the path in ``MAPPING_FILE`` (default ``.opencrane/config.yaml``); a
-    missing or unparseable file is treated as empty config (open app).
+    missing file is treated as empty config (open app), and an unparseable one
+    raises :class:`AuthConfigError` so the server does not start unprotected.
     """
-    from opencrane.mcp.auth.config_model import parse_auth_config
+    from opencrane.mcp.auth.config_model import load_mapping_data, parse_auth_config
     from opencrane.mcp.server import _get_source_keys
 
     mapping_file = Path(os.environ.get("MAPPING_FILE", ".opencrane/config.yaml"))
-    data: dict = {}
-    if mapping_file.exists():
-        try:
-            import yaml as _yaml
-
-            data = _yaml.safe_load(mapping_file.read_text(encoding="utf-8")) or {}
-        except Exception as exc:  # pragma: no cover - defensive parity with runtime.py
-            logger.warning(f"Failed to parse {mapping_file}: {exc} — treating auth as none")
-            data = {}
+    data = load_mapping_data(mapping_file)
 
     return parse_auth_config(data, set(_get_source_keys()))
 
@@ -200,19 +193,11 @@ def _load_auth_endpoints():
     multi-endpoint view (``{"": cfg}`` for absent/flat auth, one entry per name
     for a named map).
     """
-    from opencrane.mcp.auth.config_model import parse_auth_endpoints
+    from opencrane.mcp.auth.config_model import load_mapping_data, parse_auth_endpoints
     from opencrane.mcp.server import _get_source_keys
 
     mapping_file = Path(os.environ.get("MAPPING_FILE", ".opencrane/config.yaml"))
-    data: dict = {}
-    if mapping_file.exists():
-        try:
-            import yaml as _yaml
-
-            data = _yaml.safe_load(mapping_file.read_text(encoding="utf-8")) or {}
-        except Exception as exc:  # pragma: no cover - defensive parity with runtime.py
-            logger.warning(f"Failed to parse {mapping_file}: {exc} — treating auth as none")
-            data = {}
+    data = load_mapping_data(mapping_file)
 
     return parse_auth_endpoints(data, set(_get_source_keys()))
 
@@ -525,6 +510,52 @@ class _ScopesSupported:
         await send({"type": "http.response.body", "body": body})
 
 
+def _warn_open_endpoints(endpoints) -> None:
+    """Log a warning for each anonymous endpoint that serves every source.
+
+    An endpoint is anonymous when it is a named ``type: none`` endpoint or uses
+    ``oauth`` with ``allow_anonymous: true``. Without ``scope_sources`` or
+    ``default_sources`` its policy allows every source, so anyone who can reach
+    the endpoint reads every indexed source. That can be intended, so the server
+    still starts.
+    """
+    for name, cfg in endpoints.items():
+        anonymous = (cfg.type == "oauth" and cfg.allow_anonymous) or (
+            name != "" and cfg.type == "none"
+        )
+        if anonymous and not cfg.scope_sources and not cfg.default_sources:
+            path = f"/mcp/{name}" if name else "/mcp"
+            logger.warning(
+                f"auth endpoint {path} accepts anonymous callers and sets neither "
+                "scope_sources nor default_sources, so it serves every indexed source "
+                "to anyone. Set default_sources to the sources that anyone may read"
+            )
+
+
+def _missing_extensions_file() -> Path | None:
+    """Return the extensions file that the configuration names but that does not exist.
+
+    The file comes from a path in ``OPENCRANE_CONFIG`` (``--config``) or from the
+    ``extensions`` key in ``.opencrane/config.yaml``. ``load_config`` falls back to
+    the base Config class when that file is missing, which would drop its
+    middleware and auth hooks without a word. Returns ``None`` when no file is
+    named, the value is a ``module:Class`` import path, or the file exists.
+    """
+    config_arg = os.environ.get("OPENCRANE_CONFIG")
+    if config_arg:
+        if ":" in config_arg:
+            return None
+        path = Path(config_arg)
+    else:
+        from opencrane.cli import _read_config_yaml
+
+        extensions = _read_config_yaml().get("extensions")
+        if not extensions:
+            return None
+        path = Path(".opencrane") / extensions
+    return None if path.exists() else path
+
+
 def build_asgi_app():
     """Build the ASGI app for the configured MCP endpoint(s).
 
@@ -539,6 +570,11 @@ def build_asgi_app():
 
     In both shapes, project-supplied ASGI middleware from ``OpenCraneConfig.middleware``
     is applied as the outermost layers.
+
+    Raises:
+        AuthConfigError: When the auth configuration cannot be read or is
+            invalid, or when the project Config class is named but missing or
+            fails to load (fail-closed).
     """
     endpoints = _load_auth_endpoints()
     if set(endpoints) == {""}:
@@ -553,18 +589,34 @@ def build_asgi_app():
             asgi_app = OptionalAuthMiddleware(asgi_app, build_token_verifier(auth_config))
     else:
         asgi_app = _build_multi_endpoint_app(endpoints)
+    _warn_open_endpoints(endpoints)
 
     # Apply project-supplied ASGI middleware as the OUTERMOST layers, so they run
     # first and can call set_allowed_sources() before the tool executes. The first
-    # entry becomes the outermost wrapper. A missing/empty list is a no-op, and a
-    # config-load failure must not break the default (unwrapped) path.
+    # entry becomes the outermost wrapper. A missing/empty list is a no-op. A Config
+    # class that is named but missing, or fails to load, stops the server: it may
+    # hold the authorization middleware, so starting without it would fail open.
+    from opencrane.mcp.auth.config_model import AuthConfigError
+
+    missing = _missing_extensions_file()
+    if missing is not None:
+        raise AuthConfigError(
+            f"the extensions file {missing} does not exist, so the middleware and auth "
+            "hooks it defines cannot load and the server will not start. Create the "
+            "file, or fix the extensions key in config.yaml or the --config / "
+            "OPENCRANE_CONFIG value"
+        )
     try:
         from opencrane.cli import load_config
 
         middleware = getattr(load_config(None), "middleware", []) or []
     except Exception as exc:
-        logger.warning(f"Failed to load project middleware: {exc} — skipping")
-        middleware = []
+        raise AuthConfigError(
+            f"cannot load the project Config class: {exc}. The server will not start "
+            "without the middleware that the Config class may define. Fix the "
+            "extensions file that config.yaml names, or the --config / "
+            "OPENCRANE_CONFIG value"
+        ) from exc
     for mw in reversed(middleware):
         asgi_app = mw(asgi_app)
 

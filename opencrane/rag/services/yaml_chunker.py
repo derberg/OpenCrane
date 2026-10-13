@@ -1,5 +1,6 @@
 """YAML chunking strategy for CRD and configuration content."""
 
+import re
 import yaml
 import logging
 from typing import List, Dict, Any
@@ -28,6 +29,9 @@ def _has_yaml_tree_chunking_support(doc: Dict[str, Any]) -> bool:
 
 # Fence languages that the YAML strategy always claims.
 _YAML_LANGUAGES = frozenset({'yaml', 'yml'})
+
+# The fence language: the leading word of the opening fence's info string.
+_FENCE_LANGUAGE_RE = re.compile(r'\w+')
 
 
 class YamlChunkingStrategy(ProcessingStrategy):
@@ -66,10 +70,13 @@ class YamlChunkingStrategy(ProcessingStrategy):
 
         if text.startswith('```'):
             opening, _, body = text.partition('\n')
-            info = opening.lstrip('`').strip()
+            # The language is the leading word of the info string, read the
+            # same way as the code strategy, so ``yaml{1}`` and
+            # ``yaml title=...`` both count as ``yaml``.
+            language_match = _FENCE_LANGUAGE_RE.match(opening.lstrip('`').strip())
             body = self._strip_closing_fence(body)
-            if info:
-                language = info.split()[0].lower()
+            if language_match:
+                language = language_match.group(0).lower()
                 if language in _YAML_LANGUAGES:
                     return True
                 if language == 'json':

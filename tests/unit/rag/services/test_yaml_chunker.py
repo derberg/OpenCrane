@@ -564,3 +564,43 @@ class TestYamlStrategyFenceLanguageEndToEnd:
 
         yaml_chunks = [c for c in chunks if "nested" in str(c.content)]
         assert [c.chunk_type for c in yaml_chunks] == ["yaml_content"]
+
+
+@pytest.mark.unit
+class TestYamlStrategyFenceLanguageAttributes:
+    """The fence language is the leading word of the info string, as the code strategy reads it."""
+
+    @pytest.mark.parametrize("text", [
+        "```yaml{1}\nreplicas: 3\n```",
+        "```yaml:values.yaml\nreplicas: 3\n```",
+    ])
+    def test_claims_yaml_language_followed_by_attributes(self, text):
+        """A yaml fence with attributes attached to the language is claimed."""
+        assert YamlChunkingStrategy().can_process(_node(text)) is True
+
+    def test_json_schema_in_yaml_fence_with_attributes_reaches_the_tree_walker(self, tmp_path):
+        """A JSON Schema in a yaml{1} block gets json_schema chunks; the code strategy has no JSON Schema walker."""
+        from opencrane.rag.services.file_processor import FileProcessor
+
+        schema = (
+            "$schema: \"https://json-schema.org/draft/2020-12/schema\"\n"
+            "title: User\n"
+            "type: object\n"
+            "properties:\n"
+            "  name:\n"
+            "    type: string\n"
+            "    description: The user name.\n"
+        )
+        content = (
+            "# Page\n\n"
+            "### https://github.com/o/r/blob/main/page.md\n\n"
+            "The schema.\n\n"
+            "```yaml{1}\n" + schema + "```\n"
+        )
+        llms_file = tmp_path / "llms-full.txt"
+        llms_file.write_text(content)
+
+        chunks = FileProcessor().process_file(llms_file)
+
+        assert "json_schema" in {c.chunk_type for c in chunks}
+        assert "code_snippet" not in {c.chunk_type for c in chunks}

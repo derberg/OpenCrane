@@ -76,7 +76,7 @@ Chunking strategies run in the following order, and the first strategy that matc
 4. List: creates one `list_item` chunk for each list item, nested items included.
 5. Prose: handles all other content. By default, it splits at headings down to `###` and keeps each section whole.
 
-For the chunk types and fields, see the [chunking guide](chunking.md). For the metadata fields, see [Chunk metadata schema](metadata-schema.md).
+For the chunk types and fields, see the [chunking guide](chunking.md). For the metadata fields, see [Chunk metadata schema](../opencrane/mcp/metadata-schema.md).
 
 ### Embed
 

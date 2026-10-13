@@ -4,7 +4,7 @@ This guide describes how to structure Markdown documentation so that OpenCrane p
 
 ## How OpenCrane chunks Markdown
 
-OpenCrane first splits each page at every fenced code block. It then chunks each code block, and each part of the page between two code blocks, on its own. For the order in which OpenCrane tries the chunking strategies, see [Chunking strategies](chunking.md#chunking-strategies).
+OpenCrane first splits each page at every fenced code block outside a list or a `<Tabs>` block, and keeps each `<Tabs>` block whole. It then chunks each code block, each `<Tabs>` block, and each part of the page between them on its own. Each part keeps the headings that it sits under, so a list or table after a code block gets its full breadcrumb. For the order in which OpenCrane tries the chunking strategies, see [Chunking strategies](chunking.md#chunking-strategies).
 
 How you write the content determines which strategy handles each part and how well each chunk stands alone.
 
@@ -33,7 +33,7 @@ First-run steps go here.
 ````
 
 > [!IMPORTANT]
-> In a part of the page that contains a list, the list chunker emits the text before the list as one prose chunk. This happens even when that text spans several `##` sections. The part starts at the previous code block or at the top of the page. Search then returns those sections as one result.
+> In a part of the page that contains a list, the list chunker emits the text before the list as one prose chunk. This happens even when that text spans several `##` sections. The part starts at the previous code block outside a list, or at the top of the page. Search then returns those sections as one result.
 
 ### Headings that do not split chunks
 
@@ -236,7 +236,7 @@ Every list item, including each nested item, becomes its own chunk. Each item ch
 
 ### Put every list under a heading
 
-Place every list in a section that has a `##` or `###` heading. Prose between the heading and the list does not cause a problem. OpenCrane builds the breadcrumb from the headings between the list and the previous code block, or the top of the page. A list before the first `##` heading gets only the page title as its breadcrumb. A list after a code block gets only the headings that follow the code block.
+Place every list in a section that has a `##` or `###` heading. Prose between the heading and the list does not cause a problem. OpenCrane builds the breadcrumb from the headings that the list sits under on the page. A code block between the heading and the list does not change the breadcrumb. A list before the first `##` heading gets only the page title as its breadcrumb.
 
 The following list is correct:
 
@@ -346,9 +346,9 @@ The following list mixes markers across levels correctly:
 
 ### Code blocks in list items
 
-OpenCrane splits each page at every fenced code block before the list chunker runs. A code block inside a list item therefore does not stay with the item. It becomes its own `code_snippet` chunk, and the list items after it lose the headings above the code block from their breadcrumb.
+A code block inside a list item stays with the item, so the list stays one list. Each item chunk contains its code block and the breadcrumb of its section. Indent the opening fence so that it lines up with the item text. A fence at the start of the line ends the list.
 
-The following list produces four chunks:
+The following list produces two chunks:
 
 ````md
 1. Install the CLI:
@@ -361,9 +361,9 @@ The following list produces four chunks:
    ```
 ````
 
-The first chunk contains `1. Install the CLI:`, with the breadcrumb of its section. The second chunk is the `pip install opencrane` code block. The third chunk contains `2. Initialize the project:`, with an empty breadcrumb. The fourth chunk is the `opencrane init` code block.
+The first chunk contains `1. Install the CLI:` and the `pip install opencrane` code block. The second chunk contains `2. Initialize the project:` and the `opencrane init` code block. Both chunks share one `list_id` and carry the breadcrumb of their section.
 
-Put each step that needs a code block under its own heading instead, and introduce the code block with a sentence. The prose chunk of each step then carries the page title and the step heading in its breadcrumb. The following page is correct:
+A code block inside a list item does not become a `code_snippet` chunk, so it has no `language` metadata. If search must return a code block on its own, put it under its own heading and introduce it with a sentence. The following page is correct:
 
 ````md
 ## Install the CLI
@@ -382,8 +382,6 @@ Run the following command to initialize the project:
 opencrane init
 ```
 ````
-
-If a list follows a code block, put a heading between them. The list items then carry that heading as their breadcrumb.
 
 ## Tables
 
@@ -421,7 +419,7 @@ The following rules apply to the columns and placement of a table:
 
 ## Fenced code blocks
 
-Each fenced code block becomes one chunk, except the specification YAML that [Embedded specifications](#embedded-specifications) describes. This includes code blocks inside list items, as [Code blocks in list items](#code-blocks-in-list-items) explains. The following sections help each code chunk stay usable on its own.
+Each fenced code block outside a list becomes one chunk, except the specification YAML that [Embedded specifications](#embedded-specifications) describes. A code block inside a list item stays in the chunk of that item, as [Code blocks in list items](#code-blocks-in-list-items) explains. The following sections help each code chunk stay usable on its own.
 
 ### Label every code block with its language
 
@@ -507,12 +505,6 @@ sources:
     branch: main
 ```
 ````
-
-### Keep explanations outside `<Tabs>` blocks with code
-
-OpenCrane does not split a page inside a `<Tabs>` block, and keeps the block as its own part. When the block contains a code block and has fewer than 50 non-blank lines, or is mostly code, the code chunker handles it. The code chunker keeps only the code blocks, so OpenCrane drops any other text inside the `<Tabs>` block. The text before and after the block stays.
-
-Inside a `<Tabs>` block that contains code, put only the code. Write the explanation before or after the block.
 
 ## Embedded specifications
 

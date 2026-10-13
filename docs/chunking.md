@@ -84,7 +84,7 @@ A table with no heading or lead-in sentence still produces `table_row` chunks, b
 
 ## Chunking strategies
 
-Before the strategies run, the chunker splits each page at every fenced code block. It then processes each code block, and each stretch of text between code blocks, on its own. It also takes unindented fenced `yaml` and `yml` blocks out of the text first. Structured YAML specifications go to tree walkers. A tree walker is a class that walks the YAML tree of one specification format and creates one chunk for each property or element.
+Before the strategies run, the chunker splits each page at every fenced code block outside a list. A code block inside a list item stays in that item. The chunker then processes each code block, and each stretch of text between code blocks, on its own. Each stretch of text keeps the headings that it sits under, so a list or table after a code block gets its full breadcrumb. It also takes unindented fenced `yaml` and `yml` blocks out of the text first. Structured YAML specifications go to tree walkers. A tree walker is a class that walks the YAML tree of one specification format and creates one chunk for each property or element.
 
 The chunker evaluates the following strategies in this order. The first strategy that matches the content and returns chunks handles it:
 

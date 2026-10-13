@@ -238,7 +238,9 @@ class TableChunkingStrategy(ProcessingStrategy):
         text = node.text
         source_url = getattr(node, "source_url", None)
         chunks: List[Chunk] = []
-        heading_stack: List[tuple] = []
+        # Seed with the headings above this node on its page, so a table
+        # after a code block keeps the headings above that code block.
+        heading_stack: List[tuple] = list(getattr(node, "heading_ancestry", None) or [])
         caption = ""
         table_ordinal_in_section = 0     # counts tables per heading section
         for kind, lines in self._split_regions(text):

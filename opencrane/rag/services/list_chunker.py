@@ -298,7 +298,7 @@ class ListChunkingStrategy(ProcessingStrategy):
         chunks: List[Chunk] = []
         # Fingerprint of this list block's raw lines: tells apart lists that share
         # a page, breadcrumb and ordinal because they sit in separate nodes (e.g.
-        # each list directly after a code block, where the breadcrumb is empty).
+        # two lists in one section with a code block between them).
         block_fingerprint = hashlib.sha256("\n".join(list_lines).encode("utf-8")).hexdigest()[:16]
 
         # Walk top-level first, then children — parents need ids for their children's metadata.

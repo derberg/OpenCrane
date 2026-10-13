@@ -10,8 +10,14 @@ from opencrane.shared.models.vector_chunk import DEFAULT_EMBEDDING_DIM, VectorCh
 
 logger = logging.getLogger(__name__)
 
-# Milvus VARCHAR fields cap at 65535 chars; keep metadata within that limit.
+# Milvus VARCHAR max_length counts UTF-8 bytes, not characters. Each limit below
+# matches its column's max_length in create_collection; the insert path truncates
+# by bytes so multi-byte text cannot overflow a column.
+MAX_CONTENT_LENGTH = 65535
 MAX_METADATA_LENGTH = 65535
+MAX_SOURCE_FILE_LENGTH = 512
+MAX_SOURCE_NAME_LENGTH = 256
+_CONTENT_TRUNCATED_SUFFIX = "\n\n[Content truncated due to size]"
 
 # Stored width of the list_id / table_id scalar columns. The insert path caps
 # values to this width, so the lookup path must cap by the same amount or a query
@@ -24,6 +30,14 @@ _ID_FIELD_MAX = 64
 # filter string — this guard keeps that safe by stripping anything outside the
 # id charset, so a value can neither break the filter nor inject expression logic.
 _ID_UNSAFE = re.compile(r"[^0-9A-Za-z_-]")
+
+
+def _truncate_utf8(value: str, max_bytes: int) -> str:
+    """Cap ``value`` at ``max_bytes`` UTF-8 bytes without splitting a character."""
+    encoded = value.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return value
+    return encoded[:max_bytes].decode("utf-8", errors="ignore")
 
 
 def _safe_id(value: str) -> str:
@@ -72,7 +86,7 @@ def _truncate_metadata(metadata_json: str) -> str:
     Drops the largest list-valued fields first, then falls back to scalar-only
     metadata, then to a minimal marker — never a corrupt/half-cut JSON string.
     """
-    if len(metadata_json) <= MAX_METADATA_LENGTH:
+    if len(metadata_json.encode("utf-8")) <= MAX_METADATA_LENGTH:
         return metadata_json
     try:
         meta = json.loads(metadata_json)
@@ -141,11 +155,11 @@ class MilvusService:
 
         schema.add_field(field_name="chunk_id", datatype=DataType.VARCHAR, max_length=64, is_primary=True)
         schema.add_field(field_name="embedding", datatype=DataType.FLOAT_VECTOR, dim=dim)
-        schema.add_field(field_name="content", datatype=DataType.VARCHAR, max_length=65535)
-        schema.add_field(field_name="source_file", datatype=DataType.VARCHAR, max_length=512)
-        schema.add_field(field_name="source_name", datatype=DataType.VARCHAR, max_length=256)
+        schema.add_field(field_name="content", datatype=DataType.VARCHAR, max_length=MAX_CONTENT_LENGTH)
+        schema.add_field(field_name="source_file", datatype=DataType.VARCHAR, max_length=MAX_SOURCE_FILE_LENGTH)
+        schema.add_field(field_name="source_name", datatype=DataType.VARCHAR, max_length=MAX_SOURCE_NAME_LENGTH)
         schema.add_field(field_name="chunk_type", datatype=DataType.VARCHAR, max_length=32)
-        schema.add_field(field_name="metadata_json", datatype=DataType.VARCHAR, max_length=65535)
+        schema.add_field(field_name="metadata_json", datatype=DataType.VARCHAR, max_length=MAX_METADATA_LENGTH)
         schema.add_field(field_name="token_count", datatype=DataType.INT64)
         schema.add_field(field_name="line_start", datatype=DataType.INT64)
         # list_id / table_id are lifted out of metadata into their own scalar columns
@@ -201,20 +215,18 @@ class MilvusService:
         """Insert vector chunks into the collection."""
         logger.info(f"Inserting {len(vector_chunks)} chunks into collection")
 
-        # Milvus has a 65535 character limit for VARCHAR fields
-        MAX_CONTENT_LENGTH = 65535
-        MAX_SOURCE_FILE_LENGTH = 1024
-
         data = []
         for chunk in vector_chunks:
             # Truncate content if needed
             content = chunk.content or ""
-            if len(content) > MAX_CONTENT_LENGTH:
-                logger.warning(f"Truncating content for chunk {chunk.chunk_id} from {len(content)} to {MAX_CONTENT_LENGTH} chars")
-                content = content[:MAX_CONTENT_LENGTH - 50] + "\n\n[Content truncated due to size]"
+            content_bytes = len(content.encode("utf-8"))
+            if content_bytes > MAX_CONTENT_LENGTH:
+                logger.warning(f"Truncating content for chunk {chunk.chunk_id} from {content_bytes} to {MAX_CONTENT_LENGTH} bytes")
+                budget = MAX_CONTENT_LENGTH - len(_CONTENT_TRUNCATED_SUFFIX.encode("utf-8"))
+                content = _truncate_utf8(content, budget) + _CONTENT_TRUNCATED_SUFFIX
 
             # Truncate other fields if needed
-            source_file = (chunk.source_file or "")[:MAX_SOURCE_FILE_LENGTH]
+            source_file = _truncate_utf8(chunk.source_file or "", MAX_SOURCE_FILE_LENGTH)
             metadata_json = _truncate_metadata(chunk.metadata_json or "{}")
 
             data.append({
@@ -222,15 +234,15 @@ class MilvusService:
                 "embedding": chunk.embedding,
                 "content": content,
                 "source_file": source_file,
-                "source_name": chunk.source_name or "",
+                "source_name": _truncate_utf8(chunk.source_name or "", MAX_SOURCE_NAME_LENGTH),
                 "chunk_type": chunk.chunk_type,
                 "metadata_json": metadata_json,
                 "token_count": chunk.token_count,
                 "line_start": chunk.line_start if chunk.line_start is not None else 0,
-                "list_id": (chunk.list_id or "")[:_ID_FIELD_MAX],
-                "table_id": (chunk.table_id or "")[:_ID_FIELD_MAX],
-                "clause_id": (chunk.clause_id or "")[:_ID_FIELD_MAX],
-                "parent_chunk_id": (chunk.parent_chunk_id or "")[:_ID_FIELD_MAX],
+                "list_id": _truncate_utf8(chunk.list_id or "", _ID_FIELD_MAX),
+                "table_id": _truncate_utf8(chunk.table_id or "", _ID_FIELD_MAX),
+                "clause_id": _truncate_utf8(chunk.clause_id or "", _ID_FIELD_MAX),
+                "parent_chunk_id": _truncate_utf8(chunk.parent_chunk_id or "", _ID_FIELD_MAX),
             })
 
         # Insert in batches: a single call covering a whole corpus can outlive

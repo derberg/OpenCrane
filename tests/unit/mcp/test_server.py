@@ -596,7 +596,8 @@ class TestMCPServer:
         long_content = "x" * 1500
 
         with patch('opencrane.mcp.server.get_milvus_service', return_value=mock_milvus), \
-             patch('opencrane.mcp.server.get_embeddings_service', return_value=mock_embeddings):
+             patch('opencrane.mcp.server.get_embeddings_service', return_value=mock_embeddings), \
+             patch('opencrane.mcp.server._has_yaml_chunks', return_value=False):
 
             mock_milvus.search.return_value = [
                 {
@@ -618,6 +619,39 @@ class TestMCPServer:
             assert len(result) > 0
             assert "...(truncated" in result[0].text
             assert "1500 total chars" in result[0].text
+            # No YAML indexed, so get_yaml_definition is not offered and not hinted
+            assert "get_yaml_definition" not in result[0].text
+
+    @pytest.mark.anyio
+    async def test_search_documentation_long_content_truncation_hints_yaml_tool_when_offered(self):
+        """Test that a cut-off non-prose result hints get_yaml_definition when YAML chunks are indexed."""
+        from opencrane.mcp.server import _search_documentation_impl
+
+        mock_milvus = Mock()
+        mock_embeddings = Mock()
+        mock_embeddings.model.encode.return_value = [[0.1] * 768]
+
+        with patch('opencrane.mcp.server.get_milvus_service', return_value=mock_milvus), \
+             patch('opencrane.mcp.server.get_embeddings_service', return_value=mock_embeddings), \
+             patch('opencrane.mcp.server._has_yaml_chunks', return_value=True):
+
+            mock_milvus.search.return_value = [
+                {
+                    "chunk_id": "test-123",
+                    "content": "x" * 1500,
+                    "chunk_type": "prose",
+                    "metadata": "{}",
+                    "distance": 0.5
+                }
+            ]
+
+            result = await _search_documentation_impl({
+                "query": "test",
+                "limit": 1,
+                "search_mode": "semantic",
+            })
+
+            assert "...(truncated" in result[0].text
             assert "get_yaml_definition" in result[0].text
             assert "chunk_id='test-123'" in result[0].text
 

@@ -629,3 +629,66 @@ class TestTruncateMetadata:
         # A single scalar string that itself exceeds the limit — even scalar-only can't fit.
         meta = _json.dumps({"huge": "y" * (MAX_METADATA_LENGTH + 10)})
         assert _truncate_metadata(meta) == '{"truncated": true}'
+
+class TestInsertRespectsSchemaByteLimits:
+    """Every truncated VARCHAR value must fit its column's max_length in UTF-8 bytes."""
+
+    def _insert_one(self, **overrides):
+        fields = dict(
+            chunk_id="c1",
+            embedding=[0.1] * 768,
+            content="body",
+            source_file="docs/a.md",
+            source_name="src",
+            chunk_type="prose",
+            metadata_json="{}",
+            token_count=1,
+            line_start=1,
+        )
+        fields.update(overrides)
+        with patch('opencrane.mcp.services.milvus_client.MilvusClient') as mock_client_class:
+            mock_client = Mock()
+            mock_client_class.return_value = mock_client
+            MilvusService().insert_chunks([VectorChunk(**fields)])
+            return mock_client.insert.call_args[1]['data'][0]
+
+    @staticmethod
+    def _schema_lengths():
+        with patch('opencrane.mcp.services.milvus_client.MilvusClient') as mock_client_class:
+            mock_client = Mock()
+            mock_client_class.return_value = mock_client
+            MilvusService().create_collection()
+            schema = mock_client.create_schema.return_value
+            return {
+                c.kwargs["field_name"]: c.kwargs["max_length"]
+                for c in schema.add_field.call_args_list
+                if "max_length" in c.kwargs
+            }
+
+    def test_source_file_between_schema_and_old_cap_fits(self):
+        row = self._insert_one(source_file="d/" + "a" * 700)
+        assert len(row["source_file"].encode("utf-8")) <= self._schema_lengths()["source_file"]
+
+    def test_multibyte_fields_fit_their_columns_in_bytes(self):
+        limits = self._schema_lengths()
+        row = self._insert_one(
+            content="é" * 40000,  # 40000 chars but 80000 bytes
+            source_file="é" * 300,
+            source_name="é" * 200,
+            metadata_json='{"t": "' + "é" * 40000 + '"}',
+            list_id="é" * 40,
+            table_id="é" * 40,
+            clause_id="é" * 40,
+            parent_chunk_id="é" * 40,
+        )
+        for field in ("content", "source_file", "source_name", "metadata_json",
+                      "list_id", "table_id", "clause_id", "parent_chunk_id"):
+            assert len(row[field].encode("utf-8")) <= limits[field], field
+        assert row["content"].endswith("[Content truncated due to size]")
+        assert row["source_file"] == "é" * 256  # cut on a character boundary
+
+    def test_truncate_utf8_never_splits_a_character(self):
+        from opencrane.mcp.services.milvus_client import _truncate_utf8
+        assert _truncate_utf8("aé", 2) == "a"
+        assert _truncate_utf8("aé", 3) == "aé"
+        assert _truncate_utf8("abc", 2) == "ab"

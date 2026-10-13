@@ -166,3 +166,37 @@ def test_processor_leaves_source_url_a_clean_page_link(tmp_path):
     chunks = FileProcessor().process_file(f, index=idx)
     urls = {c.metadata.get("source_url") for c in chunks if c.metadata.get("source_url")}
     assert urls == {"https://x/home"}
+
+
+_TABS_PAGE = (
+    "# Home\n\n"
+    "BEFORE_TABS prose paragraph explains the install.\n\n"
+    "<Tabs>\n"
+    '  <Tab value="npm" label="npm">\n\n'
+    "```bash\nnpm install thing\n```\n\n"
+    "  </Tab>\n"
+    '  <Tab value="pip" label="pip">\n\n'
+    "```bash\npip install thing\n```\n\n"
+    "  </Tab>\n"
+    "</Tabs>\n\n"
+    "AFTER_TABS prose paragraph explains next steps.\n"
+)
+
+
+def test_processor_index_keeps_prose_around_tabs_block(tmp_path):
+    """Prose before and after a <Tabs> block becomes prose chunks, in page
+    order, with the page URL; the tab code stays code_snippet chunks."""
+    idx = LlmsIndex.parse("# D\n## proj\n- [Home](https://x/home)\n")
+    f = tmp_path / "llms-full.txt"
+    f.write_text(_TABS_PAGE)
+    chunks = FileProcessor().process_file(f, index=idx)
+
+    assert [c.chunk_type for c in chunks] == [
+        "prose", "code_snippet", "code_snippet", "prose",
+    ]
+    assert "BEFORE_TABS" in chunks[0].content
+    assert chunks[0].content.startswith("# Home")
+    assert "npm install thing" in chunks[1].content
+    assert "pip install thing" in chunks[2].content
+    assert "AFTER_TABS" in chunks[3].content
+    assert {c.metadata.get("source_url") for c in chunks} == {"https://x/home"}

@@ -330,3 +330,115 @@ code here
         strategy = CodeChunkingStrategy()
         text = "see [https://github.com/org/repo/file.md] for details"
         assert strategy._extract_source_url(text) == "https://github.com/org/repo/file.md"
+
+
+_TABS_WITH_TEXT = (
+    "<Tabs>\n"
+    '  <Tab value="npm" label="npm">\n\n'
+    "NPM_EXPLAIN install the package with npm.\n\n"
+    "```bash\nnpm install thing\n```\n\n"
+    "  </Tab>\n"
+    '  <Tab value="pip" label="pip">\n\n'
+    "PIP_EXPLAIN install the package with pip.\n\n"
+    "```bash\npip install thing\n```\n\n"
+    "  </Tab>\n"
+    "</Tabs>"
+)
+
+
+class TestTabsInnerText:
+    """The text around the code blocks of a node the code strategy claims,
+    such as a <Tabs> block, is kept as prose chunks, not dropped."""
+
+    def _process(self, text, source_url="https://x/home"):
+        class Node:
+            pass
+
+        node = Node()
+        node.text = text
+        node.source_url = source_url
+        strategy = CodeChunkingStrategy()
+        assert strategy.can_process(node)
+        return strategy.process(node, Path("llms-full.txt"))
+
+    def test_tab_text_becomes_prose_in_reading_order(self):
+        chunks = self._process(_TABS_WITH_TEXT)
+        assert [c.chunk_type for c in chunks] == [
+            "prose", "code_snippet", "prose", "code_snippet",
+        ]
+        assert "NPM_EXPLAIN" in chunks[0].content
+        assert chunks[1].content == "npm install thing"
+        assert "PIP_EXPLAIN" in chunks[2].content
+        assert chunks[3].content == "pip install thing"
+
+    def test_tab_label_kept_and_bare_tags_dropped(self):
+        chunks = self._process(_TABS_WITH_TEXT)
+        assert chunks[0].content == (
+            '<Tab value="npm" label="npm">\n\nNPM_EXPLAIN install the package with npm.'
+        )
+        assert chunks[2].content.startswith('<Tab value="pip" label="pip">')
+        for chunk in chunks:
+            assert "<Tabs>" not in chunk.content
+            assert "</Tab>" not in chunk.content
+
+    def test_prose_chunks_carry_node_source_url(self):
+        chunks = self._process(_TABS_WITH_TEXT)
+        assert {c.metadata["source_url"] for c in chunks} == {"https://x/home"}
+
+    def test_text_is_not_emitted_twice(self):
+        chunks = self._process(_TABS_WITH_TEXT)
+        joined = "\n".join(c.content for c in chunks)
+        assert joined.count("NPM_EXPLAIN") == 1
+        assert joined.count("npm install thing") == 1
+        assert all("```" not in c.content for c in chunks)
+
+    def test_tags_only_text_yields_no_prose(self):
+        text = (
+            '<Tabs>\n  <Tab value="npm" label="npm">\n\n'
+            "```bash\nnpm install thing\n```\n\n  </Tab>\n</Tabs>"
+        )
+        chunks = self._process(text)
+        assert [c.chunk_type for c in chunks] == ["code_snippet"]
+
+    def test_heading_inside_tab_is_kept(self):
+        text = (
+            "<Tabs>\n  <Tab>\n\n### Install with npm\n\n"
+            "Run the install command shown below.\n\n"
+            "```bash\nnpm install thing\n```\n\n  </Tab>\n</Tabs>"
+        )
+        chunks = self._process(text)
+        assert [c.chunk_type for c in chunks] == ["prose", "code_snippet"]
+        assert chunks[0].content.startswith("### Install with npm")
+
+    def test_text_after_last_code_block_is_kept(self):
+        text = (
+            "<Tabs>\n  <Tab>\n\n```bash\nnpm install thing\n```\n\n"
+            "AFTER_CODE the command prints the installed version.\n\n  </Tab>\n</Tabs>"
+        )
+        chunks = self._process(text)
+        assert [c.chunk_type for c in chunks] == ["code_snippet", "prose"]
+        assert "AFTER_CODE" in chunks[1].content
+
+    def test_docusaurus_tabitem_tags_only_yield_no_prose(self):
+        text = (
+            '<Tabs groupId="pm">\n  <TabItem value="npm" label="npm">\n\n'
+            "```bash\nnpm install thing\n```\n\n  </TabItem>\n"
+            '  <TabItem value="pip" label="pip">\n\n'
+            "```bash\npip install thing\n```\n\n  </TabItem>\n</Tabs>"
+        )
+        chunks = self._process(text)
+        assert [c.chunk_type for c in chunks] == ["code_snippet", "code_snippet"]
+
+    def test_docusaurus_tabitem_text_kept_and_closing_tag_dropped(self):
+        text = (
+            "<Tabs>\n  <TabItem value=\"npm\" label=\"npm\">\n\n"
+            "```bash\nnpm install thing\n```\n\n  </TabItem>\n"
+            '  <TabItem value="pip" label="pip">\n\n'
+            "PIP_EXPLAIN install with pip.\n\n"
+            "```bash\npip install thing\n```\n\n  </TabItem>\n</Tabs>"
+        )
+        chunks = self._process(text)
+        assert [c.chunk_type for c in chunks] == ["code_snippet", "prose", "code_snippet"]
+        assert chunks[1].content == (
+            '<TabItem value="pip" label="pip">\n\nPIP_EXPLAIN install with pip.'
+        )

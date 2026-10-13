@@ -102,23 +102,16 @@ def _build_access_policies() -> "dict[str, AllowAllPolicy | ScopeSourcesPolicy]"
     """Parse config.yaml and build one access policy per configured endpoint.
 
     Reads the ``auth`` block from config.yaml (path in ``MAPPING_FILE``, default
-    ``.opencrane/config.yaml``). A missing or unparseable file is treated as empty
-    config, yielding a single root endpoint with an ``AllowAllPolicy``.
+    ``.opencrane/config.yaml``). A missing file is treated as empty config,
+    yielding a single root endpoint with an ``AllowAllPolicy``. An unparseable
+    file raises :class:`AuthConfigError` (fail-closed).
     """
-    from opencrane.mcp.auth.config_model import parse_auth_endpoints
+    from opencrane.mcp.auth.config_model import load_mapping_data, parse_auth_endpoints
     from opencrane.mcp.auth.policies import build_access_policy
     from opencrane.mcp.server import _get_source_keys
 
     mapping_file = Path(os.environ.get("MAPPING_FILE", ".opencrane/config.yaml"))
-    data: dict = {}
-    if mapping_file.exists():
-        try:
-            import yaml as _yaml
-
-            data = _yaml.safe_load(mapping_file.read_text(encoding="utf-8")) or {}
-        except Exception as exc:
-            logger.warning(f"Failed to parse {mapping_file}: {exc} — using AllowAll policy")
-            data = {}
+    data = load_mapping_data(mapping_file)
 
     known_sources = set(_get_source_keys())
     endpoints = parse_auth_endpoints(data, known_sources)

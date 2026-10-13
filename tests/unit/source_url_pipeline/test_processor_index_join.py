@@ -200,3 +200,45 @@ def test_processor_index_keeps_prose_around_tabs_block(tmp_path):
     assert "pip install thing" in chunks[2].content
     assert "AFTER_TABS" in chunks[3].content
     assert {c.metadata.get("source_url") for c in chunks} == {"https://x/home"}
+
+
+_TABS_WITH_TEXT_PAGE = (
+    "# Home\n\n"
+    "BEFORE_TABS prose paragraph explains the install.\n\n"
+    "<Tabs>\n"
+    '  <Tab value="npm" label="npm">\n\n'
+    "NPM_EXPLAIN install the package with npm.\n\n"
+    "```bash\nnpm install thing\n```\n\n"
+    "  </Tab>\n"
+    '  <Tab value="pip" label="pip">\n\n'
+    "PIP_EXPLAIN install the package with pip.\n\n"
+    "```bash\npip install thing\n```\n\n"
+    "  </Tab>\n"
+    "</Tabs>\n\n"
+    "AFTER_TABS prose paragraph explains next steps.\n"
+)
+
+
+def test_processor_index_keeps_text_inside_tabs_block(tmp_path):
+    """The explanation inside each <Tab> becomes a prose chunk next to the
+    tab's code, in page order, with the page URL; nothing is emitted twice."""
+    idx = LlmsIndex.parse("# D\n## proj\n- [Home](https://x/home)\n")
+    f = tmp_path / "llms-full.txt"
+    f.write_text(_TABS_WITH_TEXT_PAGE)
+    chunks = FileProcessor().process_file(f, index=idx)
+
+    assert [c.chunk_type for c in chunks] == [
+        "prose", "prose", "code_snippet", "prose", "code_snippet", "prose",
+    ]
+    assert "BEFORE_TABS" in chunks[0].content
+    assert "NPM_EXPLAIN" in chunks[1].content
+    assert 'label="npm"' in chunks[1].content
+    assert chunks[2].content == "npm install thing"
+    assert "PIP_EXPLAIN" in chunks[3].content
+    assert 'label="pip"' in chunks[3].content
+    assert chunks[4].content == "pip install thing"
+    assert "AFTER_TABS" in chunks[5].content
+    assert {c.metadata.get("source_url") for c in chunks} == {"https://x/home"}
+    joined = "\n".join(c.content for c in chunks)
+    for marker in ("NPM_EXPLAIN", "PIP_EXPLAIN", "npm install thing"):
+        assert joined.count(marker) == 1

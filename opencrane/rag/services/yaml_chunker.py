@@ -1,5 +1,6 @@
 """YAML chunking strategy for CRD and configuration content."""
 
+import re
 import yaml
 import logging
 from typing import List, Dict, Any
@@ -26,6 +27,13 @@ def _has_yaml_tree_chunking_support(doc: Dict[str, Any]) -> bool:
     return _is_k8s_crd(doc) or is_openapi_spec(doc) or is_json_schema(doc)
 
 
+# Fence languages that the YAML strategy always claims.
+_YAML_LANGUAGES = frozenset({'yaml', 'yml'})
+
+# The fence language: the leading word of the opening fence's info string.
+_FENCE_LANGUAGE_RE = re.compile(r'\w+')
+
+
 class YamlChunkingStrategy(ProcessingStrategy):
     """Strategy for processing YAML/CRD content with intelligent splitting."""
 
@@ -46,33 +54,81 @@ class YamlChunkingStrategy(ProcessingStrategy):
             self.yaml_tree_walkers = yaml_tree_walkers
 
     def can_process(self, node) -> bool:
-        """Check if node contains YAML content (excludes front matter)."""
+        """Check if node contains YAML content (excludes front matter).
+
+        A fenced block is judged by the language on its opening fence:
+        ``yaml`` and ``yml`` blocks are always claimed, ``json`` blocks only
+        when a configured tree walker handles the parsed document (the
+        built-in ``openapi`` and ``json-schema`` fence types inline ``.json``
+        files as ``json`` blocks), and any other language is never claimed.
+        Only unfenced text and language-less fenced blocks fall back to the
+        ``key: value`` heuristic.
+        """
         if not hasattr(node, 'text'):
             return False
         text = node.text.strip()
+
+        if text.startswith('```'):
+            opening, _, body = text.partition('\n')
+            # The language is the leading word of the info string, read the
+            # same way as the code strategy, so ``yaml{1}`` and
+            # ``yaml title=...`` both count as ``yaml``.
+            language_match = _FENCE_LANGUAGE_RE.match(opening.lstrip('`').strip())
+            body = self._strip_closing_fence(body)
+            if language_match:
+                language = language_match.group(0).lower()
+                if language in _YAML_LANGUAGES:
+                    return True
+                if language == 'json':
+                    return self._is_walkable_json(body)
+                return False
+            return self._looks_like_yaml(body)
 
         # Skip YAML front matter — flat key: value metadata blocks
         if self._is_front_matter(text):
             return False
 
+        return self._looks_like_yaml(text)
+
+    @staticmethod
+    def _strip_closing_fence(body: str) -> str:
+        """Drop the closing fence line from the body of a fenced block."""
+        lines = body.rstrip().split('\n')
+        if lines and lines[-1].strip().startswith('```'):
+            lines = lines[:-1]
+        return '\n'.join(lines)
+
+    def _is_walkable_json(self, body: str) -> bool:
+        """Check if a JSON block is a document that a configured tree walker handles."""
+        try:
+            doc = yaml.safe_load(body)
+        except yaml.YAMLError:
+            return False
+        return isinstance(doc, dict) and self._has_yaml_tree_chunking_support(doc)
+
+    @staticmethod
+    def _looks_like_yaml(text: str) -> bool:
+        """Heuristic for unfenced or language-less YAML.
+
+        Looks at the first ten lines that are neither blank nor comments and
+        accepts the text when at least two of them look like ``key: value``.
+        """
         # Strong indicators of YAML
         if text.startswith('---') or text.startswith('apiVersion:') or text.startswith('kind:'):
             return True
 
         # Check for key: value patterns typical of YAML, but exclude prose
         # YAML typically has keys at line starts with colons
-        lines = text.split('\n')[:10]  # Check first 10 lines
+        content_lines = [
+            line.strip() for line in text.split('\n')
+            if line.strip() and not line.strip().startswith('#')
+        ][:10]
         yaml_like_lines = 0
-        for line in lines:
-            stripped = line.strip()
-            # Skip empty lines and comments
-            if not stripped or stripped.startswith('#'):
-                continue
+        for stripped in content_lines:
             # Check if line matches key: value pattern (key at start, colon, space/value)
-            if ':' in stripped and not stripped.startswith('#'):
+            if ':' in stripped:
                 # Split at first colon
-                parts = stripped.split(':', 1)
-                key = parts[0].strip()
+                key = stripped.split(':', 1)[0].strip()
                 # Valid YAML key should be a single word or have quotes
                 # Avoid matching prose like "text text: more text" or URLs
                 if (len(key.split()) <= 2 and

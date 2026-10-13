@@ -2,47 +2,54 @@
 
 EXTENSIONS_PY = '''\
 from opencrane import OpenCraneConfig
-# Uncomment to add custom fence type handlers:
+# Uncomment the imports that your chosen examples need:
+# from opencrane import ExtraTool
 # from opencrane.fences import CodeFenceConfig
 
 
 class Config(OpenCraneConfig):
     """Project-specific OpenCrane configuration.
 
-    Subclass OpenCraneConfig to register custom fence types,
-    chunking strategies, and YAML tree walkers.
-    See OpenCraneConfig for all available extension points.
+    OpenCrane loads this class when the `extensions` key in config.yaml
+    names this file, or when --config or OPENCRANE_CONFIG passes its path.
+    The class must be named Config.
+    For all extension points with examples, see
+    https://github.com/derberg/OpenCrane#extend-opencrane
     """
 
-    # Register custom fence types for code blocks in your documentation.
-    # The handler receives the fence content and returns a string to embed.
+    # Fence-block handlers for llms-full.txt generation. A handler receives
+    # the block content, the Markdown file path, the project root, and the
+    # project name, and returns the text that replaces the block. A plain
+    # dict replaces the built-in fence types (openapi, asyncapi, crd,
+    # json-schema), so unpack them as in this example to keep them.
     # fence_types = {
-    #     "openapi": CodeFenceConfig(fence_type="openapi", handler=my_openapi_handler),
-    #     "json-schema": CodeFenceConfig(fence_type="json-schema", handler=my_schema_handler),
+    #     **OpenCraneConfig.fence_types,
+    #     "terraform": CodeFenceConfig(fence_type="terraform", handler=my_terraform_handler),
     # }
 
-    # Prepend custom chunking strategies (first match wins).
+    # Chunking strategies, as ProcessingStrategy instances. OpenCrane uses
+    # the first strategy that accepts a block, so list yours first.
     # chunking_strategies = [MyTabsStrategy(), *OpenCraneConfig.chunking_strategies]
 
-    # Extend or replace YAML tree walkers for structured YAML chunking.
+    # YAML tree walkers, as YamlTreeWalker subclasses from opencrane.walkers.
+    # List the classes, not instances.
     # yaml_tree_walkers = [*OpenCraneConfig.yaml_tree_walkers, MyCustomWalker]
 
-    # Custom section-anchor slugs. Each markdown sub-section chunk gets a
-    # `section_anchor` in its metadata; consumers link to it as
-    # `{source_url}#{section_anchor}`. Pick a built-in style with
-    # `section_anchor_style` (in config.yaml), or override this method for a
-    # rule your docs host uses. Return None to skip a chunk's anchor.
+    # Section-anchor slugs. Override this method when no
+    # `section_anchor_style` value in config.yaml matches the anchors of your
+    # docs host. The override takes precedence over that setting. Return None
+    # to record no anchor.
     # def section_anchor_for(self, heading):
     #     if not heading:
     #         return None
-    #     # e.g. a host that keeps case and uses underscores:
+    #     # For example, a host that keeps case and uses underscores:
     #     return heading.strip().replace(" ", "_")
 
-    # Custom MCP tools served next to the built-in tools. OpenCrane does not
-    # filter the tool output: if you restrict sources, call
-    # context.allowed_sources() in each handler that returns documentation.
-    # For a handler that does this, see "Add custom MCP tools" in the README.
-    # from opencrane import ExtraTool
+    # Custom MCP tools, served next to the built-in tools. OpenCrane does not
+    # filter their output. If you restrict the sources a caller can read,
+    # call context.allowed_sources() in each handler that returns
+    # documentation. For a complete handler, see
+    # https://github.com/derberg/OpenCrane#add-custom-mcp-tools
     # extra_tools = [
     #     ExtraTool(
     #         name="read_chunk",
@@ -50,53 +57,57 @@ class Config(OpenCraneConfig):
     #         input_schema={"type": "object",
     #                       "properties": {"chunk_id": {"type": "string"}},
     #                       "required": ["chunk_id"]},
-    #         handler=read_chunk,
+    #         handler=read_chunk,  # your function: read_chunk(arguments, context)
     #     ),
     # ]
 '''
 
 CONFIG_YAML = '''\
 # OpenCrane configuration
-# Tip: Run `opencrane add` to interactively add sources instead of editing this file.
+# To add sources interactively instead of editing this file, run `opencrane add`.
 
-# Ignore patterns — directory names to exclude from llms-full.txt generation.
-# Applied globally to all sources. Per-source patterns can extend this list.
+# Directory names to exclude from llms-full.txt generation, for all sources.
+# The ignore_patterns list of a source adds to this list.
 ignore_patterns:
   - devel
 
-# Optional: Python module with custom extensions (fence types, chunking strategies, walkers).
-# Path is relative to .opencrane/ directory.
+# Optional: Python file with your Config class, relative to .opencrane/.
+# OpenCrane ignores extensions.py until this key names it, or until
+# --config or OPENCRANE_CONFIG passes its path.
+# To create a starter file, run `opencrane init --extensions`.
 # extensions: extensions.py
 
-# Optional: section anchors. Each markdown sub-section chunk records a
-# `section_anchor` in its metadata (the in-page slug of its heading) so links
-# can point at the exact section via `{source_url}#{section_anchor}`.
-# `generic` (default) suits GitBook/GitHub-style slugs; `none` disables anchors.
-# For a custom slug rule, override `section_anchor_for` in extensions.py.
+# Optional: section anchors. Each Markdown sub-section chunk records a
+# `section_anchor` (the in-page slug of its heading), so a client can link to
+# `{source_url}#{section_anchor}`. `generic` (the default) matches GitBook and
+# GitHub slugs. `none` records no anchors. For another slug rule, override
+# `section_anchor_for` in extensions.py.
 # section_anchor_style: generic
 
 # Optional: clause IDs for the MCP `get_section` tool. Each prose chunk takes
 # its `clause_id` from the start of its section heading, for example `5.4.1.2a`
-# or `Annex C`. Set a regular expression whose first capture group is the ID,
-# or `none` to record no clause IDs.
+# or `Annex C`. By default, OpenCrane recognizes numbered headings and annexes.
+# For another rule, set a regular expression whose first capture group is the
+# ID. To record no clause IDs, set `none`.
 # section_clause_pattern: none
 
-# Documentation sources.
-# Each entry maps a source name to its configuration.
+# Documentation sources, keyed by source name.
 #
 # GitHub repository example:
 #   external-sources/my-repo:
 #     url: https://github.com/my-org/my-repo
-#     docs_path: docs        # subdirectory inside the repo to fetch (empty = root)
-#     manual: true           # true = always fetch, false = only if repo has the configured topic
-#     ignore_patterns:       # optional, extends global ignore_patterns
+#     docs_path: docs     # folder to fetch (default `docs`); an empty string fetches the repo root
+#     docs_url: https://docs.example.com  # optional: published site, for page links
+#     tag: v1.2.0         # optional: pin to one sha, tag, release, or branch
+#     manual: true        # true: always fetch; false: fetch only when auto-discovery finds the repo
+#     ignore_patterns:    # optional: added to the global ignore_patterns
 #       - internal
 #
-# Pre-existing llms.txt example:
-#   anthropic-docs:
+# Pre-existing llms-full.txt example:
+#   example-docs:
 #     type: llmstxt
-#     url: https://docs.anthropic.com/llms-full.txt
-#     docs_url: https://docs.anthropic.com  # optional, for source links
+#     url: https://docs.example.com/llms-full.txt  # URL or local file path
+#     docs_url: https://docs.example.com  # optional: published site, for page links
 #     manual: true
 
 sources:
@@ -213,123 +224,112 @@ services:
 README_MD = '''\
 # .opencrane
 
-This directory contains OpenCrane configuration and generated data files.
+This directory holds the OpenCrane configuration of this project and the files that the pipeline generates.
 
-## Structure
+## Directory contents
 
-| File | Description | Commit? |
+The following table lists the files in this directory and whether to commit them:
+
+| Path | Description | Commit |
 |---|---|---|
-| `config.yaml` | Sources, ignore patterns, and optional extensions reference | Yes |
-| `extensions.py` | Custom fence types, chunking strategies, tree walkers (optional) | Yes |
-| `chunks.json` | Generated document chunks (`opencrane chunk`) | Your choice |
-| `embeddings.json` | Generated vector embeddings (`opencrane embed`) | Your choice |
+| `config.yaml` | Sources, ignore patterns, and other settings | Yes |
+| `extensions.py` | Optional Python extensions, created by `opencrane init --extensions` | Yes |
+| `Dockerfile` or `Containerfile`, `docker-compose.yml` | Container build for the HTTP Model Context Protocol (MCP) server | Yes |
+| `sources/`, `llmstxt/` | Fetched sources and generated `llms-full.txt` files | Optional |
+| `chunks.json`, `embeddings.json` | Chunks and their embedding vectors, which `opencrane index` loads | Yes, if a continuous integration (CI) pipeline builds the container image |
+| `milvus.db` | Milvus Lite database that `opencrane index` writes | No, the image build creates its own |
 
-> Committing `chunks.json` and `embeddings.json` is required for Docker image builds via CI/CD.
-> For local-only use, you can add them to `.gitignore`.
+## Build and serve the index
 
-## Quick Start
+The `build` command needs the `pipeline` extra, which `pip install 'opencrane[pipeline]'` installs.
+
+> [!CAUTION]
+> The fetch step of `opencrane build` deletes the fetched files of every auto-discovered source that auto-discovery no longer returns. To keep a source, set `manual: true` on its entry in `config.yaml`. See [How the fetch removes stale sources](https://github.com/derberg/OpenCrane/blob/main/docs/fetching.md#how-the-fetch-removes-stale-sources).
+
+To build the index and start the server, run the following commands:
 
 ```bash
 # 1. Add documentation sources interactively
 opencrane add
 
-# 2. Build the full pipeline (fetch → llms → chunk → embed → index)
+# 2. Run the pipeline: fetch, llms, chunk, embed, and index
 opencrane build
 
-# 3. Start the MCP server (auto-indexes into Milvus Lite)
+# 3. Start the MCP server over stdio
 opencrane serve
-
-# 4. Or launch MCP Inspector for interactive testing
-opencrane inspect
 ```
 
-Run `opencrane serve` and follow the printed instructions to connect your MCP client.
+`opencrane serve` prints how to connect common MCP clients. To test the tools in a browser, run `opencrane inspect`, which needs Node.js.
 
-## Docker / Podman
+## Run the server in a container
 
-For containerized deployment over HTTP:
+The container image serves MCP over HTTP on port 8000. The image build creates the Milvus Lite database inside the image, so the container starts without indexing. If you ran `opencrane init --podman`, first change the `dockerfile` value in `docker-compose.yml` to `.opencrane/Containerfile`.
+
+To build and start the container, run the following command from the project root:
 
 ```bash
-# Build and run
-{container_tool}-compose up --build
+{container_tool}-compose -f .opencrane/docker-compose.yml up --build
 ```
 
-The Docker image bakes the vector database at build time for fast startup.
-Configure the embedding model via `EMBEDDING_MODEL` env var in `{container_tool}-compose.yaml`.
+To change the embedding model, set the `EMBEDDING_MODEL` environment variable before the build, so the image contains the model. Also add `EMBEDDING_MODEL` to the `environment` section of `docker-compose.yml`, because the server reads it at runtime. Use the model that `opencrane embed` used, because the server embeds search queries with it. To add the optional reranker model to the image, set `RERANKER_MODEL` before the build. The image passes it to the server, so the `environment` section does not need it.
 
-> **Do not bind-mount the Milvus Lite database.** Milvus Lite cannot open its
-> `.db` from a bind-mounted volume (`Open local milvus failed`); the image bakes
-> it in with `COPY` (and builds it inside the container), so leave it baked —
-> don't mount a `.db` over `/app/milvus_data`.
+> [!CAUTION]
+> Do not mount a volume over `/app/milvus_data`. Milvus Lite cannot open a database file on a bind mount and fails with `Open local milvus failed`. Use the database that the image build creates.
 
-### Health checks (Cloud Run, Kubernetes, Scaleway, ...)
+### Configure health checks
 
-The HTTP server exposes `GET /health` on port 8000 for liveness/readiness probes.
-It runs a real query and reports memory headroom, returning `200` when the
-instance can serve (`healthy`/`degraded`) and `503` when it cannot
-(`unhealthy`, or `initializing` while services load). Point your platform's
-probe at `/health`; give the startup/initial-delay enough headroom for the model
-to load, and prefer a longer period for liveness so a real search isn't run every
-few seconds.
+The server answers `GET /health` on port 8000. Each request runs a real search query and checks the free memory. The endpoint returns `200` when the instance can serve (`healthy` or `degraded`), and `503` when it cannot (`unhealthy`, or `initializing` while the services load).
 
-### Build and publish the Docker image
+Point the liveness and readiness probes of your platform, for example Kubernetes or Cloud Run, at `/health`. Give the startup probe enough time for the model to load. Use a long liveness period, because every probe runs a search.
+
+### Build and publish the image
+
+To build, push, and run the image, run the following commands from the project root. If you ran `opencrane init --podman`, the build file is `.opencrane/Containerfile`.
 
 ```bash
-# Build the image
-{container_tool} build -t your-registry/opencrane-mcp:latest -f .opencrane/Dockerfile .
-
-# Push to a registry
-{container_tool} push your-registry/opencrane-mcp:latest
+{container_tool} build -t {REGISTRY}/opencrane-mcp:latest -f .opencrane/Dockerfile .
+{container_tool} push {REGISTRY}/opencrane-mcp:latest
+{container_tool} run -p 8000:8000 {REGISTRY}/opencrane-mcp:latest
 ```
 
-Others can then run it with:
+### Connect an MCP client over HTTP
+
+The MCP endpoint of the container is `http://localhost:8000/mcp`. To add the endpoint to Claude Code, run the following command:
 
 ```bash
-{container_tool} run -p 8000:8000 your-registry/opencrane-mcp:latest
+claude mcp add opencrane --transport http http://localhost:8000/mcp
 ```
 
-### MCP client configuration for Docker (HTTP)
-
-Once the container is running on port 8000, configure your MCP client to use the HTTP endpoint:
-
-**Claude Code:**
-
-```bash
-claude mcp add opencrane --transport http --url http://localhost:8000/http
-```
-
-**Cursor / Windsurf / VS Code (mcp.json):**
+To add the endpoint to Cursor, add the following entry to `mcp.json`:
 
 ```json
-{{
-  "mcpServers": {{
-    "opencrane": {{
-      "url": "http://localhost:8000/http"
-    }}
-  }}
-}}
+{
+  "mcpServers": {
+    "opencrane": {
+      "url": "http://localhost:8000/mcp"
+    }
+  }
+}
 ```
 
-## Pipeline Steps
+## Commands
 
-`opencrane build` runs the full pipeline, but each step can be run independently:
+`opencrane build` runs the pipeline steps from `fetch` to `index` in order. To repeat one step, for example to chunk again after a configuration change without a new fetch, run that step alone. The following table lists the commands:
 
 | Command | Description |
 |---|---|
-| `opencrane add` | Interactively add documentation sources |
-| `opencrane fetch` | Download documentation from GitHub repositories |
-| `opencrane llms` | Generate `llms-full.txt` bundle files |
-| `opencrane chunk` | Split documentation into chunks |
-| `opencrane embed` | Generate vector embeddings for each chunk |
-| `opencrane index` | Load chunks and embeddings into Milvus |
-| `opencrane serve` | Start the MCP server (auto-indexes if needed) |
-| `opencrane pack` | Package the MCP server for distribution via `uvx` |
-| `opencrane inspect` | Launch MCP Inspector web UI for testing |
-| `opencrane tokens` | Generate a token count report |
-
-Running steps individually is useful when iterating on a single stage (e.g., re-chunking after config changes without re-fetching).
+| `opencrane add` | Adds documentation sources interactively |
+| `opencrane fetch` | Downloads the GitHub and llms-full.txt sources |
+| `opencrane llms` | Generates the `llms-full.txt` files and their `llms.txt` index |
+| `opencrane chunk` | Splits the documentation into chunks |
+| `opencrane embed` | Generates an embedding vector for each chunk |
+| `opencrane index` | Loads the chunks and vectors into Milvus |
+| `opencrane serve` | Starts the MCP server over stdio, or over HTTP on port 8000 with `--transport http` |
+| `opencrane inspect` | Opens the MCP Inspector web UI, connected to the server |
+| `opencrane pack` | Packages the server and its data for `uvx` |
+| `opencrane tokens` | Writes a token count report for the `llms-full.txt` files |
+| `opencrane visualize` | Writes an HTML map of the embeddings, and needs the `viz` extra |
 '''
-
 
 PACK_MAIN_PY = '''\
 """MCP server with bundled documentation data."""
@@ -379,25 +379,30 @@ include = ["{module_name}*"]
 PACK_README = '''\
 # {name}
 
-MCP server for documentation search — built with [OpenCrane](https://github.com/opencrane/opencrane).
+This package is a Model Context Protocol (MCP) server for documentation search, built with [OpenCrane](https://github.com/derberg/OpenCrane). It contains the search index, so it needs no build step.
 
-## Use locally
+## Use the package locally
 
-```bash
-claude mcp add {name} -- uvx --from /path/to/{name} {name}
-```
-
-## Share via GitHub
-
-Push this directory to a GitHub repository, then others can add it with:
+To add the server to Claude Code from this directory, run the following command:
 
 ```bash
-claude mcp add {name} -- uvx --from "git+https://github.com/you/{name}" {name}
+claude mcp add {name} -- uvx --from {{PATH_TO_THIS_DIRECTORY}} {name}
 ```
 
-## Share via PyPI
+## Share the package through GitHub
 
-Build and upload the wheel:
+Push this directory to a GitHub repository. Others can then add the server with the following command:
+
+```bash
+claude mcp add {name} -- uvx --from "git+https://github.com/{{OWNER}}/{name}" {name}
+```
+
+## Share the package through PyPI
+
+> [!CAUTION]
+> `twine upload` publishes the package, including the search index of your documentation, on the public PyPI. PyPI does not accept the same version again, even after you delete it. Upload only documentation that anyone may read.
+
+To build the package and upload it to PyPI, run the following commands in this directory:
 
 ```bash
 pip install build twine
@@ -405,49 +410,43 @@ python -m build .
 twine upload dist/*
 ```
 
-Then others can add it with:
+Others can then add the server with the following command:
 
 ```bash
 claude mcp add {name} -- uvx {name}
 ```
 
-> **Note:** PyPI has a 100 MB per-file size limit. If your `milvus.db` exceeds this,
-> distribute via GitHub or a direct path instead.
+> [!NOTE]
+> PyPI limits each file to 100 MB. If `milvus.db` is larger, share the package through GitHub or a local path.
 
-> **Note:** When you re-pack with updated documentation, bump `--version` so that
-> `uvx` pulls the new version instead of serving its cache.
+> [!IMPORTANT]
+> When you pack updated documentation again, increase the `--version` value. Otherwise, `uvx` serves its cached copy of the old version.
 
-## Share via Docker
+## Share the server as a container image
 
-Build and publish a Docker image for HTTP deployment:
-
-```bash
-# Build
-docker build -t your-registry/{name}:latest -f .opencrane/Dockerfile ..
-
-# Push
-docker push your-registry/{name}:latest
-```
-
-Run the container:
+The container image builds from the OpenCrane project, not from this package. To build, push, and run the image, run the following commands from the project root:
 
 ```bash
-docker run -p 8000:8000 your-registry/{name}:latest
+docker build -t {{REGISTRY}}/{name}:latest -f .opencrane/Dockerfile .
+docker push {{REGISTRY}}/{name}:latest
+docker run -p 8000:8000 {{REGISTRY}}/{name}:latest
 ```
 
-The MCP endpoint is available at `http://localhost:8000/http`.
+The MCP endpoint of the container is `http://localhost:8000/mcp`.
 
-## MCP client configuration
+## Configure an MCP client
 
-### Stdio (uvx)
+The following sections show the client settings for the stdio and HTTP transports.
 
-**Claude Code:**
+### Connect over stdio with uvx
+
+To add the server to Claude Code, run the following command:
 
 ```bash
 claude mcp add {name} -- uvx {name}
 ```
 
-**Cursor / Windsurf / VS Code (mcp.json):**
+To add the server to Cursor, add the following entry to `mcp.json`:
 
 ```json
 {{
@@ -460,7 +459,7 @@ claude mcp add {name} -- uvx {name}
 }}
 ```
 
-**Zed (settings.json):**
+To add the server to Zed, add the following entry to `settings.json`:
 
 ```json
 {{
@@ -475,27 +474,26 @@ claude mcp add {name} -- uvx {name}
 }}
 ```
 
-### HTTP (Docker)
+### Connect over HTTP to the container
 
-**Claude Code:**
+To add the container endpoint to Claude Code, run the following command:
 
 ```bash
-claude mcp add {name} --transport http --url http://localhost:8000/http
+claude mcp add {name} --transport http http://localhost:8000/mcp
 ```
 
-**Cursor / Windsurf / VS Code (mcp.json):**
+To add the container endpoint to Cursor, add the following entry to `mcp.json`:
 
 ```json
 {{
   "mcpServers": {{
     "{name}": {{
-      "url": "http://localhost:8000/http"
+      "url": "http://localhost:8000/mcp"
     }}
   }}
 }}
 ```
 '''
-
 
 def readme(podman: bool = False) -> str:
     tool = "podman" if podman else "docker"

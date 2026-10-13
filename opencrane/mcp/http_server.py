@@ -540,6 +540,11 @@ def _missing_extensions_file() -> Path | None:
     the base Config class when that file is missing, which would drop its
     middleware and auth hooks without a word. Returns ``None`` when no file is
     named, the value is a ``module:Class`` import path, or the file exists.
+
+    Raises:
+        AuthConfigError: When ``.opencrane/config.yaml`` cannot be parsed. The CLI
+            reads the ``extensions`` key from that file even when ``MAPPING_FILE``
+            points elsewhere, and would otherwise drop the key without a word.
     """
     config_arg = os.environ.get("OPENCRANE_CONFIG")
     if config_arg:
@@ -547,9 +552,9 @@ def _missing_extensions_file() -> Path | None:
             return None
         path = Path(config_arg)
     else:
-        from opencrane.cli import _read_config_yaml
+        from opencrane.mcp.auth.config_model import load_mapping_data
 
-        extensions = _read_config_yaml().get("extensions")
+        extensions = load_mapping_data(Path(".opencrane/config.yaml")).get("extensions")
         if not extensions:
             return None
         path = Path(".opencrane") / extensions

@@ -73,6 +73,20 @@ class TestFailClosed:
         with pytest.raises(AuthConfigError, match="extensions file .*extensions.py does not exist"):
             http_server.build_asgi_app()
 
+    def test_unparseable_project_config_with_other_mapping_file_stops_the_server(
+        self, tmp_path, monkeypatch
+    ):
+        """MAPPING_FILE is valid, but the .opencrane/config.yaml that holds the
+        extensions key is not, so its middleware would be dropped without a word."""
+        (tmp_path / ".opencrane").mkdir()
+        (tmp_path / ".opencrane" / "config.yaml").write_text(
+            "extensions: extensions.py\nsources: [\n", encoding="utf-8"
+        )
+        monkeypatch.chdir(tmp_path)
+        _config(tmp_path, monkeypatch, "auth:\n  type: none\n")
+        with pytest.raises(AuthConfigError, match=r"cannot parse \.opencrane/config\.yaml"):
+            http_server.build_asgi_app()
+
     def test_missing_config_path_stops_the_server(self, tmp_path, monkeypatch):
         """--config / OPENCRANE_CONFIG names a file that does not exist."""
         _config(tmp_path, monkeypatch, "auth:\n  type: none\n")

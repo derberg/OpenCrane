@@ -853,6 +853,43 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         raise ValueError(f"Unknown tool: {name}")
     return await handler(arguments)
 
+# A chunk type name: letters, digits, ``_`` and ``-`` (``prose``, ``list_item``).
+_CHUNK_TYPE_NAME = re.compile(r"[A-Za-z0-9_-]+")
+
+# Characters no source name may contain: they could end or escape the quoted
+# literal the source filter is built from. Control characters are rejected too.
+_SOURCE_NAME_UNSAFE = re.compile(r'["\\\x00-\x1f\x7f]')
+
+
+def _invalid_search_filters(chunk_types, source_names) -> str | None:
+    """Return an error message when a search filter argument is malformed, else ``None``.
+
+    The tool schema lists the valid values, but clients don't have to honour it,
+    so the server checks the arguments that end up in the Milvus filter.
+    ``chunk_types`` must be a list of chunk type names. ``source_names`` must be
+    a list of strings without quotes, backslashes or control characters. A well
+    formed source name the caller may not read is not an error here: the source
+    policy drops it, as before.
+    """
+    if chunk_types is not None:
+        if not isinstance(chunk_types, list) or not all(
+            isinstance(t, str) and _CHUNK_TYPE_NAME.fullmatch(t) for t in chunk_types
+        ):
+            return (
+                "Error: invalid chunk_types. Pass a list of chunk type names "
+                "(letters, digits, '_' and '-')."
+            )
+    if source_names is not None:
+        if not isinstance(source_names, list) or not all(
+            isinstance(s, str) and s and not _SOURCE_NAME_UNSAFE.search(s) for s in source_names
+        ):
+            return (
+                "Error: invalid source_names. Pass a list of configured source names, "
+                "without quotes, backslashes or control characters."
+            )
+    return None
+
+
 async def search_docs(arguments: dict) -> list[TextContent]:
     """
     Search indexed documentation.
@@ -885,6 +922,12 @@ async def _search_documentation_impl(
     limit = arguments.get("limit", 5)
     chunk_types = arguments.get("chunk_types")
     source_names = arguments.get("source_names")
+    # These values are interpolated into the Milvus filter, so a malformed one is
+    # rejected before any search runs (milvus_client also drops unsafe values).
+    invalid = _invalid_search_filters(chunk_types, source_names)
+    if invalid:
+        logger.warning(f"   🔒 search: rejected filter arguments: {invalid}")
+        return [TextContent(type="text", text=invalid)]
     # --- Layer 2: content authorization ---
     from opencrane.mcp.auth.runtime import resolve_allowed_sources
     # A project middleware's declared sources take precedence over the scope

@@ -96,6 +96,8 @@ The server always provides `search_docs` and `health`. It provides each other to
 
 The `search_docs` tool searches the indexed documentation. Its description names the topics of the configured sources. The **chunk_types** and **source_names** parameters accept only the values that exist in the index and the configuration.
 
+The server also checks these two parameters, because a client can ignore the tool schema. Each must be a list of strings. A **chunk_types** value can contain only letters, digits, `_`, and `-`. A **source_names** value cannot be empty or contain a double quote, a backslash, or a control character. If a value breaks these rules, `search_docs` returns an error and does not search. Authorization still removes a valid source name that the caller cannot read, so that source returns no results.
+
 The following table lists the parameters of `search_docs`:
 
 | Parameter | Type | Required | Description | Default value |

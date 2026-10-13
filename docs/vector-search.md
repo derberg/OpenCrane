@@ -90,7 +90,7 @@ The people you share the package with run it through `uvx` and do not rebuild an
 
 ## MCP tools
 
-The server always provides `search_docs` and `health`. It provides each other tool only when the index contains the chunks that the tool reads. The following sections describe the tools.
+The server always provides `search_docs` and `health`. It provides each other tool only when the index contains the chunks that the tool reads. Every tool that returns chunks applies the source policy of the endpoint. For an ID from a source that the caller cannot read, the tool returns the same answer as for an ID that does not exist. See [Authentication and authorization](auth.md). The following sections describe the tools.
 
 ### `search_docs`
 

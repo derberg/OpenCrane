@@ -113,11 +113,15 @@ class MilvusService:
 
     def __init__(self, host: str = None, port: int = None, collection_name: str = None):
         self.config = get_config()
-        # Support MILVUS_DB_PATH for Milvus Lite (file path) or fallback to host/port for server mode
+        # Mode selection: an explicit MILVUS_DB_PATH always wins (a file path means
+        # Milvus Lite, an empty value means server mode). When MILVUS_DB_PATH is unset,
+        # MILVUS_HOST selects server mode; with neither set, Lite is the default.
         # Note: We use MILVUS_DB_PATH instead of MILVUS_URI because pymilvus reads MILVUS_URI
         # at import time and fails if it's a file path
         import os
-        milvus_db_path = os.getenv("MILVUS_DB_PATH", ".opencrane/milvus.db")
+        milvus_db_path = os.getenv("MILVUS_DB_PATH")
+        if milvus_db_path is None:
+            milvus_db_path = "" if os.getenv("MILVUS_HOST") else ".opencrane/milvus.db"
         if milvus_db_path:
             self.uri = milvus_db_path
         else:

@@ -167,3 +167,27 @@ def test_embeddings_up_to_date_false_when_document_prompt_changed(tmp_path, monk
         "document_prompt": "search_document: ",
     }))
     assert _embeddings_up_to_date(chunks_file, embeddings_file) is True
+
+
+@patch('opencrane.rag.generate_embeddings.setup_logging')
+def test_main_second_run_skips_on_unchanged_chunks_file(mock_logging, tmp_path, monkeypatch):
+    """A second embed run on the same chunks.json skips regeneration."""
+    monkeypatch.setenv("AI_DOCS_EMBEDDINGS_BACKEND", "mock")
+    chunks_file = tmp_path / "chunks.json"
+    embeddings_file = tmp_path / "embeddings.json"
+    # Written the way ChunkSerializer writes chunks.json
+    with open(chunks_file, 'w', encoding='utf-8') as f:
+        json.dump(
+            [{"chunk_id": "c1", "chunk_type": "prose", "content": "héllo", "source_file": "a.md"}],
+            f, indent=2, sort_keys=True, ensure_ascii=False,
+        )
+
+    from opencrane.mcp.services.embeddings import EmbeddingService
+    original = EmbeddingService.generate_embeddings
+    with patch.object(
+        EmbeddingService, 'generate_embeddings', autospec=True, side_effect=original
+    ) as spy:
+        main(chunks_file, embeddings_file)
+        main(chunks_file, embeddings_file)
+
+    assert spy.call_count == 1

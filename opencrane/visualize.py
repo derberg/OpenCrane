@@ -765,16 +765,17 @@ GLOSSARY_HTML = """
       <div class="term-body">
         <p><strong>What they are:</strong> For each docs repo, we take the top-30
         chunks most similar to your paragraph, then compute:
-        the <strong>mean</strong> of those 30 similarities (the colored bar),
-        and the <strong>max</strong> of all similarities from that repo (the teal tick).</p>
+        the <strong>max</strong> of all similarities from that repo (the bar length),
+        and the <strong>mean</strong> of those 30 similarities (the orange tick inside the bar).</p>
         <p><strong>Why both:</strong> Mean tells you whether the repo
         <em>broadly</em> overlaps with your topic. Max tells you whether <em>any single
         chunk</em> in that repo hits hard.</p>
         <p><strong>What you can read from it:</strong></p>
         <ul>
-          <li><strong>Long bar (high mean)</strong> = the repo is generally about your
-          topic. Strong candidate for "where this paragraph belongs".</li>
-          <li><strong>Short bar but teal tick far to the right</strong> = the repo
+          <li><strong>Long bar with the tick near its end (high max and mean)</strong> =
+          the repo is generally about your topic. Strong candidate for "where this
+          paragraph belongs".</li>
+          <li><strong>Long bar but tick far to the left</strong> = the repo
           isn't about your topic overall, but one specific chunk matches strongly.
           Could be a coincidence or a hidden cross-reference.</li>
           <li><strong>Both short</strong> = the repo doesn't overlap at all; skip it.</li>
@@ -1204,7 +1205,7 @@ SOURCES_DEBUG = """
       glossary entry name-drops the technical term you're searching for,
       even when no entry is actually about it.</div></dd>
 
-      <dt>Bar (mean) and tick (max) very close together for a repo</dt>
+      <dt>Bar end (max) and tick (mean) very close together for a repo</dt>
       <dd><strong>Likely:</strong> the repo's chunks are too homogeneous &mdash;
       probably templated content where every chunk looks the same (release
       notes, CRD schema repetitions). The mean is artificially propped up by
@@ -1217,7 +1218,7 @@ SOURCES_DEBUG = """
       look interchangeable to the embedder, so top-30 mean is barely below
       the max.</div></dd>
 
-      <dt>Bar (mean) low, but teal tick (max) far to the right</dt>
+      <dt>Tick (mean) low, but bar (max) long</dt>
       <dd><strong>Likely:</strong> one specific chunk in that repo is highly
       relevant, even though the repo overall isn't about your topic. Could be
       a genuine cross-reference (e.g., release notes mentioning BGP) or a
@@ -1228,7 +1229,7 @@ SOURCES_DEBUG = """
       <div class="example"><b>Example:</b> a billing/OSS repo shouldn't
       score high on <code>"BGP peering"</code> overall, but one chunk in its
       install guide mentions BGP setup briefly &mdash; that single chunk
-      drives the max tick while everything else stays low.</div></dd>
+      drives the long bar while everything else stays low.</div></dd>
 
       <dt>Repo you expected at the top is missing or low</dt>
       <dd><strong>Likely:</strong> either (a) the docs in that repo don't

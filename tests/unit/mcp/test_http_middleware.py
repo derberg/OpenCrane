@@ -65,13 +65,15 @@ class TestMiddlewareHook:
         app = http_server.build_asgi_app()
         assert not isinstance(app, _Marker)
 
-    def test_config_load_failure_does_not_break_default_path(self, tmp_path, monkeypatch):
-        """A config-load failure is swallowed; the app is returned unwrapped."""
+    def test_config_load_failure_stops_the_server(self, tmp_path, monkeypatch):
+        """A Config class that fails to load stops startup instead of dropping its middleware."""
+        from opencrane.mcp.auth.config_model import AuthConfigError
+
         _none_mode(tmp_path, monkeypatch)
 
         def _boom(_arg):
             raise RuntimeError("bad extensions module")
 
         monkeypatch.setattr("opencrane.cli.load_config", _boom)
-        app = http_server.build_asgi_app()
-        assert not isinstance(app, _Marker)
+        with pytest.raises(AuthConfigError, match="cannot load the project Config class: bad extensions module"):
+            http_server.build_asgi_app()

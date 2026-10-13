@@ -76,7 +76,7 @@ After you change a variable, run `opencrane chunk` and `opencrane embed` again, 
 
 ## Table chunks
 
-Every Markdown table becomes one `table_row` chunk for each data row. The chunker renders each row as natural-language `Column: value.` lines and leaves out empty cells. Each row chunk carries the section heading and the lead-in sentence from the source, so search can return the row on its own. For the fields that link the rows of a table, see [Table row metadata](metadata-schema.md#table-row-metadata).
+Every Markdown table becomes one `table_row` chunk for each data row. The chunker renders each row as natural-language `Column: value.` lines and leaves out empty cells. Each row chunk carries the section heading and the lead-in sentence from the source, so search can return the row on its own. For the fields that link the rows of a table, see [Table row metadata](../opencrane/mcp/metadata-schema.md#table-row-metadata).
 
 A table ends at the first row whose number of cells differs from the header. The chunker splits cells at every `|` except an escaped `\|` and a `|` inside backticks, and stores `\|` as `|`.
 
@@ -84,23 +84,23 @@ A table with no heading or lead-in sentence still produces `table_row` chunks, b
 
 ## Chunking strategies
 
-Before the strategies run, the chunker splits each page at every fenced code block. It then processes each code block, and each stretch of text between code blocks, on its own. It also takes unindented fenced `yaml` and `yml` blocks out of the text first. Structured YAML specifications go to tree walkers. A tree walker is a class that walks the YAML tree of one specification format and creates one chunk for each property or element.
+Before the strategies run, the chunker splits each page at every fenced code block outside a list or a `<Tabs>` block, and keeps each `<Tabs>` block whole. A code block inside a list item stays in that item. The chunker then processes each code block, each `<Tabs>` block, and each stretch of text between them on its own. Each stretch of text keeps the headings that it sits under, so a list or table after a code block gets its full breadcrumb. It also takes fenced `yaml` and `yml` blocks out of the text first, when the opening fence is unindented and has nothing after the language. Structured YAML specifications go to tree walkers. A tree walker is a class that walks the YAML tree of one specification format and creates one chunk for each property or element.
 
 The chunker evaluates the following strategies in this order. The first strategy that matches the content and returns chunks handles it:
 
 | Strategy | Content it handles |
 |---|---|
-| `YamlChunkingStrategy` | YAML content, including any code block whose first lines look like `key: value` pairs. Structured YAML specifications, such as Kubernetes CustomResourceDefinitions (CRDs) and OpenAPI specifications, go to the first configured tree walker whose `can_handle` method accepts them. Other YAML becomes one `yaml_content` chunk. |
-| `CodeChunkingStrategy` | Fenced code blocks, with the language from the opening fence. For a `yaml` or `yml` block that the YAML strategy did not handle, it passes CRDs and OpenAPI specifications to the built-in tree walkers. |
+| `YamlChunkingStrategy` | Fenced `yaml` and `yml` blocks, and fenced `json` blocks that a configured tree walker accepts. The strategy skips fenced blocks in any other language. For unfenced text and for fenced blocks without a language, the strategy reads the first ten lines that are not blank or comments. It handles the text when at least two of those lines look like `key: value` pairs. Structured YAML specifications, such as Kubernetes CustomResourceDefinitions (CRDs) and OpenAPI specifications, go to the first configured tree walker whose `can_handle` method accepts them. Other YAML becomes one `yaml_content` chunk. |
+| `CodeChunkingStrategy` | Fenced code blocks, with the language from the opening fence. The strategy passes CRDs and OpenAPI specifications to the built-in tree walkers only from a `yaml` or `yml` block inside a `<Tabs>` block. The chunker leaves a `yaml` block inside the `<Tabs>` block when, for example, its opening fence has a title after the language. The built-in tree walkers do not read `yaml_tree_walkers`. To have your configured tree walkers handle the block, write its opening fence unindented, with nothing after the language. In a `<Tabs>` block, the strategy emits the text between the code blocks as prose chunks, in page order. A `<Tab>` or `<TabItem>` tag with attributes stays in the prose chunk, so the chunk shows the tab label. |
 | `TableChunkingStrategy` | Markdown tables. The strategy emits one `table_row` chunk for each data row. It passes the text outside the tables to the list and prose strategies. |
-| `ListChunkingStrategy` | Markdown lists. The strategy emits one chunk for each list item, nested items included. It emits the text around the lists as prose chunks, without splitting the text at headings and without the prose variables. |
+| `ListChunkingStrategy` | Markdown lists. The strategy emits one chunk for each list item, nested items included. It passes the text around the lists to the prose strategy. |
 | `ProseChunkingStrategy` | Markdown and text with headings. This is the fallback strategy, and it splits the text as [Prose sections](#prose-sections) describes. |
 
 To turn the tree walkers off, set `YAML_TREE_CHUNKING_ENABLED` to `false`. The default is `true`, and any other value also turns them off. Structured specifications then become `yaml_content` or `code_snippet` chunks.
 
 ## Chunk data model
 
-Each chunk has a set of top-level fields and a `metadata` object. The fields in the `metadata` object depend on the chunk type. For every metadata field, see [Chunk metadata schema](metadata-schema.md).
+Each chunk has a set of top-level fields and a `metadata` object. The fields in the `metadata` object depend on the chunk type. For every metadata field, see [Chunk metadata schema](../opencrane/mcp/metadata-schema.md).
 
 ### Top-level fields
 
@@ -109,7 +109,7 @@ Every chunk has the following top-level fields:
 | Field | Type | Description | Example |
 |---|---|---|---|
 | `chunk_id` | string | Unique identifier of the chunk, as a 64-character hexadecimal string. OpenCrane builds it from a SHA-256 hash of the chunk content, source file, chunk type, and selected metadata such as the source URL. The same input produces the same ID on every run. Milvus uses it as the primary key. | `"195c9565…"` (shortened) |
-| `chunk_type` | string, enum | Semantic type of the chunk content. For the values, see [Chunk types](#chunk-types). | `"prose"` |
+| `chunk_type` | string | Semantic type of the chunk content. The value is a built-in chunk type or a custom chunk type from your own strategy or walker. For the values, see [Chunk types](#chunk-types). | `"prose"` |
 | `content` | string or object | The chunk content. Prose, code, generic YAML, list item, and table row chunks store a string. CRD, OpenAPI, and JSON Schema chunks store a JSON object or array parsed from the YAML. | `"Run the following command to install the server."` |
 | `source_file` | string | Path to the source file, relative to the directory where you run `opencrane`. This is usually the `llms-full.txt` file. | `".opencrane/llmstxt/llms-full.txt"` |
 | `source_name` | string, optional | Path key of the source under `sources` in `.opencrane/config.yaml`. The chunker matches the `metadata.source_url` of the chunk against the `url` and `docs_url` of each source, and the longest match wins. The value is `null` when no source matches. The `source_names` parameter of `search_docs` filters on this field. | `"MicrosoftDocs/microsoft-style-guide"` |
@@ -117,7 +117,7 @@ Every chunk has the following top-level fields:
 
 ### Chunk types
 
-The `chunk_type` field takes one of the following values:
+The built-in strategies and walkers set the `chunk_type` field to one of the following values:
 
 | Value | Content |
 |---|---|
@@ -129,6 +129,25 @@ The `chunk_type` field takes one of the following values:
 | `"yaml_content"` | YAML that is not a recognized structured format |
 | `"list_item"` | One Markdown list item |
 | `"table_row"` | One data row of a Markdown table |
+
+### Custom chunk types
+
+A processing strategy or tree walker in your project can set a custom chunk type, for example `"asyncapi_spec"`. A custom chunk type needs no change to OpenCrane.
+
+A custom chunk type name must meet the following rules:
+
+- Only letters, digits, `_`, and `-`
+- Length from 1 to 32 characters, the width of the `chunk_type` column in Milvus
+
+A chunk with a name that breaks these rules fails validation when your strategy or walker creates it.
+
+The chunk model checks the metadata of the built-in chunk types only. A chunk with a custom chunk type accepts any metadata keys and values, so your strategy or walker defines them. The content of the chunk must not be empty, as for every chunk type.
+
+The MCP server handles custom chunk types in the following ways:
+
+- The `chunk_types` parameter of `search_docs` lists every chunk type in the index, the custom ones included, and filters on them.
+- The `get_metadata_schema` tool returns the universal metadata fields for a custom chunk type.
+- Search results show the `breadcrumb_path` and `section_anchor` metadata of a custom chunk, when the chunk has them.
 
 ### CRD chunks
 
@@ -236,7 +255,7 @@ class MyCustomStrategy(ProcessingStrategy):
         return [chunk]
 ```
 
-The `chunk_type` must be one of the values in the `chunk_type` `Literal` in `opencrane/shared/models/chunk.py`. Prose chunks accept only the following metadata keys, and OpenCrane sets most of them after the strategies run:
+The example creates `prose` chunks, so the chunk model checks their metadata. Prose chunks accept only the following metadata keys, and OpenCrane sets most of them after the strategies run:
 
 - `source_url`
 - `breadcrumb_path`
@@ -250,6 +269,8 @@ The `chunk_type` must be one of the values in the `chunk_type` `Literal` in `ope
 - `position`
 - `prev_chunk_id`
 - `next_chunk_id`
+
+To give the chunks a custom chunk type, pass a name such as `"custom_block"` as `chunk_type` and to `generate_unique_chunk_id`. A custom chunk type accepts any metadata keys. For the naming rules, see [Custom chunk types](#custom-chunk-types).
 
 ### 2. Register the strategy
 
@@ -285,17 +306,15 @@ The chunker uses your strategy the next time you run `opencrane chunk`.
 
 ## Add a tree walker for a YAML specification
 
-To add support for a new YAML-based specification, such as AsyncAPI or AWS CloudFormation templates, complete the steps in this section. Steps 1 and 4 change the OpenCrane package itself, not only your configuration.
+To add support for a new YAML-based specification, such as AsyncAPI or AWS CloudFormation templates, complete the steps in this section. Only the optional step 3 changes the OpenCrane package itself.
 
 The walker runs on every YAML document that `YamlChunkingStrategy` handles. The first walker in `yaml_tree_walkers` whose `can_handle` returns `True` processes the document.
 
-### 1. Add the chunk type to the chunk model
+### 1. Create a tree walker class
 
-Add the new chunk type, for example `"asyncapi_spec"`, to the `chunk_type` `Literal` in `opencrane/shared/models/chunk.py`. Without it, the chunk fails validation when the walker creates it.
+A walker can set a custom chunk type. For the naming rules, see [Custom chunk types](#custom-chunk-types).
 
-### 2. Create a tree walker class
-
-The following example walks AsyncAPI specifications:
+The following example walks AsyncAPI specifications and sets the custom chunk type `"asyncapi_spec"`:
 
 ```python
 from typing import List, Dict, Any
@@ -403,7 +422,7 @@ class AsyncAPITreeWalker(YamlTreeWalker):
                 chunk.metadata["neighbor_chunks"] = neighbor_ids
 ```
 
-### 3. Register the walker
+### 2. Register the walker
 
 Save the walker class as `.opencrane/my_walkers.py`, next to `extensions.py`.
 
@@ -421,12 +440,11 @@ class Config(OpenCraneConfig):
     ]
 ```
 
-### 4. Document the chunk type
+### 3. (Optional) Document the chunk type in OpenCrane
 
-Document the chunk type in the following places:
+For a custom chunk type, `get_metadata_schema(chunk_type="asyncapi_spec")` returns only the universal metadata fields. To also return the fields of the new chunk type, change the OpenCrane package in the following places:
 
-- Add the new chunk type and its metadata fields to [Chunk metadata schema](metadata-schema.md).
-- Add the same chunk type and fields to `opencrane/mcp/metadata-schema.md`, which the `get_metadata_schema` Model Context Protocol (MCP) tool returns.
+- Add the new chunk type and its metadata fields to [Chunk metadata schema](../opencrane/mcp/metadata-schema.md). The `get_metadata_schema` Model Context Protocol (MCP) tool returns this file.
 - Add the chunk type to `_CHUNK_TYPE_SECTION_HEADINGS` in `opencrane/mcp/server.py`, so `get_metadata_schema(chunk_type=...)` returns its section.
 
 The MCP server shows only `crd_definition`, `openapi_spec`, and `json_schema` chunks as YAML with location comments. To show the new chunk type the same way, add it to `_YAML_CHUNK_TYPES` and to the matching chunk type checks in `opencrane/mcp/server.py`.

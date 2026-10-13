@@ -226,3 +226,65 @@ class TestInitVectorDb:
         # get_collection_stats only called once at the end (not for the populated check)
         mock_milvus.create_collection.assert_called_once()
         mock_milvus.insert_chunks.assert_called_once()
+
+
+class TestInitVectorDbFileArguments:
+    """The chunks_file and embeddings_file arguments override the env vars."""
+
+    @patch('opencrane.mcp.init_vector_db.setup_logging')
+    @patch('opencrane.mcp.init_vector_db.MilvusService')
+    @patch('opencrane.mcp.init_vector_db.EmbeddingService')
+    def test_main_arguments_override_env_vars(
+        self, mock_embedding_class, mock_milvus_class, mock_logging, tmp_path, monkeypatch
+    ):
+        """Explicit paths win over AI_DOCS_CHUNKS_FILE and AI_DOCS_EMBEDDINGS_FILE."""
+        monkeypatch.setenv("AI_DOCS_CHUNKS_FILE", str(tmp_path / "env-chunks.json"))
+        monkeypatch.setenv("AI_DOCS_EMBEDDINGS_FILE", str(tmp_path / "env-embeddings.json"))
+        chunks_file = tmp_path / "custom-chunks.json"
+        chunks_file.write_text(json.dumps([{
+            "content": "test", "chunk_type": "prose", "source_file": "test.md",
+            "token_count": 10, "line_start": 1, "metadata": {},
+        }]))
+        embeddings_file = tmp_path / "custom-embeddings.json"
+        embeddings_file.write_text("{}")
+
+        mock_embedding_service = MagicMock()
+        mock_embedding_class.return_value = mock_embedding_service
+        mock_embedding_service.load_embeddings.return_value.embeddings = [
+            MagicMock(chunk_id="test_id", vector=[0.1] * 768)
+        ]
+        mock_milvus = MagicMock()
+        mock_milvus_class.return_value = mock_milvus
+        mock_milvus.client.has_collection.return_value = False
+        mock_milvus.get_collection_stats.return_value = {"row_count": 1}
+
+        main(chunks_file=chunks_file, embeddings_file=embeddings_file)
+
+        mock_embedding_service.load_embeddings.assert_called_once_with(str(embeddings_file))
+        mock_milvus.insert_chunks.assert_called_once()
+
+    @patch('opencrane.mcp.init_vector_db.setup_logging')
+    def test_main_missing_chunks_argument_exits(self, mock_logging, tmp_path, monkeypatch):
+        """A missing chunks_file argument fails even when the env var path exists."""
+        env_chunks = tmp_path / "env-chunks.json"
+        env_chunks.write_text("[]")
+        monkeypatch.setenv("AI_DOCS_CHUNKS_FILE", str(env_chunks))
+
+        with pytest.raises(SystemExit) as exc_info:
+            main(chunks_file=tmp_path / "missing-chunks.json")
+
+        assert exc_info.value.code == 1
+
+    @patch('opencrane.mcp.init_vector_db.setup_logging')
+    def test_main_missing_embeddings_argument_exits(self, mock_logging, tmp_path, monkeypatch):
+        """A missing embeddings_file argument fails even when the env var path exists."""
+        chunks_file = tmp_path / "chunks.json"
+        chunks_file.write_text("[]")
+        env_embeddings = tmp_path / "env-embeddings.json"
+        env_embeddings.write_text("{}")
+        monkeypatch.setenv("AI_DOCS_EMBEDDINGS_FILE", str(env_embeddings))
+
+        with pytest.raises(SystemExit) as exc_info:
+            main(chunks_file=chunks_file, embeddings_file=tmp_path / "missing-embeddings.json")
+
+        assert exc_info.value.code == 1

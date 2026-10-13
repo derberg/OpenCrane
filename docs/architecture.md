@@ -76,7 +76,7 @@ Chunking strategies run in the following order, and the first strategy that matc
 4. List: creates one `list_item` chunk for each list item, nested items included.
 5. Prose: handles all other content. By default, it splits at headings down to `###` and keeps each section whole.
 
-For the chunk types and fields, see the [chunking guide](chunking.md). For the metadata fields, see [Chunk metadata schema](metadata-schema.md).
+For the chunk types and fields, see the [chunking guide](chunking.md). For the metadata fields, see [Chunk metadata schema](../opencrane/mcp/metadata-schema.md).
 
 ### Embed
 
@@ -101,7 +101,7 @@ The `opencrane index` command loads `.opencrane/embeddings.json` into a Milvus v
 Milvus runs in one of the following deployment modes:
 
 - Milvus Lite: an embedded, file-based database at `.opencrane/milvus.db`. It is the default and needs no separate service. To store the file somewhere else, set `MILVUS_DB_PATH`.
-- Milvus Server: a separate Milvus instance. To connect to it, set `MILVUS_DB_PATH` to an empty value, and set `MILVUS_HOST` and `MILVUS_PORT`.
+- Milvus Server: a separate Milvus instance. To connect to it, set `MILVUS_HOST` and `MILVUS_PORT`, and leave `MILVUS_DB_PATH` unset. A `MILVUS_DB_PATH` with a file path takes precedence over `MILVUS_HOST`.
 
 ### Serve
 
@@ -182,7 +182,7 @@ The CLI is in `opencrane/cli.py`. Every subcommand loads the project configurati
 3. The file that the `extensions` key in `.opencrane/config.yaml` names, relative to `.opencrane/`
 4. The base `OpenCraneConfig` class
 
-From a Python file, the CLI loads the class named `Config`. The `config.yaml` that `opencrane init` creates contains the `extensions` key as a comment.
+From a Python file, the CLI loads the class named `Config`. The `config.yaml` that `opencrane init` creates contains the `extensions` key as a comment. With `--extensions`, the command writes the key without the comment marker, so the CLI loads `extensions.py`.
 
 ### Retrieval-augmented generation pipeline
 

@@ -440,6 +440,40 @@ class TestMilvusService:
         mock_client_class.assert_called_once_with(uri="http://myhost:12345")
 
     @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_init_host_without_db_path_uses_server_mode(self, mock_client_class, monkeypatch):
+        """MILVUS_HOST alone, with MILVUS_DB_PATH unset, selects server mode."""
+        monkeypatch.delenv("MILVUS_DB_PATH", raising=False)
+        monkeypatch.setenv("MILVUS_HOST", "milvus.example")
+        monkeypatch.delenv("MILVUS_PORT", raising=False)
+
+        service = MilvusService()
+
+        assert service.uri == "http://milvus.example:19530"
+        mock_client_class.assert_called_once_with(uri="http://milvus.example:19530")
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_init_explicit_db_path_wins_over_host(self, mock_client_class, monkeypatch):
+        """An explicit MILVUS_DB_PATH keeps Lite mode even when MILVUS_HOST is set."""
+        monkeypatch.setenv("MILVUS_DB_PATH", "/tmp/explicit.db")
+        monkeypatch.setenv("MILVUS_HOST", "milvus.example")
+
+        service = MilvusService()
+
+        assert service.uri == "/tmp/explicit.db"
+        mock_client_class.assert_called_once_with(uri="/tmp/explicit.db")
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_init_defaults_to_lite_without_db_path_or_host(self, mock_client_class, monkeypatch):
+        """With neither MILVUS_DB_PATH nor MILVUS_HOST set, Lite mode is the default."""
+        monkeypatch.delenv("MILVUS_DB_PATH", raising=False)
+        monkeypatch.delenv("MILVUS_HOST", raising=False)
+
+        service = MilvusService()
+
+        assert service.uri == ".opencrane/milvus.db"
+        mock_client_class.assert_called_once_with(uri=".opencrane/milvus.db")
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
     def test_get_chunk_found(self, mock_client_class):
         mock_client = Mock()
         mock_client_class.return_value = mock_client
@@ -488,6 +522,31 @@ class TestMilvusService:
         service = MilvusService()
         service.query_by_field("list_id", "L1", chunk_type="list_item")
         assert mock_client.query.call_args[1]["filter"] == 'list_id == "L1" and chunk_type == "list_item"'
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_query_by_field_with_source_names(self, mock_client_class):
+        """Allowed sources go into the filter; a name that could break the literal is dropped."""
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+        mock_client.query.return_value = []
+
+        service = MilvusService()
+        service.query_by_field("list_id", "L1", chunk_type="list_item",
+                               source_names=["b", "a", 'x" || "1"=="1', "y\\"])
+        assert mock_client.query.call_args[1]["filter"] == (
+            'list_id == "L1" and chunk_type == "list_item" and source_name in ["a", "b"]'
+        )
+
+    @patch('opencrane.mcp.services.milvus_client.MilvusClient')
+    def test_query_by_field_without_usable_source_names_matches_nothing(self, mock_client_class):
+        """An empty (or all-unsafe) allowlist returns no rows and never queries."""
+        mock_client = Mock()
+        mock_client_class.return_value = mock_client
+
+        service = MilvusService()
+        assert service.query_by_field("list_id", "L1", source_names=[]) == []
+        assert service.query_by_field("list_id", "L1", source_names=['"']) == []
+        mock_client.query.assert_not_called()
 
     @patch('opencrane.mcp.services.milvus_client.MilvusClient')
     def test_query_by_field_sanitizes_value(self, mock_client_class):

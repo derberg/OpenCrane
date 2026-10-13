@@ -99,7 +99,7 @@ add → fetch → llms → chunk → embed → index → serve
 ```
 
 - **100% code coverage is enforced**: `./pytest.sh --check-coverage` fails below 100%
-- Test markers: `@pytest.mark.unit`, `@pytest.mark.integration`
+- Test markers: `tests/integration/conftest.py` adds the `integration` marker to every test in `tests/integration/`, so new files need no marker. Select unit tests by path (`tests/unit/`), because not every unit test has the `unit` marker
 - `./pytest.sh` with no arguments runs both unit and integration tests
 
 ### Test policy

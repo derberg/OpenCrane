@@ -247,7 +247,7 @@ The command accepts the following flags:
 |---|---|
 | `--sources-dir {PATH}` | Source directory to process. Repeat the flag for several directories. Overrides the `AI_DOCS_SOURCES_DIRS` environment variable. |
 | `--llmstxt-dir {PATH}` | Output directory for the `llms-full.txt` files. Overrides the `AI_DOCS_LLMSTXT_DIR` environment variable. |
-| `--force` | Regenerates the bundles even when Git detects no changes in the directories passed with `--sources-dir` or set in `AI_DOCS_SOURCES_DIRS`. Without either, the step always regenerates the bundles. Git compares the directories with the last commit only. Pass `--force` for a directory that Git ignores, and after changes that are already committed, for example after `git pull`. |
+| `--force` | Regenerates the bundles even when the step detects no changes in the directories passed with `--sources-dir` or set in `AI_DOCS_SOURCES_DIRS`. Without either, the step always regenerates the bundles. Git compares tracked files with the last commit only. Pass `--force` after changes that are already committed, for example after `git pull`. For files that Git ignores, the step compares their content with its last run. See [Process specific directories](docs/llms-generation.md#process-specific-directories). |
 
 #### Count tokens with `opencrane tokens`
 

@@ -12,8 +12,10 @@ opencrane llms
 
 To process only specific directories, pass each one with the `--sources-dir` flag, or list them in the `AI_DOCS_SOURCES_DIRS` environment variable, separated by commas.
 
+A run with `--sources-dir` or `AI_DOCS_SOURCES_DIRS` regenerates the bundles of only the directories you pass. For every other source, the combined `llms-full.txt` and its `llms.txt` index reuse the bundle and the index from the last run that built that source. These sources keep their page URLs.
+
 > [!CAUTION]
-> A run with `--sources-dir` or `AI_DOCS_SOURCES_DIRS` rewrites the combined `llms-full.txt` and its `llms.txt` index around only the directories you pass. Other sources lose their page URLs, and some can drop out of the combined bundle. Run `opencrane llms` without these settings before you run `opencrane chunk`.
+> A source whose key in the source mapping file contains a `/` drops out of the combined bundle, unless you pass its directory. A bundle that an older OpenCrane version built has no index of its own, so its pages get the `docs_url` of the source or no URL. In both cases, run `opencrane llms` without these settings before you run `opencrane chunk`.
 
 To process two directories, run the following command:
 
@@ -21,7 +23,12 @@ To process two directories, run the following command:
 opencrane llms --sources-dir {SOURCE_DIR} --sources-dir {OTHER_SOURCE_DIR}
 ```
 
-In this mode, the step skips regeneration when Git reports no uncommitted or untracked changes in those directories. Git never reports changes in a directory it ignores, so if Git ignores every directory you pass, the step always skips. Outside a Git repository, the step always regenerates. To regenerate the bundles anyway, add the `--force` flag.
+In this mode, the step regenerates the bundles only when the files in those directories changed. The step checks the files in the following way:
+
+- For files that Git tracks, an uncommitted change counts, and so does an untracked file in the directory. A change that you already committed, for example with `git pull`, does not count.
+- A file that Git ignores, for example a fetched file in `.opencrane/sources/`, counts as changed when its content differs from the last run for that directory. The step records a hash of each of these files in `.sources-fingerprint.json` in the output directory.
+
+Outside a Git repository, the step always regenerates. To regenerate the bundles anyway, add the `--force` flag.
 
 ## Choose what each bundle contains
 
@@ -106,7 +113,7 @@ A page from a different source...
 
 ## Companion `llms.txt` index
 
-Next to the combined `llms-full.txt`, the `llms` step writes a standard `llms.txt` index that maps the title of each page to its URL. The index follows the [llms.txt convention](https://llmstxt.org/). The per-source bundles get no index of their own. The exception is an `llmstxt` source whose companion `llms.txt` the fetch downloaded. The following example shows the combined `.opencrane/llmstxt/llms.txt`:
+Next to the combined `llms-full.txt`, the `llms` step writes a standard `llms.txt` index that maps the title of each page to its URL. The index follows the [llms.txt convention](https://llmstxt.org/). Each per-source bundle also gets an `llms.txt` index with the section of that source. A later run with `--sources-dir` reads this index for the sources that it does not regenerate. An `llmstxt` source has an index only when the fetch downloaded its companion `llms.txt`. The following example shows the combined `.opencrane/llmstxt/llms.txt`:
 
 ```markdown
 # Documentation

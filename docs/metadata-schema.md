@@ -156,6 +156,10 @@ The array holds at most 15 previews. With more than 15 other rows, the array hol
 
 The top-ranked search results can contain two or more rows with the same `table_id`. In that case, the MCP `search_docs` tool groups them into a single result, with all matched rows inline. The grouped result shows the unmatched rows as `sibling_previews`.
 
+## Custom chunk type metadata
+
+A chunk with a custom chunk type carries the metadata fields that your strategy or walker sets. OpenCrane does not check these fields. To link the chunk to its source page, set the universal `source_url` field, as the built-in strategies do. For the naming rules of a custom chunk type, see [Custom chunk types](chunking.md#custom-chunk-types).
+
 ## Programmatic usage examples
 
 The following Python examples use the metadata fields to move between chunks. They apply to CRD, OpenAPI, and JSON Schema chunks, which carry `breadcrumb_path`, `logical_parent`, and `neighbor_chunks`. The Pydantic model that validates chunks is in `opencrane/shared/models/chunk.py`.

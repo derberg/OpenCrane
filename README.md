@@ -850,7 +850,7 @@ class TerraformTreeWalker(YamlTreeWalker):
         ...
 ```
 
-The `can_handle` method returns `True` for the documents that the walker supports. The `walk` method returns the chunks of the document. Each chunk needs a `chunk_type` that the `Chunk` model accepts. A new chunk type needs a change to OpenCrane itself, as described in [Add a tree walker for a YAML specification](docs/chunking.md#add-a-tree-walker-for-a-yaml-specification).
+The `can_handle` method returns `True` for the documents that the walker supports. The `walk` method returns the chunks of the document. Each chunk needs a `chunk_type`. The walker can use a built-in chunk type or its own custom chunk type, such as `terraform_resource`. For the naming rules, see [Custom chunk types](docs/chunking.md#custom-chunk-types).
 
 To register the walker, add it to `yaml_tree_walkers`, as in the example in [Extend OpenCrane](#extend-opencrane).
 

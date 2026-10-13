@@ -109,6 +109,10 @@ add → fetch → llms → chunk → embed → index → serve
 - **Test isolation is mandatory**: tests must never touch production files or directories. Always use temp directories and fixture copies. No hardcoded production paths in tests or fixtures.
 - Place reusable test assets under `tests/fixtures/`.
 
+### Debugging
+
+`LOG_LEVEL=DEBUG` turns on debug logging for every command, for example `LOG_LEVEL=DEBUG opencrane chunk`. The log goes to stderr, never to stdout.
+
 ### Installing for development
 
 ```bash

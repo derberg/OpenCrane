@@ -1,6 +1,6 @@
 # Generate llms-full.txt bundles
 
-The `llms` step combines the fetched documentation into single text files for a large language model (LLM) to read. Each of these bundles is an `llms-full.txt` file. The step writes one bundle for each source, and a combined bundle with all sources in `.opencrane/llmstxt/llms-full.txt`. The combined bundle leaves out the bundles of `llmstxt` sources when the step reads only `.opencrane/sources/`, the default, or only the project root. With any other sources directories, it includes them.
+The `llms` step combines the fetched documentation into single text files for a large language model (LLM) to read. Each of these bundles is an `llms-full.txt` file. The step writes one bundle for each source, and a combined bundle with all sources in `.opencrane/llmstxt/llms-full.txt`. The combined bundle also includes the existing bundles of `llmstxt` sources.
 
 To process every source in the source mapping file, run the following command:
 

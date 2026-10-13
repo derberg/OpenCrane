@@ -1,6 +1,6 @@
 # Chunk Metadata Schema
 
-This document lists the metadata fields of each chunk type. Use these fields to move between related chunks and to add context to a search result. Retrieval-augmented generation (RAG) responses use them to link to the source page. For the top-level fields of a chunk, such as `chunk_id` and `content`, see [Chunk data model](../../docs/chunking.md#chunk-data-model).
+This document lists the metadata fields of each chunk type. Use these fields to move between related chunks and to add context to a search result. Retrieval-augmented generation (RAG) responses use them to link to the source page. For the top-level fields of a chunk, such as `chunk_id` and `content`, see [Chunk data model](https://github.com/derberg/OpenCrane/blob/main/docs/chunking.md#chunk-data-model).
 
 ## Universal Metadata
 
@@ -14,9 +14,9 @@ The following table lists the metadata fields that can appear on every chunk typ
 | `schema_type` | string, enum, optional | Schema category of YAML content: `"k8s_crd"`, `"openapi"`, or `"json_schema"`. Only CRD, OpenAPI, and JSON Schema chunks have it. | `"openapi"` |
 | `root_identity` | object, optional | Identity of a Kubernetes resource: its `apiVersion`, `kind`, `name`, and `namespace`. Only `yaml_content` chunks of a YAML document with `apiVersion`, `kind`, and `metadata.name` have it. | `{"apiVersion": "v1", "kind": "ConfigMap", "name": "app-config", "namespace": null}` |
 
-The chunker finds the `source_url` of a chunk by matching the `llms-full.txt` content to the companion `llms.txt` index. For details, see [Document boundaries and page URLs](../../docs/chunking.md#document-boundaries-and-page-urls).
+The chunker finds the `source_url` of a chunk by matching the `llms-full.txt` content to the companion `llms.txt` index. For details, see [Document boundaries and page URLs](https://github.com/derberg/OpenCrane/blob/main/docs/chunking.md#document-boundaries-and-page-urls).
 
-To link to a section, join the two fields as `{SOURCE_URL}#{SECTION_ANCHOR}`. Section anchors are on by default. To turn them off, set `section_anchor_style: none` in `.opencrane/config.yaml`. To change how OpenCrane builds them, see [Section anchors](../../README.md#section-anchors).
+To link to a section, join the two fields as `{SOURCE_URL}#{SECTION_ANCHOR}`. Section anchors are on by default. To turn them off, set `section_anchor_style: none` in `.opencrane/config.yaml`. To change how OpenCrane builds them, see [Section anchors](https://github.com/derberg/OpenCrane/blob/main/README.md#section-anchors).
 
 ### Hierarchical navigation metadata
 
@@ -94,7 +94,7 @@ The following table lists the navigation fields of `prose` chunks. OpenCrane add
 
 A chunk without a leading heading continues the previous section and repeats its `heading_path`, `clause_id`, and `parent_chunk_id`.
 
-To change the clause format, set `section_clause_pattern` in `.opencrane/config.yaml` to a regular expression whose first capture group is the clause ID. The value `none` turns clause IDs off. For details, see [Section navigation and clause IDs](../../README.md#section-navigation-and-clause-ids).
+To change the clause format, set `section_clause_pattern` in `.opencrane/config.yaml` to a regular expression whose first capture group is the clause ID. The value `none` turns clause IDs off. For details, see [Section navigation and clause IDs](https://github.com/derberg/OpenCrane/blob/main/README.md#section-navigation-and-clause-ids).
 
 ## List Item Metadata
 

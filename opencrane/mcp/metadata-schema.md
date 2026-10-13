@@ -1,6 +1,6 @@
 # Chunk Metadata Schema
 
-This document lists the metadata fields of each chunk type. Use these fields to move between related chunks and to add context to a search result. Retrieval-augmented generation (RAG) responses use them to link to the source page.
+This document lists the metadata fields of each chunk type. Use these fields to move between related chunks and to add context to a search result. Retrieval-augmented generation (RAG) responses use them to link to the source page. For the top-level fields of a chunk, such as `chunk_id` and `content`, see [Chunk data model](../../docs/chunking.md#chunk-data-model).
 
 ## Universal Metadata
 
@@ -14,7 +14,9 @@ The following table lists the metadata fields that can appear on every chunk typ
 | `schema_type` | string, enum, optional | Schema category of YAML content: `"k8s_crd"`, `"openapi"`, or `"json_schema"`. Only CRD, OpenAPI, and JSON Schema chunks have it. | `"openapi"` |
 | `root_identity` | object, optional | Identity of a Kubernetes resource: its `apiVersion`, `kind`, `name`, and `namespace`. Only `yaml_content` chunks of a YAML document with `apiVersion`, `kind`, and `metadata.name` have it. | `{"apiVersion": "v1", "kind": "ConfigMap", "name": "app-config", "namespace": null}` |
 
-To link to a section, join the two fields as `{SOURCE_URL}#{SECTION_ANCHOR}`. Section anchors are on by default. To turn them off, set `section_anchor_style: none` in `.opencrane/config.yaml`.
+The chunker finds the `source_url` of a chunk by matching the `llms-full.txt` content to the companion `llms.txt` index. For details, see [Document boundaries and page URLs](../../docs/chunking.md#document-boundaries-and-page-urls).
+
+To link to a section, join the two fields as `{SOURCE_URL}#{SECTION_ANCHOR}`. Section anchors are on by default. To turn them off, set `section_anchor_style: none` in `.opencrane/config.yaml`. To change how OpenCrane builds them, see [Section anchors](../../README.md#section-anchors).
 
 ### Hierarchical navigation metadata
 
@@ -92,6 +94,8 @@ The following table lists the navigation fields of `prose` chunks. OpenCrane add
 
 A chunk without a leading heading continues the previous section and repeats its `heading_path`, `clause_id`, and `parent_chunk_id`.
 
+To change the clause format, set `section_clause_pattern` in `.opencrane/config.yaml` to a regular expression whose first capture group is the clause ID. The value `none` turns clause IDs off. For details, see [Section navigation and clause IDs](../../README.md#section-navigation-and-clause-ids).
+
 ## List Item Metadata
 
 A `list_item` chunk holds a single bullet or numbered item of a Markdown list. The chunker stores each item as its own chunk, so semantic search can match one item. The chunk of a top-level item holds the item text up to its first nested item. The chunk leaves out the nested items and any text after them. The chunk of a nested item holds only the first line of each parent item and of the item itself. The metadata links each item to its list, so you can fetch the full list when you need it.
@@ -106,7 +110,7 @@ The following table lists the metadata fields of `list_item` chunks:
 | `position` | integer, 1-indexed | Position of the item in its list. Use it to rebuild the list in order. | `1` for the first item |
 | `total_siblings` | integer | Number of items in the list, including this item. | `5` |
 | `sibling_ids` | array of `chunk_id` strings | The `chunk_id` values of the other items in the same list, in list order. To fetch all items in one call, use `get_list_members(list_id=...)` instead. The array always has `total_siblings - 1` entries. | `["a41e…", "c07b…"]` (shortened) |
-| `sibling_previews` | array of strings | Short previews of the other items, in list order. For the length and the cap, see the Previews of list items section. | `["1. Back up the database", "3. Restart the server"]` |
+| `sibling_previews` | array of strings | Short previews of the other items, in list order. For the length and the cap, see [Previews of list items](#previews-of-list-items). | `["1. Back up the database", "3. Restart the server"]` |
 | `parent_item_id` | `chunk_id` string, or null | For a nested item, the `chunk_id` of the item that contains it. The value is `null` at the top level. The parent item belongs to the outer list, so its `list_id` differs from the `list_id` of this item. | `null` |
 | `depth` | integer | Nesting level of the item: `0` for a top-level item, `1` for the first nested level, and so on. | `0` |
 
@@ -138,7 +142,7 @@ The following table lists the metadata fields of `table_row` chunks:
 | `total_rows` | integer | Number of data rows in the table. Use it to decide whether to fetch the full table. | `12` |
 | `row_key` | string | Value of the first cell of the row. Use it as a short label for the row. | `"replicas"`, if the first column is "Field" |
 | `sibling_ids` | array of `chunk_id` strings | The `chunk_id` values of the other rows in the same table, in row order. To fetch all rows in one call, use `get_table_members(table_id=...)` instead. The array always has `total_rows - 1` entries. | `["a41e…", "c07b…"]` (shortened) |
-| `sibling_previews` | array of strings | The `row_key` of each other row, shortened, in row order. For the length and the cap, see the Previews of table rows section. | `["image", "resources"]` |
+| `sibling_previews` | array of strings | The `row_key` of each other row, shortened, in row order. For the length and the cap, see [Previews of table rows](#previews-of-table-rows). | `["image", "resources"]` |
 | `breadcrumb_path` | string, optional | Headings that the table sits under, joined by ` > `, back to the previous code block on the page. Only a table under one or more headings has it. The chunker adds it to the row content as `# {BREADCRUMB_PATH}`, so each row carries its location. | `"Configuration > Parameters"` |
 | `table_caption` | string, optional | Lead-in sentence of the table: the last non-blank line before the table, without a list marker. Only a table whose preceding line is text, not a heading, has it. The chunker adds it to the row content, so the embedding of each row includes it. | `"The following parameters are available:"` |
 
@@ -226,4 +230,4 @@ The MCP server uses the metadata fields in the following ways:
 | YAML definition tool | Adds `breadcrumb_path` and `logical_parent` as location comments. It also lists up to five `neighbor_chunks` IDs, so you can fetch them. |
 | Section tool | Finds a prose section by `chunk_id` or `clause_id`, and uses `parent_chunk_id` and `position` to return it with its sub-sections. |
 
-You receive formatted results from the MCP server, not raw chunks. Use this schema when you need the meaning of a metadata field.
+You receive formatted results from the MCP server, not raw chunks. To learn what a metadata field means, call the `get_metadata_schema` tool, which returns this schema.

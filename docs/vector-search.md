@@ -157,7 +157,7 @@ get_yaml_definition(chunk_id="{CHUNK_ID}")
 
 ### `get_metadata_schema`
 
-The `get_metadata_schema` tool returns the reference of the chunk metadata fields. [Chunk metadata schema](metadata-schema.md) has the same reference. The tool is available only when at least one other conditional tool is available. See [MCP tools](architecture.md#mcp-tools).
+The `get_metadata_schema` tool returns [Chunk metadata schema](../opencrane/mcp/metadata-schema.md), the reference of the chunk metadata fields. The tool is available only when at least one other conditional tool is available. See [MCP tools](architecture.md#mcp-tools).
 
 The following table lists the parameter of `get_metadata_schema`:
 
@@ -206,7 +206,7 @@ get_table_members(table_id="{TABLE_ID}")
 
 ### `get_section`
 
-The `get_section` tool returns a whole prose section, for example when a search result is cut off. The tool is available only when the prose chunks have [navigation metadata](metadata-schema.md#prose-navigation-metadata).
+The `get_section` tool returns a whole prose section, for example when a search result is cut off. The tool is available only when the prose chunks have [navigation metadata](../opencrane/mcp/metadata-schema.md#prose-navigation-metadata).
 
 The following table lists the parameters of `get_section`. Pass **chunk_id** or **clause_id**:
 

@@ -6,11 +6,17 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from github import Github, Auth, RateLimitExceededException, GithubException
 from github.Repository import Repository
 from opencrane.shared.config import get_config
-from opencrane.shared.models.file import File
+from opencrane.shared.models.file import FetchedFiles, File
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar('T')
+
+
+def _ref_name(ref: str) -> str:
+    """Turn a fetch ref (``tags/v1``, ``heads/dev``, ``sha:abc``) into the
+    name a GitHub ``/blob/<name>/`` URL expects."""
+    return ref.removeprefix("sha:").removeprefix("tags/").removeprefix("heads/")
 
 
 class GitHubClient:
@@ -251,6 +257,10 @@ class GitHubClient:
                 sha, tag, release, branch. If None, uses latest release or default branch.
 
         Fetches from the latest release if available, otherwise falls back to default branch.
+
+        Returns:
+            A :class:`FetchedFiles` list whose ``ref`` is the branch, tag or
+            commit SHA the files were read from, or an empty list on failure.
         """
         files = []
         try:
@@ -262,7 +272,7 @@ class GitHubClient:
                     logger.info(f"Fetching {repo.name} from pinned ref: {ref_str}")
                     commit = repo.get_git_commit(commit_sha)
                     tree = repo.get_git_tree(commit.tree.sha, recursive=True)
-                    return tree
+                    return tree, _ref_name(ref_str)
 
                 # Try to get latest release first
                 release_ref = self.get_latest_release_ref(repo)
@@ -294,7 +304,7 @@ class GitHubClient:
                     # Get the tree directly from commit SHA
                     commit = repo.get_git_commit(commit_sha)
                     tree = repo.get_git_tree(commit.tree.sha, recursive=True)
-                    return tree
+                    return tree, _ref_name(ref)
                 except GithubException as e:
                     # If fetching from release fails, fall back to default branch
                     if release_ref:
@@ -305,11 +315,11 @@ class GitHubClient:
                         commit_sha = git_ref.object.sha
                         commit = repo.get_git_commit(commit_sha)
                         tree = repo.get_git_tree(commit.tree.sha, recursive=True)
-                        return tree
+                        return tree, default_branch
                     else:
                         raise
             
-            tree = self._retry_with_backoff(_get_tree)
+            tree, ref_name = self._retry_with_backoff(_get_tree)
 
             if not tree:
                 logger.warning(f"No tree found for {repo.name}")
@@ -332,7 +342,10 @@ class GitHubClient:
             logger.debug(f"Found {len(doc_files)} files in {docs_path or 'root'}/ for {repo.name}")
             
             # Fetch file contents in parallel
-            files = self._fetch_files_parallel(repo, doc_files, docs_path=docs_path)
+            files = FetchedFiles(
+                self._fetch_files_parallel(repo, doc_files, docs_path=docs_path),
+                ref=ref_name,
+            )
             
         except Exception as e:
             logger.warning(f"Failed to get docs contents for {repo.name}: {e}")

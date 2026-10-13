@@ -1,7 +1,7 @@
 [
   {
     "chunk_id": "$prose_intro",
-    "content": "## Migration guide\n\n### 1.6 -> 1.7\n\nFollow these steps to upgrade CGW to version 1.7.0:",
+    "content": "### 1.6 -> 1.7\n\nFollow these steps to upgrade CGW to version 1.7.0:",
     "source_file": "tests/fixtures/lists/01_simple_ordered.md",
     "chunk_type": "prose",
     "metadata": {}

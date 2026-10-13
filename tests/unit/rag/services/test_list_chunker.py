@@ -120,6 +120,7 @@ FIXTURE_NAMES = [
     "03_nested",
     "04_with_embedded_code",
     "06_multiple_same_section",
+    "08_nested_continuation",
 ]
 
 
@@ -355,3 +356,158 @@ def test_process_seeds_breadcrumb_from_heading_ancestry():
     chunks = strategy.process(node, Path("doc.md"))
     items = [c for c in chunks if c.chunk_type == "list_item"]
     assert items and all(c.metadata["breadcrumb_path"] == "Root > Sub" for c in items)
+
+
+# ---------------------------------------------------------------------------
+# The prose around lists goes through ProseChunkingStrategy.
+# ---------------------------------------------------------------------------
+
+
+def _prose(chunks):
+    return [c for c in chunks if c.chunk_type == "prose"]
+
+
+def _items(chunks):
+    return [c for c in chunks if c.chunk_type == "list_item"]
+
+
+def test_prose_around_list_splits_at_headings(monkeypatch):
+    """Prose next to a list splits at headings and drops heading-only sections."""
+    monkeypatch.delenv("PROSE_SPLIT_HEADING_DEPTH", raising=False)
+    monkeypatch.delenv("PROSE_KEEP_HEADING_ONLY_SECTIONS", raising=False)
+    text = "\n".join(
+        [
+            "## Install",
+            "",
+            "### Prerequisites",
+            "",
+            "Check that these tools exist:",
+            "",
+            "- a tool",
+            "- another tool",
+            "",
+            "### Next steps",
+            "",
+            "Read the guide afterwards.",
+        ]
+    )
+    chunks = ListChunkingStrategy().process(_mk_node(text), Path("doc.md"))
+    prose = _prose(chunks)
+    assert [c.content for c in prose] == [
+        "### Prerequisites\n\nCheck that these tools exist:",
+        "### Next steps\n\nRead the guide afterwards.",
+    ]
+    # The dropped heading-only section is handed to the next prose chunk.
+    assert prose[0]._preceding_headings == ["## Install"]
+    assert all(c.metadata["breadcrumb_path"] == "Install > Prerequisites" for c in _items(chunks))
+
+
+def test_prose_around_list_honours_prose_settings(monkeypatch):
+    """PROSE_SPLIT_HEADING_DEPTH and PROSE_KEEP_HEADING_ONLY_SECTIONS apply to the prose."""
+    monkeypatch.setenv("PROSE_SPLIT_HEADING_DEPTH", "2")
+    monkeypatch.setenv("PROSE_KEEP_HEADING_ONLY_SECTIONS", "true")
+    text = "## Installation guide\n\n### Prerequisites\n\nCheck that these tools exist:\n\n- a tool\n- another tool\n"
+    chunks = ListChunkingStrategy().process(_mk_node(text), Path("doc.md"))
+    assert [c.content for c in _prose(chunks)] == [
+        "## Installation guide\n\n### Prerequisites\n\nCheck that these tools exist:",
+    ]
+
+    monkeypatch.setenv("PROSE_SPLIT_HEADING_DEPTH", "3")
+    chunks = ListChunkingStrategy().process(_mk_node(text), Path("doc.md"))
+    assert [c.content for c in _prose(chunks)] == [
+        "## Installation guide",
+        "### Prerequisites\n\nCheck that these tools exist:",
+    ]
+
+
+def test_prose_around_list_applies_short_chunk_filter():
+    """Prose shorter than 15 characters between lists is dropped, as elsewhere."""
+    text = "- alpha\n- beta\n\nSee:\n\n- gamma\n"
+    chunks = ListChunkingStrategy().process(_mk_node(text), Path("doc.md"))
+    assert _prose(chunks) == []
+    assert len(_items(chunks)) == 3
+
+
+def test_prose_around_list_gets_navigation_metadata():
+    """Prose split around a list gets the same navigation metadata as other prose."""
+    from opencrane.config import OpenCraneConfig
+    from opencrane.rag.chunker import _annotate_prose_navigation
+
+    text = "\n".join(
+        [
+            "## Options",
+            "",
+            "- alpha",
+            "- beta",
+            "",
+            "Trailing prose paragraph here.",
+            "",
+            "### Details",
+            "",
+            "More words about the details.",
+        ]
+    )
+    chunks = ListChunkingStrategy().process(_mk_node(text, source_url="https://x/p"), Path("doc.md"))
+    _annotate_prose_navigation(chunks, OpenCraneConfig())
+    prose = _prose(chunks)
+    assert [c.content for c in prose] == [
+        "Trailing prose paragraph here.",
+        "### Details\n\nMore words about the details.",
+    ]
+    assert prose[0].metadata["heading_path"] == "Options"
+    assert prose[1].metadata["heading_path"] == "Options > Details"
+    assert prose[1].metadata["prev_chunk_id"] == prose[0].chunk_id
+    assert [c.metadata["position"] for c in prose] == [1, 2]
+
+
+# ---------------------------------------------------------------------------
+# Continuation lines stay with their item.
+# ---------------------------------------------------------------------------
+
+
+def test_nested_item_keeps_fenced_block_and_paragraphs():
+    """A nested item keeps its fenced block (marker-like lines included) and later paragraphs."""
+    text = "\n".join(
+        [
+            "- Configure:",
+            "  - Servers:",
+            "",
+            "    ```yaml",
+            "    - 192.0.2.1",
+            "",
+            "    - 192.0.2.2",
+            "    ```",
+            "",
+            "    Restart afterwards.",
+            "  - Ports",
+        ]
+    )
+    chunks = ListChunkingStrategy().process(_mk_node(text), Path("doc.md"))
+    items = _items(chunks)
+    assert [c.content for c in items] == [
+        "#\nConfigure:",
+        "#\nConfigure:\nServers:\n\n  ```yaml\n  - 192.0.2.1\n\n  - 192.0.2.2\n  ```\n\n  Restart afterwards.",
+        "#\nConfigure:\nPorts",
+    ]
+    assert items[1].metadata["depth"] == 1
+    assert items[1].metadata["sibling_previews"] == ["Ports"]
+    assert items[2].metadata["sibling_previews"] == ["Servers: …"]
+
+
+def test_nested_ordered_item_keeps_continuation():
+    """A deeper nested ordered item keeps its continuation lines and its ancestors' first lines."""
+    text = "\n".join(
+        [
+            "1. Install",
+            "   1. Download the chart",
+            "      from the internal registry.",
+            "      - Check the checksum",
+            "        against the release notes.",
+        ]
+    )
+    chunks = ListChunkingStrategy().process(_mk_node(text), Path("doc.md"))
+    assert [c.content for c in _items(chunks)] == [
+        "#\n1. Install",
+        "#\n1. Install\n1. Download the chart\n   from the internal registry.",
+        "#\n1. Install\n1. Download the chart\nCheck the checksum\n  against the release notes.",
+    ]

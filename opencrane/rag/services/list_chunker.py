@@ -3,7 +3,9 @@
 Emits one chunk per markdown list item so semantic search can match individual
 items. Each chunk's metadata links it to siblings in the same list, to its
 parent (when nested), and carries short previews of the rest of the list so
-agents can reconstruct the group without extra tool calls.
+agents can reconstruct the group without extra tool calls. The prose around the
+lists is handed to ``ProseChunkingStrategy``, so it is chunked like any other
+prose.
 """
 
 import hashlib
@@ -13,6 +15,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 from opencrane.rag.services.base_strategy import ProcessingStrategy
+from opencrane.rag.services.prose_chunker import ProseChunkingStrategy
 from opencrane.rag.services.utils.chunk_id_generator import generate_unique_chunk_id
 from opencrane.shared.models.chunk import Chunk
 from opencrane.shared.utils.token_counter import get_token_count
@@ -20,6 +23,7 @@ from opencrane.shared.utils.token_counter import get_token_count
 
 _LIST_MARKER_RE = re.compile(r"^(?P<indent>\s*)(?:(?P<ordered>\d+)\.|[-*+])\s")
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
+_MARKER_PREFIX_RE = re.compile(r"^(?P<prefix>\s*(?:\d+\.|[-*+])\s+)(?P<body>.*)$")
 
 
 TOTAL_CAP = 30       # preview display width (incl. prefix and ellipsis)
@@ -36,6 +40,7 @@ class _Item:
     depth: int                        # nesting depth (0 = top level)
     first_line: str                   # body text after marker on the marker line
     body_lines: List[str] = field(default_factory=list)  # full raw lines of this item (marker line + continuation, excluding nested items)
+    content_indent: int = 0           # column where the item's text starts (continuation lines indented at least this far belong to it)
     children: List["_Item"] = field(default_factory=list)
     parent: Optional["_Item"] = None
     position: int = 0                 # 1-indexed within siblings
@@ -50,8 +55,18 @@ class _Item:
         return bool(extra)
 
 
+@dataclass
+class _ProseNode:
+    """A prose segment handed to ``ProseChunkingStrategy``."""
+
+    text: str
+    source_url: Optional[str]
+    node_type: str = "text"
+
+
 class ListChunkingStrategy(ProcessingStrategy):
-    """Strategy that emits prose chunks around lists and one chunk per list item."""
+    """Strategy that emits one chunk per list item and hands the prose around
+    the lists to ``ProseChunkingStrategy``."""
 
     def can_process(self, node) -> bool:
         if not hasattr(node, "text"):
@@ -73,6 +88,11 @@ class ListChunkingStrategy(ProcessingStrategy):
         heading_stack: List[Tuple[int, str]] = list(getattr(node, "heading_ancestry", None) or [])
         section_breadcrumb = " > ".join(title for _, title in heading_stack)
         list_ordinal_in_section = 0                   # counts top-level lists per section
+        prose_strategy = ProseChunkingStrategy()
+        # Headings the prose chunker dropped at the end of one prose segment
+        # (heading-only or too short), handed to the next prose chunk so its
+        # heading ancestry stays complete, as within a single prose node.
+        pending_headings: List[str] = []
 
         for kind, payload in segments:
             if kind == "prose":
@@ -82,9 +102,15 @@ class ListChunkingStrategy(ProcessingStrategy):
                 if new_breadcrumb != section_breadcrumb:
                     section_breadcrumb = new_breadcrumb
                     list_ordinal_in_section = 0
-                chunk = self._make_prose_chunk(payload, source_file, source_url)
-                if chunk is not None:
-                    chunks.append(chunk)
+                prose_chunks = prose_strategy.process(
+                    _ProseNode("\n".join(payload), source_url), source_file
+                )
+                if prose_chunks:
+                    first = prose_chunks[0]
+                    first._preceding_headings = pending_headings + first._preceding_headings
+                    pending_headings = []
+                pending_headings += prose_strategy._skipped_headings
+                chunks.extend(prose_chunks)
             elif kind == "list":
                 list_ordinal_in_section += 1
                 list_chunks = self._make_list_chunks(
@@ -255,31 +281,6 @@ class ListChunkingStrategy(ProcessingStrategy):
             heading_stack.append((level, title))
         return " > ".join(title for _, title in heading_stack)
 
-    # --- prose chunk builder -------------------------------------------------
-
-    @staticmethod
-    def _make_prose_chunk(lines: List[str], source_file: Path, source_url: Optional[str]) -> Optional[Chunk]:
-        content = "\n".join(lines).strip()
-        if not content:
-            return None  # pragma: no cover - segmenter strips empty segments
-        metadata: dict = {}
-        if source_url:
-            metadata["source_url"] = source_url
-        chunk_id = generate_unique_chunk_id(
-            content=content,
-            source_file=str(source_file),
-            chunk_type="prose",
-            metadata=metadata,
-        )
-        return Chunk(
-            chunk_id=chunk_id,
-            content=content,
-            source_file=str(source_file),
-            chunk_type="prose",
-            metadata=metadata,
-            token_count=get_token_count(content),
-        )
-
     # --- list chunk builder --------------------------------------------------
 
     def _make_list_chunks(
@@ -349,16 +350,26 @@ class ListChunkingStrategy(ProcessingStrategy):
     # --- parsing list items --------------------------------------------------
 
     def _parse_items(self, lines: List[str]) -> List[_Item]:
-        """Parse a list block's lines into a nested tree of _Item objects."""
-        # Record indents for each top-level/nested marker so we can compute depth.
-        top_items: List[_Item] = []
-        stack: List[_Item] = []  # item ancestry by increasing indent
+        """Parse a list block's lines into a nested tree of _Item objects.
 
-        i = 0
-        while i < len(lines):
-            line = lines[i]
-            m = _LIST_MARKER_RE.match(line)
+        A line that is not a list marker is a continuation line. It belongs to
+        the deepest open item whose text column it reaches, so text indented
+        under a nested item stays with that item and text indented back to a
+        parent's column after its nested items stays with the parent. Lines of
+        a fenced block go to the item that holds the opening fence, and list
+        markers inside a fence never start an item. Blank lines go to the item
+        that owns the next non-blank line.
+        """
+        mask = self._compute_fence_mask(lines)
+        top_items: List[_Item] = []
+        stack: List[_Item] = []  # open items by increasing indent
+        pending_blanks: List[str] = []
+        in_fence = False
+
+        for i, line in enumerate(lines):
+            m = None if mask[i] else _LIST_MARKER_RE.match(line)
             if m:
+                pending_blanks = []
                 indent = len(m.group("indent"))
                 ordered_num = m.group("ordered")
                 style = "ordered" if ordered_num else "unordered"
@@ -370,36 +381,42 @@ class ListChunkingStrategy(ProcessingStrategy):
                 parent = stack[-1] if stack else None
 
                 # Body content of marker line: content after marker + space
-                marker_prefix_match = re.match(
-                    r"^\s*(?:\d+\.|[-*+])\s+(.*)$", line
-                )
-                first_line_body = marker_prefix_match.group(1) if marker_prefix_match else ""
-
+                prefix = _MARKER_PREFIX_RE.match(line)
                 item = _Item(
                     style=style,
                     marker=marker_token,
                     indent=indent,
                     depth=depth,
-                    first_line=first_line_body,
+                    first_line=prefix.group("body"),
                     body_lines=[line],
+                    content_indent=len(prefix.group("prefix")),
                 )
                 if parent is None:
                     top_items.append(item)
                 else:
                     parent.children.append(item)
                 stack.append(item)
-                i += 1
-                # Collect continuation lines for this item until the next marker
-                # or a deeper/sibling marker (handled by outer loop).
-                while i < len(lines):
-                    nxt = lines[i]
-                    if _LIST_MARKER_RE.match(nxt):
-                        break
-                    item.body_lines.append(nxt)
-                    i += 1
                 continue
-            # Non-marker line outside any item (shouldn't happen given segmentation)
-            i += 1  # pragma: no cover
+
+            if not stack:
+                continue  # pragma: no cover - segmentation starts lists at a marker
+
+            if not mask[i] and not line.strip():
+                pending_blanks.append(line)
+                continue
+
+            if not in_fence:
+                # A text line or an opening fence: close nested items whose
+                # text column the line does not reach.
+                line_indent = len(line) - len(line.lstrip())
+                while len(stack) > 1 and line_indent < stack[-1].content_indent:
+                    stack.pop()
+            if mask[i] and line.strip().startswith("```"):
+                in_fence = not in_fence
+            owner = stack[-1]
+            owner.body_lines.extend(pending_blanks)
+            pending_blanks = []
+            owner.body_lines.append(line)
 
         return top_items
 
@@ -408,26 +425,19 @@ class ListChunkingStrategy(ProcessingStrategy):
     def _build_item_content(self, item: _Item, breadcrumb: str) -> str:
         """Compose the chunk content for a list item.
 
-        Top-level items render their full body (including fenced code and
-        continuation paragraphs).  Nested items prepend their ancestors' first
-        lines so the chunk stays self-contained for embedding.
+        Every item renders its own full body (continuation lines, paragraphs
+        and fenced code included, nested items excluded since they get their
+        own chunks). Nested items prepend their ancestors' first lines so the
+        chunk stays self-contained for embedding.
         """
         header = f"# {breadcrumb}" if breadcrumb else "#"
-        if item.depth == 0:
-            body = self._render_top_body(item)
-            return f"{header}\n{body}".rstrip("\n")
-
-        # Nested: prepend ancestor first-lines (walking up), excluding
-        # ancestor marker prefixes for unordered, including for ordered.
         lineage: List[str] = []
         cur: Optional[_Item] = item.parent
         while cur is not None:
             lineage.append(self._rendered_first_line(cur))
             cur = cur.parent
         lineage.reverse()
-        own = self._rendered_first_line(item)
-        parts = [header] + lineage + [own]
-        return "\n".join(parts)
+        return "\n".join([header] + lineage + [self._render_body(item)])
 
     @staticmethod
     def _rendered_first_line(item: _Item) -> str:
@@ -436,28 +446,26 @@ class ListChunkingStrategy(ProcessingStrategy):
             return f"{item.marker} {item.first_line}".rstrip()
         return item.first_line
 
-    def _render_top_body(self, item: _Item) -> str:
-        """Render a top-level item's body verbatim (fences and continuation preserved).
+    def _render_body(self, item: _Item) -> str:
+        """Render an item's own body: its first line plus its continuation lines.
 
-        Excludes lines that belong to nested child items — children are emitted
-        as their own chunks.
+        Continuation lines keep their layout relative to the item's marker (the
+        marker's own indent is removed), so a nested item renders like a
+        top-level one.
         """
-        # Identify line indices (within body_lines) that belong to nested children.
-        # body_lines was collected up to the NEXT marker, so child markers are not
-        # in body_lines at all. However, _parse_items traverses linearly: when a
-        # child marker is encountered, the outer item's body_lines collection stops.
-        # So body_lines already excludes child lines.  Render directly.
-        if item.style == "ordered":
-            first = f"{item.marker} {item.first_line}".rstrip()
-        else:
-            first = item.first_line
-        rest = item.body_lines[1:]
-        # Trim trailing blank lines
-        while rest and not rest[-1].strip():
-            rest = rest[:-1]
+        first = self._rendered_first_line(item)
+        # Blank lines are only attached before a following line of the item,
+        # so the body never ends with one.
+        rest = [self._dedent(ln, item.indent) for ln in item.body_lines[1:]]
         if not rest:
             return first
         return "\n".join([first] + rest)
+
+    @staticmethod
+    def _dedent(line: str, width: int) -> str:
+        """Remove up to ``width`` leading whitespace characters from ``line``."""
+        lead = len(line) - len(line.lstrip())
+        return line[min(lead, width):]
 
     # --- metadata + chunk assembly -------------------------------------------
 

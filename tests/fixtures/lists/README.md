@@ -41,6 +41,7 @@ At test time, the harness:
 | `05_in_code_fence.md` | List-looking lines inside a YAML fence MUST NOT be chunked as list_items |
 | `06_multiple_same_section.md` | Two distinct lists in one section → two distinct `list_id`s |
 | `07_long.md` | 16-item list → exercises the 15-preview cap with overflow marker |
+| `08_nested_continuation.md` | Continuation lines of top-level and nested items stay with their item |
 
 ## MCP grouping acceptance (no markdown fixture)
 

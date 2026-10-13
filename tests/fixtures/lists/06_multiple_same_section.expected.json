@@ -41,13 +41,6 @@
     }
   },
   {
-    "chunk_id": "$prose_separator",
-    "content": "Then install:",
-    "source_file": "tests/fixtures/lists/06_multiple_same_section.md",
-    "chunk_type": "prose",
-    "metadata": {}
-  },
-  {
     "chunk_id": "$item_base",
     "content": "# Prerequisites\n1. Install the base chart.",
     "source_file": "tests/fixtures/lists/06_multiple_same_section.md",

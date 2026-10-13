@@ -18,6 +18,7 @@ import os
 import re
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, NamedTuple, Optional
+from urllib.parse import quote
 
 import yaml
 
@@ -275,7 +276,10 @@ def get_source_url(rel_with_project: Path, project_name: str) -> str | None:
     # older version has no record: both keep linking to ``main``.
     ref = "main"
     if not source.get("local") and matched_path:
-        ref = read_fetched_ref(Path(get_config().target_dir) / matched_path) or "main"
+        fetched_ref = read_fetched_ref(Path(get_config().target_dir) / matched_path)
+        # Git allows ``#`` and ``%`` in ref names, which would cut or garble
+        # the URL. Keep ``/`` so ``release/2.x`` stays a readable path.
+        ref = quote(fetched_ref, safe="/+") if fetched_ref else "main"
 
     # For local sources the workspace may sit inside a repo subdirectory.
     # Prepend that prefix so the GitHub blob URL points to the correct path.

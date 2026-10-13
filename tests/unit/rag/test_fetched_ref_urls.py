@@ -214,3 +214,12 @@ class TestPageUrlsUseFetchedRef:
         with patch("opencrane.rag.generate_llms_txt.get_repo_subdir", return_value=""):
             assert _url_for(config, "local-docs", "local-docs/guide.md") == \
                 "https://github.com/org/self/blob/main/local-docs/guide.md"
+
+
+@pytest.mark.unit
+def test_url_escapes_special_characters_in_ref(tmp_path):
+    """Git allows ``#`` and ``%`` in ref names; they must not cut the URL."""
+    files = FetchedFiles([File(repo_name="proj", relative_path="guide.md", content=b"# G")], ref="v1#2%x")
+    config = _run_fetch(tmp_path, SOURCE, files)
+    assert _url_for(config, "proj", "proj/guide.md") == \
+        "https://github.com/org/proj/blob/v1%232%25x/docs/guide.md"

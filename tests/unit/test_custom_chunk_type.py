@@ -179,8 +179,9 @@ def test_milvus_search_rejects_unsafe_chunk_types(mock_client_class):
     from opencrane.mcp.services.milvus_client import MilvusService
 
     service = MilvusService()
-    with pytest.raises(ValueError, match="Invalid chunk_types"):
-        service.search([0.1] * 768, limit=3, chunk_types=[_INJECTION], source_names=["public"])
+    # An unsafe value is dropped. With no safe value left, the search matches
+    # nothing instead of losing the clause.
+    assert service.search([0.1] * 768, limit=3, chunk_types=[_INJECTION], source_names=["public"]) == []
     mock_client_class.return_value.search.assert_not_called()
 
 
@@ -194,7 +195,7 @@ async def test_search_rejects_unsafe_chunk_types_before_backends(chunk_types):
         results = await _search_documentation_impl(
             {"query": "q", "chunk_types": chunk_types, "source_names": ["public"]})
 
-    assert results[0].text.startswith("Error: chunk_types must be")
+    assert results[0].text.startswith("Error: invalid chunk_types")
     milvus.search.assert_not_called()
     keyword.search.assert_not_called()
 

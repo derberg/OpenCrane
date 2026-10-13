@@ -90,11 +90,13 @@ The people you share the package with run it through `uvx` and do not rebuild an
 
 ## MCP tools
 
-The server always provides `search_docs` and `health`. It provides each other tool only when the index contains the chunks that the tool reads. The following sections describe the tools.
+The server always provides `search_docs` and `health`. It provides each other tool only when the index contains the chunks that the tool reads. Every tool that returns chunks applies the source policy of the endpoint. For an ID from a source that the caller cannot read, the tool returns the same answer as for an ID that does not exist. See [Authentication and authorization](auth.md). The following sections describe the tools.
 
 ### `search_docs`
 
 The `search_docs` tool searches the indexed documentation. Its description names the topics of the configured sources. The **chunk_types** and **source_names** parameters accept only the values that exist in the index and the configuration.
+
+The server also checks these two parameters, because a client can ignore the tool schema. Each must be a list of strings. A **chunk_types** value can contain only letters, digits, `_`, and `-`. A **source_names** value cannot be empty or contain a double quote, a backslash, or a control character. If a value breaks these rules, `search_docs` returns an error and does not search. Authorization still removes a valid source name that the caller cannot read, so that source returns no results.
 
 The following table lists the parameters of `search_docs`:
 

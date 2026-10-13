@@ -918,7 +918,7 @@ You choose the authentication mode with the `auth.type` key in `.opencrane/confi
 |---|---|---|
 | `local` | OpenCrane acts as its own authorization server. When an MCP client starts authorization, OpenCrane redirects the browser to its `/login` form. | Set `auth.type: local` and `OPENCRANE_ACCESS_TOKEN`. For a username and password instead of a token, set `auth.local.method: password`, `OPENCRANE_LOGIN_USER`, and `OPENCRANE_LOGIN_PASS`. |
 | `oauth` | An external identity provider, such as Keycloak or Microsoft Entra ID. OpenCrane is an OAuth resource server. | Install the `auth` extra with `pip install 'opencrane[auth]'`. Set `auth.type: oauth` with the OpenID Connect (OIDC) settings `oidc.issuer` and `oidc.audience`. |
-| `custom` | Your own code, for full control over token validation or the authorization server. | Set `auth.type: custom`, and supply your own `token_verifier` or `auth_provider` on `OpenCraneConfig`. Without either, the server runs with no authentication and logs a warning. |
+| `custom` | Your own code, for full control over token validation or the authorization server. | Set `auth.type: custom`, and supply your own `token_verifier` or `auth_provider` on `OpenCraneConfig`. Without either, the server refuses to start. |
 
 To limit which sources a caller can search, set `scope_sources`. It maps OAuth scopes to sets of documentation sources. Callers get content only from the sources that the scopes of their token allow.
 

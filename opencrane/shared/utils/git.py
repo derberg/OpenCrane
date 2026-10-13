@@ -66,7 +66,10 @@ def ignored_fingerprint(paths: List[Path]) -> Dict[str, str] | None:
         for name in result.stdout.split("\0"):
             if not name:
                 continue
-            file_path = Path(name).resolve()
+            # Absolute but not resolved: a symlink's target can sit outside the
+            # source dir, and load_fingerprint would then drop its key, so the
+            # record would never match. os.getcwd() is already the physical path.
+            file_path = Path(os.path.abspath(name))
             if file_path.is_file():
                 with file_path.open("rb") as fh:
                     fingerprint[str(file_path)] = hashlib.file_digest(fh, "sha256").hexdigest()

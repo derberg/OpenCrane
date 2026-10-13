@@ -150,6 +150,19 @@ class TestIgnoredDirectories:
             str((src / "sub" / "deep.md").resolve()),
         }
 
+    def test_symlink_to_file_outside_dir_does_not_count_as_changed(self, ignored_repo, tmp_path):
+        # A symlink whose target sits outside the source dir is keyed by its own
+        # path, so the record of the dir still covers it and an unchanged run skips.
+        src = ignored_repo / "sources" / "proj"
+        target = tmp_path / "outside.md"
+        target.write_text("# Outside\n")
+        (src / "linked.md").symlink_to(target)
+        fp_file = ignored_repo / "fp.json"
+        save_fingerprint(fp_file, [src], ignored_fingerprint([src]))
+        assert has_changes([src], fp_file) is False
+        target.write_text("# Outside\nEdited.\n")
+        assert has_changes([src], fp_file) is True
+
     def test_given_fingerprint_is_used(self, ignored_repo):
         src = ignored_repo / "sources" / "proj"
         fp_file = ignored_repo / "fp.json"

@@ -871,6 +871,13 @@ async def _search_documentation_impl(
         return [TextContent(type="text", text="Error: query must be a non-empty string.")]
     limit = arguments.get("limit", 5)
     chunk_types = arguments.get("chunk_types")
+    # SECURITY: chunk_types go into the Milvus filter expression. The HTTP
+    # transport does not validate arguments against the tool schema, so reject
+    # any value that is not a valid chunk type name before it reaches the filter.
+    if chunk_types is not None and (
+        not isinstance(chunk_types, list) or not all(is_valid_chunk_type(t) for t in chunk_types)
+    ):
+        return [TextContent(type="text", text="Error: chunk_types must be a list of chunk type names.")]
     source_names = arguments.get("source_names")
     # --- Layer 2: content authorization ---
     from opencrane.mcp.auth.runtime import resolve_allowed_sources

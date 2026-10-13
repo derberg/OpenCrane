@@ -166,3 +166,43 @@ async def test_get_metadata_schema_custom_type_returns_universal_section():
     assert "Universal Metadata" in text
     assert "`my_type` is a custom chunk type" in text
     assert "crd_kind" not in text
+
+
+# A chunk_types value that closes the quoted literal and widens the filter.
+# Unvalidated, it turns ``source_name == "public"`` into an OR that matches
+# every source, which bypasses source authorization.
+_INJECTION = 'prose") || (chunk_type != "'
+
+
+@patch("opencrane.mcp.services.milvus_client.MilvusClient")
+def test_milvus_search_rejects_unsafe_chunk_types(mock_client_class):
+    from opencrane.mcp.services.milvus_client import MilvusService
+
+    service = MilvusService()
+    with pytest.raises(ValueError, match="Invalid chunk_types"):
+        service.search([0.1] * 768, limit=3, chunk_types=[_INJECTION], source_names=["public"])
+    mock_client_class.return_value.search.assert_not_called()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("chunk_types", [[_INJECTION], "prose", ["prose", 5]])
+async def test_search_rejects_unsafe_chunk_types_before_backends(chunk_types):
+    milvus = Mock()
+    keyword = Mock()
+    with patch.object(mcp_server, "get_milvus_service", return_value=milvus), \
+         patch.object(mcp_server, "get_keyword_service", return_value=keyword):
+        results = await _search_documentation_impl(
+            {"query": "q", "chunk_types": chunk_types, "source_names": ["public"]})
+
+    assert results[0].text.startswith("Error: chunk_types must be")
+    milvus.search.assert_not_called()
+    keyword.search.assert_not_called()
+
+
+def test_custom_type_with_non_string_id_metadata_indexes():
+    chunk = _chunk("my_type", metadata={"table_id": 5, "list_id": "L1"})
+    record = EmbeddingRecord(chunk_index=0, chunk_id="c1", vector=[0.1])
+    vector = VectorChunk.from_chunk_and_embedding(chunk, record)
+    assert vector.table_id is None
+    assert vector.list_id == "L1"
+    assert json.loads(vector.metadata_json)["table_id"] == 5

@@ -6,7 +6,7 @@ import re
 from typing import List, Optional, Dict
 from pymilvus import MilvusClient, DataType
 from opencrane.shared.config import get_config
-from opencrane.shared.models.chunk import CHUNK_TYPE_MAX_LENGTH
+from opencrane.shared.models.chunk import CHUNK_TYPE_MAX_LENGTH, is_valid_chunk_type
 from opencrane.shared.models.vector_chunk import DEFAULT_EMBEDDING_DIM, VectorChunk
 
 logger = logging.getLogger(__name__)
@@ -298,6 +298,11 @@ class MilvusService:
 
         filter_clauses = []
         if chunk_types:
+            # The names go into the filter expression unescaped, so only the
+            # safe chunk type alphabet may pass.
+            invalid = [t for t in chunk_types if not is_valid_chunk_type(t)]
+            if invalid:
+                raise ValueError(f"Invalid chunk_types: {invalid!r}")
             type_filter = " || ".join(f'chunk_type == "{t}"' for t in chunk_types)
             filter_clauses.append(f"({type_filter})")
         if source_files:

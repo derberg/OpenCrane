@@ -277,14 +277,23 @@ def get_source_url(rel_with_project: Path, project_name: str) -> str | None:
         if subdir:
             repo_prefix = f"{subdir}/"
 
-    if docs_path:
-        docs_prefix = f"{docs_path.rstrip('/')}/"
+    # Fetch copies <docs_path>/ of the repo into sources/<path_key>/ and
+    # defaults a missing docs_path to "docs", so read a missing key the same
+    # way here. A local source is never fetched, so it keeps "" (no docs_path).
+    repo_docs_path = source.get("docs_path", "" if source.get("local") else "docs")
+
+    if repo_docs_path:
+        docs_prefix = f"{repo_docs_path.rstrip('/')}/"
         file_rel = relative_after_key
         if file_rel.startswith(docs_prefix):
             file_rel = file_rel[len(docs_prefix):]
-        return f"{url}/blob/main/{repo_prefix}{docs_path.rstrip('/')}/{file_rel}"
+        return f"{url}/blob/main/{repo_prefix}{repo_docs_path.rstrip('/')}/{file_rel}"
 
-    return f"{url}/blob/main/{repo_prefix}{rel_str}"
+    # Fetched repo root: the path key is only the local directory name and
+    # is not part of the repo path. A local source's path key is a real
+    # directory in the workspace, so it stays in the URL.
+    repo_path = f"{repo_prefix}{rel_str}" if source.get("local") else relative_after_key
+    return f"{url}/blob/main/{repo_path}"
 
 
 def ensure_leading_h1(body: str, title: str) -> str:
@@ -885,23 +894,24 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
     if single_source_is_base:
         # write_outputs already produced the correct combined file — just
         # pick up any pre-existing llmstxt sources not covered by mapping.
-        covered_subdirs: set[str] = set()
+        # Only the subdirs written by this run are covered. Marking every
+        # existing subdir would also hide external llmstxt bundles
+        # (.opencrane/llmstxt/{name}/llms-full.txt) from the sweep below.
+        covered_subdirs: set[str] = set(loop_covered)
         combined_parts: List[str] = []
-        # The combined file already exists; read it so we can append extras
+        # The combined file was written by this run; read it so we can append
+        # extras. Skip it when nothing was processed: it is then stale and may
+        # already hold the external blocks the sweep appends.
         top_llms = LLMSTXT_BASE / "llms-full.txt"
-        if top_llms.exists():
+        if loop_contributions and top_llms.exists():
             combined_parts.append(top_llms.read_text(encoding="utf-8"))
-            # Mark all project subdirs as covered
-            for sd in LLMSTXT_BASE.iterdir():
-                if sd.is_dir():
-                    covered_subdirs.add(sd.name)
         # In single_source_is_base the per-source llms.txt was already written
         # by write_outputs (to the same output_root == LLMSTXT_BASE). Seed
         # top_entry_sections from that existing index so any external blocks
         # appended below can extend it — keeping section count == block count.
         top_entry_sections: List[tuple[str, list[IndexEntry]]] = []
         top_llms_index = LLMSTXT_BASE / "llms.txt"
-        if top_llms_index.exists():
+        if loop_contributions and top_llms_index.exists():
             existing_index = LlmsIndex.parse(top_llms_index.read_text(encoding="utf-8"))
             top_entry_sections = [
                 (src, existing_index.entries_for(src))

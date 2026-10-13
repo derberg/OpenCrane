@@ -210,7 +210,7 @@ def main():
 
 @main.command(cls=_ColorCommand)
 @click.option("--config", "config_path", default=None,
-              help="Python config class (module:Class) or YAML file path")
+              help="Config class as module:Class, or path to a Python file defining Config")
 @click.option("--org", default=None,
               help="GitHub organization name (overrides ORG_NAME env var)")
 @click.option("--source", "--repo", "source", default=None,
@@ -240,7 +240,7 @@ def fetch(config_path, org, source):
 
 @main.command(cls=_ColorCommand)
 @click.option("--config", "config_path", default=None,
-              help="Python config class (module:Class) or YAML file path")
+              help="Config class as module:Class, or path to a Python file defining Config")
 @click.option("--sources-dir", "sources_dirs", multiple=True, type=click.Path(), default=None,
               help="Source directory to process (repeatable; overrides AI_DOCS_SOURCES_DIRS)")
 @click.option("--llmstxt-dir", default=None, type=click.Path(),
@@ -266,7 +266,7 @@ def llms(config_path, sources_dirs, llmstxt_dir, force):
 
 @main.command(cls=_ColorCommand)
 @click.option("--config", "config_path", default=None,
-              help="Python config class (module:Class) or YAML file path")
+              help="Config class as module:Class, or path to a Python file defining Config")
 @click.option("--llmstxt-dir", default=None, type=click.Path(),
               help="Directory containing llms-full.txt (overrides AI_DOCS_LLMSTXT_DIR)")
 @click.option("--chunks-file", default=None, type=click.Path(),
@@ -291,7 +291,7 @@ def chunk(config_path, llmstxt_dir, chunks_file, force):
 
 @main.command(cls=_ColorCommand)
 @click.option("--config", "config_path", default=None,
-              help="Python config class (module:Class) or YAML file path")
+              help="Config class as module:Class, or path to a Python file defining Config")
 @click.option("--chunks-file", default=None, type=click.Path(),
               help="Input chunks JSON file (overrides AI_DOCS_CHUNKS_FILE)")
 @click.option("--embeddings-file", default=None, type=click.Path(),
@@ -335,7 +335,7 @@ def tokens(source_dir, output_file):
 
 @main.command(cls=_ColorCommand)
 @click.option("--config", "config_path", default=None,
-              help="Python config class (module:Class) or YAML file path")
+              help="Config class as module:Class, or path to a Python file defining Config")
 def index(config_path):
     """Initialize vector database (Milvus) with chunks and embeddings."""
     try:
@@ -349,7 +349,7 @@ def index(config_path):
 
 @main.command(cls=_ColorCommand)
 @click.option("--config", "config_path", default=None,
-              help="Python config class (module:Class) or YAML file path")
+              help="Config class as module:Class, or path to a Python file defining Config")
 @click.option("--transport", "transport",
               type=click.Choice(["stdio", "http"], case_sensitive=False),
               default="stdio",
@@ -396,9 +396,9 @@ def serve(config_path, transport):
             click.secho("    command: opencrane serve", fg="bright_white", err=True)
             click.echo("", err=True)
             _info("  Or serve over HTTP via Docker:", err=True)
-            click.secho("    docker-compose up --build   (after: opencrane init)", fg="bright_white", err=True)
+            click.secho("    docker-compose -f .opencrane/docker-compose.yml up --build   (after: opencrane init)", fg="bright_white", err=True)
             _info("  Or with Podman:", err=True)
-            click.secho("    podman-compose up --build   (after: opencrane init --podman)", fg="bright_white", err=True)
+            click.secho("    podman-compose -f .opencrane/docker-compose.yml up --build   (after: opencrane init --podman)", fg="bright_white", err=True)
             click.echo("", err=True)
             from opencrane.mcp.server import main as serve_main
             asyncio.run(serve_main())
@@ -409,7 +409,7 @@ def serve(config_path, transport):
 
 @main.command(cls=_ColorCommand)
 @click.option("--config", "config_path", default=None,
-              help="Python config class (module:Class) or YAML file path")
+              help="Config class as module:Class, or path to a Python file defining Config")
 @click.option("--sources-dir", "sources_dirs", multiple=True, type=click.Path(), default=None,
               help="Source directory to process (repeatable; overrides AI_DOCS_SOURCES_DIRS)")
 @click.option("--llmstxt-dir", default=None, type=click.Path(),
@@ -437,7 +437,11 @@ def build(config_path, sources_dirs, llmstxt_dir, chunks_file, embeddings_file):
         )
 
         # Check if there's anything to chunk
-        effective_llmstxt_dir = Path(llmstxt_dir) if llmstxt_dir else Path(".opencrane/llmstxt")
+        # Same resolution as the llms step: --llmstxt-dir, then AI_DOCS_LLMSTXT_DIR.
+        import os
+        effective_llmstxt_dir = Path(
+            llmstxt_dir or os.environ.get("AI_DOCS_LLMSTXT_DIR") or ".opencrane/llmstxt"
+        )
         if not (effective_llmstxt_dir / "llms-full.txt").exists():
             click.echo("")
             _warn("Nothing to process — no llms-full.txt was generated.")
@@ -471,7 +475,7 @@ def build(config_path, sources_dirs, llmstxt_dir, chunks_file, embeddings_file):
 
 @main.command(cls=_ColorCommand)
 @click.option("--config", "config_path", default=None,
-              help="Python config class (module:Class) or YAML file path")
+              help="Config class as module:Class, or path to a Python file defining Config")
 def inspect(config_path):
     """Launch MCP Inspector connected to the server via stdio (no Docker needed)."""
     import shutil
@@ -485,7 +489,10 @@ def inspect(config_path):
     serve_cmd = ["opencrane", "serve"] + config_args
 
     _step("Starting MCP Inspector (stdio transport)...")
-    _info("Web UI will be available at http://localhost:5173", err=True)
+    # MCP Inspector serves its web UI on CLIENT_PORT, default 6274.
+    import os
+    client_port = os.environ.get("CLIENT_PORT") or "6274"
+    _info(f"Web UI will be available at http://localhost:{client_port}", err=True)
 
     result = subprocess.run(
         ["npx", "@modelcontextprotocol/inspector@0.20.0", "--transport", "stdio"] + serve_cmd
@@ -662,7 +669,7 @@ def _add_sources_interactive():
 @click.option("--name", "name", default=None,
               help="Package name (e.g. my-docs-mcp)")
 @click.option("--output", "output", default=None, type=click.Path(),
-              help="Output directory (default: .opencrane/pack/<name>/)")
+              help="Output directory (default: .opencrane/pack/)")
 @click.option("--version", "version", default="1.0.0",
               help="Package version (default: 1.0.0)")
 def pack(name, output, version):
@@ -708,7 +715,7 @@ def pack(name, output, version):
 def init(podman, force, no_add, with_extensions):
     """Scaffold a new OpenCrane project with .opencrane/ directory and container files."""
     from pathlib import Path
-    from opencrane.templates import CONFIG_YAML, EXTENSIONS_PY, DOCKERFILE, DOCKER_COMPOSE, readme
+    from opencrane.templates import CONFIG_YAML, EXTENSIONS_PY, DOCKERFILE, docker_compose, readme
 
     created = []
     skipped = []
@@ -734,7 +741,7 @@ def init(podman, force, no_add, with_extensions):
 
     dockerfile_name = "Containerfile" if podman else "Dockerfile"
     write_file(opencrane_dir / dockerfile_name, DOCKERFILE)
-    write_file(opencrane_dir / "docker-compose.yml", DOCKER_COMPOSE)
+    write_file(opencrane_dir / "docker-compose.yml", docker_compose(dockerfile_name))
 
     if created:
         _success("Created:")

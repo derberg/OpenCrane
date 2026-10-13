@@ -277,13 +277,23 @@ def main(config=None):
                     ref_fields = {}
                     if ref_config:
                         ref_fields = {k: ref_config[k] for k in ("sha", "tag", "release", "branch") if k in ref_config}
-                    source_mapping.add_source(
-                        path_key=path_key,
-                        url=url,
-                        docs_path=docs_path,
-                        manual=is_manual,
-                        **ref_fields,
-                    )
+                    if is_manual:
+                        # Keep user-set keys (docs_url, ignore_patterns, ...);
+                        # fetch only owns url, docs_path, manual and pin fields
+                        source_mapping.update_source(
+                            path_key,
+                            url=url,
+                            docs_path=docs_path,
+                            manual=True,
+                            **ref_fields,
+                        )
+                    else:
+                        source_mapping.add_source(
+                            path_key=path_key,
+                            url=url,
+                            docs_path=docs_path,
+                            manual=False,
+                        )
 
                     return path_key
                 except Exception as e:

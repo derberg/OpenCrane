@@ -191,7 +191,7 @@ class TestGetSourceUrl:
             with patch("opencrane.rag.generate_llms_txt._source_mapping", mapping):
                 rel_path = Path("guidelines-dir/strategy/component-doc.md")
                 result = get_source_url(rel_path, "main-repo")
-                assert result == "https://github.com/test/main-repo/blob/main/guidelines-dir/strategy/component-doc.md"
+                assert result == "https://github.com/test/main-repo/blob/main/strategy/component-doc.md"
 
     def test_internal_other_path_with_mapping(self):
         """Test GitHub URL generation for other internal paths."""
@@ -208,7 +208,7 @@ class TestGetSourceUrl:
             with patch("opencrane.rag.generate_llms_txt._source_mapping", mapping):
                 rel_path = Path("some/other/path/file.md")
                 result = get_source_url(rel_path, "main-repo")
-                assert result == "https://github.com/test/main-repo/blob/main/some/other/path/file.md"
+                assert result == "https://github.com/test/main-repo/blob/main/path/file.md"
 
     def test_returns_none_when_no_mapping(self):
         """Test that None is returned when no mapping entry exists for the file."""
@@ -318,6 +318,33 @@ class TestGetSourceUrl:
                     # docs_path appears in the URL between repo_prefix and the file
                     assert result == "https://github.com/org/repo/blob/main/subdir/docs/guide.md"
 
+    def test_github_url_without_docs_path_drops_path_key(self):
+        """Fetch copies the repo (or its docs_path) into sources/<path_key>/,
+        so the GitHub URL must not contain the path key. A missing docs_path on
+        a fetched source means "docs", the default fetch copies. A local source
+        has no fetch step: its path key is a real directory in the repo."""
+        import yaml
+        with tempfile.TemporaryDirectory() as tmp:
+            mapping_file = Path(tmp) / "mapping.yaml"
+            mapping_file.write_text(yaml.dump({"sources": {
+                "proj": {"url": "https://github.com/org/proj", "docs_path": ""},
+                "org/repo": {"url": "https://github.com/org/repo", "docs_path": ""},
+                "no-key": {"url": "https://github.com/org/no-key"},
+                "local-dir": {"url": "https://github.com/org/self", "local": True},
+            }}))
+            mapping = SourceMapping(mapping_file)
+
+            with patch("opencrane.rag.generate_llms_txt._source_mapping", mapping):
+                with patch("opencrane.rag.generate_llms_txt.get_repo_subdir", return_value="subdir"):
+                    assert get_source_url(Path("proj/index.md"), "proj") == \
+                        "https://github.com/org/proj/blob/main/index.md"
+                    assert get_source_url(Path("org/repo/guides/setup.md"), "org/repo") == \
+                        "https://github.com/org/repo/blob/main/guides/setup.md"
+                    assert get_source_url(Path("no-key/guide.md"), "no-key") == \
+                        "https://github.com/org/no-key/blob/main/docs/guide.md"
+                    assert get_source_url(Path("local-dir/guide.md"), "local-dir") == \
+                        "https://github.com/org/self/blob/main/subdir/local-dir/guide.md"
+
 
 
 class TestProcessFenceBlocks:
@@ -390,7 +417,7 @@ class TestProcessFile:
                 assert "Some content with" in content
                 # entry carries the source URL for the index
                 assert entry is not None
-                assert entry.url == "https://github.com/test/project-a/blob/main/project-a/docs/test.md"
+                assert entry.url == "https://github.com/test/project-a/blob/main/docs/test.md"
                 assert entry.title == "Test Heading"
 
     def test_process_file_no_url(self):

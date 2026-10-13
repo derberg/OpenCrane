@@ -104,6 +104,22 @@ class SourceMapping:
         self.data["sources"][path_key] = entry
         logger.info(f"Added/updated source mapping for {path_key}")
 
+    def update_source(self, path_key: str, **fields) -> None:
+        """
+        Merge fields into an existing entry, keeping every key not passed in.
+
+        Used by fetch for manual entries: fetch owns only the fields it passes,
+        and user-set keys such as docs_url, ignore_patterns or unknown keys stay.
+
+        Args:
+            path_key: Local path key
+            **fields: Fields to set on the entry
+        """
+        entry = dict(self.data["sources"].get(path_key) or {})
+        entry.update(fields)
+        self.data["sources"][path_key] = entry
+        logger.info(f"Updated source mapping for {path_key}")
+
     def get_source(self, path_key: str) -> Optional[Dict]:
         """
         Get source mapping for a local path.

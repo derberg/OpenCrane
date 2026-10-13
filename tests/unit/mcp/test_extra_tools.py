@@ -183,6 +183,7 @@ class TestStdio:
         with patch.object(s, "_has_yaml_chunks", return_value=True), \
                 patch.object(s, "_has_list_item_chunks", return_value=True), \
                 patch.object(s, "_has_table_row_chunks", return_value=True), \
+                patch.object(s, "_has_prose_navigation", return_value=True), \
                 patch.object(s, "_get_indexed_chunk_types", return_value=set()), \
                 patch.object(s, "_get_source_topics", return_value=[]):
             names = {t.name for t in await s.list_tools()}

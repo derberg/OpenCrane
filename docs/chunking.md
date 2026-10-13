@@ -109,7 +109,7 @@ Every chunk has the following top-level fields:
 | Field | Type | Description | Example |
 |---|---|---|---|
 | `chunk_id` | string | Unique identifier of the chunk, as a 64-character hexadecimal string. OpenCrane builds it from a SHA-256 hash of the chunk content, source file, chunk type, and selected metadata such as the source URL. The same input produces the same ID on every run. Milvus uses it as the primary key. | `"195c9565…"` (shortened) |
-| `chunk_type` | string, enum | Semantic type of the chunk content. For the values, see [Chunk types](#chunk-types). | `"prose"` |
+| `chunk_type` | string | Semantic type of the chunk content. The value is a built-in chunk type or a custom chunk type from your own strategy or walker. For the values, see [Chunk types](#chunk-types). | `"prose"` |
 | `content` | string or object | The chunk content. Prose, code, generic YAML, list item, and table row chunks store a string. CRD, OpenAPI, and JSON Schema chunks store a JSON object or array parsed from the YAML. | `"Run the following command to install the server."` |
 | `source_file` | string | Path to the source file, relative to the directory where you run `opencrane`. This is usually the `llms-full.txt` file. | `".opencrane/llmstxt/llms-full.txt"` |
 | `source_name` | string, optional | Path key of the source under `sources` in `.opencrane/config.yaml`. The chunker matches the `metadata.source_url` of the chunk against the `url` and `docs_url` of each source, and the longest match wins. The value is `null` when no source matches. The `source_names` parameter of `search_docs` filters on this field. | `"MicrosoftDocs/microsoft-style-guide"` |
@@ -117,7 +117,7 @@ Every chunk has the following top-level fields:
 
 ### Chunk types
 
-The `chunk_type` field takes one of the following values:
+The built-in strategies and walkers set the `chunk_type` field to one of the following values:
 
 | Value | Content |
 |---|---|
@@ -129,6 +129,25 @@ The `chunk_type` field takes one of the following values:
 | `"yaml_content"` | YAML that is not a recognized structured format |
 | `"list_item"` | One Markdown list item |
 | `"table_row"` | One data row of a Markdown table |
+
+### Custom chunk types
+
+A processing strategy or tree walker in your project can set a custom chunk type, for example `"asyncapi_spec"`. A custom chunk type needs no change to OpenCrane.
+
+A custom chunk type name must meet the following rules:
+
+- Only letters, digits, `_`, and `-`
+- Length from 1 to 32 characters, the width of the `chunk_type` column in Milvus
+
+A chunk with a name that breaks these rules fails validation when your strategy or walker creates it.
+
+The chunk model checks the metadata of the built-in chunk types only. A chunk with a custom chunk type accepts any metadata keys and values, so your strategy or walker defines them. The content of the chunk must not be empty, as for every chunk type.
+
+The MCP server handles custom chunk types in the following ways:
+
+- The `chunk_types` parameter of `search_docs` lists every chunk type in the index, the custom ones included, and filters on them.
+- The `get_metadata_schema` tool returns the universal metadata fields for a custom chunk type.
+- Search results show the `breadcrumb_path` and `section_anchor` metadata of a custom chunk, when the chunk has them.
 
 ### CRD chunks
 
@@ -236,7 +255,7 @@ class MyCustomStrategy(ProcessingStrategy):
         return [chunk]
 ```
 
-The `chunk_type` must be one of the values in the `chunk_type` `Literal` in `opencrane/shared/models/chunk.py`. Prose chunks accept only the following metadata keys, and OpenCrane sets most of them after the strategies run:
+The example creates `prose` chunks, so the chunk model checks their metadata. Prose chunks accept only the following metadata keys, and OpenCrane sets most of them after the strategies run:
 
 - `source_url`
 - `breadcrumb_path`
@@ -250,6 +269,8 @@ The `chunk_type` must be one of the values in the `chunk_type` `Literal` in `ope
 - `position`
 - `prev_chunk_id`
 - `next_chunk_id`
+
+To give the chunks a custom chunk type, pass a name such as `"custom_block"` as `chunk_type` and to `generate_unique_chunk_id`. A custom chunk type accepts any metadata keys. For the naming rules, see [Custom chunk types](#custom-chunk-types).
 
 ### 2. Register the strategy
 
@@ -285,17 +306,15 @@ The chunker uses your strategy the next time you run `opencrane chunk`.
 
 ## Add a tree walker for a YAML specification
 
-To add support for a new YAML-based specification, such as AsyncAPI or AWS CloudFormation templates, complete the steps in this section. Steps 1 and 4 change the OpenCrane package itself, not only your configuration.
+To add support for a new YAML-based specification, such as AsyncAPI or AWS CloudFormation templates, complete the steps in this section. Only the optional step 3 changes the OpenCrane package itself.
 
 The walker runs on every YAML document that `YamlChunkingStrategy` handles. The first walker in `yaml_tree_walkers` whose `can_handle` returns `True` processes the document.
 
-### 1. Add the chunk type to the chunk model
+### 1. Create a tree walker class
 
-Add the new chunk type, for example `"asyncapi_spec"`, to the `chunk_type` `Literal` in `opencrane/shared/models/chunk.py`. Without it, the chunk fails validation when the walker creates it.
+A walker can set a custom chunk type. For the naming rules, see [Custom chunk types](#custom-chunk-types).
 
-### 2. Create a tree walker class
-
-The following example walks AsyncAPI specifications:
+The following example walks AsyncAPI specifications and sets the custom chunk type `"asyncapi_spec"`:
 
 ```python
 from typing import List, Dict, Any
@@ -403,7 +422,7 @@ class AsyncAPITreeWalker(YamlTreeWalker):
                 chunk.metadata["neighbor_chunks"] = neighbor_ids
 ```
 
-### 3. Register the walker
+### 2. Register the walker
 
 Save the walker class as `.opencrane/my_walkers.py`, next to `extensions.py`.
 
@@ -421,9 +440,9 @@ class Config(OpenCraneConfig):
     ]
 ```
 
-### 4. Document the chunk type
+### 3. (Optional) Document the chunk type in OpenCrane
 
-Document the chunk type in the following places:
+For a custom chunk type, `get_metadata_schema(chunk_type="asyncapi_spec")` returns only the universal metadata fields. To also return the fields of the new chunk type, change the OpenCrane package in the following places:
 
 - Add the new chunk type and its metadata fields to [Chunk metadata schema](metadata-schema.md).
 - Add the same chunk type and fields to `opencrane/mcp/metadata-schema.md`, which the `get_metadata_schema` Model Context Protocol (MCP) tool returns.

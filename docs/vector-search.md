@@ -106,7 +106,7 @@ The following table lists the parameters of `search_docs`:
 | **limit** | integer | No | The maximum number of results, from `1` to `50`. | `5` |
 | **search_mode** | string | No | `semantic`, `keyword`, or `hybrid`. | `hybrid` |
 | **alpha** | number | No | The weight of the semantic results in hybrid mode, from `0` to `1`. The keyword results get `1 - alpha`. With `HYBRID_FUSION=rrf`, it weights ranks instead of scores. | The value of `HYBRID_ALPHA`, by default `0.6` |
-| **chunk_types** | array of strings | No | The content types to return: `prose`, `code_snippet`, `yaml_content`, `crd_definition`, `openapi_spec`, `json_schema`, `list_item`, or `table_row`. The tool schema lists only the types in the index. | none |
+| **chunk_types** | array of strings | No | The content types to return, for example `prose` or `code_snippet`. The tool schema lists only the types in the index, custom chunk types included. See [Chunk types](chunking.md#chunk-types). | none |
 | **metadata_contains** | array of strings | No | Strings that the chunk metadata must all contain. | none |
 | **source_names** | array of strings | No | The sources to search, as keys of the `sources:` block in `.opencrane/config.yaml`, for example `MicrosoftDocs/microsoft-style-guide`. A chunk matches if it comes from any of them. The tool schema has this parameter only when sources are configured. Authorization can narrow the results further. See [Authentication and authorization](auth.md). | none |
 
@@ -165,7 +165,7 @@ The following table lists the parameter of `get_metadata_schema`:
 
 | Parameter | Type | Required | Description | Default value |
 |---|---|---|---|---|
-| **chunk_type** | string | No | Returns only the universal fields and the fields of this chunk type, for example `list_item`. | none, which returns the full reference |
+| **chunk_type** | string | No | Returns only the universal fields and the fields of this chunk type, for example `list_item`. For a custom chunk type, returns the universal fields. | none, which returns the full reference |
 
 The following example calls the tool for the full reference and for one chunk type:
 

@@ -223,7 +223,9 @@ async def test_get_metadata_schema_filter_list_item():
 
 @pytest.mark.anyio
 async def test_get_metadata_schema_unknown_chunk_type():
-    result = await get_metadata_schema({"chunk_type": "bogus"})
+    # "bogus" is now a valid custom type name, so an unknown type here is a
+    # value that no chunk can carry.
+    result = await get_metadata_schema({"chunk_type": "not a type!"})
     assert "Unknown chunk_type" in result[0].text
 
 

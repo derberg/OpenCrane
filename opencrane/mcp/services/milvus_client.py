@@ -6,6 +6,7 @@ import re
 from typing import List, Optional, Dict
 from pymilvus import MilvusClient, DataType
 from opencrane.shared.config import get_config
+from opencrane.shared.models.chunk import CHUNK_TYPE_MAX_LENGTH
 from opencrane.shared.models.vector_chunk import DEFAULT_EMBEDDING_DIM, VectorChunk
 
 logger = logging.getLogger(__name__)
@@ -186,7 +187,7 @@ class MilvusService:
         schema.add_field(field_name="content", datatype=DataType.VARCHAR, max_length=MAX_CONTENT_LENGTH)
         schema.add_field(field_name="source_file", datatype=DataType.VARCHAR, max_length=MAX_SOURCE_FILE_LENGTH)
         schema.add_field(field_name="source_name", datatype=DataType.VARCHAR, max_length=MAX_SOURCE_NAME_LENGTH)
-        schema.add_field(field_name="chunk_type", datatype=DataType.VARCHAR, max_length=32)
+        schema.add_field(field_name="chunk_type", datatype=DataType.VARCHAR, max_length=CHUNK_TYPE_MAX_LENGTH)
         schema.add_field(field_name="metadata_json", datatype=DataType.VARCHAR, max_length=MAX_METADATA_LENGTH)
         schema.add_field(field_name="token_count", datatype=DataType.INT64)
         schema.add_field(field_name="line_start", datatype=DataType.INT64)

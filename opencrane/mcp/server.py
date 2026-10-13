@@ -21,6 +21,7 @@ from opencrane.mcp.services.milvus_client import MilvusService
 from opencrane.mcp.services.keyword_search import KeywordSearchService
 from opencrane.mcp.services.reranker import CrossEncoderReranker, apply_reranker
 from opencrane.shared.config import get_config
+from opencrane.shared.models.chunk import is_valid_chunk_type
 from opencrane.shared.utils.embedding_prompts import format_query, warn_if_inconsistent
 
 import sys
@@ -698,7 +699,7 @@ GET_METADATA_SCHEMA_TOOL_SCHEMA = {
     "properties": {
         "chunk_type": {
             "type": "string",
-            "description": "Optional: filter the schema to a specific chunk type (e.g., 'list_item', 'crd_definition', 'openapi_spec', 'json_schema'). When omitted, the full schema is returned."
+            "description": "Optional: filter the schema to a specific chunk type (e.g., 'list_item', 'crd_definition', 'openapi_spec', 'json_schema'). A custom chunk type returns the universal fields only. When omitted, the full schema is returned."
         }
     },
     "required": []
@@ -854,7 +855,6 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     return await handler(arguments)
 
 # A chunk type name: letters, digits, ``_`` and ``-`` (``prose``, ``list_item``).
-_CHUNK_TYPE_NAME = re.compile(r"[A-Za-z0-9_-]+")
 
 # Characters no source name may contain: they could end or escape the quoted
 # literal the source filter is built from. Control characters are rejected too.
@@ -873,7 +873,7 @@ def _invalid_search_filters(chunk_types, source_names) -> str | None:
     """
     if chunk_types is not None:
         if not isinstance(chunk_types, list) or not all(
-            isinstance(t, str) and _CHUNK_TYPE_NAME.fullmatch(t) for t in chunk_types
+            is_valid_chunk_type(t) for t in chunk_types
         ):
             return (
                 "Error: invalid chunk_types. Pass a list of chunk type names "
@@ -1484,14 +1484,25 @@ async def get_metadata_schema(arguments: dict) -> list[TextContent]:
         if not chunk_type:
             return [TextContent(type="text", text=schema_content)]
 
+        universal = _extract_schema_section(schema_content, "Universal Metadata") or ""
+
         heading = _CHUNK_TYPE_SECTION_HEADINGS.get(chunk_type)
         if heading is None:
-            return [TextContent(
-                type="text",
-                text=f"Unknown chunk_type '{chunk_type}'. Omit chunk_type to retrieve the full schema.",
-            )]
+            if not is_valid_chunk_type(chunk_type):
+                return [TextContent(
+                    type="text",
+                    text=f"Unknown chunk_type '{chunk_type}'. Omit chunk_type to retrieve the full schema.",
+                )]
+            # A custom chunk type from a project strategy or walker. Its own
+            # metadata keys are not documented here, so return the universal
+            # fields with a note.
+            body = universal + (
+                f"\n`{chunk_type}` is a custom chunk type. The project's chunking "
+                "strategy or tree walker defines its other metadata fields.\n"
+            )
+            logger.info(f"   get_metadata_schema: returned universal fields for custom type {chunk_type}")
+            return [TextContent(type="text", text=body)]
 
-        universal = _extract_schema_section(schema_content, "Universal Metadata") or ""
         specific = _extract_schema_section(schema_content, heading) or ""
         body = universal + "\n" + specific if specific else universal
         logger.info(f"   get_metadata_schema: returned {len(body)} chars (filtered to {chunk_type})")

@@ -11,9 +11,10 @@ from opencrane.shared.utils.metadata_helpers import is_openapi_spec, extract_ope
 from opencrane.shared.config import get_config
 
 
-# A <Tabs>/<Tab> tag alone on its line, and the bare (attribute-less) form.
-_TAB_TAG_RE = re.compile(r'^\s*</?Tabs?(\s[^>]*)?>\s*$')
-_BARE_TAB_TAG_RE = re.compile(r'^\s*</?Tabs?>\s*$')
+# A <Tabs>/<Tab>/<TabItem> tag alone on its line, and the bare (attribute-less)
+# form. <TabItem> is the Docusaurus name for a tab.
+_TAB_TAG_RE = re.compile(r'^\s*</?Tab(?:s|Item)?(\s[^>]*)?>\s*$')
+_BARE_TAB_TAG_RE = re.compile(r'^\s*</?Tab(?:s|Item)?>\s*$')
 
 
 class _TextNode:
@@ -120,9 +121,9 @@ class CodeChunkingStrategy(ProcessingStrategy):
     def _prose_chunks(text: str, source_file: Path, source_url: str | None) -> List[Chunk]:
         """Chunk the text between code blocks as prose.
 
-        Bare structural tags (``<Tabs>``, ``<Tab>``, ``</Tab>``, ``</Tabs>``)
-        carry no content and are dropped; a ``<Tab>`` tag with attributes is
-        kept because its ``label`` names the tab. Text made only of tags yields
+        Bare structural tags (``<Tabs>``, ``<Tab>``, ``<TabItem>`` and their
+        closing tags) carry no content and are dropped; a tab tag with
+        attributes is kept because its ``label`` names the tab. Text made only of tags yields
         no chunk.
         """
         lines = [line for line in text.split('\n') if not _BARE_TAB_TAG_RE.match(line)]

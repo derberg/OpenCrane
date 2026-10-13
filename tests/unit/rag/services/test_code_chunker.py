@@ -418,3 +418,27 @@ class TestTabsInnerText:
         chunks = self._process(text)
         assert [c.chunk_type for c in chunks] == ["code_snippet", "prose"]
         assert "AFTER_CODE" in chunks[1].content
+
+    def test_docusaurus_tabitem_tags_only_yield_no_prose(self):
+        text = (
+            '<Tabs groupId="pm">\n  <TabItem value="npm" label="npm">\n\n'
+            "```bash\nnpm install thing\n```\n\n  </TabItem>\n"
+            '  <TabItem value="pip" label="pip">\n\n'
+            "```bash\npip install thing\n```\n\n  </TabItem>\n</Tabs>"
+        )
+        chunks = self._process(text)
+        assert [c.chunk_type for c in chunks] == ["code_snippet", "code_snippet"]
+
+    def test_docusaurus_tabitem_text_kept_and_closing_tag_dropped(self):
+        text = (
+            "<Tabs>\n  <TabItem value=\"npm\" label=\"npm\">\n\n"
+            "```bash\nnpm install thing\n```\n\n  </TabItem>\n"
+            '  <TabItem value="pip" label="pip">\n\n'
+            "PIP_EXPLAIN install with pip.\n\n"
+            "```bash\npip install thing\n```\n\n  </TabItem>\n</Tabs>"
+        )
+        chunks = self._process(text)
+        assert [c.chunk_type for c in chunks] == ["code_snippet", "prose", "code_snippet"]
+        assert chunks[1].content == (
+            '<TabItem value="pip" label="pip">\n\nPIP_EXPLAIN install with pip.'
+        )

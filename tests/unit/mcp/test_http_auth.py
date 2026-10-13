@@ -36,8 +36,13 @@ class TestBuildFastmcpAuth:
     def test_none_returns_empty(self):
         assert build_fastmcp_auth(AuthConfig(type="none")) == {}
 
-    def test_custom_returns_empty(self):
-        assert build_fastmcp_auth(AuthConfig(type="custom")) == {}
+    def test_custom_without_hook_raises(self, monkeypatch):
+        """custom with no hook fails closed instead of serving unauthenticated."""
+        from opencrane.config import OpenCraneConfig
+
+        monkeypatch.setattr("opencrane.cli.load_config", lambda _arg: OpenCraneConfig())
+        with pytest.raises(AuthConfigError, match="neither token_verifier nor auth_provider"):
+            build_fastmcp_auth(AuthConfig(type="custom"))
 
     def test_local_returns_provider_and_settings(self, monkeypatch):
         monkeypatch.setenv("PUBLIC_URL", "https://docs.example.com")

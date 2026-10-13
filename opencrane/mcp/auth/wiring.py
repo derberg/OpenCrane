@@ -9,7 +9,7 @@ arguments that get splatted into ``FastMCP(...)``.
   ``auth_provider`` / ``token_verifier``.  If ``auth_provider`` is set, wire a
   self-hosted authorization server (requires ``PUBLIC_URL``).  If ``token_verifier``
   is set, wire a resource server (requires ``PUBLIC_URL``).  If neither is set,
-  return ``{}`` (open — the operator has not wired a custom provider).
+  raise :class:`AuthConfigError` (fail-closed: nothing would authenticate).
 * ``type == "local"``: build the self-hosted :class:`OpenCraneAuthProvider` and the
   matching :class:`AuthSettings`. Requires ``PUBLIC_URL`` (fail-closed).
 * ``type == "oauth"``: OpenCrane is an OAuth 2.0 resource server delegating token
@@ -53,7 +53,7 @@ def build_fastmcp_auth(auth_config: AuthConfig, resource_url_suffix: str = "") -
 
     Raises:
         AuthConfigError: For ``local`` or ``oauth`` mode when ``PUBLIC_URL`` is
-            unset, or for ``oauth`` mode when the ``opencrane[auth]`` extra is
+            unset, for ``custom`` mode when no hook is set, or for ``oauth`` mode when the ``opencrane[auth]`` extra is
             not installed.
     """
     if auth_config.type == "none":
@@ -91,12 +91,14 @@ def build_fastmcp_auth(auth_config: AuthConfig, resource_url_suffix: str = "") -
                     resource_server_url=public_url,
                 ),
             }
-        # Neither hook set — custom type with no wiring means open.
-        logger.warning(
-            "auth.type is 'custom' but neither token_verifier nor auth_provider is "
-            "configured — the MCP server is running UNAUTHENTICATED"
+        # Neither hook set: the config asked for auth that nothing provides.
+        raise AuthConfigError(
+            "auth.type is 'custom' but the loaded Config class sets neither "
+            "token_verifier nor auth_provider, so the endpoint would run "
+            "unauthenticated. Set one of them in the extensions file that "
+            "config.yaml names (extensions: extensions.py) or that --config / "
+            "OPENCRANE_CONFIG points at, or use 'type: none' for an open endpoint"
         )
-        return {}
 
     if auth_config.type == "local":
         public_url = (os.environ.get("PUBLIC_URL") or "").strip()

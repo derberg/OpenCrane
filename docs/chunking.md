@@ -76,7 +76,7 @@ After you change a variable, run `opencrane chunk` and `opencrane embed` again, 
 
 ## Table chunks
 
-Every Markdown table becomes one `table_row` chunk for each data row. The chunker renders each row as natural-language `Column: value.` lines and leaves out empty cells. Each row chunk carries the section heading and the lead-in sentence from the source, so search can return the row on its own. For the fields that link the rows of a table, see [Table row metadata](metadata-schema.md#table-row-metadata).
+Every Markdown table becomes one `table_row` chunk for each data row. The chunker renders each row as natural-language `Column: value.` lines and leaves out empty cells. Each row chunk carries the section heading and the lead-in sentence from the source, so search can return the row on its own. For the fields that link the rows of a table, see [Table row metadata](../opencrane/mcp/metadata-schema.md#table-row-metadata).
 
 A table ends at the first row whose number of cells differs from the header. The chunker splits cells at every `|` except an escaped `\|` and a `|` inside backticks, and stores `\|` as `|`.
 
@@ -100,7 +100,7 @@ To turn the tree walkers off, set `YAML_TREE_CHUNKING_ENABLED` to `false`. The d
 
 ## Chunk data model
 
-Each chunk has a set of top-level fields and a `metadata` object. The fields in the `metadata` object depend on the chunk type. For every metadata field, see [Chunk metadata schema](metadata-schema.md).
+Each chunk has a set of top-level fields and a `metadata` object. The fields in the `metadata` object depend on the chunk type. For every metadata field, see [Chunk metadata schema](../opencrane/mcp/metadata-schema.md).
 
 ### Top-level fields
 
@@ -444,8 +444,7 @@ class Config(OpenCraneConfig):
 
 For a custom chunk type, `get_metadata_schema(chunk_type="asyncapi_spec")` returns only the universal metadata fields. To also return the fields of the new chunk type, change the OpenCrane package in the following places:
 
-- Add the new chunk type and its metadata fields to [Chunk metadata schema](metadata-schema.md).
-- Add the same chunk type and fields to `opencrane/mcp/metadata-schema.md`, which the `get_metadata_schema` Model Context Protocol (MCP) tool returns.
+- Add the new chunk type and its metadata fields to [Chunk metadata schema](../opencrane/mcp/metadata-schema.md). The `get_metadata_schema` Model Context Protocol (MCP) tool returns this file.
 - Add the chunk type to `_CHUNK_TYPE_SECTION_HEADINGS` in `opencrane/mcp/server.py`, so `get_metadata_schema(chunk_type=...)` returns its section.
 
 The MCP server shows only `crd_definition`, `openapi_spec`, and `json_schema` chunks as YAML with location comments. To show the new chunk type the same way, add it to `_YAML_CHUNK_TYPES` and to the matching chunk type checks in `opencrane/mcp/server.py`.

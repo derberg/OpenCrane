@@ -753,7 +753,7 @@ An override takes precedence over `section_anchor_style`.
 
 ### Section navigation and clause IDs
 
-Each prose chunk records its heading path and clause number. The [`get_section`](docs/vector-search.md#get_section) tool uses them to return whole sections. For the fields, see [Prose navigation metadata](docs/metadata-schema.md#prose-navigation-metadata).
+Each prose chunk records its heading path and clause number. The [`get_section`](docs/vector-search.md#get_section) tool uses them to return whole sections. For the fields, see [Prose navigation metadata](opencrane/mcp/metadata-schema.md#prose-navigation-metadata).
 
 To change the clause format, set `section_clause_pattern` in `.opencrane/config.yaml` to a regular expression whose first capture group is the clause ID. The value `none` turns clause IDs off. The following example matches plain dotted numbers:
 

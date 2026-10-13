@@ -3,6 +3,7 @@
 import io
 import json
 import logging
+import re
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -674,7 +675,8 @@ def test_main_html_shows_real_embedding_dimension(tmp_path, workspace_files, pat
     assert f"{DIM}-number vector" in body
     assert f"projected from <b>{DIM}D</b> embeddings" in body
     assert f"full {DIM}-number embedding" in body  # glossary and captions
-    assert "768" not in body
+    # A standalone 768, not digits inside a plotted coordinate such as -0.7314013838768005
+    assert not re.search(r"(?<![\d.])768(?!\d)", body)
     assert "__EMBED_DIM__" not in body
 
 

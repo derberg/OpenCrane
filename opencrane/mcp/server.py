@@ -203,8 +203,22 @@ def _member_rows(field: str, value: str, chunk_type: str) -> list[dict]:
     so the formatting handlers can read metadata fields the same way they did
     when rows came from the file-backed index.
     """
+    # Source authorization, same as search_docs: members of a source the caller
+    # may not read are hidden, so the tool answers as if the id did not exist.
+    permitted = _permitted_sources()
+    if permitted is None:
+        found = get_milvus_service().query_by_field(field, value, chunk_type=chunk_type)
+    elif not permitted:
+        return []
+    else:
+        found = get_milvus_service().query_by_field(
+            field, value, chunk_type=chunk_type, source_names=sorted(permitted)
+        )
     rows = []
-    for row in get_milvus_service().query_by_field(field, value, chunk_type=chunk_type):
+    for row in found:
+        # Defense in depth: drop any row the backend returned outside the policy.
+        if permitted is not None and row.get("source_name") not in permitted:
+            continue
         meta = row.get("metadata_json")
         try:
             metadata = json.loads(meta) if isinstance(meta, str) else (meta or {})
@@ -1327,6 +1341,11 @@ async def get_yaml_definition(arguments: dict) -> list[TextContent]:
 
     try:
         chunk = get_milvus_service().get_chunk(chunk_id)
+        # Source authorization, same as search_docs: a chunk of a source the
+        # caller may not read is reported as not found, so its existence is hidden.
+        permitted = _permitted_sources()
+        if chunk and permitted is not None and chunk.get("source_name") not in permitted:
+            chunk = None
 
         if not chunk:
             logger.info(f"   📄 get_yaml_definition: chunk not found")
@@ -1561,18 +1580,12 @@ def _section_chunks(head: dict) -> list[dict]:
 def _permitted_sources() -> set | None:
     """Source names the caller may read (``None`` = unrestricted).
 
-    Mirrors search_docs' Layer-2 authorization so get_section cannot read a
-    section of a source the caller could not find through search.
+    Uses search_docs' Layer-2 authorization (``resolve_allowed_sources``) so
+    get_section, get_yaml_definition and the member tools cannot read a chunk of
+    a source the caller could not find through search.
     """
-    from opencrane.mcp.auth.runtime import (
-        current_allowed_sources,
-        current_scopes,
-        get_access_policy,
-    )
-    allowed = current_allowed_sources()
-    if allowed is not None:
-        return set(allowed)
-    decision = get_access_policy().authorize(current_scopes(), None)
+    from opencrane.mcp.auth.runtime import resolve_allowed_sources
+    decision = resolve_allowed_sources()
     return None if decision is None else set(decision)
 
 

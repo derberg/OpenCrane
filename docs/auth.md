@@ -12,7 +12,7 @@ The standard input/output (stdio) transport is always unauthenticated. For the s
 The `auth:` block sets the authentication mode. Place it at the top level of the `.opencrane/config.yaml` file.
 
 > [!CAUTION]
-> With the default `type: none`, OpenCrane has no authentication. Anyone who can reach the HTTP port can read every source. Before you expose the server on a network, set another type, or index only sources that anyone may read. `default_sources` limits `search_docs` and `get_section` only. The other built-in lookup tools still return chunks from any indexed source. Custom MCP tools must filter their own output. See [Add custom MCP tools](../README.md#add-custom-mcp-tools).
+> With the default `type: none`, OpenCrane has no authentication. Anyone who can reach the HTTP port can read every source. Before you expose the server on a network, set another type, or index only sources that anyone may read. `default_sources` limits every built-in tool that returns chunks. Custom MCP tools must filter their own output. See [Add custom MCP tools](../README.md#add-custom-mcp-tools).
 
 The following example sets the default mode:
 
@@ -461,7 +461,7 @@ The following notes summarize the security behavior of the HTTP transport:
 - The HTTP server does not check the `Host` header, so DNS-rebinding protection is off. To turn it on, set `MCP_ALLOWED_HOSTS` to a comma-separated list of the hosts that clients use, for example `docs-mcp.example.com` or `localhost:*`. OpenCrane then rejects requests for other hosts.
 - In the `local` mode, `PUBLIC_URL` must use HTTPS outside local development. Credentials come only from environment variables, and token matching uses a constant-time comparison.
 - The `oauth` mode rejects tokens that were not issued for `oidc.audience`, which prevents confused-deputy attacks. The exception is `oidc.verify_audience: false`.
-- Only `search_docs` and `get_section` apply the source policy. The other built-in lookup tools return chunks from any source, by the ID that the caller supplies.
+- Every built-in tool that returns chunks applies the source policy. For an ID from a source outside the policy, the tool returns the same answer as for an ID that does not exist.
 - An open endpoint without `default_sources`, or `allow_anonymous: true` without a source policy, gives anyone every source. OpenCrane starts, and logs a `WARNING` that names the endpoint.
 - Misconfigured authentication fails closed. OpenCrane raises an error at startup and refuses to serve in the following cases:
   - A missing `PUBLIC_URL`

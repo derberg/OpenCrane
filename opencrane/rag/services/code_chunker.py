@@ -5,6 +5,7 @@ import yaml
 from typing import List, Dict, Any
 from pathlib import Path
 from opencrane.rag.services.base_strategy import ProcessingStrategy
+from opencrane.rag.services.utils.markdown_structure import has_fence_outside_list_items
 from opencrane.shared.models.chunk import Chunk
 from opencrane.shared.utils.token_counter import get_token_count
 from opencrane.shared.utils.metadata_helpers import is_openapi_spec, extract_openapi_metadata, extract_crd_identity
@@ -57,6 +58,11 @@ class CodeChunkingStrategy(ProcessingStrategy):
         # BUT: only process if it's primarily code, not mixed prose/code document
         text = node.text.strip()
         if '```' not in text:
+            return False
+
+        # Code blocks inside list items belong to the list: leave the node to
+        # the list strategy, which keeps each code block inside its item.
+        if not has_fence_outside_list_items(text):
             return False
         
         # If there are code fences, check if this is a pure code block or mixed content

@@ -1,6 +1,7 @@
 """Auth config model and parser for OpenCrane MCP server."""
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 ALLOWED_TYPES = frozenset({"none", "local", "oauth", "custom"})
@@ -16,6 +17,30 @@ _FLAT_AUTH_KEYS = frozenset(
 
 class AuthConfigError(Exception):
     """Raised when the auth block in config.yaml is invalid."""
+
+
+def load_mapping_data(mapping_file: Path) -> dict:
+    """Read config.yaml for the auth layer, failing closed on a parse error.
+
+    A missing file is not an error: it means no auth block, so ``{}`` comes
+    back. A file that exists but cannot be parsed raises, because the auth
+    block it may hold cannot be read and the server must not start open.
+
+    Raises:
+        AuthConfigError: When ``mapping_file`` exists but is not valid YAML.
+    """
+    if not mapping_file.exists():
+        return {}
+    import yaml
+
+    try:
+        return yaml.safe_load(mapping_file.read_text(encoding="utf-8")) or {}
+    except Exception as exc:
+        raise AuthConfigError(
+            f"cannot parse {mapping_file}: {exc}. The auth settings in this file "
+            "cannot be read, so the server will not start. Fix the YAML syntax, or "
+            "point MAPPING_FILE at a valid config.yaml"
+        ) from exc
 
 
 def _parse_audiences(raw) -> tuple[str, ...]:

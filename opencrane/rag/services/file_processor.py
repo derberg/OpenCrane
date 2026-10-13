@@ -11,6 +11,10 @@ from opencrane.rag.services.yaml_chunker import YamlChunkingStrategy
 from opencrane.rag.services.code_chunker import CodeChunkingStrategy
 from opencrane.rag.services.table_chunker import _is_table_separator
 from opencrane.rag.services.llms_index import PAGE_SEPARATOR
+from opencrane.rag.services.utils.markdown_structure import (
+    list_item_fence_mask,
+    update_heading_stack,
+)
 from opencrane.shared.models.chunk import Chunk
 
 logger = logging.getLogger(__name__)
@@ -258,10 +262,26 @@ class FileProcessor:
         config = self.config
 
         class FakeTextItem:
-            def __init__(self, text, source_url=None):
+            def __init__(self, text, source_url=None, heading_ancestry=None, starts_page=False):
                 self.text = text
                 self.node_type = 'text'
                 self.source_url = source_url
+                # Headings in effect where this item starts on its page, as
+                # (level, title) pairs. The list and table strategies seed
+                # their breadcrumb with it, so a part of the page that follows
+                # a code block keeps the headings above that code block.
+                self.heading_ancestry = heading_ancestry or []
+                self.starts_page = starts_page
+
+        def _assign_heading_ancestry(items):
+            """Give each item the headings seen so far on its page."""
+            stack = []
+            for item in items:
+                if item.starts_page:
+                    stack = []
+                item.heading_ancestry = list(stack)
+                update_heading_stack(stack, item.text)
+            return items
 
         class FakeDocument:
             def __init__(self, content, file_path, index=None):
@@ -296,7 +316,7 @@ class FileProcessor:
                 # This allows prose, code, and YAML sections to be processed independently
                 if has_section_markers or len(self.content) > 100000 or self.content.count('```') > 100:
                     logger.debug(f"File has section markers or is large, splitting into sections")
-                    sections = self._split_into_sections(self.content)
+                    sections = _assign_heading_ancestry(self._split_into_sections(self.content))
                     # Extract YAML blocks as separate items
                     return self._extract_yaml_from_sections(sections)
                 else:
@@ -334,7 +354,7 @@ class FileProcessor:
                             for block in yaml_blocks:
                                 # Wrap in fenced block so YamlChunkingStrategy can process it
                                 yaml_text = f"```yaml\n{block.yaml_content}\n```"
-                                result.append(FakeTextItem(yaml_text, block.source_url))
+                                result.append(FakeTextItem(yaml_text, block.source_url, section.heading_ancestry))
 
                             # Keep the surrounding prose, with the extracted
                             # fences dropped by their line spans — each YAML
@@ -351,7 +371,7 @@ class FileProcessor:
                                 line for n, line in enumerate(lines) if n not in owned
                             )
                             if remainder.strip():
-                                result.append(FakeTextItem(remainder, section.source_url))
+                                result.append(FakeTextItem(remainder, section.source_url, section.heading_ancestry))
                         else:
                             result.append(section)
                     else:
@@ -469,7 +489,12 @@ class FileProcessor:
                     if text.strip():
                         sub_sections.append(text)
 
-                for line in page_text.split('\n'):
+                lines = page_text.split('\n')
+                # Fences inside list items do not split the page, so the list
+                # stays one list and the code stays inside its item.
+                item_fence = list_item_fence_mask(lines)
+
+                for n, line in enumerate(lines):
                     stripped_line = line.lstrip()
                     if stripped_line.startswith('<Tabs>') or stripped_line.startswith('<Tabs '):
                         if not in_html_block and not in_code_block:
@@ -490,7 +515,7 @@ class FileProcessor:
                             emit('\n'.join(current_section).strip())
                             current_section = []
 
-                    if line.strip().startswith('```') and not in_html_block:
+                    if line.strip().startswith('```') and not in_html_block and not item_fence[n]:
                         if not in_code_block:
                             if len(current_section) > 1:
                                 emit('\n'.join(current_section[:-1]).strip())
@@ -505,7 +530,7 @@ class FileProcessor:
                     emit('\n'.join(current_section).strip())
 
                 items = [FakeTextItem(text, page_url) for text in sub_sections]
-                return items
+                return _assign_heading_ancestry(items)
 
             def _split_into_sections(self, content):
                 """Split content into sections for independent processing.
@@ -545,6 +570,15 @@ class FileProcessor:
                 in_html_block = False
                 html_block_depth = 0
                 current_heading = None
+                # True until the first item of a new page (a marker with a new
+                # URL) is emitted, so heading ancestry restarts on each page.
+                page_start = False
+
+                def _new_item(section_text):
+                    nonlocal page_start
+                    item = FakeTextItem(section_text, current_source_url, starts_page=page_start)
+                    page_start = False
+                    return item
 
                 def _emit(section_text):
                     # A table severed into a heading-less section gets its
@@ -555,15 +589,20 @@ class FileProcessor:
                         and not _section_has_heading(section_text)
                     ):
                         section_text = f"{current_heading}\n\n{section_text}"
-                    return FakeTextItem(section_text, current_source_url)
+                    return _new_item(section_text)
 
-                for line in content.split('\n'):
+                lines = content.split('\n')
+                # Fences inside list items do not split the page, so the list
+                # stays one list and the code stays inside its item.
+                item_fence = list_item_fence_mask(lines)
+
+                for n, line in enumerate(lines):
                     stripped = line.strip()
                     
                     # Split on URL marker lines BEFORE processing.
                     # Matches both bare GitHub URLs (### https://github.com/...)
                     # and bracketed docs URLs (# [https://...] Title).
-                    if not in_html_block and not in_code_block:
+                    if not in_html_block and not in_code_block and not item_fence[n]:
                         # Markers update the current source URL and start a new
                         # section. A bracketed marker (# [base] <page-url> ...)
                         # uses the page URL after the bracket, not the base tag.
@@ -583,6 +622,9 @@ class FileProcessor:
                                     sections.append(_emit(section_text))
 
                             # Extract and update current source URL
+                            new_url = bracketed[0] if bracketed is not None else bare_marker
+                            if new_url != current_source_url:
+                                page_start = True
                             if bracketed is not None:
                                 new_url, title = bracketed
                                 logger.debug(f"Found bracketed URL marker, updating URL from {current_source_url[:60] if current_source_url else 'None'}... to {new_url[:60]}...")
@@ -634,6 +676,7 @@ class FileProcessor:
                     if (
                         not in_code_block
                         and not in_html_block
+                        and not item_fence[n]
                         and _HEADING_PREFIX_RE.match(stripped)
                     ):
                         current_heading = line
@@ -651,7 +694,7 @@ class FileProcessor:
                                 current_section = []
 
                     # Track code block state - but don't split if inside HTML block
-                    if line.strip().startswith('```') and not in_html_block:
+                    if line.strip().startswith('```') and not in_html_block and not item_fence[n]:
                         if not in_code_block:
                             # Starting a code block - save accumulated prose before it
                             if len(current_section) > 1:  # More than just the ``` line
@@ -664,7 +707,7 @@ class FileProcessor:
                             # Ending a code block - save the code block
                             in_code_block = False
                             section_text = '\n'.join(current_section)
-                            sections.append(FakeTextItem(section_text, current_source_url))
+                            sections.append(_new_item(section_text))
                             current_section = []
                 
                 # Add final section

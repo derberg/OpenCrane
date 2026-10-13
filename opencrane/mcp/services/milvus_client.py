@@ -427,7 +427,12 @@ class MilvusService:
             return None
 
     def query_by_field(
-        self, field: str, value: str, chunk_type: Optional[str] = None, limit: int = 16384
+        self,
+        field: str,
+        value: str,
+        chunk_type: Optional[str] = None,
+        limit: int = 16384,
+        source_names: Optional[List[str]] = None,
     ) -> List[Dict]:
         """Return all chunks whose scalar ``field`` equals ``value``.
 
@@ -440,10 +445,25 @@ class MilvusService:
         but are still checked: ``field`` must be a plain field name and
         ``chunk_type`` is stripped to the id charset. Pass ``chunk_type`` to constrain
         rows in the database instead of post-filtering in Python.
+
+        ``source_names`` (``None`` = any source) restricts rows to the sources
+        the caller may read. Names come from server config or a server-side
+        middleware, never the client; a name that could break the quoted
+        literal is dropped, so it fails closed, and an empty list matches
+        nothing.
         """
         expr = f'{_check_field(field)} == "{_safe_id(value)}"'
         if chunk_type is not None:
             expr += f' and chunk_type == "{_safe_id(chunk_type)}"'
+        if source_names is not None:
+            names = sorted({
+                _truncate_utf8(n, MAX_SOURCE_NAME_LENGTH)
+                for n in source_names
+                if '"' not in n and "\\" not in n
+            })
+            if not names:
+                return []
+            expr += " and source_name in [" + ", ".join(f'"{n}"' for n in names) + "]"
         try:
             rows = self.client.query(
                 collection_name=self.collection_name,

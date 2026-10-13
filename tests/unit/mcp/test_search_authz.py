@@ -5,7 +5,7 @@ Tests cover:
 - ScopeSourcesPolicy constrains source_names to permitted sources.
 - Empty allowlist short-circuits to "No results found." and backend is never called.
 - current_scopes() returns () when get_access_token returns None.
-- Missing / unparseable MAPPING_FILE treated as empty config (AllowAll).
+- Missing MAPPING_FILE treated as empty config (AllowAll); unparseable one fails closed.
 """
 
 import pytest
@@ -236,8 +236,8 @@ async def test_reset_auth_runtime_clears_cache(tmp_path, monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_unparseable_mapping_file_treated_as_allow_all(tmp_path, monkeypatch):
-    """Unparseable MAPPING_FILE → logs warning, falls back to AllowAll."""
+async def test_unparseable_mapping_file_fails_closed(tmp_path, monkeypatch):
+    """Unparseable MAPPING_FILE → the search raises and never reaches the backend."""
     config_yaml = tmp_path / "config.yaml"
     # Write invalid YAML that will raise on parse
     config_yaml.write_bytes(b"\x00\x01\x02invalid yaml \xff")
@@ -249,15 +249,17 @@ async def test_unparseable_mapping_file_treated_as_allow_all(tmp_path, monkeypat
     monkeypatch.setattr(mcp_server, "get_milvus_service", lambda: recording)
     monkeypatch.setattr(mcp_server, "get_embeddings_service", lambda: DummyEmbeddings())
 
-    with patch("mcp.server.auth.middleware.auth_context.get_access_token", return_value=None):
-        await mcp_server._search_documentation_impl({
-            "query": "test",
-            "search_mode": "semantic",
-            "limit": 1,
-        })
+    from opencrane.mcp.auth.config_model import AuthConfigError
 
-    assert recording.calls, "backend must have been called (AllowAll fallback)"
-    assert recording.calls[0] is None
+    with patch("mcp.server.auth.middleware.auth_context.get_access_token", return_value=None):
+        with pytest.raises(AuthConfigError, match="cannot parse"):
+            await mcp_server._search_documentation_impl({
+                "query": "test",
+                "search_mode": "semantic",
+                "limit": 1,
+            })
+
+    assert not recording.calls, "backend must not be called when the auth config is unreadable"
 
 
 # ---------------------------------------------------------------------------

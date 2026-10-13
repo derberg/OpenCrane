@@ -11,17 +11,29 @@ opencrane embed
 The `opencrane embed` command performs the following steps:
 
 1. Loads the chunks from `.opencrane/chunks.json`.
-2. Generates a vector embedding for each chunk, in batches to limit memory use. The default model is Nomic Embed, `nomic-ai/nomic-embed-text-v1.5`.
-3. Saves the embeddings to `.opencrane/embeddings.json`.
+2. Adds the document prompt, if set, to the start of each chunk. See [Embedding prompts](#embedding-prompts).
+3. Generates a vector embedding for each chunk on the CPU, in small batches to limit memory use. The default model is Nomic Embed, `nomic-ai/nomic-embed-text-v1.5`.
+4. Saves the embeddings to `.opencrane/embeddings.json`, together with the model name and the document prompt.
+
+The command regenerates the embeddings on every run, with or without the `--force` flag.
 
 ## Choose an embedding model
 
-To use a different model, set the `EMBEDDING_MODEL` environment variable to a Hugging Face model ID or a local path that the `sentence-transformers` library can load. Any vector size works. A larger model can improve results, and a smaller one embeds faster.
+To use a different model, set the `EMBEDDING_MODEL` environment variable. The value is a Hugging Face model ID or a local path that the `sentence-transformers` library can load. Any vector size works, because `opencrane index` sizes the collection from the embeddings. A larger model can improve results, and a smaller one embeds faster.
+
+OpenCrane loads the model with `trust_remote_code=True`, so the model can run its own Python code on your machine. Use only models whose code you trust.
 
 > [!CAUTION]
-> `opencrane index` deletes the collection before a rebuild. Searches fail until the Model Context Protocol (MCP) server uses the new model and collection. Check that `MILVUS_COLLECTION` and the [connection variables](../README.md#variables-for-the-index-and-serve-steps) point to the collection to replace.
+> If the new model has a different vector size, `opencrane index` deletes and rebuilds the collection without `DROP_EXISTING`. If the size is the same, you must set `DROP_EXISTING=true`, which also deletes the collection. Searches fail or return poor results until the Model Context Protocol (MCP) server uses the same model as the collection. Check that `MILVUS_COLLECTION` and the [connection variables](../README.md#variables-for-the-index-and-serve-steps) point to the collection to replace.
 
-After you change the model, run `opencrane embed` and `opencrane index` again. If the vector size stays the same, set `DROP_EXISTING=true`, or `index` keeps the old vectors. Then restart the MCP server with the same `EMBEDDING_MODEL`.
+To switch to a new model, run the following commands:
+
+```bash
+export EMBEDDING_MODEL={MODEL_ID}
+opencrane embed --force && DROP_EXISTING=true opencrane index
+```
+
+Then restart the MCP server with the same `EMBEDDING_MODEL`.
 
 ## Embedding prompts
 
@@ -39,12 +51,12 @@ The following table lists prompts for common models:
 | `nomic-ai/nomic-embed-text-v1.5`, the default | `search_document: ` | `search_query: ` |
 | `intfloat/e5-base-v2` | `passage: ` | `query: ` |
 
-To change the document prompt, generate new embeddings and rebuild the collection.
+A new document prompt needs new embeddings and a rebuilt collection.
 
 > [!CAUTION]
-> `DROP_EXISTING=true` deletes the Milvus collection before `index` rebuilds it. First confirm that `MILVUS_COLLECTION` and the connection variables name the right collection.
+> `DROP_EXISTING=true` deletes the Milvus collection before `index` rebuilds it. Searches fail until the rebuild finishes. First confirm that `MILVUS_COLLECTION` and the connection variables name the right collection.
 
-The following commands do both for the default model:
+The following commands set both prompts for the default model and rebuild the collection:
 
 ```bash
 export EMBEDDING_DOCUMENT_PROMPT="search_document: "
@@ -52,24 +64,26 @@ export EMBEDDING_QUERY_PROMPT="search_query: "
 opencrane embed && DROP_EXISTING=true opencrane index
 ```
 
-A new query prompt needs only a server restart. The `docker-compose.yml` file from `opencrane init` passes `EMBEDDING_QUERY_PROMPT` from your shell to the container.
+A new query prompt needs only a server restart. The `.opencrane/docker-compose.yml` file from `opencrane init` passes `EMBEDDING_QUERY_PROMPT` from your shell to the container.
 
 ## Collection schema
 
-When the `index` step loads the embeddings into Milvus, each chunk becomes one record in the collection. The following table lists the fields of each record:
+When the `index` step loads the embeddings into Milvus, each chunk becomes one record in the collection. For the rules that decide when `index` rebuilds the collection, see [`opencrane index`](../README.md#index-the-embeddings-in-milvus-with-opencrane-index). The following table lists the fields of each record:
 
 | Field | Type | Notes |
 |---|---|---|
-| `chunk_id` | `VARCHAR` | Primary key. `max_length` 64 |
+| `chunk_id` | `VARCHAR` | Primary key |
 | `embedding` | `FLOAT_VECTOR` | Vector size of the model, 768 by default |
-| `content` | `VARCHAR` | `max_length` 65,535 |
-| `source_file` | `VARCHAR` | `max_length` 512 |
-| `source_name` | `VARCHAR` | `max_length` 256 |
-| `chunk_type` | `VARCHAR` | `max_length` 32. One of `prose`, `code_snippet`, `crd_definition`, `openapi_spec`, `json_schema`, `yaml_content`, `list_item`, or `table_row` |
-| `metadata_json` | `VARCHAR` | `max_length` 65,535 |
+| `content` | `VARCHAR` | OpenCrane truncates content longer than 65,535 characters. |
+| `source_file` | `VARCHAR` | none |
+| `source_name` | `VARCHAR` | none |
+| `chunk_type` | `VARCHAR` | One of `prose`, `code_snippet`, `crd_definition`, `openapi_spec`, `json_schema`, `yaml_content`, `list_item`, or `table_row` |
+| `metadata_json` | `VARCHAR` | none |
 | `token_count` | `INT64` | none |
-| `line_start` | `INT64` | none |
-| `list_id` | `VARCHAR` | `max_length` 64 |
-| `table_id` | `VARCHAR` | `max_length` 64 |
+| `line_start` | `INT64` | `0` when the chunk has no line number |
+| `list_id` | `VARCHAR` | none |
+| `table_id` | `VARCHAR` | none |
+| `clause_id` | `VARCHAR` | none |
+| `parent_chunk_id` | `VARCHAR` | none |
 
-The `index` step creates an `AUTOINDEX` vector index with the cosine metric, and `INVERTED` indexes on `list_id` and `table_id`. It then loads the collection into memory. For how the MCP server searches the collection, see [Vector search and the MCP server](vector-search.md).
+The `index` step indexes the `embedding` field with the cosine metric. For how the MCP server searches the collection, see [Vector search and the MCP server](vector-search.md).

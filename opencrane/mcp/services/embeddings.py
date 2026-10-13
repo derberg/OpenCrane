@@ -64,9 +64,10 @@ class EmbeddingService:
         """
         logger.info(f"Generating embeddings for {len(chunks)} chunks")
 
-        # Compute SHA-256 of chunks for integrity
-        chunks_json = json.dumps(chunks, sort_keys=True)
-        chunks_sha256 = hashlib.sha256(chunks_json.encode()).hexdigest()
+        # SHA-256 of the chunks serialized exactly as ChunkSerializer writes
+        # chunks.json, so it equals the file hash `embed` checks to skip reruns
+        chunks_json = json.dumps(chunks, indent=2, sort_keys=True, ensure_ascii=False)
+        chunks_sha256 = hashlib.sha256(chunks_json.encode("utf-8")).hexdigest()
 
         embeddings = []
         # Convert chunk content to strings (handle dict/list content from tree walkers)

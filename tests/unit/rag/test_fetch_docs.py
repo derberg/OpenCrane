@@ -567,6 +567,43 @@ class TestFetchDocsGitHub:
         assert entry is not None
         assert entry.get("tag") == "v1.2.3"
 
+    def test_manual_github_keeps_user_set_keys(self, tmp_path):
+        """Fetch keeps every user-set key of a manual entry when it rewrites config.yaml."""
+        setup_sources_yaml(tmp_path, {
+            "external/cgw": {
+                "url": "https://github.com/otherorg/cgw",
+                "manual": True,
+                "docs_path": "docs",
+                "docs_url": "https://docs.example.com/cgw",
+                "ignore_patterns": ["drafts/**"],
+                "custom_key": "kept",
+                "branch": "main",
+            }
+        })
+        config = Config(
+            org_name="myorg",
+            mapping_file=tmp_path / ".opencrane" / "config.yaml",
+            target_dir=tmp_path / ".opencrane" / "sources",
+        )
+
+        repo_fetcher = MagicMock()
+        repo_fetcher.get_documentation_repos.return_value = []
+        repo_fetcher.get_manual_repo.return_value = make_repo("cgw")
+        repo_fetcher.get_repo_files.return_value = [MagicMock()]
+
+        run_main_github(tmp_path, config, repo_fetcher)
+
+        entry = SourceMapping(tmp_path / ".opencrane" / "config.yaml").get_source("external/cgw")
+        assert entry == {
+            "url": "https://github.com/otherorg/cgw",
+            "manual": True,
+            "docs_path": "docs",
+            "docs_url": "https://docs.example.com/cgw",
+            "ignore_patterns": ["drafts/**"],
+            "custom_key": "kept",
+            "branch": "main",
+        }
+
     def test_manual_github_skips_self_reference(self, tmp_path, caplog):
         """A manual entry pointing at the current repo in our org is skipped."""
         setup_sources_yaml(tmp_path, {

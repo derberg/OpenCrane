@@ -13,16 +13,16 @@ OpenCrane is a command-line tool that builds and runs an AI-powered documentatio
 OpenCrane usually runs as the documentation search service for AI coding assistants. Claude Code, Cursor, and other MCP clients query it for the following content:
 
 - Component specifications
-- Custom Resource Definition (CRD) references
+- CustomResourceDefinition (CRD) references
 - Operational guides
 
-When an engineer asks the assistant a question about a documented component, the assistant calls the OpenCrane `search_docs` tool. The tool returns the relevant documentation chunks, and the assistant uses them as context.
+When an engineer asks the assistant about a documented component, the assistant calls the OpenCrane `search_docs` tool. The tool returns the relevant documentation chunks, and the assistant uses them as context.
 
-OpenCrane is open source (Apache 2.0). It runs as a containerized service, or locally over standard input and output (stdio), and it needs no specific platform or infrastructure.
+OpenCrane is open source (Apache 2.0). It runs as a containerized service, or locally over standard input and output (stdio). It needs no specific platform or infrastructure.
 
 ## Pipeline steps
 
-OpenCrane organizes work into steps, and each step has its own command-line interface (CLI) subcommand. You can run each step on its own, or run the steps from `fetch` to `index` in sequence with `opencrane build`.
+Each pipeline step has its own command-line interface (CLI) subcommand. You can run each step on its own, or run the steps from `fetch` to `index` in sequence with `opencrane build`.
 
 The following diagram shows each step, the command that runs it, and the output it writes:
 
@@ -31,7 +31,7 @@ GitHub repositories
       ↓  add / fetch
 .opencrane/sources/
       ↓  llms
-.opencrane/llmstxt/  (hierarchical llms-full.txt bundles + companion llms.txt index)
+.opencrane/llmstxt/  (llms-full.txt bundles + companion llms.txt index)
       ↓  chunk
 .opencrane/chunks.json
       ↓  embed
@@ -44,127 +44,93 @@ MCP server (stdio or HTTP)
 
 ### Add sources
 
-The `opencrane add` command registers documentation sources in the [source mapping file](source-mapping.md), `.opencrane/config.yaml`. Each source is either a GitHub repository or an existing `llms-full.txt` file. You can also run `opencrane init` to create a new project and add sources interactively in one step.
+The `opencrane add` command registers documentation sources in the [source mapping file](source-mapping.md), `.opencrane/config.yaml`. Each source is either a GitHub repository or an existing `llms-full.txt` file. The `opencrane init` command creates a new project and offers the same interactive source addition.
 
 ### Fetch
 
-The `opencrane fetch` command downloads the documentation files of registered GitHub repositories into `.opencrane/sources/`. It supports the following discovery modes:
+The `opencrane fetch` command downloads the documentation of the registered GitHub repositories into `.opencrane/sources/`. It finds repositories in one of the following ways:
 
-- Auto-discovery: OpenCrane finds all repositories in a GitHub organization that carry the discovery topic. The topic is `documentation` by default, and the `DOCS_TOPIC` environment variable changes it.
-- Manual: OpenCrane uses the list of repositories you defined in the source mapping file.
+- Auto-discovery: OpenCrane finds the repositories of a GitHub organization that carry the discovery topic. The topic is `documentation` by default, and the `DOCS_TOPIC` environment variable changes it.
+- Manual: OpenCrane uses the repositories you listed in the source mapping file.
 
-The command fetches repositories concurrently. OpenCrane never fetches sources marked `local: true`, and reads them from the local file system as they are.
-
-A stale source is an auto-discovered repository (`manual: false`) that auto-discovery no longer returns. The fetch removes stale sources automatically. For the causes, see [How the fetch removes stale sources](fetching.md#how-the-fetch-removes-stale-sources).
+The fetch never downloads sources marked `local: true`. OpenCrane reads those sources from the project directory. For the details, see [Fetch documentation sources](fetching.md).
 
 > [!CAUTION]
-> When auto-discovery no longer returns a repository (it lost the discovery topic, its topics could not be read, or the token cannot see it), `opencrane fetch` removes its entry from the source mapping file. It also deletes its source directory and its generated `llmstxt/` output. To keep the source, set `manual: true` on its entry before you run the fetch.
+> When auto-discovery no longer returns a repository, `opencrane fetch` removes the entry of that repository from the source mapping file. It also deletes the source directory and the generated `llmstxt/` output of that repository. This happens, for example, when the repository loses the discovery topic. To keep the source, set `manual: true` on its entry before you run the fetch.
 
 ### Generate `llms-full.txt` bundles
 
-The `opencrane llms` command combines the fetched Markdown files into `llms-full.txt` bundles under `.opencrane/llmstxt/`. It writes the following bundles:
+The `opencrane llms` command combines the Markdown files of each source into `llms-full.txt` bundles under `.opencrane/llmstxt/`. It writes one bundle for each source, and a combined `llms-full.txt` with all sources. Next to the combined bundle, it writes a companion `llms.txt` index that maps the title of each page to its URL. For the URLs in the bundles, see [`llms-full.txt` generation](llms-generation.md).
 
-- A top-level bundle that combines all sources
-- One bundle for each path in the source mapping file
-
-When the source mapping file lists no sources, the command only combines the `llms-full.txt` bundles that already exist under `.opencrane/llmstxt/`. With `--sources-dir`, it instead writes a bundle for each directory under the directory you pass, and for each directory one level below that.
-
-For each bundle, the command does the following:
-
-- Processes Markdown files recursively.
-- Produces clean content, with no URLs added to headings.
-- Adds separators: a `<!-- opencrane:page -->` marker between files within a source, and `======` between sources.
-- Adds a `# {title}` heading at the start of each page, unless the page already starts with exactly that heading. OpenCrane takes the title from the front matter `title`. If that is missing, it uses the first heading, and then the file name. An existing H1 with different text stays under the new heading, so the page then has two H1 headings.
-- Replaces relative links to Markdown files and anchors with their link text.
-- Runs [fence type](#custom-fence-types) handlers for structured content embedded as fenced code blocks, such as OpenAPI specs and Kubernetes CRDs.
-- Writes a companion `llms.txt` index next to the combined `llms-full.txt`.
-
-The page separator is an HTML comment, so the chunker does not treat Markdown thematic breaks (`---`) in the content as page boundaries.
-
-The companion `llms.txt` index has the following parts:
-
-- A `# {project}` H1
-- One `## {source}` section for each source
-- A `- [title](page_url)` link for each page
-
-The sections and links follow the page order of the bundle.
-
-The `chunk` step uses the companion `llms.txt` index to find the page `source_url` of each chunk. For an external `llmstxt` source, `opencrane fetch` can download a companion `llms.txt`. The `llms` command copies its page URLs into the index it writes. When no companion exists, the `llms` command builds an index from the `docs_url` of the source.
+When the source mapping file lists no sources, the command combines the `llms-full.txt` bundles that already exist under `.opencrane/llmstxt/`. [Fence type](../README.md#write-a-custom-fence-type) handlers replace structured content in fenced code blocks, such as OpenAPI specs and CRDs. For the bundle format, see [Generate llms-full.txt bundles](llms-generation.md).
 
 ### Chunk
 
-The `opencrane chunk` command splits the combined `.opencrane/llmstxt/llms-full.txt` bundle into typed semantic chunks and writes them to `.opencrane/chunks.json`. It reads the companion `llms.txt` index next to the bundle and gives each chunk the `source_url` of its own page. To do this, it matches the pages in the bundle to the index entries by position within each source. It then checks each match against the H1 title of the page. When no companion index is present, the command reads page URL markers inside the bundle instead. A bundle that an older OpenCrane version built is an example of this case.
+The `opencrane chunk` command splits the combined `llms-full.txt` bundle into typed semantic chunks and writes them to `.opencrane/chunks.json`. The command gives each chunk the `source_url` of its page from the companion `llms.txt` index. It matches pages to index entries by position within each source, and checks each match against the page title. For the details, see [Document boundaries and page URLs](chunking.md#document-boundaries-and-page-urls).
 
-Chunking strategies run in priority order. The first strategy that matches a document fragment handles it. The following table lists the strategies in that order:
+Chunking strategies run in the following order, and the first strategy that matches a fragment handles it:
 
-| Order | Strategy | Behavior |
-|---|---|---|
-| 1 | YAML | Handles YAML content. Passes structured specs (CRDs, OpenAPI, JSON Schema) to [tree walkers](#custom-yaml-tree-walkers), which split a spec into one chunk for each field or element. Falls back to a generic `yaml_content` chunk for unrecognized YAML. |
-| 2 | Code | Handles fenced code blocks. Detects the language, and runs tree walkers for structured YAML specs inside code fences. |
-| 3 | Table | Handles Markdown tables. Produces one `table_row` chunk for each data row, written as natural-language `Column: value.` lines. Links each row to the rest of the table through `table_id` and `sibling_ids`. Passes text outside the table to the list and prose strategies. |
-| 4 | List | Handles Markdown lists. Produces one chunk for each top-level list item, and attaches sibling previews and breadcrumb paths. |
-| 5 | Prose | Handles every fragment the other strategies do not match. By default, splits at `#`, `##`, and `###` headings and keeps each section whole. See [Prose sections](chunking.md#prose-sections). |
+1. YAML: sends structured YAML specs, such as CRDs and OpenAPI specs, to [tree walkers](../README.md#write-a-custom-yaml-tree-walker), which create one chunk for each field or element. Other YAML becomes a `yaml_content` chunk.
+2. Code: handles fenced code blocks and detects the language.
+3. Table: creates one `table_row` chunk for each data row.
+4. List: creates one `list_item` chunk for each list item, nested items included.
+5. Prose: handles all other content. By default, it splits at headings down to `###` and keeps each section whole.
 
-Each chunk carries type-specific metadata fields and a `chunk_type` field. The `chunk_type` field takes one of the following values:
-
-- `prose`
-- `code_snippet`
-- `crd_definition`
-- `openapi_spec`
-- `json_schema`
-- `yaml_content`
-- `list_item`
-- `table_row`
-
-For the full field reference, see [Chunk metadata schema](metadata-schema.md).
+For the chunk types and fields, see the [chunking guide](chunking.md). For the metadata fields, see [Chunk metadata schema](metadata-schema.md).
 
 ### Embed
 
-The `opencrane embed` command generates a vector embedding for each chunk in `.opencrane/chunks.json` and writes the results to `.opencrane/embeddings.json`. It uses the `sentence-transformers` library with `nomic-ai/nomic-embed-text-v1.5` as the default model. To change the model, see [Choose an embedding model](embeddings.md#choose-an-embedding-model). The command processes chunks in batches to limit memory use.
+The `opencrane embed` command generates a vector embedding for each chunk and writes the results to `.opencrane/embeddings.json`. It uses the `sentence-transformers` library with the `nomic-ai/nomic-embed-text-v1.5` model by default. To change the model, see [Choose an embedding model](embeddings.md#choose-an-embedding-model).
 
 ### Index
 
 The `opencrane index` command loads `.opencrane/embeddings.json` into a Milvus vector database. It creates a collection with the following indexes:
 
 - A vector index on the embeddings, with cosine similarity as the distance metric
-- `INVERTED` scalar indexes on the `list_id`, `table_id`, `clause_id`, and `parent_chunk_id` columns
-
-With the scalar indexes, the `get_list_members`, `get_table_members`, and `get_section` MCP tools run an indexed lookup instead of scanning all chunks in memory. OpenCrane uses `INVERTED` rather than `AUTOINDEX` because Milvus Lite accepts `AUTOINDEX` only on vector fields.
+- `INVERTED` scalar indexes on the ID columns that the lookup tools query
 
 > [!CAUTION]
-> OpenCrane stores `list_id`, `table_id`, `clause_id`, and `parent_chunk_id` in their own columns. If an older OpenCrane version built the collection without these columns, the next `index` run drops the collection and rebuilds it. Searches on that collection fail until the rebuild finishes.
+> In the following cases, `opencrane index` deletes the existing collection and builds it again:
+>
+> - An older OpenCrane version built the collection, and the collection lacks a scalar ID column that the current version needs.
+> - The vector size of the embeddings differs from the vector size of the populated collection.
+> - `DROP_EXISTING` is `true`.
+>
+> Searches fail until the rebuild finishes. Before you run the command, check that `MILVUS_COLLECTION` names the collection to replace.
 
 Milvus runs in one of the following deployment modes:
 
-- Milvus Lite: an embedded, file-based database stored at `.opencrane/milvus.db`. It needs no separate service, and it is the default mode. To store the file somewhere else, set `MILVUS_DB_PATH`.
+- Milvus Lite: an embedded, file-based database at `.opencrane/milvus.db`. It is the default and needs no separate service. To store the file somewhere else, set `MILVUS_DB_PATH`.
 - Milvus Server: a separate Milvus instance. To connect to it, set `MILVUS_DB_PATH` to an empty value, and set `MILVUS_HOST` and `MILVUS_PORT`.
 
 ### Serve
 
 The `opencrane serve` command starts the MCP server on top of the indexed data. The server supports the following transport modes:
 
-- stdio: for local MCP clients such as Claude Code or Cursor.
-- HTTP: for containerized or remote deployments. The `Dockerfile` and `docker-compose.yml` that `opencrane init` creates use this mode.
+- stdio: for local MCP clients such as Claude Code or Cursor
+- HTTP: for containerized or remote deployments, such as the container that `opencrane init` sets up
 
 ## MCP tools
 
-The tools the server exposes depend on the content of the index. `search_docs` and `health` are always present. The other tools appear only when the index contains the chunk types they work with, as the following table shows:
+The server always lists `search_docs` and `health`. It lists the other tools only when the index holds the chunk types they work with. The following table lists each tool and the condition for it:
 
 | Tool | Condition | Description |
 |---|---|---|
-| `search_docs` | Always present | Searches all indexed chunks in semantic, keyword, or hybrid mode. |
-| `get_yaml_definition` | YAML chunks indexed | Returns a complete YAML document by chunk ID, with breadcrumb comments that show its location. |
-| `get_metadata_schema` | YAML, list, or table row chunks indexed, or prose chunks with navigation metadata | Returns the reference documentation for all chunk metadata fields. |
-| `get_list_members` | List chunks indexed | Returns all items in a list by list ID. |
+| `search_docs` | Always present | Searches all indexed chunks. See [Search modes](#search-modes). |
+| `get_yaml_definition` | CRD, OpenAPI, or JSON Schema chunks indexed | Returns a complete YAML document by chunk ID, with breadcrumb comments that show its location. |
+| `get_metadata_schema` | At least one other conditional tool present | Returns the reference documentation for the chunk metadata fields. |
+| `get_list_members` | List item chunks indexed | Returns all items of a list by list ID. |
 | `get_table_members` | Table row chunks indexed | Returns all rows of a table by table ID. |
 | `get_section` | Prose chunks with navigation metadata indexed | Returns a whole prose section by chunk ID or clause number. |
-| `health` | Always present | Reports the service status, the Milvus connection state, and collection statistics. |
+| `health` | Always present | Reports whether the server can serve queries, with Milvus and collection checks. |
 
-To add your own tools, see [Add custom MCP tools](../README.md#add-custom-mcp-tools).
+The stdio server reads the indexed chunk types from Milvus on the first request for the tool list, and keeps them until the process stops. The HTTP server builds its tool list once, at startup. Restart the server after you run `opencrane index`.
+
+For the tool parameters, see [MCP tools](vector-search.md#mcp-tools). To add your own tools, see [Add custom MCP tools](../README.md#add-custom-mcp-tools).
 
 ### Search modes
 
-`search_docs` supports the following search modes, which you select with the **search_mode** parameter:
+The **search_mode** parameter of `search_docs` selects one of the following modes:
 
 - `semantic`
 - `keyword`
@@ -178,11 +144,11 @@ final_score = alpha × vector_score + (1 − alpha) × bm25_score
 
 The default **alpha** is `0.6`, which means 60% semantic and 40% keyword. To override it for a single query, pass the **alpha** parameter. To set a different default, use the `HYBRID_ALPHA` environment variable.
 
-By default, each arm of hybrid search returns **limit** results before the fusion, so a chunk that both arms rank just below **limit** can't reach the fused list. To fetch more candidates from each arm, set the `HYBRID_CANDIDATE_POOL` environment variable, for example to `50`.
+By default, the semantic search and the keyword search each return **limit** results before the fusion. A chunk that both searches rank slightly below **limit** then can't reach the fused list. To fetch more candidates from each search, set the `HYBRID_CANDIDATE_POOL` environment variable, for example to `50`.
 
-The `HYBRID_FUSION` environment variable selects how hybrid search merges the two arms:
+The `HYBRID_FUSION` environment variable selects how hybrid search merges the results of the two searches:
 
-- `minmax`: the default. It normalizes the scores of each arm to the range 0 to 1 and applies the formula above.
+- `minmax`: the default. It normalizes the scores of each search to the range 0 to 1 and applies the previous formula.
 - `rrf`: Reciprocal Rank Fusion (RRF), which blends the ranks of a chunk instead of its scores:
 
   ```text
@@ -191,167 +157,72 @@ The `HYBRID_FUSION` environment variable selects how hybrid search merges the tw
 
   An **alpha** of `0.5` gives classic RRF. The `HYBRID_RRF_K` environment variable sets `k`, and the default is `60`. RRF scores are at most `2 / (k + 1)`, so they order the results but don't measure confidence.
 
-Neither setting needs re-indexing.
+A change to any `HYBRID_*` variable needs a server restart but no re-indexing.
 
-The BM25 index uses the `simple` tokenizer by default. This tokenizer lowercases text and splits it on every non-alphanumeric character, so `5.4.1` and `4.5.1` produce the same tokens. To keep dotted, hyphenated, and underscored identifiers as one token, set the `BM25_TOKENIZER` environment variable to `identifier`. This tokenizer also emits the parts of each identifier, so a query for `gtp` still matches `GTP-U`. The server builds the BM25 index in memory, so a change of tokenizer needs a server restart but no re-indexing.
+The BM25 index uses the `simple` tokenizer by default. This tokenizer lowercases text and splits it on every character that is not a letter, a digit, or an underscore, so `5.4.1` and `4.5.1` produce the same tokens. To keep dotted and hyphenated identifiers as one token, set the `BM25_TOKENIZER` environment variable to `identifier`. This tokenizer also emits the parts of each identifier, so a query for `gtp` still matches `GTP-U`. A change of tokenizer needs a server restart but no re-indexing.
 
-An optional reranker reorders the results of every search mode. The reranker scores each candidate against the query and can move up a chunk that search ranks too low. Reranking is off by default and needs no re-indexing.
+An optional reranker reorders the results of every search mode. The reranker scores each candidate against the query, and can move up a chunk that search ranks too low. Reranking is off by default and needs no re-indexing.
 
 To turn on the built-in reranker, set the `RERANKER_MODEL` environment variable to a sentence-transformers cross-encoder model, for example `cross-encoder/ms-marco-MiniLM-L-6-v2`. To use your own reranker, see [Custom reranker](#custom-reranker). The Docker image from `opencrane init` runs offline, so set `RERANKER_MODEL` before you build the image. The build then downloads the model into the image.
 
-The server reranks the first `RERANK_DEPTH` candidates, `50` by default, and returns the top **limit** results. Set `RERANK_DEPTH` to a whole number up to `16384`. A value below **limit** counts as **limit**. The built-in reranker runs on the CPU, so a higher `RERANK_DEPTH` makes each search slower. The `Score` line shows the score of the built-in reranker.
+The server reranks the first `RERANK_DEPTH` candidates, `50` by default, and returns the top **limit** results. A value below **limit** counts as **limit**, and OpenCrane caps the value at `16384`. The built-in reranker runs on the CPU, so a higher `RERANK_DEPTH` makes each search slower. With the built-in reranker, the `Score` line of each result shows the reranker score.
 
 If the reranker fails, the server logs the `Reranker failed, returning unreranked results` warning and returns the results in search order. The health check skips the reranker.
 
-To narrow the results, pass the following `search_docs` parameters:
-
-- **chunk_types**: limits the results to the given chunk types
-- **source_names**: limits the results to the given documentation sources
-- **metadata_contains**: limits the results to chunks whose metadata contains all the given strings
-
 ## Internal components
 
-This section describes the main packages in the `opencrane/` source tree and what each one does.
+This section describes the main packages in the `opencrane/` source tree.
 
 ### Command-line interface
 
-The CLI is in `opencrane/cli.py`. All subcommands resolve their configuration in the following order:
+The CLI is in `opencrane/cli.py`. Every subcommand loads the project configuration class from the first of the following sources that is set:
 
-1. Explicit `--config` flag
-2. `OPENCRANE_CONFIG` environment variable
+1. The `--config` flag, as `module:Class` or as the path of a Python file
+2. The `OPENCRANE_CONFIG` environment variable
 3. The file that the `extensions` key in `.opencrane/config.yaml` names, relative to `.opencrane/`
-4. Base `OpenCraneConfig` defaults
+4. The base `OpenCraneConfig` class
 
-When `.opencrane/config.yaml` has an `extensions` key, for example `extensions: extensions.py`, the CLI loads the `OpenCraneConfig` subclass named `Config` from that file. The `config.yaml` that `opencrane init` creates contains this key as a comment. This subclass is the primary extension mechanism. Without modifying the OpenCrane core, a subclass of `OpenCraneConfig` can override the following:
-
-- Fence types
-- Chunking strategies
-- YAML tree walkers
-- Reranker
+From a Python file, the CLI loads the class named `Config`. The `config.yaml` that `opencrane init` creates contains the `extensions` key as a comment.
 
 ### Retrieval-augmented generation pipeline
 
-The `opencrane/rag/` package implements all retrieval-augmented generation (RAG) pipeline steps. The following table lists its key modules:
+The `opencrane/rag/` package implements the retrieval-augmented generation (RAG) pipeline steps. The following table lists its key modules:
 
 | Module | Responsibility |
 |---|---|
-| `opencrane/rag/fetch_docs.py` | Fetches GitHub repositories, discovers sources, and cleans up stale sources. |
-| `opencrane/rag/generate_llms_txt.py` | Generates `llms-full.txt` bundles, writes the companion `llms.txt` index, dispatches fence types, and rewrites links. |
-| `opencrane/rag/services/llms_index.py` | Parses and renders the `llms.txt` index (`LlmsIndex`, `render_llms_txt`) that the `chunk` step uses to match content to page URLs. |
-| `opencrane/rag/chunker.py` | Runs the `chunk` step: loads bundles, resolves source names, and writes `chunks.json`. |
-| `opencrane/rag/services/file_processor.py` | Runs the chunking strategies in order, and the first match handles the fragment. |
-| `opencrane/rag/generate_embeddings.py` | Generates embeddings in batches. |
-| `opencrane/rag/services/source_mapping.py` | Reads the source mapping file and resolves source URLs to source names. |
-
-Tree walkers are in `opencrane/rag/services/chunking_strategies/` and split structured YAML documents into chunks. The following table lists them:
-
-| Tree walker | Behavior |
-|---|---|
-| `k8s_crd_tree_walker.py` | Chunks Kubernetes CRDs. Produces one chunk for each `spec.properties` field, and recursively splits nested properties that exceed 800 tokens. |
-| `openapi_tree_walker.py` | Chunks OpenAPI 3.x specs. Produces one chunk for `info`, one for each server, one for each operation (path and method), and one for each item under `components`. `security` and `tags` get a chunk each. A schema over 800 tokens splits into chunks for its properties. |
-| `json_schema_tree_walker.py` | Chunks JSON Schema documents. Produces one chunk for each property, and splits a property that exceeds 800 tokens into chunks for its nested properties. |
+| `opencrane/rag/fetch_docs.py` | Fetches GitHub repositories, discovers sources, and removes stale sources. |
+| `opencrane/rag/generate_llms_txt.py` | Generates the `llms-full.txt` bundles and the companion `llms.txt` index, runs fence type handlers, and rewrites links. |
+| `opencrane/rag/services/llms_index.py` | Parses and renders the `llms.txt` index. |
+| `opencrane/rag/chunker.py` | Runs the `chunk` step: loads the bundle, assigns page URLs and source names, adds navigation metadata, and writes `chunks.json`. |
+| `opencrane/rag/services/file_processor.py` | Runs the chunking strategies in order. |
+| `opencrane/rag/services/chunking_strategies/` | Holds the YAML tree walkers. |
+| `opencrane/rag/generate_embeddings.py` | Generates the embeddings. |
+| `opencrane/rag/services/source_mapping.py` | Reads and updates the source mapping file. |
 
 ### MCP server
 
-The MCP server is in `opencrane/mcp/`. With the stdio transport, the server starts its backing services on the first tool call, so startup is fast. With the HTTP transport, the server starts its backing services at server startup.
+The MCP server is in `opencrane/mcp/`. The vector database serves `search_docs` in `semantic` mode and the lookup tools. Keyword and hybrid search also use a BM25 index, which the server builds in memory from `chunks.json` on the first keyword or hybrid query. The server rebuilds the BM25 index only when the modification time or size of `chunks.json` changes.
 
-The following tools read from the vector database and do not keep an in-memory copy of the chunks:
-
-- `get_yaml_definition` fetches a single chunk by its primary key.
-- `get_list_members` and `get_table_members` query the indexed `list_id` and `table_id` columns for the members of a list or table. The query reads only chunks of the matching `chunk_type`.
-- In `semantic` mode, `search_docs` reads `token_count` and the `source_url` of each chunk directly from the query result.
-
-Keyword and hybrid search are the exception. They use a BM25 index that OpenCrane builds from `chunks.json` and holds in memory.
-
-On the first request for the tool list, the server queries Milvus for the `chunk_type` values that the collection contains. It caches the answer for the life of the process. The query reads only the `chunk_type` field through `query_iterator`, not the chunk content. The tool list then matches the content that was indexed when the server first listed its tools. Restart the server after you run `opencrane index`.
-
-The following table lists the backing services:
+The following table lists the backing services in `opencrane/mcp/services/`:
 
 | Service | Responsibility |
 |---|---|
-| `opencrane/mcp/services/milvus_client.py` | Manages the connection to Milvus and runs the vector searches. |
-| `opencrane/mcp/services/keyword_search.py` | Builds the BM25 index from `chunks.json` when the first keyword or hybrid query arrives, then keeps it in memory and reuses it for later queries. It rebuilds the index only when the modification time or size of `chunks.json` changes. The server needs `chunks.json` for keyword and hybrid search. |
+| `milvus_client.py` | Manages the connection to Milvus, and runs vector searches and scalar lookups. |
+| `embeddings.py` | Loads the embedding model and generates embeddings. The `embed` step uses it too. |
+| `keyword_search.py` | Builds and queries the BM25 index. |
+| `reranker.py` | Runs the optional reranker. |
 
 ### Configuration
 
-The configuration is in `opencrane/config.py` and `opencrane/shared/config.py`. `OpenCraneConfig` is the base class for all project-level configuration. The following table lists the attributes that act as its pipeline extension points:
-
-| Attribute | Description |
-|---|---|
-| `fence_types` | A dictionary of fence type handlers. The defaults include OpenAPI, AsyncAPI, CRD, and JSON Schema. |
-| `chunking_strategies` | An ordered list of chunking strategy instances. OpenCrane evaluates them in order, and the first match handles the fragment. |
-| `yaml_tree_walkers` | A list of tree walker classes. OpenCrane evaluates them in the order listed. |
-| `reranker` | An optional `search_docs` reranker. See [Custom reranker](#custom-reranker). |
-
-`Config` in `opencrane/shared/config.py` is the runtime configuration that comes from the environment. It reads all settings from environment variables when the process starts. This runtime `Config` is a different class from the `Config` subclass in `.opencrane/extensions.py`.
+`OpenCraneConfig` in `opencrane/config.py` is the base class for project configuration. Its attributes and methods are the [extension points](#extension-points). `Config` in `opencrane/shared/config.py` is a different class. It holds the runtime settings that come from environment variables.
 
 ## Extension points
 
-You extend OpenCrane with a subclass of `OpenCraneConfig` named `Config` in `.opencrane/extensions.py`. To load the file, set `extensions: extensions.py` in `.opencrane/config.yaml`. This section covers the extension points of the pipeline. For the authentication hooks, see [Authentication and authorization](auth.md).
-
-### Custom fence types
-
-A fence type handles structured content embedded as fenced code blocks during the `llms` step. To add a fence type, add an entry to `fence_types` with a `CodeFenceConfig` that names the fence and provides a handler function:
-
-```python
-class Config(OpenCraneConfig):
-    fence_types = {
-        **OpenCraneConfig.fence_types,
-        "terraform": CodeFenceConfig(fence_type="terraform", handler=my_handler),
-    }
-```
-
-The handler has the following signature:
-
-```python
-def my_handler(
-    content: str,
-    file_path: Path,
-    project_dir: Path,
-    project_name: str,
-) -> str: ...
-```
-
-The handler receives the text inside the fence. OpenCrane replaces the whole fenced block, fences included, with the string that the handler returns.
-
-### Custom chunking strategies
-
-To add a chunking strategy, insert it into the `chunking_strategies` list at the priority position you want. The first strategy that matches a fragment handles it, so place more specific strategies before more general ones. The following example places a custom strategy immediately after the YAML strategy:
-
-```python
-class Config(OpenCraneConfig):
-    chunking_strategies = [
-        YamlChunkingStrategy(),
-        MyCustomStrategy(),   # runs before Code, Table, List, and Prose
-        CodeChunkingStrategy(),
-        TableChunkingStrategy(),
-        ListChunkingStrategy(),
-        ProseChunkingStrategy(),
-    ]
-```
-
-### Custom YAML tree walkers
-
-A tree walker splits one kind of structured YAML document into chunks. To add a tree walker, append it to `yaml_tree_walkers`. Each walker must implement the following methods:
-
-- `can_handle(cls, doc: dict) -> bool`: returns `True` if this walker handles the given YAML document
-- `walk(self) -> list[Chunk]`: returns typed `Chunk` objects for the document
-
-The following example shows a tree walker for YAML documents that contain a `terraform` key:
-
-```python
-class TerraformTreeWalker(YamlTreeWalker):
-    @classmethod
-    def can_handle(cls, doc: dict) -> bool:
-        return "terraform" in doc
-
-    def walk(self) -> list[Chunk]:
-        ...
-```
+You extend OpenCrane with a subclass of `OpenCraneConfig` named `Config` in `.opencrane/extensions.py`. To load the file, set `extensions: extensions.py` in `.opencrane/config.yaml`. For the extension points, see [Extension points](../README.md#extension-points).
 
 ### Custom reranker
 
-A custom reranker replaces the built-in reranker, for example to call a hosted rerank API or a large language model. Set the `reranker` attribute on your `Config` class to a function or an object with a `rerank` method. The reranker takes the query and a list of candidates. Each candidate is a dictionary with the following keys:
+A custom reranker replaces the built-in reranker, for example to call a hosted rerank API or a large language model. Set the `reranker` attribute of your `Config` class to a function or to an object with a `rerank` method. The reranker takes the query and a list of candidates. Each candidate is a dictionary with the following keys:
 
 - `chunk_id`: the chunk ID
 - `content`: the chunk text, which is a JSON string for YAML chunks
@@ -361,7 +232,7 @@ A custom reranker replaces the built-in reranker, for example to call a hosted r
 - `metadata_json`: the chunk metadata as JSON
 - `distance`: the search score, where a higher value is better
 
-Return the candidates best first. You can drop candidates or set `distance` to your own score. The following example moves candidates that contain the query text to the top:
+Return the candidates best first. You can drop candidates, or set `distance` to your own score. The following example moves candidates that contain the query text to the top:
 
 ```python
 def my_reranker(query: str, candidates: list[dict]) -> list[dict]:
@@ -372,23 +243,6 @@ class Config(OpenCraneConfig):
     reranker = my_reranker
 ```
 
-## Data model
-
-The `Chunk` model in `opencrane/shared/models/chunk.py` is the core data structure of the pipeline. The following table lists its fields:
-
-| Field | Type | Description |
-|---|---|---|
-| `chunk_id` | `str` | Deterministic 64-character hexadecimal ID, hashed from the chunk content, source file, chunk type, and metadata. Stable across pipeline runs. |
-| `content` | `str` or `dict` or `list` | A string for prose and code, and a dictionary or list for YAML. |
-| `source_file` | `str` | Relative path from the project root. |
-| `source_name` | `str` or `None` | Resolved from the `source_url` metadata field. `None` if no source mapping entry matches. |
-| `chunk_type` | `str` | One of the chunk type values listed in the [Chunk](#chunk) section. |
-| `metadata` | `dict` | Type-specific metadata fields. |
-| `token_count` | `int` | Token count using the `cl100k_base` encoding. |
-| `line_start` | `int` or `None` | Reserved for line-level source tracking. Currently always `None`. |
-
-`VectorChunk` extends `Chunk` with an `embedding` field, which is a list of floats. Only the `embed` and `index` steps use it.
-
 ## External dependencies
 
 The following table lists the libraries and services that OpenCrane depends on:
@@ -396,11 +250,11 @@ The following table lists the libraries and services that OpenCrane depends on:
 | Dependency | Purpose |
 |---|---|
 | Milvus | Vector database for embedding storage and similarity search |
-| sentence-transformers | Embedding model (`nomic-ai/nomic-embed-text-v1.5` by default) |
+| sentence-transformers | Embedding model (`nomic-ai/nomic-embed-text-v1.5` by default) and the built-in reranker |
 | rank-bm25 | BM25 scoring for keyword search |
 | PyGithub | GitHub API client for repository discovery and file download |
-| Docling | Document parsing for PDF, DOCX, and other non-Markdown formats |
-| tiktoken | Token counting using the `cl100k_base` encoding |
+| Docling | Document conversion for chunker input other than `.txt` files. The `chunk` step reads `llms-full.txt`, so it does not use Docling. |
+| tiktoken | Token counting with the `cl100k_base` encoding |
 | Pydantic | Data model validation |
 | Click | CLI framework |
 | MCP SDK | Model Context Protocol server implementation |

@@ -984,7 +984,7 @@ async def _search_documentation_impl(
                     result_text += f"...(truncated - {len(display_content)} total chars)\n"
                     if chunk_type == "prose" and "position" in (metadata or {}):
                         result_text += f"💡 Tip: Use get_section(chunk_id='{chunk_id}') to read the whole section.\n"
-                    else:
+                    elif _has_yaml_chunks():
                         result_text += f"💡 Tip: Use get_yaml_definition tool with chunk_id='{chunk_id}' to retrieve the complete definition with breadcrumb comments.\n"
                 elif chunk_type in ("crd_definition", "openapi_spec", "json_schema"):
                     result_text += f"💡 Tip: Use get_yaml_definition(chunk_id='{chunk_id}') to see this with breadcrumb comments showing its location in the YAML tree and neighbor chunks.\n"

@@ -29,6 +29,11 @@ class EmbeddingsFile(BaseModel):
     embeddings: List[EmbeddingRecord] = Field(..., description="List of embedding records")
 
 
+def _str_or_none(value):
+    """Return ``value`` when it is a string, otherwise ``None``."""
+    return value if isinstance(value, str) else None
+
+
 class VectorChunk(BaseModel):
     """Represents a chunk with its vector for Milvus indexing."""
 
@@ -68,10 +73,12 @@ class VectorChunk(BaseModel):
             metadata_json=json.dumps(chunk.metadata) if chunk.metadata else None,
             token_count=chunk.token_count,
             line_start=chunk.line_start,
-            list_id=metadata.get("list_id"),
-            table_id=metadata.get("table_id"),
-            clause_id=metadata.get("clause_id"),
-            parent_chunk_id=metadata.get("parent_chunk_id"),
+            # A custom chunk type may carry these keys with any value; only a
+            # string fits the id columns, so other values stay in metadata_json.
+            list_id=_str_or_none(metadata.get("list_id")),
+            table_id=_str_or_none(metadata.get("table_id")),
+            clause_id=_str_or_none(metadata.get("clause_id")),
+            parent_chunk_id=_str_or_none(metadata.get("parent_chunk_id")),
         )
 
 

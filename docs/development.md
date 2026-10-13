@@ -49,6 +49,16 @@ scripts/worktree.sh rm {BRANCH_NAME}
 
 The `rm` command fails for a worktree that has uncommitted changes.
 
+## Show the debug log
+
+To see the debug log of a command, set the `LOG_LEVEL` environment variable to `DEBUG`. The following command shows the debug log of the `chunk` step:
+
+```bash
+LOG_LEVEL=DEBUG opencrane chunk
+```
+
+The log goes to stderr, so the stdio MCP server keeps stdout for MCP messages. For the other values, see [Variables for all commands](../README.md#variables-for-all-commands).
+
 ## Write commit messages for releases
 
 Write commit messages in the Conventional Commits format, for example `feat: add custom walker support` or `fix: token count for empty files`. Release Please reads these messages to compute the next version and to write `CHANGELOG.md`. Do not edit the version in `pyproject.toml`, `CHANGELOG.md`, or the release tags by hand, because Release Please manages them.

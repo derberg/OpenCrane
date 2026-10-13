@@ -12,7 +12,7 @@ The standard input/output (stdio) transport is always unauthenticated. For the s
 The `auth:` block sets the authentication mode. Place it at the top level of the `.opencrane/config.yaml` file.
 
 > [!CAUTION]
-> With the default `type: none`, OpenCrane has no authentication. Anyone who can reach the HTTP port can read every source. Before you expose the server on a network, set another type, or index only sources that anyone may read. `default_sources` limits `search_docs` and `get_section` only. The other built-in lookup tools still return chunks from any indexed source. Custom MCP tools must filter their own output. See [Add custom MCP tools](../README.md#add-custom-mcp-tools).
+> With the default `type: none`, OpenCrane has no authentication. Anyone who can reach the HTTP port can read every source. Before you expose the server on a network, set another type, or index only sources that anyone may read. `default_sources` limits every built-in tool that returns chunks. Custom MCP tools must filter their own output. See [Add custom MCP tools](../README.md#add-custom-mcp-tools).
 
 The following example sets the default mode:
 
@@ -180,7 +180,7 @@ For the middleware check, see [Authorize requests with custom middleware](#autho
 By default, the `oauth` mode requires a valid bearer token on every request. A request without a token gets `401`.
 
 > [!CAUTION]
-> With `allow_anonymous: true`, anyone can read the sources in `default_sources` without a token. Set `default_sources`, and list only public documentation in it. For both keys, see [Restrict sources by scope](#restrict-sources-by-scope).
+> With `allow_anonymous: true`, anyone can read the sources in `default_sources` without a token. Set `default_sources`, and list only public documentation in it. Without `scope_sources` and `default_sources`, anyone can read every source. OpenCrane still starts, and logs a `WARNING` that names the endpoint. For both keys, see [Restrict sources by scope](#restrict-sources-by-scope).
 
 To make the token optional, set `allow_anonymous: true`:
 
@@ -213,8 +213,8 @@ In this mode, `PUBLIC_URL` is not required, and the server publishes no OAuth di
 
 To use your own authentication code, set `auth.type: custom` in `.opencrane/config.yaml`. Then set `token_verifier` or `auth_provider` on the `Config` class in `.opencrane/extensions.py`. If you set both, OpenCrane uses `auth_provider`.
 
-> [!CAUTION]
-> If neither hook is set, the `custom` type runs with no authentication and accepts every request. OpenCrane only logs a warning. The same happens when OpenCrane does not load `.opencrane/extensions.py`, for example because the `extensions:` key is missing. Check the startup log before you expose the server.
+> [!IMPORTANT]
+> If neither hook is set, OpenCrane refuses to start, and the error names both hooks. This also happens when OpenCrane does not load `.opencrane/extensions.py`, for example because the `extensions:` key is missing. To serve the endpoint without authentication, set `type: none` instead.
 
 OpenCrane loads `.opencrane/extensions.py` only when `.opencrane/config.yaml` sets `extensions: extensions.py`. The class in the file must be named `Config`. Instead of the `extensions:` key, the `opencrane serve --config` flag or the `OPENCRANE_CONFIG` environment variable can name your class as `{MODULE}:{CLASS}`.
 
@@ -332,7 +332,7 @@ A common pattern has the following steps:
 With this pattern, you keep your authorization logic out of OpenCrane. A missing token or a failed lookup sets no source set. The request then falls back to the endpoint's `scope_sources` and `default_sources` policy.
 
 > [!CAUTION]
-> Without `scope_sources` or `default_sources` on the endpoint, a request that the middleware does not resolve gets every source. This includes a failed lookup, and every request when OpenCrane does not load your `Config` class. Set `default_sources` on the endpoint before you rely on this middleware.
+> Without `scope_sources` or `default_sources` on the endpoint, a request that the middleware does not resolve gets every source. This includes a failed lookup. It also includes every request when OpenCrane does not load your `Config` class. OpenCrane loads the class only through the `extensions:` key in `.opencrane/config.yaml` or the `--config` flag. Set `default_sources` on the endpoint before you rely on this middleware.
 
 The following example implements this pattern:
 
@@ -399,7 +399,7 @@ Source names that the service returns must match the names in the `sources:` blo
 By default, the `auth:` block is a single flat block and produces one MCP endpoint at `/mcp`. To serve several endpoints from one deployment, each with its own authentication, make `auth:` a map of named entries. Each key becomes an endpoint at `/mcp/{NAME}`. Each value is a full `auth:` block and takes the same keys as a flat block, except `allow_anonymous`.
 
 > [!CAUTION]
-> A `type: none` endpoint without `default_sources` serves every source to anyone, including sources meant for the authenticated endpoint. Always set `default_sources` on an open endpoint.
+> A `type: none` endpoint without `default_sources` serves every source to anyone, including sources meant for the authenticated endpoint. OpenCrane still starts, and logs a `WARNING` that names the endpoint. Always set `default_sources` on an open endpoint.
 
 The following example serves an open endpoint and an authenticated endpoint:
 
@@ -435,7 +435,7 @@ The following rules and limits apply to named endpoints:
   - `oidc`
   - `local`
 - Named endpoints do not support `allow_anonymous`. If you set it on a named `oauth` entry, OpenCrane refuses to start. On other types, OpenCrane ignores it. For open access, add a `type: none` endpoint.
-- A deployment can expose at most one authenticated endpoint, together with any number of `type: none` endpoints. An authenticated endpoint is a `local` or `oauth` endpoint, or a `custom` endpoint with a `token_verifier` or `auth_provider` hook. A `custom` endpoint with neither hook is open. With two authenticated endpoints, OpenCrane refuses to start.
+- A deployment can expose at most one authenticated endpoint, together with any number of `type: none` endpoints. An authenticated endpoint is a `local`, `oauth`, or `custom` endpoint. With two authenticated endpoints, OpenCrane refuses to start.
 - Only a `type: none` endpoint with `default_sources` limits the sources it advertises. The limit applies to its topic list and to the `source_names` enum of `search_docs`. The endpoint then does not show the names of private sources served elsewhere. Every other endpoint advertises all sources. Advertising does not restrict results. The endpoint's source policy does.
 - All endpoints share one readiness probe at `/health`.
 
@@ -449,6 +449,7 @@ A stdio caller has no scopes, so the policy of the root endpoint at `/mcp` deter
 
 - With a flat `auth:` block, the caller gets `default_sources`. If neither `scope_sources` nor `default_sources` is set, the caller gets all sources.
 - A named `auth:` map has no root endpoint, so the caller gets no results.
+- If `.opencrane/config.yaml` contains invalid YAML, `search_docs` and `get_section` return an error.
 
 ---
 
@@ -460,17 +461,18 @@ The following notes summarize the security behavior of the HTTP transport:
 - The HTTP server does not check the `Host` header, so DNS-rebinding protection is off. To turn it on, set `MCP_ALLOWED_HOSTS` to a comma-separated list of the hosts that clients use, for example `docs-mcp.example.com` or `localhost:*`. OpenCrane then rejects requests for other hosts.
 - In the `local` mode, `PUBLIC_URL` must use HTTPS outside local development. Credentials come only from environment variables, and token matching uses a constant-time comparison.
 - The `oauth` mode rejects tokens that were not issued for `oidc.audience`, which prevents confused-deputy attacks. The exception is `oidc.verify_audience: false`.
-- Only `search_docs` and `get_section` apply the source policy. The other built-in lookup tools return chunks from any source, by the ID that the caller supplies.
-- An open endpoint without `default_sources`, or `allow_anonymous: true` without a source policy, gives anyone every source.
+- Every built-in tool that returns chunks applies the source policy. For an ID from a source outside the policy, the tool returns the same answer as for an ID that does not exist.
+- An open endpoint without `default_sources`, or `allow_anonymous: true` without a source policy, gives anyone every source. OpenCrane starts, and logs a `WARNING` that names the endpoint.
 - Misconfigured authentication fails closed. OpenCrane raises an error at startup and refuses to serve in the following cases:
   - A missing `PUBLIC_URL`
   - Unknown source names
   - A missing `opencrane[auth]` extra
   - `allow_anonymous` on a named `oauth` endpoint
   - More than one authenticated endpoint
-  - A `Config` class that fails to load, when an endpoint uses `type: custom`
-- Some problems do not stop the server. OpenCrane serves without the protection in the following cases:
-  - OpenCrane cannot parse `.opencrane/config.yaml`, so it treats `auth` as `none` and logs a warning.
-  - A `custom` endpoint has no hook. OpenCrane logs a warning.
-  - OpenCrane does not find your `Config` class. It starts without the middleware and the auth hooks, and logs no warning about the missing class.
-  - Your `Config` class fails to load and no endpoint uses `type: custom`. OpenCrane starts without the middleware and logs a warning.
+  - Invalid YAML in `.opencrane/config.yaml`
+  - A `custom` endpoint without a `token_verifier` or `auth_provider` hook
+  - An extensions file that the `extensions:` key or `--config` names, but that does not exist
+  - A `Config` class that fails to load
+- The error message names the problem and the setting to change.
+- Without an `auth:` block, or with `type: none`, OpenCrane starts without authentication. OpenCrane also starts without authentication when `.opencrane/config.yaml` does not exist.
+- Without an `extensions:` key or `--config`, OpenCrane does not load your `Config` class and logs no warning. The middleware does not run, and a `custom` endpoint refuses to start.

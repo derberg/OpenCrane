@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from opencrane.mcp.server import (
+    _CHUNK_TYPE_SECTION_HEADINGS,
     _get_list_members,
     _group_list_item_results,
     _has_list_item_chunks,
@@ -223,7 +224,9 @@ async def test_get_metadata_schema_filter_list_item():
 
 @pytest.mark.anyio
 async def test_get_metadata_schema_unknown_chunk_type():
-    result = await get_metadata_schema({"chunk_type": "bogus"})
+    # "bogus" is now a valid custom type name, so an unknown type here is a
+    # value that no chunk can carry.
+    result = await get_metadata_schema({"chunk_type": "not a type!"})
     assert "Unknown chunk_type" in result[0].text
 
 
@@ -389,3 +392,12 @@ def test_get_source_keys_default_path_is_config_yaml(tmp_path, monkeypatch):
         "sources:\n  Acme/example-repo: docs\n  Other/project-docs: .\n"
     )
     assert _get_source_keys() == ["Acme/example-repo", "Other/project-docs"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("chunk_type", sorted(_CHUNK_TYPE_SECTION_HEADINGS))
+async def test_get_metadata_schema_returns_each_section_once(chunk_type):
+    text = (await get_metadata_schema({"chunk_type": chunk_type}))[0].text
+    assert text.count("## Universal Metadata") == 1
+    headings = [line for line in text.splitlines() if line.startswith("## ")]
+    assert len(headings) == len(set(headings))

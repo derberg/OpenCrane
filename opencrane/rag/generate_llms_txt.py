@@ -18,12 +18,14 @@ import os
 import re
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, NamedTuple, Optional
+from urllib.parse import quote
 
 import yaml
 
 from opencrane.rag.services.llms_index import PAGE_SEPARATOR, IndexEntry, LlmsIndex, render_llms_txt
 from opencrane.rag.services.source_mapping import SourceMapping
 from opencrane.shared.config import get_config
+from opencrane.rag.file_manager import read_fetched_ref
 from opencrane.shared.utils.git import get_repo_subdir, has_changes, ignored_fingerprint, save_fingerprint
 
 # Digests of the Git-ignored source files read by the last --sources-dir run,
@@ -273,6 +275,16 @@ def get_source_url(rel_with_project: Path, project_name: str) -> str | None:
     if not url:
         return None
 
+    # Link to the ref the fetch read (release tag, pinned ref or default
+    # branch). A local source is never fetched, and a source fetched by an
+    # older version has no record: both keep linking to ``main``.
+    ref = "main"
+    if not source.get("local") and matched_path:
+        fetched_ref = read_fetched_ref(Path(get_config().target_dir) / matched_path)
+        # Git allows ``#`` and ``%`` in ref names, which would cut or garble
+        # the URL. Keep ``/`` so ``release/2.x`` stays a readable path.
+        ref = quote(fetched_ref, safe="/+") if fetched_ref else "main"
+
     # For local sources the workspace may sit inside a repo subdirectory.
     # Prepend that prefix so the GitHub blob URL points to the correct path.
     repo_prefix = ""
@@ -291,13 +303,13 @@ def get_source_url(rel_with_project: Path, project_name: str) -> str | None:
         file_rel = relative_after_key
         if file_rel.startswith(docs_prefix):
             file_rel = file_rel[len(docs_prefix):]
-        return f"{url}/blob/main/{repo_prefix}{repo_docs_path.rstrip('/')}/{file_rel}"
+        return f"{url}/blob/{ref}/{repo_prefix}{repo_docs_path.rstrip('/')}/{file_rel}"
 
     # Fetched repo root: the path key is only the local directory name and
     # is not part of the repo path. A local source's path key is a real
     # directory in the workspace, so it stays in the URL.
     repo_path = f"{repo_prefix}{rel_str}" if source.get("local") else relative_after_key
-    return f"{url}/blob/main/{repo_path}"
+    return f"{url}/blob/{ref}/{repo_path}"
 
 
 def ensure_leading_h1(body: str, title: str) -> str:

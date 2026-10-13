@@ -21,13 +21,16 @@ from opencrane.mcp.services.milvus_client import MilvusService
 from opencrane.mcp.services.keyword_search import KeywordSearchService
 from opencrane.mcp.services.reranker import CrossEncoderReranker, apply_reranker
 from opencrane.shared.config import get_config
+from opencrane.shared.logging_config import resolve_log_level
+from opencrane.shared.models.chunk import is_valid_chunk_type
 from opencrane.shared.utils.embedding_prompts import format_query, warn_if_inconsistent
 
 import sys
 
-# Configure logging to stderr (stdout is reserved for MCP stdio transport)
+# Configure logging to stderr (stdout is reserved for MCP stdio transport).
+# LOG_LEVEL sets the level, default INFO.
 logging.basicConfig(
-    level=logging.INFO,
+    level=resolve_log_level(),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     stream=sys.stderr,
 )
@@ -203,8 +206,22 @@ def _member_rows(field: str, value: str, chunk_type: str) -> list[dict]:
     so the formatting handlers can read metadata fields the same way they did
     when rows came from the file-backed index.
     """
+    # Source authorization, same as search_docs: members of a source the caller
+    # may not read are hidden, so the tool answers as if the id did not exist.
+    permitted = _permitted_sources()
+    if permitted is None:
+        found = get_milvus_service().query_by_field(field, value, chunk_type=chunk_type)
+    elif not permitted:
+        return []
+    else:
+        found = get_milvus_service().query_by_field(
+            field, value, chunk_type=chunk_type, source_names=sorted(permitted)
+        )
     rows = []
-    for row in get_milvus_service().query_by_field(field, value, chunk_type=chunk_type):
+    for row in found:
+        # Defense in depth: drop any row the backend returned outside the policy.
+        if permitted is not None and row.get("source_name") not in permitted:
+            continue
         meta = row.get("metadata_json")
         try:
             metadata = json.loads(meta) if isinstance(meta, str) else (meta or {})
@@ -684,7 +701,7 @@ GET_METADATA_SCHEMA_TOOL_SCHEMA = {
     "properties": {
         "chunk_type": {
             "type": "string",
-            "description": "Optional: filter the schema to a specific chunk type (e.g., 'list_item', 'crd_definition', 'openapi_spec', 'json_schema'). When omitted, the full schema is returned."
+            "description": "Optional: filter the schema to a specific chunk type (e.g., 'list_item', 'crd_definition', 'openapi_spec', 'json_schema'). A custom chunk type returns the universal fields only. When omitted, the full schema is returned."
         }
     },
     "required": []
@@ -839,6 +856,42 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         raise ValueError(f"Unknown tool: {name}")
     return await handler(arguments)
 
+# A chunk type name: letters, digits, ``_`` and ``-`` (``prose``, ``list_item``).
+
+# Characters no source name may contain: they could end or escape the quoted
+# literal the source filter is built from. Control characters are rejected too.
+_SOURCE_NAME_UNSAFE = re.compile(r'["\\\x00-\x1f\x7f]')
+
+
+def _invalid_search_filters(chunk_types, source_names) -> str | None:
+    """Return an error message when a search filter argument is malformed, else ``None``.
+
+    The tool schema lists the valid values, but clients don't have to honour it,
+    so the server checks the arguments that end up in the Milvus filter.
+    ``chunk_types`` must be a list of chunk type names. ``source_names`` must be
+    a list of strings without quotes, backslashes or control characters. A well
+    formed source name the caller may not read is not an error here: the source
+    policy drops it, as before.
+    """
+    if chunk_types is not None:
+        if not isinstance(chunk_types, list) or not all(
+            is_valid_chunk_type(t) for t in chunk_types
+        ):
+            return (
+                "Error: invalid chunk_types. Pass a list of chunk type names "
+                "(letters, digits, '_' and '-')."
+            )
+    if source_names is not None:
+        if not isinstance(source_names, list) or not all(
+            isinstance(s, str) and s and not _SOURCE_NAME_UNSAFE.search(s) for s in source_names
+        ):
+            return (
+                "Error: invalid source_names. Pass a list of configured source names, "
+                "without quotes, backslashes or control characters."
+            )
+    return None
+
+
 async def search_docs(arguments: dict) -> list[TextContent]:
     """
     Search indexed documentation.
@@ -871,6 +924,12 @@ async def _search_documentation_impl(
     limit = arguments.get("limit", 5)
     chunk_types = arguments.get("chunk_types")
     source_names = arguments.get("source_names")
+    # These values are interpolated into the Milvus filter, so a malformed one is
+    # rejected before any search runs (milvus_client also drops unsafe values).
+    invalid = _invalid_search_filters(chunk_types, source_names)
+    if invalid:
+        logger.warning(f"   🔒 search: rejected filter arguments: {invalid}")
+        return [TextContent(type="text", text=invalid)]
     # --- Layer 2: content authorization ---
     from opencrane.mcp.auth.runtime import resolve_allowed_sources
     # A project middleware's declared sources take precedence over the scope
@@ -1327,6 +1386,11 @@ async def get_yaml_definition(arguments: dict) -> list[TextContent]:
 
     try:
         chunk = get_milvus_service().get_chunk(chunk_id)
+        # Source authorization, same as search_docs: a chunk of a source the
+        # caller may not read is reported as not found, so its existence is hidden.
+        permitted = _permitted_sources()
+        if chunk and permitted is not None and chunk.get("source_name") not in permitted:
+            chunk = None
 
         if not chunk:
             logger.info(f"   📄 get_yaml_definition: chunk not found")
@@ -1422,15 +1486,29 @@ async def get_metadata_schema(arguments: dict) -> list[TextContent]:
         if not chunk_type:
             return [TextContent(type="text", text=schema_content)]
 
+        universal = _extract_schema_section(schema_content, "Universal Metadata") or ""
+
         heading = _CHUNK_TYPE_SECTION_HEADINGS.get(chunk_type)
         if heading is None:
-            return [TextContent(
-                type="text",
-                text=f"Unknown chunk_type '{chunk_type}'. Omit chunk_type to retrieve the full schema.",
-            )]
+            if not is_valid_chunk_type(chunk_type):
+                return [TextContent(
+                    type="text",
+                    text=f"Unknown chunk_type '{chunk_type}'. Omit chunk_type to retrieve the full schema.",
+                )]
+            # A custom chunk type from a project strategy or walker. Its own
+            # metadata keys are not documented here, so return the universal
+            # fields with a note.
+            body = universal + (
+                f"\n`{chunk_type}` is a custom chunk type. The project's chunking "
+                "strategy or tree walker defines its other metadata fields.\n"
+            )
+            logger.info(f"   get_metadata_schema: returned universal fields for custom type {chunk_type}")
+            return [TextContent(type="text", text=body)]
 
-        universal = _extract_schema_section(schema_content, "Universal Metadata") or ""
-        specific = _extract_schema_section(schema_content, heading) or ""
+        # code_snippet and yaml_content fields live in the Universal section itself.
+        specific = "" if heading == "Universal Metadata" else (
+            _extract_schema_section(schema_content, heading) or ""
+        )
         body = universal + "\n" + specific if specific else universal
         logger.info(f"   get_metadata_schema: returned {len(body)} chars (filtered to {chunk_type})")
         return [TextContent(type="text", text=body)]
@@ -1561,18 +1639,12 @@ def _section_chunks(head: dict) -> list[dict]:
 def _permitted_sources() -> set | None:
     """Source names the caller may read (``None`` = unrestricted).
 
-    Mirrors search_docs' Layer-2 authorization so get_section cannot read a
-    section of a source the caller could not find through search.
+    Uses search_docs' Layer-2 authorization (``resolve_allowed_sources``) so
+    get_section, get_yaml_definition and the member tools cannot read a chunk of
+    a source the caller could not find through search.
     """
-    from opencrane.mcp.auth.runtime import (
-        current_allowed_sources,
-        current_scopes,
-        get_access_policy,
-    )
-    allowed = current_allowed_sources()
-    if allowed is not None:
-        return set(allowed)
-    decision = get_access_policy().authorize(current_scopes(), None)
+    from opencrane.mcp.auth.runtime import resolve_allowed_sources
+    decision = resolve_allowed_sources()
     return None if decision is None else set(decision)
 
 

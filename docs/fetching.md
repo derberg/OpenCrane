@@ -11,6 +11,8 @@ For an entry with `manual: true`, you can pin the fetch to a fixed Git ref inste
 
 OpenCrane ignores these fields on auto-discovered entries.
 
+OpenCrane builds each [page URL](source-mapping.md#page-urls) on GitHub from the Git ref that the fetch read. The link then opens the version of the page that OpenCrane indexed. After you upgrade from an older OpenCrane version, run `opencrane build` to update the URLs.
+
 Run the fetch on a schedule, for example in a scheduled GitHub Actions workflow, so the indexed documentation stays current.
 
 ## Choose which repositories to fetch

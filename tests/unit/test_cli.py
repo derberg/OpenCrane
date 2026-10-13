@@ -426,7 +426,20 @@ def test_index_success(runner):
          patch.dict(sys.modules, {"opencrane.mcp.init_vector_db": fake_mod}):
         result = runner.invoke(cli_main, ["index"])
     assert result.exit_code == 0
-    fake_mod.main.assert_called_once_with()
+    fake_mod.main.assert_called_once_with(chunks_file=None, embeddings_file=None)
+
+
+@pytest.mark.unit
+def test_index_with_file_options(runner):
+    """--chunks-file and --embeddings-file reach the index step as paths."""
+    fake_mod = MagicMock()
+    with patch.object(cli, "load_config"), \
+         patch.dict(sys.modules, {"opencrane.mcp.init_vector_db": fake_mod}):
+        result = runner.invoke(
+            cli_main, ["index", "--chunks-file", "cf", "--embeddings-file", "ef"]
+        )
+    assert result.exit_code == 0
+    fake_mod.main.assert_called_once_with(chunks_file=Path("cf"), embeddings_file=Path("ef"))
 
 
 @pytest.mark.unit
@@ -514,7 +527,7 @@ def test_build_success(runner, tmp_path, monkeypatch):
     gen.assert_called_once()
     chunk_main.assert_called_once()
     embed_main.assert_called_once()
-    index_mod.main.assert_called_once()
+    index_mod.main.assert_called_once_with(chunks_file=None, embeddings_file=None)
 
 
 @pytest.mark.unit
@@ -545,6 +558,7 @@ def test_build_with_options(runner, tmp_path, monkeypatch):
     assert ck["chunks_file"] == Path("cf")
     _, ek = embed_main.call_args
     assert ek["embeddings_file"] == Path("ef")
+    index_mod.main.assert_called_once_with(chunks_file=Path("cf"), embeddings_file=Path("ef"))
 
 
 @pytest.mark.unit

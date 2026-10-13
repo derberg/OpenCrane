@@ -473,3 +473,134 @@ class TestYamlChunkerNoWalkerMatch:
             {"any": "doc"}, Path("test.yaml"), None
         )
         assert result == []
+
+
+def _node(text):
+    node = Mock()
+    node.text = text
+    return node
+
+
+@pytest.mark.unit
+class TestYamlStrategyFenceLanguage:
+    """The opening fence language decides which fenced blocks the YAML strategy claims."""
+
+    @pytest.mark.parametrize("text", [
+        "```bash\nexport FOO=1\nNAME: value\nOther: thing\n```",
+        "```ini\n[server]\nhost: localhost\nport: 8080\n```",
+        "```toml\n[server]\nhost: \"localhost\"\nport: 8080\n```",
+        "```properties\nserver.port: 8080\nhost: localhost\nmode: dev\n```",
+        "```text\nNote: restart the server.\nTip: check the logs.\n```",
+        "```python\nconfig = {\n    'host': 'localhost',\n    'port': 8080,\n}\n```",
+    ])
+    def test_does_not_claim_non_yaml_language(self, text):
+        """A fenced block with a non-YAML language is never claimed, even when it has key: value lines."""
+        assert YamlChunkingStrategy().can_process(_node(text)) is False
+
+    @pytest.mark.parametrize("text", [
+        "```yaml\n" + "\n".join(f"# comment {i}" for i in range(10)) + "\nkey: value\n```",
+        "```yml\nreplicas: 3\n```",
+        "```YAML title=\"values.yaml\"\n# Helm values\nimage: nginx\n```",
+        "```yaml\n- one\n- two\n```",
+    ])
+    def test_claims_yaml_language_regardless_of_first_lines(self, text):
+        """A yaml or yml fenced block is claimed whatever its first lines contain."""
+        assert YamlChunkingStrategy().can_process(_node(text)) is True
+
+    def test_claims_language_less_fence_by_heuristic(self):
+        """A language-less fence falls back to the key: value heuristic, skipping comments."""
+        text = "```\n" + "\n".join(f"# comment {i}" for i in range(10)) + "\nhost: localhost\nport: 8080\n```"
+        assert YamlChunkingStrategy().can_process(_node(text)) is True
+
+    def test_language_less_fence_without_yaml_lines_is_not_claimed(self):
+        """A language-less, unclosed fence of shell commands is not claimed."""
+        assert YamlChunkingStrategy().can_process(_node("```\nls -la\ncd /tmp")) is False
+
+    def test_unfenced_yaml_heuristic_skips_comments_and_blank_lines(self):
+        """Unfenced YAML after more than ten comment and blank lines is still claimed."""
+        text = "\n\n".join(f"# comment {i}" for i in range(10)) + "\nspec:\n  replicas: 3\nstatus: {}\n"
+        assert YamlChunkingStrategy().can_process(_node(text)) is True
+
+    def test_claims_json_spec_handled_by_a_tree_walker(self):
+        """A json block is claimed when a configured tree walker handles it (openapi and json-schema fences inline .json files)."""
+        text = (
+            "```json\n{\n  \"openapi\": \"3.0.0\",\n  \"info\": {\"title\": \"A\", \"version\": \"1\"},\n"
+            "  \"paths\": {}\n}\n```"
+        )
+        assert YamlChunkingStrategy().can_process(_node(text)) is True
+
+    @pytest.mark.parametrize("text", [
+        "```json\n{\n  \"name\": \"plain\",\n  \"version\": \"1.0.0\"\n}\n```",
+        "```json\n{ not valid\n```",
+    ])
+    def test_does_not_claim_other_json(self, text):
+        """A json block that no tree walker handles, or that does not parse, is left to the code strategy."""
+        assert YamlChunkingStrategy().can_process(_node(text)) is False
+
+
+@pytest.mark.unit
+class TestYamlStrategyFenceLanguageEndToEnd:
+    """Chunk types produced from an llms-full.txt file for fenced blocks."""
+
+    def test_fenced_blocks_get_the_matching_chunk_type(self, tmp_path):
+        from opencrane.rag.services.file_processor import FileProcessor
+
+        content = (
+            "# Page\n\n"
+            "### https://github.com/o/r/blob/main/page.md\n\n"
+            "Configure the server.\n\n"
+            "```properties\nserver.port: 8080\nhost: localhost\nmode: dev\n```\n\n"
+            "Set the values.\n\n"
+            "```yaml\n" + "\n".join(f"# comment {i}" for i in range(10)) + "\nkey: value\nother:\n  nested: 1\n```\n"
+        )
+        llms_file = tmp_path / "llms-full.txt"
+        llms_file.write_text(content)
+
+        chunks = FileProcessor().process_file(llms_file)
+
+        properties = [c for c in chunks if "server.port" in str(c.content)]
+        assert [c.chunk_type for c in properties] == ["code_snippet"]
+        assert properties[0].metadata["language"] == "properties"
+
+        yaml_chunks = [c for c in chunks if "nested" in str(c.content)]
+        assert [c.chunk_type for c in yaml_chunks] == ["yaml_content"]
+
+
+@pytest.mark.unit
+class TestYamlStrategyFenceLanguageAttributes:
+    """The fence language is the leading word of the info string, as the code strategy reads it."""
+
+    @pytest.mark.parametrize("text", [
+        "```yaml{1}\nreplicas: 3\n```",
+        "```yaml:values.yaml\nreplicas: 3\n```",
+    ])
+    def test_claims_yaml_language_followed_by_attributes(self, text):
+        """A yaml fence with attributes attached to the language is claimed."""
+        assert YamlChunkingStrategy().can_process(_node(text)) is True
+
+    def test_json_schema_in_yaml_fence_with_attributes_reaches_the_tree_walker(self, tmp_path):
+        """A JSON Schema in a yaml{1} block gets json_schema chunks; the code strategy has no JSON Schema walker."""
+        from opencrane.rag.services.file_processor import FileProcessor
+
+        schema = (
+            "$schema: \"https://json-schema.org/draft/2020-12/schema\"\n"
+            "title: User\n"
+            "type: object\n"
+            "properties:\n"
+            "  name:\n"
+            "    type: string\n"
+            "    description: The user name.\n"
+        )
+        content = (
+            "# Page\n\n"
+            "### https://github.com/o/r/blob/main/page.md\n\n"
+            "The schema.\n\n"
+            "```yaml{1}\n" + schema + "```\n"
+        )
+        llms_file = tmp_path / "llms-full.txt"
+        llms_file.write_text(content)
+
+        chunks = FileProcessor().process_file(llms_file)
+
+        assert "json_schema" in {c.chunk_type for c in chunks}
+        assert "code_snippet" not in {c.chunk_type for c in chunks}

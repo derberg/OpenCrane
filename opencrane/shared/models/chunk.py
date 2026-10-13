@@ -1,7 +1,36 @@
 """Pydantic models for the Structure-Aware Hybrid Chunker."""
 
-from typing import Dict, Any, Literal, Union
+import re
+from typing import Dict, Any, Union
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
+
+
+# Chunk types that OpenCrane's own strategies and walkers emit. Each one has a
+# fixed metadata contract, checked in Chunk.validate_content_and_metadata.
+BUILTIN_CHUNK_TYPES = frozenset({
+    "prose", "code_snippet", "crd_definition", "openapi_spec",
+    "yaml_content", "json_schema", "list_item", "table_row",
+})
+
+# Width of the chunk_type VARCHAR column in the Milvus schema. A longer value
+# cannot be indexed, so the model rejects it at chunking time.
+CHUNK_TYPE_MAX_LENGTH = 32
+
+_CHUNK_TYPE_PATTERN = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def is_valid_chunk_type(value: object) -> bool:
+    """Return True when ``value`` can be used as a chunk_type.
+
+    A valid chunk type is a string of letters, digits, ``_`` and ``-`` that
+    fits the Milvus column. The rule keeps custom types safe to place in a
+    Milvus filter expression.
+    """
+    return (
+        isinstance(value, str)
+        and len(value) <= CHUNK_TYPE_MAX_LENGTH
+        and _CHUNK_TYPE_PATTERN.fullmatch(value) is not None
+    )
 
 
 class Chunk(BaseModel):
@@ -14,8 +43,12 @@ class Chunk(BaseModel):
         None,
         description="Human-readable source identifier (matches a key in .opencrane/config.yaml sources). Resolved from source_url at chunking time; None when no mapping matches."
     )
-    chunk_type: Literal["prose", "code_snippet", "crd_definition", "openapi_spec", "yaml_content", "json_schema", "list_item", "table_row"] = Field(
-        ..., description="Categorizes processing strategy"
+    chunk_type: str = Field(
+        ...,
+        description=(
+            "Categorizes processing strategy. One of BUILTIN_CHUNK_TYPES, or a custom "
+            "type of letters, digits, '_' and '-', at most CHUNK_TYPE_MAX_LENGTH characters"
+        ),
     )
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Contextual data")
     token_count: int = Field(..., ge=0, description="Tokens per standard tokenizer")
@@ -26,6 +59,18 @@ class Chunk(BaseModel):
     # right before this chunk. Not serialized; read by the chunker's prose
     # navigation pass so heading ancestry includes them.
     _preceding_headings: list = PrivateAttr(default_factory=list)
+
+    @field_validator("chunk_type")
+    @classmethod
+    def validate_chunk_type(cls, value: str) -> str:
+        """Accept a built-in type or a custom identifier that fits the Milvus column."""
+        if not is_valid_chunk_type(value):
+            raise ValueError(
+                "chunk_type must be 1 to "
+                f"{CHUNK_TYPE_MAX_LENGTH} characters of letters, digits, '_' and '-'"
+            )
+        return value
+
     @model_validator(mode='after')
     def validate_content_and_metadata(self):
         """Validate content is non-empty and metadata matches chunk type."""
@@ -98,6 +143,8 @@ class Chunk(BaseModel):
                 raise ValueError(f"table_row chunks must have {', '.join(missing)} in metadata")
             if not isinstance(self.content, str):
                 raise ValueError("table_row chunks must have string content")
+        # A custom chunk type gets no metadata checks: the strategy or walker
+        # that emits it owns its metadata keys. Content must still be non-empty.
 
         return self
 

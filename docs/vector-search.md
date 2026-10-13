@@ -90,11 +90,13 @@ The people you share the package with run it through `uvx` and do not rebuild an
 
 ## MCP tools
 
-The server always provides `search_docs` and `health`. It provides each other tool only when the index contains the chunks that the tool reads. The following sections describe the tools.
+The server always provides `search_docs` and `health`. It provides each other tool only when the index contains the chunks that the tool reads. Every tool that returns chunks applies the source policy of the endpoint. For an ID from a source that the caller cannot read, the tool returns the same answer as for an ID that does not exist. See [Authentication and authorization](auth.md). The following sections describe the tools.
 
 ### `search_docs`
 
 The `search_docs` tool searches the indexed documentation. Its description names the topics of the configured sources. The **chunk_types** and **source_names** parameters accept only the values that exist in the index and the configuration.
+
+The server also checks these two parameters, because a client can ignore the tool schema. Each must be a list of strings. A **chunk_types** value can contain only letters, digits, `_`, and `-`. A **source_names** value cannot be empty or contain a double quote, a backslash, or a control character. If a value breaks these rules, `search_docs` returns an error and does not search. Authorization still removes a valid source name that the caller cannot read, so that source returns no results.
 
 The following table lists the parameters of `search_docs`:
 
@@ -104,7 +106,7 @@ The following table lists the parameters of `search_docs`:
 | **limit** | integer | No | The maximum number of results, from `1` to `50`. | `5` |
 | **search_mode** | string | No | `semantic`, `keyword`, or `hybrid`. | `hybrid` |
 | **alpha** | number | No | The weight of the semantic results in hybrid mode, from `0` to `1`. The keyword results get `1 - alpha`. With `HYBRID_FUSION=rrf`, it weights ranks instead of scores. | The value of `HYBRID_ALPHA`, by default `0.6` |
-| **chunk_types** | array of strings | No | The content types to return: `prose`, `code_snippet`, `yaml_content`, `crd_definition`, `openapi_spec`, `json_schema`, `list_item`, or `table_row`. The tool schema lists only the types in the index. | none |
+| **chunk_types** | array of strings | No | The content types to return, for example `prose` or `code_snippet`. The tool schema lists only the types in the index, custom chunk types included. See [Chunk types](chunking.md#chunk-types). | none |
 | **metadata_contains** | array of strings | No | Strings that the chunk metadata must all contain. | none |
 | **source_names** | array of strings | No | The sources to search, as keys of the `sources:` block in `.opencrane/config.yaml`, for example `MicrosoftDocs/microsoft-style-guide`. A chunk matches if it comes from any of them. The tool schema has this parameter only when sources are configured. Authorization can narrow the results further. See [Authentication and authorization](auth.md). | none |
 
@@ -157,13 +159,13 @@ get_yaml_definition(chunk_id="{CHUNK_ID}")
 
 ### `get_metadata_schema`
 
-The `get_metadata_schema` tool returns the reference of the chunk metadata fields. [Chunk metadata schema](metadata-schema.md) has the same reference. The tool is available only when at least one other conditional tool is available. See [MCP tools](architecture.md#mcp-tools).
+The `get_metadata_schema` tool returns [Chunk metadata schema](../opencrane/mcp/metadata-schema.md), the reference of the chunk metadata fields. The tool is available only when at least one other conditional tool is available. See [MCP tools](architecture.md#mcp-tools).
 
 The following table lists the parameter of `get_metadata_schema`:
 
 | Parameter | Type | Required | Description | Default value |
 |---|---|---|---|---|
-| **chunk_type** | string | No | Returns only the universal fields and the fields of this chunk type, for example `list_item`. | none, which returns the full reference |
+| **chunk_type** | string | No | Returns only the universal fields and the fields of this chunk type, for example `list_item`. For a custom chunk type, returns the universal fields. | none, which returns the full reference |
 
 The following example calls the tool for the full reference and for one chunk type:
 
@@ -206,7 +208,7 @@ get_table_members(table_id="{TABLE_ID}")
 
 ### `get_section`
 
-The `get_section` tool returns a whole prose section, for example when a search result is cut off. The tool is available only when the prose chunks have [navigation metadata](metadata-schema.md#prose-navigation-metadata).
+The `get_section` tool returns a whole prose section, for example when a search result is cut off. The tool is available only when the prose chunks have [navigation metadata](../opencrane/mcp/metadata-schema.md#prose-navigation-metadata).
 
 The following table lists the parameters of `get_section`. Pass **chunk_id** or **clause_id**:
 

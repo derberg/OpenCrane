@@ -19,12 +19,21 @@ _REQUIRED_FIELDS = {"list_id", "table_id", "clause_id", "parent_chunk_id"}
 logger = logging.getLogger(__name__)
 
 
-def main():
-    """Main entry point for vector database initialization."""
+def main(chunks_file=None, embeddings_file=None):
+    """Main entry point for vector database initialization.
+
+    Args:
+        chunks_file: Input chunks JSON file. Falls back to ``AI_DOCS_CHUNKS_FILE``,
+            then ``.opencrane/chunks.json``.
+        embeddings_file: Input embeddings JSON file. Falls back to
+            ``AI_DOCS_EMBEDDINGS_FILE``, then ``.opencrane/embeddings.json``.
+    """
     setup_logging()
 
-    chunks_file = Path(os.environ.get("AI_DOCS_CHUNKS_FILE", ".opencrane/chunks.json"))
-    embeddings_file = Path(os.environ.get("AI_DOCS_EMBEDDINGS_FILE", ".opencrane/embeddings.json"))
+    chunks_file = Path(chunks_file or os.environ.get("AI_DOCS_CHUNKS_FILE", ".opencrane/chunks.json"))
+    embeddings_file = Path(
+        embeddings_file or os.environ.get("AI_DOCS_EMBEDDINGS_FILE", ".opencrane/embeddings.json")
+    )
 
     # Validate input files
     if not chunks_file.exists():

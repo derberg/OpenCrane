@@ -48,7 +48,7 @@ The following commands cover the common test runs:
 ./pytest.sh --cov=opencrane --cov-report=html
 ```
 
-To select tests, pass a path. Not every test has the `unit` or `integration` marker, so a marker expression such as `-m integration` misses tests.
+To select the integration tests, pass `-m integration`. Every test in `tests/integration/` has this marker, so `-m "not integration"` excludes all of them. To select the unit tests, pass the `tests/unit/` path.
 
 ## Check the coverage
 

@@ -83,17 +83,19 @@ my-project:
 For the file `.opencrane/sources/my-project/guides/setup.md`, OpenCrane builds the URL in the following order:
 
 1. Takes `url`: `https://github.com/my-org/my-project`
-2. Adds `/blob/main`. OpenCrane always links to the `main` branch, even when the fetch used a release or a pinned Git ref.
+2. Adds `/blob/` and the Git ref that the fetch read, for example `/blob/v1.2.0`. For how the fetch picks the ref, see [Fetch documentation sources](fetching.md).
 3. Adds `docs_path`, if present: `/docs`
 4. Adds the path of the file relative to the directory of the source: `/guides/setup.md`
 
 For a fetched source, a missing `docs_path` counts as `docs`, the directory that the fetch copies, and an empty `docs_path` adds nothing in step 3. A local source keeps its path key in the URL, because the key is a directory of the repository.
 
-OpenCrane writes the resulting entry to `llms.txt`:
+The fetch skips local sources, so their URLs use the `main` branch. A source that an older OpenCrane version fetched also uses `main` until you run the fetch again.
+
+If the fetch read the `v1.2.0` release, OpenCrane writes the following entry to `llms.txt`:
 
 ```markdown
 ## my-project
-- [Setup Guide](https://github.com/my-org/my-project/blob/main/docs/guides/setup.md)
+- [Setup Guide](https://github.com/my-org/my-project/blob/v1.2.0/docs/guides/setup.md)
 ```
 
 For a local source in a project that sits in a subdirectory of its Git repository, OpenCrane also adds the path of that subdirectory after `/blob/main`.

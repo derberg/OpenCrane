@@ -97,3 +97,14 @@ class TestLogLevelVariable:
         warnings = [r for r in caplog.records if "LOG_LEVEL" in r.getMessage()]
         assert len(warnings) == 1
         assert "Using WARNING" in warnings[0].getMessage()
+
+    @pytest.mark.parametrize("value", [None, "verbose"])
+    def test_keeps_host_root_level_without_valid_variable(self, monkeypatch, value):
+        """A host app that configured logging first keeps its root level."""
+        if value is not None:
+            monkeypatch.setenv("LOG_LEVEL", value)
+        logging.getLogger().setLevel(logging.WARNING)
+        with patch('logging.basicConfig'):
+            setup_logging()
+
+        assert logging.getLogger().level == logging.WARNING

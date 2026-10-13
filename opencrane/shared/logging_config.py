@@ -49,8 +49,14 @@ def setup_logging(level=None):
     Without an explicit ``level``, the level comes from LOG_LEVEL (default INFO).
     """
     invalid = None
+    # Only an explicit level or a valid LOG_LEVEL overrides the root level of
+    # a host application that configured logging before importing opencrane.
+    explicit = level is not None
     if level is None:
-        level, invalid = _parse_log_level(logging.INFO)
+        level, invalid = _parse_log_level(None)
+        explicit = level is not None
+        if level is None:
+            level = logging.INFO
     log_path = Path('.opencrane/fetch_docs.log')
     log_path.parent.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
@@ -63,7 +69,8 @@ def setup_logging(level=None):
     )
     # basicConfig is a no-op once the root logger has handlers, so set the
     # level directly; a later call then still applies its level.
-    logging.getLogger().setLevel(level)
+    if explicit:
+        logging.getLogger().setLevel(level)
     # Warn after the handlers exist, so the warning uses the log format.
     _warn_invalid(invalid, logging.INFO)
     # Suppress noisy loggers

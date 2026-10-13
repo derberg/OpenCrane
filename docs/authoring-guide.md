@@ -508,11 +508,11 @@ sources:
 ```
 ````
 
-### Keep code out of `<Tabs>` blocks
+### Keep explanations outside `<Tabs>` blocks with code
 
-OpenCrane does not split a page inside a `<Tabs>` block. It keeps the block in one part together with the text before it, back to the previous code block or the top of the page. When that part contains a code block and has fewer than 50 non-blank lines, or is mostly code, the code chunker handles it. The code chunker keeps only the code blocks, and OpenCrane drops all text in the part, including the text before the `<Tabs>` block.
+OpenCrane does not split a page inside a `<Tabs>` block, and keeps the block as its own part. When the block contains a code block and has fewer than 50 non-blank lines, or is mostly code, the code chunker handles it. The code chunker keeps only the code blocks, so OpenCrane drops any other text inside the `<Tabs>` block. The text before and after the block stays.
 
-Write code examples as plain fenced blocks under their own headings instead of inside `<Tabs>` blocks.
+Inside a `<Tabs>` block that contains code, put only the code. Write the explanation before or after the block.
 
 ## Embedded specifications
 

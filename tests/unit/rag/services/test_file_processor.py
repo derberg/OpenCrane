@@ -644,6 +644,42 @@ class TestFallbackDocumentIteration:
         # The complete <Tabs>...</Tabs> block should appear intact in one section.
         assert any("<Tabs>" in s.text and "</Tabs>" in s.text for s in sections)
 
+    def test_split_sections_flushes_prose_before_tabs_block(self, tmp_path):
+        """Prose before a <Tabs> block is its own section, not merged into the
+        block (where the code strategy would claim and drop it)."""
+        url = "https://github.com/org/repo/blob/main/a.md"
+        content = (
+            f"### {url}\n\n"
+            "# Intro\n\nBEFORE_TABS prose content.\n\n"
+            "<Tabs>\n"
+            "  <Tab>\n\n```bash\nnpm install thing\n```\n\n  </Tab>\n"
+            "</Tabs>\n\n"
+            "AFTER_TABS prose content.\n"
+        )
+        doc = self._doc(content, tmp_path)
+        sections = doc._split_into_sections(content)
+        texts = [s.text for s in sections]
+        assert texts == [
+            "# Intro\n\nBEFORE_TABS prose content.",
+            "<Tabs>\n  <Tab>\n\n```bash\nnpm install thing\n```\n\n  </Tab>\n</Tabs>",
+            "AFTER_TABS prose content.",
+        ]
+        assert all(s.source_url == url for s in sections)
+
+    def test_split_sections_nested_tabs_stay_one_section(self, tmp_path):
+        """An inner <Tabs> inside an open block does not split the outer block."""
+        content = (
+            "### https://github.com/org/repo/blob/main/a.md\n\n"
+            "Intro prose.\n\n"
+            "<Tabs>\n  <Tab>\n  <Tabs>\n    <Tab>inner</Tab>\n  </Tabs>\n  </Tab>\n</Tabs>\n"
+        )
+        doc = self._doc(content, tmp_path)
+        sections = doc._split_into_sections(content)
+        assert [s.text for s in sections] == [
+            "Intro prose.",
+            "<Tabs>\n  <Tab>\n  <Tabs>\n    <Tab>inner</Tab>\n  </Tabs>\n  </Tab>\n</Tabs>",
+        ]
+
     def test_split_sections_bare_marker_with_inline_title(self, tmp_path):
         """A bare URL marker with inline title seeds the next section heading (lines 381-382)."""
         url = "https://github.com/org/repo/blob/main/page.md"

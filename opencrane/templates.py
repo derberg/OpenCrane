@@ -287,10 +287,10 @@ Point the liveness and readiness probes of your platform, for example Kubernetes
 
 ### Build and publish the image
 
-To build, push, and run the image, run the following commands from the project root. If you ran `opencrane init --podman`, the build file is `.opencrane/Containerfile`.
+To build, push, and run the image, run the following commands from the project root:
 
 ```bash
-{container_tool} build -t {REGISTRY}/opencrane-mcp:latest -f .opencrane/Dockerfile .
+{container_tool} build -t {REGISTRY}/opencrane-mcp:latest -f .opencrane/{container_file} .
 {container_tool} push {REGISTRY}/opencrane-mcp:latest
 {container_tool} run -p 8000:8000 {REGISTRY}/opencrane-mcp:latest
 ```
@@ -507,5 +507,6 @@ def docker_compose(dockerfile_name: str = "Dockerfile") -> str:
 
 
 def readme(podman: bool = False) -> str:
-    tool = "podman" if podman else "docker"
-    return README_MD.replace("{container_tool}", tool)
+    tool, container_file = ("podman", "Containerfile") if podman else ("docker", "Dockerfile")
+    return README_MD.replace("{container_tool}", tool).replace("{container_file}", container_file)
+

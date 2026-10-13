@@ -74,7 +74,7 @@ Run the commands from the project root, the directory that contains `.opencrane/
 The `opencrane fetch --org` command fetches every repository in the organization that has the discovery topic. It also fetches every entry with `manual: true` and every `llmstxt` source, and then removes stale sources.
 
 > [!CAUTION]
-> This command deletes the local source directory and the generated `llmstxt/` output of every auto-discovered repository in the organization that auto-discovery no longer returns. To keep such a source, set `manual: true` on its entry before you run the command. The command also deletes and rewrites `.opencrane/sources/{PATH_KEY}/` for every source it fetches, and overwrites any change you made in that directory. It also removes fields such as `docs_url` and `ignore_patterns` from the `config.yaml` entries it fetches.
+> This command deletes the local source directory and the generated `llmstxt/` output of every auto-discovered repository in the organization that auto-discovery no longer returns. To keep such a source, set `manual: true` on its entry before you run the command. The command also deletes and rewrites `.opencrane/sources/{PATH_KEY}/` for every source it fetches, and overwrites any change you made in that directory. It also rewrites the `config.yaml` entries with `manual: false` that it fetches, so fields that you added to them, such as `docs_url`, are lost.
 
 To fetch the repositories of an organization, run the following command:
 
@@ -89,7 +89,7 @@ The fetched files appear in `.opencrane/sources/`, in one directory for each sou
 To refresh only some sources, pass their path keys to `--source`, or set them in the `FETCH_REPO` environment variable. The path key is the top-level key under `sources:` in the source mapping file. Separate several keys with commas. An entry with `manual: true` needs no `--org`. An auto-discovered entry needs auto-discovery for its organization, so pass `--org {ORG_NAME}` too.
 
 > [!CAUTION]
-> If you name an auto-discovered source and auto-discovery does not return its repository, this command deletes its local source directory and its generated `llmstxt/` output. This also happens when you omit `--org`, `ORG_NAME` names the organization of the source, and `AUTO_DISCOVERY_ORGS` does not list it. The command also deletes and rewrites `.opencrane/sources/{PATH_KEY}/` for every source it fetches, and overwrites any change you made in that directory. It also removes fields such as `docs_url` and `ignore_patterns` from the `config.yaml` entries it fetches.
+> If you name an auto-discovered source and auto-discovery does not return its repository, this command deletes its local source directory and its generated `llmstxt/` output. This also happens when you omit `--org`, `ORG_NAME` names the organization of the source, and `AUTO_DISCOVERY_ORGS` does not list it. The command also deletes and rewrites `.opencrane/sources/{PATH_KEY}/` for every source it fetches, and overwrites any change you made in that directory. It also rewrites the `config.yaml` entries with `manual: false` that it fetches, so fields that you added to them, such as `docs_url`, are lost.
 
 To fetch specific sources, run the following command:
 

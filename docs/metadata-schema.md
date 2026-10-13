@@ -46,7 +46,7 @@ Chunks of Kubernetes CRDs, with `chunk_type: "crd_definition"`, carry the follow
 |---|---|---|---|
 | `crd_kind` | string | Kubernetes resource kind, from `spec.names.kind`. Use it to filter chunks by resource type. | `"MyResource"`, `"Certificate"` |
 | `crd_api_version` | string | API group and version, in the format `{GROUP}/{VERSION}`. Use it to look up a property in one API version. | `"mygroup.example.com/v1"` |
-| `crd_version` | string | Version name only. Use it to filter chunks by version. Chunks of all versions share the `versions[0]` index in `breadcrumb_path` and `logical_parent`, so this field is the only way to tell the versions apart. | `"v1"`, `"v1alpha1"`, `"v1beta1"` |
+| `crd_version` | string | Version name only. Use it to filter chunks by version. The `breadcrumb_path` and `logical_parent` use the index of the version instead, for example `versions[1]`. | `"v1"`, `"v1alpha1"`, `"v1beta1"` |
 | `crd_property_path` | string | Short property path that starts at `spec.`. For a recursively split property, it shows the full nested path. Use it to show a short path in RAG responses. | Top-level: `"spec.replicas"`<br>Nested: `"spec.config.database"`<br>Array items: `"spec.volumes.items.name"` |
 
 ## OpenAPI metadata

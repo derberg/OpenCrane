@@ -78,7 +78,7 @@ After you change a variable, run `opencrane chunk` and `opencrane embed` again, 
 
 Every Markdown table becomes one `table_row` chunk for each data row. The chunker renders each row as natural-language `Column: value.` lines and leaves out empty cells. Each row chunk carries the section heading and the lead-in sentence from the source, so search can return the row on its own. For the fields that link the rows of a table, see [Table row metadata](metadata-schema.md#table-row-metadata).
 
-A table ends at the first row whose number of cells differs from the header. The chunker splits cells at every `|`, including an escaped `\|`. A cell that contains a pipe therefore ends the table, and the remaining rows become prose.
+A table ends at the first row whose number of cells differs from the header. The chunker splits cells at every `|` except an escaped `\|` and a `|` inside backticks, and stores `\|` as `|`.
 
 A table with no heading or lead-in sentence still produces `table_row` chunks, but those chunks have no `breadcrumb_path` or `table_caption` metadata. To make them retrievable by semantic search, add a heading and a lead-in sentence to the source.
 
@@ -149,7 +149,7 @@ When the chunker splits a property, the property itself gets no chunk of its own
 | `spec.config` | 1,200 tokens, nested properties | Separate chunks for `spec.config.database` and `spec.config.cache` |
 | `spec.volumes` | 900 tokens, array items with properties | Separate chunks for `spec.volumes.items.name` and `spec.volumes.items.path` |
 
-The chunker processes all CRD versions, and each version produces its own chunks with its `crd_version`. The `breadcrumb_path` and `logical_parent` of every version use the index `versions[0]`, so chunks of different versions share a `logical_parent` and list each other in `neighbor_chunks`. Use `crd_version` to tell the versions apart.
+The chunker processes all CRD versions, and each version produces its own chunks with its `crd_version`. The `breadcrumb_path` and `logical_parent` of each version use the index of that version, for example `versions[1]`, so `neighbor_chunks` stay within one version.
 
 ### OpenAPI chunks
 

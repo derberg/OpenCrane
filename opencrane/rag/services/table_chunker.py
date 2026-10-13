@@ -28,13 +28,62 @@ def _is_table_separator(line: str) -> bool:
 
 
 def _split_row(line: str) -> List[str]:
-    """Split a ``| a | b |`` row into stripped cell values."""
+    """Split a ``| a | b |`` row into stripped cell values.
+
+    Only unescaped pipes outside backtick code spans separate cells:
+
+    - ``\\|`` is an escaped pipe. As in GitHub-flavored Markdown, the escape is
+      removed and the cell keeps a literal ``|`` (also inside a code span), which
+      is what a GFM renderer shows. Other backslash escapes are kept as written.
+    - A pipe inside a code span (a backtick run closed by a run of the same
+      length) stays in the cell. Strict GFM would split there; keeping the span
+      whole avoids a wrong cell count, which would end the table early.
+    """
     s = line.strip()
+    cells: List[str] = []
+    current: List[str] = []
+    ends_with_delimiter = False
+    i, n = 0, len(s)
+    while i < n:
+        ch = s[i]
+        ends_with_delimiter = False
+        if ch == "\\" and i + 1 < n:
+            current.append("|" if s[i + 1] == "|" else s[i:i + 2])
+            i += 2
+        elif ch == "`":
+            run_end = i
+            while run_end < n and s[run_end] == "`":
+                run_end += 1
+            ticks = s[i:run_end]
+            close = run_end
+            while True:
+                close = s.find(ticks, close)
+                if close == -1 or close + len(ticks) == n or s[close + len(ticks)] != "`":
+                    break
+                # A longer backtick run does not close this span; skip past it.
+                while close < n and s[close] == "`":
+                    close += 1
+            if close == -1:
+                current.append(ticks)
+                i = run_end
+            else:
+                end = close + len(ticks)
+                current.append(s[i:end].replace("\\|", "|"))
+                i = end
+        elif ch == "|":
+            cells.append("".join(current))
+            current = []
+            ends_with_delimiter = True
+            i += 1
+        else:
+            current.append(ch)
+            i += 1
+    cells.append("".join(current))
     if s.startswith("|"):
-        s = s[1:]
-    if s.endswith("|"):
-        s = s[:-1]
-    return [c.strip() for c in s.split("|")]
+        cells = cells[1:]
+    if ends_with_delimiter and cells:
+        cells = cells[:-1]
+    return [c.strip() for c in cells]
 
 
 def _table_id(breadcrumb: str, caption: str, columns: List[str], row_keys: List[str], table_ordinal: int) -> str:

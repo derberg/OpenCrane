@@ -151,3 +151,35 @@ class TestCRDNeighborIdentification:
             replicas_chunk = next((c for c in chunks if "replicas" in c.metadata.get("crd_property_path", "")), None)
             if replicas_chunk:
                 assert replicas_chunk.chunk_id not in host_chunk.metadata.get("neighbor_chunks", [])
+
+    def test_each_version_uses_its_own_path_and_neighbors(self):
+        """Each CRD version gets its own versions[i] path, and neighbors stay within a version."""
+        def version(name):
+            return {
+                "name": name,
+                "schema": {"openAPIV3Schema": {"properties": {"spec": {"properties": {
+                    "replicas": {"type": "integer"},
+                    "image": {"type": "string"},
+                }}}}},
+            }
+
+        crd_dict = {
+            "apiVersion": "apiextensions.k8s.io/v1",
+            "kind": "CustomResourceDefinition",
+            "spec": {"versions": [version("v1alpha1"), version("v1")]},
+        }
+        chunks = K8sCRDTreeWalker(crd_dict, source_url="https://example.com/crd.md").walk()
+        assert len(chunks) == 4
+
+        by_version = {}
+        for chunk in chunks:
+            by_version.setdefault(chunk.metadata["crd_version"], []).append(chunk)
+
+        for index, name in enumerate(["v1alpha1", "v1"]):
+            prefix = f"spec.versions[{index}].schema.openAPIV3Schema.properties.spec"
+            same_version = by_version[name]
+            ids = {c.chunk_id for c in same_version}
+            for chunk in same_version:
+                assert chunk.metadata["breadcrumb_path"].startswith(prefix + ".")
+                assert chunk.metadata["logical_parent"] == prefix + ".properties"
+                assert set(chunk.metadata["neighbor_chunks"]) == ids - {chunk.chunk_id}

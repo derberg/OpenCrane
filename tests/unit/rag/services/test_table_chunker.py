@@ -1,6 +1,6 @@
 from pathlib import Path
 from unittest.mock import Mock
-from opencrane.rag.services.table_chunker import build_table_chunks, _is_table_separator, TableChunkingStrategy, _render_row
+from opencrane.rag.services.table_chunker import build_table_chunks, _is_table_separator, TableChunkingStrategy, _render_row, _split_row
 
 
 def test_is_table_separator():
@@ -237,3 +237,48 @@ def test_delegated_list_breadcrumb_includes_ancestors_from_prior_region():
     tr = [c for c in chunks if c.chunk_type == "table_row" and c.metadata["breadcrumb_path"].endswith("C")][0]
     assert li.metadata["breadcrumb_path"] == "A > B > C"
     assert li.metadata["breadcrumb_path"] == tr.metadata["breadcrumb_path"]
+
+
+def test_split_row_escaped_pipe_does_not_split_and_is_unescaped():
+    # GFM: `\|` is a literal pipe in the cell, and renders as `|`.
+    assert _split_row(r"| a \| b | c |") == ["a | b", "c"]
+    # An escaped pipe at the end of the row is cell text, not the closing pipe.
+    assert _split_row(r"| a \|") == ["a |"]
+    # Other backslash escapes are kept as written.
+    assert _split_row(r"| a \* b | c |") == [r"a \* b", "c"]
+
+
+def test_split_row_pipe_inside_code_span_does_not_split():
+    assert _split_row("| `a|b` | c |") == ["`a|b`", "c"]
+    # A double-backtick span may contain a single backtick and a pipe.
+    assert _split_row("| ``x`|y`` | c |") == ["``x`|y``", "c"]
+    # An escaped pipe inside a code span is unescaped, as GFM renders it.
+    assert _split_row(r"| `a\|b` | c |") == ["`a|b`", "c"]
+
+
+def test_split_row_unclosed_or_mismatched_backticks_are_literal():
+    # No closing run: the backtick is literal and the pipe still splits.
+    assert _split_row("| `open | x |") == ["`open", "x"]
+    # A longer run does not close a shorter one.
+    assert _split_row("| `a``` | b |") == ["`a```", "b"]
+    # An escaped backtick does not open a code span.
+    assert _split_row(r"| \`a | b` |") == [r"\`a", "b`"]
+    # Rows without leading and trailing pipes still split.
+    assert _split_row("a | b") == ["a", "b"]
+
+
+def test_table_with_escaped_and_code_span_pipes_keeps_every_row():
+    text = "\n".join([
+        "| Operator | Meaning |",
+        "|---|---|",
+        "| `a|b` | either side |",
+        r"| x \| y | escaped pipe |",
+        "| last | final row |",
+    ])
+    chunks = TableChunkingStrategy().process(_node(text), Path("d.md"))
+    rows = [c for c in chunks if c.chunk_type == "table_row"]
+    assert [r.metadata["row_key"] for r in rows] == ["`a|b`", "x | y", "last"]
+    assert all(r.metadata["total_rows"] == 3 for r in rows)
+    assert "Meaning: either side." in rows[0].content
+    assert "Operator: x | y." in rows[1].content
+    assert all(c.chunk_type == "table_row" for c in chunks)

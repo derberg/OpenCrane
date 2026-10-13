@@ -11,6 +11,19 @@ from opencrane.shared.utils.metadata_helpers import is_openapi_spec, extract_ope
 from opencrane.shared.config import get_config
 
 
+# A <Tabs>/<Tab> tag alone on its line, and the bare (attribute-less) form.
+_TAB_TAG_RE = re.compile(r'^\s*</?Tabs?(\s[^>]*)?>\s*$')
+_BARE_TAB_TAG_RE = re.compile(r'^\s*</?Tabs?>\s*$')
+
+
+class _TextNode:
+    """Minimal node handed to the prose strategy for text between code blocks."""
+
+    def __init__(self, text: str, source_url: str | None):
+        self.text = text
+        self.source_url = source_url
+
+
 def _is_k8s_crd(doc: Dict[str, Any]) -> bool:
     """Check if document is a K8s CRD (CustomResourceDefinition)."""
     return (
@@ -73,70 +86,108 @@ class CodeChunkingStrategy(ProcessingStrategy):
         chunks = []
         text = node.text.strip()
         node_source_url = getattr(node, 'source_url', None)  # Authoritative source from file processor
-        
-        # Extract code blocks from fenced markdown
-        code_blocks = self._extract_code_blocks(text)
-        
-        if not code_blocks:
+
+        segments = self._split_segments(text)
+
+        if not any(kind == 'code' for kind, _, _ in segments):
             # If no fenced blocks found but node is marked as code, treat whole as code
             if hasattr(node, 'node_type') and getattr(node, 'node_type') == 'code':
                 language = getattr(node, 'language', 'unknown')
-                result = self._create_code_chunk(text, language, source_file, node_source_url)
-                if result:
-                    # Tree walkers return lists, single chunks return Chunk
-                    if isinstance(result, list):
-                        chunks.extend(result)
-                    else:
-                        chunks.append(result)
+                self._add_code(chunks, text, language, source_file, node_source_url)
         else:
-            # Process each extracted code block
-            for language, code in code_blocks:
-                result = self._create_code_chunk(code, language, source_file, node_source_url)
-                if result:
-                    # Tree walkers return lists, single chunks return Chunk
-                    if isinstance(result, list):
-                        chunks.extend(result)
-                    else:
-                        chunks.append(result)
-        
+            # Walk the node in reading order: each code block becomes code
+            # chunks and the text between code blocks (for example the
+            # explanations inside a <Tabs> block) becomes prose chunks.
+            for kind, language, content in segments:
+                if kind == 'code':
+                    self._add_code(chunks, content, language, source_file, node_source_url)
+                else:
+                    chunks.extend(self._prose_chunks(content, source_file, node_source_url))
+
         return chunks
-    
+
+    def _add_code(self, chunks: List[Chunk], code: str, language: str, source_file: Path, source_url: str | None) -> None:
+        """Append the chunk(s) built from one code block to ``chunks``."""
+        result = self._create_code_chunk(code, language, source_file, source_url)
+        if result:
+            # Tree walkers return lists, single chunks return Chunk
+            if isinstance(result, list):
+                chunks.extend(result)
+            else:
+                chunks.append(result)
+
+    @staticmethod
+    def _prose_chunks(text: str, source_file: Path, source_url: str | None) -> List[Chunk]:
+        """Chunk the text between code blocks as prose.
+
+        Bare structural tags (``<Tabs>``, ``<Tab>``, ``</Tab>``, ``</Tabs>``)
+        carry no content and are dropped; a ``<Tab>`` tag with attributes is
+        kept because its ``label`` names the tab. Text made only of tags yields
+        no chunk.
+        """
+        lines = [line for line in text.split('\n') if not _BARE_TAB_TAG_RE.match(line)]
+        if all(not line.strip() or _TAB_TAG_RE.match(line) for line in lines):
+            return []
+        from opencrane.rag.services.prose_chunker import ProseChunkingStrategy
+
+        node = _TextNode('\n'.join(lines).strip(), source_url)
+        return ProseChunkingStrategy().process(node, source_file)
+
+    @staticmethod
+    def _split_segments(text: str) -> List[tuple[str, str, str]]:
+        """Split markdown text into fenced code blocks and the text between them.
+
+        Returns:
+            ``(kind, language, content)`` tuples in reading order, where kind is
+            ``'code'`` or ``'text'`` (language is ``''`` for text). Empty code
+            blocks and blank text are left out.
+        """
+        segments = []
+        lines = text.split('\n')
+        in_block = False
+        current_language = 'unknown'
+        current = []
+
+        def flush_text():
+            if '\n'.join(current).strip():
+                segments.append(('text', '', '\n'.join(current)))
+
+        for line in lines:
+            if line.strip().startswith('```'):
+                if not in_block:
+                    # Starting a code block
+                    flush_text()
+                    in_block = True
+                    # Extract language if specified
+                    lang_match = re.match(r'^```(\w+)', line.strip())
+                    current_language = lang_match.group(1) if lang_match else 'unknown'
+                    current = []
+                else:
+                    # Ending a code block
+                    in_block = False
+                    if current:
+                        segments.append(('code', current_language, '\n'.join(current)))
+                    current_language = 'unknown'
+                    current = []
+            else:
+                current.append(line)
+
+        if in_block:
+            # Handle unclosed code block
+            if current:
+                segments.append(('code', current_language, '\n'.join(current)))
+        else:
+            flush_text()
+
+        return segments
+
     def _extract_code_blocks(self, text: str) -> List[tuple[str, str]]:
         """Extract fenced code blocks from markdown text.
         
         Returns:
             List of (language, code) tuples.
         """
-        blocks = []
-        lines = text.split('\n')
-        in_block = False
-        current_language = 'unknown'
-        current_code = []
-        
-        for line in lines:
-            if line.strip().startswith('```'):
-                if not in_block:
-                    # Starting a code block
-                    in_block = True
-                    # Extract language if specified
-                    lang_match = re.match(r'^```(\w+)', line.strip())
-                    current_language = lang_match.group(1) if lang_match else 'unknown'
-                    current_code = []
-                else:
-                    # Ending a code block
-                    in_block = False
-                    if current_code:
-                        blocks.append((current_language, '\n'.join(current_code)))
-                    current_language = 'unknown'
-                    current_code = []
-            elif in_block:
-                current_code.append(line)
-        
-        # Handle unclosed code block
-        if in_block and current_code:
-            blocks.append((current_language, '\n'.join(current_code)))
-        
-        return blocks
+        return [(language, code) for kind, language, code in self._split_segments(text) if kind == 'code']
     
     def _create_code_chunk(self, code: str, language: str, source_file: Path, base_source_url: str | None = None) -> Chunk | List[Chunk] | None:
         """Create a code chunk with language metadata.

@@ -163,7 +163,7 @@ WORKDIR /build
 COPY .opencrane/ ./.opencrane/
 
 ENV MILVUS_DB_PATH=/build/milvus_data/milvus.db
-ENV COLLECTION_NAME=opencrane_chunks
+ENV MILVUS_COLLECTION=opencrane_chunks
 ENV DROP_EXISTING=true
 ENV PYTHONPATH=/build
 
@@ -174,6 +174,8 @@ RUN mkdir -p /build/milvus_data && opencrane index
 # =============================================================================
 FROM python:3.11-slim
 
+# The server must encode queries with the model that built the index.
+ARG EMBEDDING_MODEL=nomic-ai/nomic-embed-text-v1.5
 ARG RERANKER_MODEL=
 
 WORKDIR /app
@@ -192,10 +194,11 @@ COPY --from=milvus /build/milvus_data /app/milvus_data
 COPY .opencrane/ /app/.opencrane/
 
 ENV MILVUS_DB_PATH=/app/milvus_data/milvus.db
-ENV COLLECTION_NAME=opencrane_chunks
+ENV MILVUS_COLLECTION=opencrane_chunks
 ENV MCP_HTTP_PORT=8000
 ENV PYTHONUNBUFFERED=1
 ENV TRANSFORMERS_OFFLINE=1
+ENV EMBEDDING_MODEL=${EMBEDDING_MODEL}
 ENV RERANKER_MODEL=${RERANKER_MODEL}
 
 EXPOSE 8000
@@ -217,7 +220,7 @@ services:
       - "8000:8000"
     environment:
       MILVUS_DB_PATH: /app/milvus_data/milvus.db
-      COLLECTION_NAME: opencrane_chunks
+      MILVUS_COLLECTION: opencrane_chunks
       EMBEDDING_QUERY_PROMPT: "${EMBEDDING_QUERY_PROMPT:-}"
 '''
 
@@ -263,7 +266,7 @@ opencrane serve
 
 ## Run the server in a container
 
-The container image serves MCP over HTTP on port 8000. The image build creates the Milvus Lite database inside the image, so the container starts without indexing. If you ran `opencrane init --podman`, first change the `dockerfile` value in `docker-compose.yml` to `.opencrane/Containerfile`.
+The container image serves MCP over HTTP on port 8000. The image build creates the Milvus Lite database inside the image, so the container starts without indexing.
 
 To build and start the container, run the following command from the project root:
 
@@ -271,7 +274,7 @@ To build and start the container, run the following command from the project roo
 {container_tool}-compose -f .opencrane/docker-compose.yml up --build
 ```
 
-To change the embedding model, set the `EMBEDDING_MODEL` environment variable before the build, so the image contains the model. Also add `EMBEDDING_MODEL` to the `environment` section of `docker-compose.yml`, because the server reads it at runtime. Use the model that `opencrane embed` used, because the server embeds search queries with it. To add the optional reranker model to the image, set `RERANKER_MODEL` before the build. The image passes it to the server, so the `environment` section does not need it.
+To change the embedding model, set the `EMBEDDING_MODEL` environment variable before the build. The image then contains the model and passes it to the server. Use the model that `opencrane embed` used, because the server embeds search queries with it. To add the optional reranker model, set `RERANKER_MODEL` before the build in the same way.
 
 > [!CAUTION]
 > Do not mount a volume over `/app/milvus_data`. Milvus Lite cannot open a database file on a bind mount and fails with `Open local milvus failed`. Use the database that the image build creates.
@@ -494,6 +497,14 @@ To add the container endpoint to Cursor, add the following entry to `mcp.json`:
 }}
 ```
 '''
+
+
+def docker_compose(dockerfile_name: str = "Dockerfile") -> str:
+    """Render the compose file so its build points at the container file ``init`` wrote."""
+    return DOCKER_COMPOSE.replace(
+        "dockerfile: .opencrane/Dockerfile", f"dockerfile: .opencrane/{dockerfile_name}"
+    )
+
 
 def readme(podman: bool = False) -> str:
     tool = "podman" if podman else "docker"

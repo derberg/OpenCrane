@@ -1503,7 +1503,10 @@ async def get_metadata_schema(arguments: dict) -> list[TextContent]:
             logger.info(f"   get_metadata_schema: returned universal fields for custom type {chunk_type}")
             return [TextContent(type="text", text=body)]
 
-        specific = _extract_schema_section(schema_content, heading) or ""
+        # code_snippet and yaml_content fields live in the Universal section itself.
+        specific = "" if heading == "Universal Metadata" else (
+            _extract_schema_section(schema_content, heading) or ""
+        )
         body = universal + "\n" + specific if specific else universal
         logger.info(f"   get_metadata_schema: returned {len(body)} chars (filtered to {chunk_type})")
         return [TextContent(type="text", text=body)]

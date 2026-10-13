@@ -174,3 +174,68 @@ def test_runtime_image_uses_the_embedding_model_it_downloaded():
     runtime = DOCKERFILE.split("# Stage 4", 1)[1]
     assert "ARG EMBEDDING_MODEL=" in runtime
     assert "ENV EMBEDDING_MODEL=${EMBEDDING_MODEL}" in runtime
+
+
+# === init: README build command names the written container file ===
+
+@pytest.mark.unit
+def test_init_podman_readme_builds_from_containerfile(runner, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(cli_main, ["init", "--no-add", "--podman"])
+    assert result.exit_code == 0
+    readme_text = (tmp_path / ".opencrane" / "README.md").read_text()
+    assert "podman build -t {REGISTRY}/opencrane-mcp:latest -f .opencrane/Containerfile ." in readme_text
+    assert "-f .opencrane/Dockerfile" not in readme_text
+
+
+@pytest.mark.unit
+def test_init_docker_readme_builds_from_dockerfile(runner, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(cli_main, ["init", "--no-add"])
+    assert result.exit_code == 0
+    readme_text = (tmp_path / ".opencrane" / "README.md").read_text()
+    assert "docker build -t {REGISTRY}/opencrane-mcp:latest -f .opencrane/Dockerfile ." in readme_text
+    assert "Containerfile ." not in readme_text
+
+
+# === init --extensions: config.yaml loads the generated file ===
+
+@pytest.mark.unit
+def test_init_extensions_enables_extensions_key(runner, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(cli_main, ["init", "--no-add", "--extensions"])
+    assert result.exit_code == 0
+    config = yaml.safe_load((tmp_path / ".opencrane" / "config.yaml").read_text())
+    assert config["extensions"] == "extensions.py"
+
+
+@pytest.mark.unit
+def test_init_without_extensions_keeps_key_commented(runner, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(cli_main, ["init", "--no-add"])
+    assert result.exit_code == 0
+    text = (tmp_path / ".opencrane" / "config.yaml").read_text()
+    assert "# extensions: extensions.py" in text
+    assert "extensions" not in yaml.safe_load(text)
+
+
+@pytest.mark.unit
+def test_init_extensions_hints_when_config_exists(runner, tmp_path, monkeypatch):
+    """An existing config.yaml is never overwritten, so init tells the user
+    to add the key that loads the new extensions.py."""
+    monkeypatch.chdir(tmp_path)
+    runner.invoke(cli_main, ["init", "--no-add"])
+    result = runner.invoke(cli_main, ["init", "--no-add", "--extensions"])
+    assert result.exit_code == 0
+    assert "extensions: extensions.py" in result.output
+    config = yaml.safe_load((tmp_path / ".opencrane" / "config.yaml").read_text())
+    assert "extensions" not in config
+
+
+@pytest.mark.unit
+def test_init_extensions_no_hint_when_config_loads_extensions(runner, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner.invoke(cli_main, ["init", "--no-add", "--extensions"])
+    result = runner.invoke(cli_main, ["init", "--no-add", "--extensions"])
+    assert result.exit_code == 0
+    assert "To load extensions.py" not in result.output

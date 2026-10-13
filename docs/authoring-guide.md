@@ -4,7 +4,7 @@ This guide describes how to structure Markdown documentation so that OpenCrane p
 
 ## How OpenCrane chunks Markdown
 
-OpenCrane first splits each page at every fenced code block outside a list. It then chunks each code block, and each part of the page between two code blocks, on its own. Each part keeps the headings that it sits under, so a list or table after a code block gets its full breadcrumb. For the order in which OpenCrane tries the chunking strategies, see [Chunking strategies](chunking.md#chunking-strategies).
+OpenCrane first splits each page at every fenced code block outside a list or a `<Tabs>` block, and keeps each `<Tabs>` block whole. It then chunks each code block, each `<Tabs>` block, and each part of the page between them on its own. Each part keeps the headings that it sits under, so a list or table after a code block gets its full breadcrumb. For the order in which OpenCrane tries the chunking strategies, see [Chunking strategies](chunking.md#chunking-strategies).
 
 How you write the content determines which strategy handles each part and how well each chunk stands alone.
 
@@ -505,12 +505,6 @@ sources:
     branch: main
 ```
 ````
-
-### Keep explanations outside `<Tabs>` blocks with code
-
-OpenCrane does not split a page inside a `<Tabs>` block, and keeps the block as its own part. When the block contains a code block and has fewer than 50 non-blank lines, or is mostly code, the code chunker handles it. The code chunker keeps only the code blocks, so OpenCrane drops any other text inside the `<Tabs>` block. The text before and after the block stays.
-
-Inside a `<Tabs>` block that contains code, put only the code. Write the explanation before or after the block.
 
 ## Embedded specifications
 

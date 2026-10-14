@@ -4,9 +4,32 @@ import logging
 import os
 import subprocess
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, Iterable, List
 
 logger = logging.getLogger(__name__)
+
+# Paths, relative to each source directory, that ignored_fingerprint never
+# hashes: OpenCrane's own output and state, and tool and dependency dirs that
+# hold no docs. A file is left out when its relative path starts with one of
+# these, compared component by component, so "build" skips build/x.md but not
+# builder/x.md. Fetched sources in .opencrane/sources/ are still hashed.
+FINGERPRINT_EXCLUDED_PATHS = (
+    ".opencrane/llmstxt",
+    ".opencrane/chunks.json",
+    ".opencrane/embeddings.json",
+    ".opencrane/milvus.db",
+    ".opencrane/.milvus.db.lock",
+    ".git",
+    ".venv",
+    "venv",
+    "node_modules",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".tox",
+    "dist",
+    "build",
+)
 
 
 _repo_subdir: str | None = None
@@ -40,16 +63,26 @@ def get_repo_subdir() -> str:
     return ""
 
 
-def ignored_fingerprint(paths: List[Path]) -> Dict[str, str] | None:
+def _is_excluded(file_path: Path, excluded: List[Path]) -> bool:
+    return any(file_path == e or e in file_path.parents for e in excluded)
+
+
+def ignored_fingerprint(paths: List[Path], exclude: Iterable[Path] = ()) -> Dict[str, str] | None:
     """Return a SHA-256 digest for every Git-ignored file under the given paths.
 
     Git never reports changes in files it ignores, so :func:`has_changes`
     compares these digests with the ones recorded by the last run instead.
-    Keys are absolute file paths. Returns ``None`` when git is unavailable or
-    fails, for example outside a repository, so callers assume changes.
+    Keys are absolute file paths. Files under :data:`FINGERPRINT_EXCLUDED_PATHS`
+    of each path, or under any of *exclude*, are left out, so OpenCrane's own
+    output, the fingerprint file among it, never counts as a change. Returns
+    ``None`` when git is unavailable or fails, for example outside a
+    repository, so callers assume changes.
     """
     fingerprint: Dict[str, str] = {}
+    extra = [Path(os.path.abspath(e)) for e in exclude]
     for path in paths:
+        root = Path(os.path.abspath(path))
+        excluded = [root.joinpath(*p.split("/")) for p in FINGERPRINT_EXCLUDED_PATHS] + extra
         try:
             result = subprocess.run(
                 ["git", "ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--", str(path)],
@@ -70,6 +103,8 @@ def ignored_fingerprint(paths: List[Path]) -> Dict[str, str] | None:
             # source dir, and load_fingerprint would then drop its key, so the
             # record would never match. os.getcwd() is already the physical path.
             file_path = Path(os.path.abspath(name))
+            if _is_excluded(file_path, excluded):
+                continue
             if file_path.is_file():
                 with file_path.open("rb") as fh:
                     fingerprint[str(file_path)] = hashlib.file_digest(fh, "sha256").hexdigest()

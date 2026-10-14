@@ -26,7 +26,7 @@ opencrane llms --sources-dir {SOURCE_DIR} --sources-dir {OTHER_SOURCE_DIR}
 In this mode, the step regenerates the bundles only when the files in those directories changed. The step checks the files in the following way:
 
 - For files that Git tracks, an uncommitted change counts, and so does an untracked file in the directory. A change that you already committed, for example with `git pull`, does not count.
-- A file that Git ignores, for example a fetched file in `.opencrane/sources/`, counts as changed when its content differs from the last run for that directory. The step records a hash of each of these files in `.sources-fingerprint.json` in the output directory.
+- A file that Git ignores, for example a fetched file in `.opencrane/sources/`, counts as changed when its content differs from the last run for that directory. The step records a hash of each of these files in `.sources-fingerprint.json` in the output directory. The step does not hash the output directory, the other files that OpenCrane writes to `.opencrane/`, or tool and dependency directories such as `.git`, `.venv`, and `node_modules`. The list is `FINGERPRINT_EXCLUDED_PATHS` in `opencrane/shared/utils/git.py`. A directory that holds the project root, for example `--sources-dir .`, therefore skips a run in which nothing changed.
 
 Outside a Git repository, the step always regenerates. To regenerate the bundles anyway, add the `--force` flag.
 

@@ -147,3 +147,34 @@ def test_ignored_sources_dir_regenerates_when_files_change(workspace, capsys):
     gen_mod._source_mapping = None
     generate_outputs(sources_dirs=[src])
     assert "Rewritten intro." in bundle.read_text()
+
+
+@pytest.mark.unit
+def test_project_root_as_sources_dir_skips_unchanged_run(workspace, capsys):
+    """With ``--sources-dir .`` the output and fingerprint sit inside the hashed tree."""
+    _git(workspace, "init", "-q")
+    _git(workspace, "config", "user.email", "test@example.com")
+    _git(workspace, "config", "user.name", "Test")
+    (workspace / ".gitignore").write_text(".opencrane/\n.venv/\n")
+    _git(workspace, "add", ".gitignore")
+    _git(workspace, "commit", "-q", "-m", "init")
+    (workspace / ".venv" / "lib").mkdir(parents=True)
+    (workspace / ".venv" / "lib" / "site.py").write_text("x = 1\n")
+
+    bundle = workspace / ".opencrane" / "llmstxt" / "llms-full.txt"
+    generate_outputs(sources_dirs=[Path(".")])
+    assert "Intro page of proj-a." in bundle.read_text()
+
+    # Second run without changes: skipped, although the first run wrote the
+    # bundles and the fingerprint file under the source dir.
+    capsys.readouterr()
+    gen_mod._source_mapping = None
+    generate_outputs(sources_dirs=[Path(".")])
+    assert "Skipping" in capsys.readouterr().out
+
+    # A changed ignored doc file still triggers regeneration.
+    (workspace / ".opencrane" / "sources" / "proj-a" / "intro.md").write_text("# proj-a Intro\n\nRewritten intro.\n")
+    gen_mod._source_mapping = None
+    generate_outputs(sources_dirs=[Path(".")])
+    assert "Skipping" not in capsys.readouterr().out
+    assert "Rewritten intro." in bundle.read_text()

@@ -449,7 +449,7 @@ A stdio caller has no scopes, so the policy of the root endpoint at `/mcp` deter
 
 - With a flat `auth:` block, the caller gets `default_sources`. If neither `scope_sources` nor `default_sources` is set, the caller gets all sources.
 - A named `auth:` map has no root endpoint, so the caller gets no results.
-- If `.opencrane/config.yaml` contains invalid YAML, `search_docs` and `get_section` return an error.
+- If `.opencrane/config.yaml` contains invalid YAML, OpenCrane logs one `ERROR` that names the file and the parse problem. Until you fix the file, OpenCrane does not apply `default_sources`, and the caller gets all sources. The HTTP transport does not start with such a file.
 
 ---
 

@@ -262,7 +262,6 @@ The example creates `prose` chunks, so the chunk model checks their metadata. Pr
 - `section_anchor`
 - `tab_value`
 - `tab_label`
-- `key`
 - `heading_path`
 - `clause_id`
 - `parent_chunk_id`

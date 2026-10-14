@@ -30,7 +30,7 @@ class TestVectorChunk:
             content="test content",
             source_file="file.md",
             chunk_type="prose",
-            metadata={"key": "value"},
+            metadata={"source_url": "https://example.com/docs/page"},
             token_count=10,
             line_start=5
         )
@@ -47,7 +47,7 @@ class TestVectorChunk:
         assert vector_chunk.content == "test content"
         assert vector_chunk.source_file == "file.md"
         assert vector_chunk.chunk_type == "prose"
-        assert vector_chunk.metadata_json == '{\"key\": \"value\"}'
+        assert vector_chunk.metadata_json == '{"source_url": "https://example.com/docs/page"}'
         assert vector_chunk.token_count == 10
         assert vector_chunk.line_start == 5
         # Non-member chunk: list_id/table_id are absent

@@ -262,6 +262,85 @@ async def test_unparseable_mapping_file_fails_closed(tmp_path, monkeypatch):
     assert not recording.calls, "backend must not be called when the auth config is unreadable"
 
 
+@pytest.mark.anyio
+async def test_stdio_unparseable_mapping_file_logs_once_and_searches(tmp_path, monkeypatch, caplog):
+    """Over stdio an unparseable MAPPING_FILE logs one error and search runs unrestricted."""
+    import logging
+
+    from opencrane.mcp.auth.runtime import mark_stdio_transport
+
+    config_yaml = tmp_path / "config.yaml"
+    config_yaml.write_text("auth:\n  default_sources: [unclosed\n", encoding="utf-8")
+
+    monkeypatch.setenv("MAPPING_FILE", str(config_yaml))
+    reset_auth_runtime()
+    mark_stdio_transport()
+
+    recording = RecordingMilvus()
+    monkeypatch.setattr(mcp_server, "get_milvus_service", lambda: recording)
+    monkeypatch.setattr(mcp_server, "get_embeddings_service", lambda: DummyEmbeddings())
+
+    caplog.set_level(logging.ERROR, logger="opencrane.mcp.auth.runtime")
+    try:
+        with patch("mcp.server.auth.middleware.auth_context.get_access_token", return_value=None):
+            for _ in range(2):
+                await mcp_server._search_documentation_impl({
+                    "query": "test",
+                    "search_mode": "semantic",
+                    "limit": 1,
+                })
+    finally:
+        reset_auth_runtime()
+
+    assert recording.calls == [None, None]
+    errors = [
+        r.getMessage() for r in caplog.records
+        if r.name == "opencrane.mcp.auth.runtime" and r.levelno == logging.ERROR
+    ]
+    assert len(errors) == 1
+    assert str(config_yaml) in errors[0]
+    assert "default_sources" in errors[0]
+
+
+@pytest.mark.anyio
+async def test_stdio_valid_default_sources_still_restricts(tmp_path, monkeypatch):
+    """Over stdio a valid config.yaml with default_sources still narrows the search."""
+    from opencrane.mcp.auth.runtime import mark_stdio_transport
+
+    config_yaml = tmp_path / "config.yaml"
+    _write_config(
+        config_yaml,
+        "sources:\n"
+        "  cgw:\n"
+        "    url: https://github.com/org/cgw\n"
+        "  glossary:\n"
+        "    url: https://github.com/org/glossary\n"
+        "auth:\n"
+        "  type: none\n"
+        "  default_sources: [glossary]\n",
+    )
+
+    monkeypatch.setenv("MAPPING_FILE", str(config_yaml))
+    reset_auth_runtime()
+    mark_stdio_transport()
+
+    recording = RecordingMilvus()
+    monkeypatch.setattr(mcp_server, "get_milvus_service", lambda: recording)
+    monkeypatch.setattr(mcp_server, "get_embeddings_service", lambda: DummyEmbeddings())
+
+    try:
+        with patch("mcp.server.auth.middleware.auth_context.get_access_token", return_value=None):
+            await mcp_server._search_documentation_impl({
+                "query": "test",
+                "search_mode": "semantic",
+                "limit": 1,
+            })
+    finally:
+        reset_auth_runtime()
+
+    assert recording.calls == [["glossary"]]
+
+
 # ---------------------------------------------------------------------------
 # Per-endpoint access policy (named auth map)
 # ---------------------------------------------------------------------------

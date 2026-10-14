@@ -1938,6 +1938,10 @@ async def main():
     global _extra_tools
     _extra_tools = load_extra_tools()
 
+    from opencrane.mcp.auth.runtime import mark_stdio_transport
+
+    mark_stdio_transport()
+
     async with stdio_server() as (read_stream, write_stream):
         await app.run(
             read_stream,

@@ -36,6 +36,11 @@ _allowed_sources: ContextVar[tuple[str, ...] | None] = ContextVar(
     "opencrane_allowed_sources", default=None
 )
 
+# True while the stdio transport serves the request. Set once by the stdio
+# server's main(); the tasks that handle tool calls inherit it. The HTTP
+# transport never sets it, so it keeps failing closed on an unparseable config.
+_stdio_transport: ContextVar[bool] = ContextVar("opencrane_stdio_transport", default=False)
+
 
 def set_optional_scopes(scopes: tuple[str, ...]) -> None:
     """Record the caller's scopes for this request (optional-auth mode).
@@ -88,6 +93,16 @@ def current_allowed_sources() -> tuple[str, ...] | None:
     return _allowed_sources.get()
 
 
+def mark_stdio_transport() -> None:
+    """Record that the stdio transport serves the requests in this context.
+
+    Stdio has no authentication: its caller is the local user, who can read the
+    indexed files anyway. So over stdio an unparseable config.yaml logs an error
+    and leaves the search unrestricted instead of failing every search.
+    """
+    _stdio_transport.set(True)
+
+
 def set_current_endpoint(name: str) -> None:
     """Record which named MCP endpoint is serving the current request.
 
@@ -104,14 +119,30 @@ def _build_access_policies() -> "dict[str, AllowAllPolicy | ScopeSourcesPolicy]"
     Reads the ``auth`` block from config.yaml (path in ``MAPPING_FILE``, default
     ``.opencrane/config.yaml``). A missing file is treated as empty config,
     yielding a single root endpoint with an ``AllowAllPolicy``. An unparseable
-    file raises :class:`AuthConfigError` (fail-closed).
+    file raises :class:`AuthConfigError` (fail-closed), except over the stdio
+    transport: there it logs one error and the root endpoint allows all sources.
+    The result is cached, so the error is logged once per process.
     """
-    from opencrane.mcp.auth.config_model import load_mapping_data, parse_auth_endpoints
-    from opencrane.mcp.auth.policies import build_access_policy
+    from opencrane.mcp.auth.config_model import (
+        AuthConfigError,
+        load_mapping_data,
+        parse_auth_endpoints,
+    )
+    from opencrane.mcp.auth.policies import AllowAllPolicy, build_access_policy
     from opencrane.mcp.server import _get_source_keys
 
     mapping_file = Path(os.environ.get("MAPPING_FILE", ".opencrane/config.yaml"))
-    data = load_mapping_data(mapping_file)
+    try:
+        data = load_mapping_data(mapping_file)
+    except AuthConfigError as exc:
+        if not _stdio_transport.get():
+            raise
+        logger.error(
+            f"Cannot parse {mapping_file}: {exc.__cause__}. The source policy "
+            "(default_sources) is not applied until you fix this file, so stdio "
+            "search runs without a source restriction"
+        )
+        return {"": AllowAllPolicy()}
 
     known_sources = set(_get_source_keys())
     endpoints = parse_auth_endpoints(data, known_sources)
@@ -176,3 +207,4 @@ def reset_auth_runtime() -> None:
     _optional_scopes.set(None)
     _allowed_sources.set(None)
     _current_endpoint.set("")
+    _stdio_transport.set(False)

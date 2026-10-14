@@ -173,6 +173,73 @@ class TestIgnoredDirectories:
             mock_fp.assert_not_called()
 
 
+@pytest.fixture()
+def root_source_repo(tmp_path, monkeypatch):
+    """A repository whose root is the source dir and holds ignored state and tool dirs."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "user.name", "Test")
+    (repo / ".gitignore").write_text("*\n!.gitignore\n")
+    _git(repo, "add", ".gitignore")
+    _git(repo, "commit", "-q", "-m", "init")
+    files = [
+        ".opencrane/llmstxt/llms-full.txt",
+        ".opencrane/llmstxt/.sources-fingerprint.json",
+        ".opencrane/chunks.json",
+        ".opencrane/embeddings.json",
+        ".opencrane/milvus.db",
+        ".venv/lib/site.py",
+        "venv/lib/site.py",
+        "node_modules/pkg/README.md",
+        "__pycache__/x.pyc",
+        ".pytest_cache/v",
+        ".mypy_cache/v",
+        ".tox/env/x",
+        "dist/pkg.whl",
+        "build/out.md",
+        "out/llms-full.txt",
+        # Hashed: docs, fetched sources, and names that only share a prefix string.
+        "docs/page.md",
+        ".opencrane/sources/proj/page.md",
+        "builder/page.md",
+        "venvs.md",
+    ]
+    for name in files:
+        (repo / name).parent.mkdir(parents=True, exist_ok=True)
+        (repo / name).write_text(name)
+    monkeypatch.chdir(repo)
+    return repo
+
+
+class TestFingerprintExclusions:
+    """A source dir that holds the project root must not hash OpenCrane's own output."""
+
+    def test_excluded_dirs_are_not_hashed(self, root_source_repo):
+        fp = ignored_fingerprint([root_source_repo], exclude=[root_source_repo / "out"])
+        hashed = {Path(k).relative_to(root_source_repo).as_posix() for k in fp}
+        assert hashed == {
+            "docs/page.md",
+            ".opencrane/sources/proj/page.md",
+            "builder/page.md",
+            "venvs.md",
+        }
+
+    def test_changes_to_excluded_files_do_not_count(self, root_source_repo):
+        fp_file = root_source_repo / ".opencrane" / "llmstxt" / ".sources-fingerprint.json"
+        save_fingerprint(fp_file, [root_source_repo], ignored_fingerprint([root_source_repo]))
+        (root_source_repo / ".opencrane" / "chunks.json").write_text("rewritten")
+        (root_source_repo / "node_modules" / "pkg" / "README.md").write_text("rewritten")
+        assert has_changes([root_source_repo], fp_file) is False
+
+    def test_change_to_ignored_doc_is_detected(self, root_source_repo):
+        fp_file = root_source_repo / ".opencrane" / "llmstxt" / ".sources-fingerprint.json"
+        save_fingerprint(fp_file, [root_source_repo], ignored_fingerprint([root_source_repo]))
+        (root_source_repo / ".opencrane" / "sources" / "proj" / "page.md").write_text("rewritten")
+        assert has_changes([root_source_repo], fp_file) is True
+
+
 class TestIgnoredFingerprint:
     def _result(self, returncode=0, stdout=""):
         result = MagicMock()

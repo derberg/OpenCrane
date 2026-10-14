@@ -683,7 +683,7 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
         # them once, before reading the sources, and record the same digests
         # after generation so a change made mid-run is caught next time.
         fingerprint_file = LLMSTXT_BASE / FINGERPRINT_FILE_NAME
-        fingerprint = ignored_fingerprint(source_dirs)
+        fingerprint = ignored_fingerprint(source_dirs, exclude=[LLMSTXT_BASE])
         if not force and not has_changes(source_dirs, fingerprint_file, fingerprint):
             print("⊘ Skipping --generate-llms: no changes detected in source directories")
             print("  To force regeneration, use: --force")

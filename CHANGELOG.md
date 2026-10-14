@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.33.1](https://github.com/derberg/OpenCrane/compare/v0.33.0...v0.33.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* keep stdio search working when config.yaml cannot be parsed ([#90](https://github.com/derberg/OpenCrane/issues/90)) ([2b579eb](https://github.com/derberg/OpenCrane/commit/2b579eb782f7dc710b116de840145e9333f3d4db))
+* leave OpenCrane output and tool dirs out of the ignored-file fingerprint ([#91](https://github.com/derberg/OpenCrane/issues/91)) ([44abf8f](https://github.com/derberg/OpenCrane/commit/44abf8f916478396ebae6b3b254f6c0e174bff00))
+
 ## [0.33.0](https://github.com/derberg/OpenCrane/compare/v0.32.0...v0.33.0) (2026-10-13)
 
 

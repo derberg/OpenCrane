@@ -18,6 +18,27 @@ _REQUIRED_FIELDS = {"list_id", "table_id", "clause_id", "parent_chunk_id"}
 
 logger = logging.getLogger(__name__)
 
+# Recorded settings that change how queries must be embedded. A collection that
+# recorded different values is rebuilt so the server reads the current ones.
+_EMBEDDING_SETTING_KEYS = ("model", "document_prompt", "query_prompt")
+
+
+def _embedding_metadata(embeddings, dim: int) -> dict:
+    """Settings recorded in the collection so the server embeds queries the same way.
+
+    ``query_prompt`` is left out when the embeddings file predates it: an
+    unknown prompt must not override the server's ``EMBEDDING_QUERY_PROMPT``.
+    """
+    metadata = {"model": embeddings.model, "document_prompt": embeddings.document_prompt, "dim": dim}
+    if "query_prompt" in embeddings.model_fields_set:
+        metadata["query_prompt"] = embeddings.query_prompt
+    return metadata
+
+
+def _changed_settings(recorded: dict, metadata: dict) -> list:
+    """Names of the embedding settings that differ between the collection and the embeddings."""
+    return [key for key in _EMBEDDING_SETTING_KEYS if recorded.get(key) != metadata.get(key)]
+
 
 def main(chunks_file=None, embeddings_file=None):
     """Main entry point for vector database initialization.
@@ -59,11 +80,7 @@ def main(chunks_file=None, embeddings_file=None):
         dim = len(embeddings.embeddings[0].vector)
     else:
         dim = embeddings.dimensions or DEFAULT_EMBEDDING_DIM
-    if embeddings.document_prompt:
-        logger.info(
-            f"The embeddings use document prompt {embeddings.document_prompt!r}; "
-            "serve with the matching query prompt"
-        )
+    metadata = _embedding_metadata(embeddings, dim)
 
     logger.info(f"Initializing Milvus with {len(chunks_data)} chunks...")
     milvus = MilvusService()
@@ -90,6 +107,8 @@ def main(chunks_file=None, embeddings_file=None):
             stats = milvus.get_collection_stats()
             populated = stats.get('row_count', 0) > 0
             existing_dim = milvus.vector_dim()
+            recorded = milvus.embedding_metadata()
+            changed = _changed_settings(recorded, metadata) if isinstance(recorded, dict) else []
             # Only real vectors identify the model. Without them the dim is a
             # guess, and a guess must not wipe a populated collection.
             if populated and embeddings.embeddings and existing_dim not in (None, dim):
@@ -100,7 +119,22 @@ def main(chunks_file=None, embeddings_file=None):
                     f"are {dim}-dimensional (embedding model changed); dropping and rebuilding."
                 )
                 milvus.client.drop_collection(milvus.collection_name)
+            elif populated and embeddings.embeddings and changed:
+                # The collection records how its vectors were made, and the
+                # server serves with those settings. Rebuild so it records the
+                # embeddings' settings instead of stale ones.
+                logger.info(
+                    f"Collection was indexed with different embedding settings {changed}; "
+                    "dropping and rebuilding."
+                )
+                milvus.client.drop_collection(milvus.collection_name)
             elif populated:
+                if not isinstance(recorded, dict):
+                    logger.warning(
+                        "Collection does not record its embedding model and prompts, so the "
+                        "server takes them from EMBEDDING_MODEL and EMBEDDING_QUERY_PROMPT. "
+                        "Run 'DROP_EXISTING=true opencrane index' to record them."
+                    )
                 logger.info(f"Collection already initialized with {stats['row_count']} vectors")
                 logger.info("Skipping initialization (collection already populated)")
                 logger.info("To force reinit, set DROP_EXISTING=true")
@@ -110,7 +144,7 @@ def main(chunks_file=None, embeddings_file=None):
                 milvus.client.drop_collection(milvus.collection_name)
 
     logger.info("Creating collection...")
-    milvus.create_collection(dim=dim)
+    milvus.create_collection(dim=dim, embedding_metadata=metadata)
 
     logger.info("Building vector chunks...")
     vector_chunks = []

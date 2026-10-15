@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from opencrane.shared.config import get_config
 from opencrane.shared.models.vector_chunk import DEFAULT_EMBEDDING_DIM
 from opencrane.shared.utils.embedding_prompts import format_query
 
@@ -64,6 +65,9 @@ class CorpusData:
     # only a sample.
     full_size: int = 0
     sample_size: int = 0
+    # Query prompt that `embed` recorded in the embeddings file, or None for a
+    # file from before it was recorded.
+    query_prompt: str | None = None
 
 
 def read_paragraph(text: str | None, file: str | None) -> str:
@@ -114,7 +118,8 @@ def load_corpus(embeddings_file: Path, chunks_file: Path) -> CorpusData:
     n = len(records)
     return CorpusData(model_name=model_name, vectors=vectors,
                       sources=sources, snippets=snippets, urls=urls,
-                      full_size=n, sample_size=n)
+                      full_size=n, sample_size=n,
+                      query_prompt=emb_data.get("query_prompt"))
 
 
 def subsample_for_scatter(corpus: CorpusData, sample_size: int,
@@ -151,12 +156,13 @@ def subsample_for_scatter(corpus: CorpusData, sample_size: int,
     return sliced, new_neighbor_idx
 
 
-def encode_paragraph(model_name: str, paragraph: str):
+def encode_paragraph(model_name: str, paragraph: str, query_prompt: str | None = None):
     """Encode a single paragraph using the same model as the corpus.
 
-    The paragraph is treated like a search query, so the effective query prompt
-    (``EMBEDDING_QUERY_PROMPT`` or the model's default) is applied, mirroring
-    how ``serve`` encodes queries against the corpus.
+    The paragraph is treated like a search query, so a query prompt is applied,
+    mirroring how ``serve`` encodes queries against the corpus. The prompt is
+    ``EMBEDDING_QUERY_PROMPT`` when set, else *query_prompt* (the one the
+    embeddings file records), else the model's default.
     """
     np = _require("numpy")
     _require("sentence_transformers")
@@ -165,7 +171,10 @@ def encode_paragraph(model_name: str, paragraph: str):
     logger.info("Loading model %s (CPU)…", model_name)
     model = SentenceTransformer(model_name, trust_remote_code=True, device="cpu")
     logger.info("Encoding paragraph (%d chars)…", len(paragraph))
-    vec = model.encode([format_query(paragraph, model=model, model_name=model_name)], show_progress_bar=False)[0]
+    template = get_config().embedding_query_prompt
+    if template is None:
+        template = query_prompt
+    vec = model.encode([format_query(paragraph, template, model=model, model_name=model_name)], show_progress_bar=False)[0]
     return np.asarray(vec, dtype=np.float32)
 
 
@@ -2393,7 +2402,7 @@ def main(
     # Always load the FULL corpus — neighbor finding must search every chunk,
     # not a random sample, or "top neighbor" lies.
     corpus = load_corpus(embeddings_file, chunks_file)
-    new_vec = encode_paragraph(corpus.model_name, paragraph)
+    new_vec = encode_paragraph(corpus.model_name, paragraph, corpus.query_prompt)
     if new_vec.shape[0] != corpus.vectors.shape[1]:
         raise SystemExit(
             f"Dimension mismatch: model returned {new_vec.shape[0]}, "

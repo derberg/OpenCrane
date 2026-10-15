@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Union
 from sentence_transformers import SentenceTransformer
 from opencrane.shared.config import get_config
 from opencrane.shared.models.vector_chunk import DEFAULT_EMBEDDING_DIM, EmbeddingRecord, EmbeddingsFile, generate_chunk_id
-from opencrane.shared.utils.embedding_prompts import format_document, resolve_document_prompt
+from opencrane.shared.utils.embedding_prompts import format_document, resolve_document_prompt, resolve_query_prompt
 import json
 import hashlib
 from datetime import datetime, timezone
@@ -129,6 +129,8 @@ class EmbeddingService:
             created_at=datetime.now(timezone.utc).isoformat(),
             chunks_sha256=chunks_sha256,
             document_prompt=document_prompt,
+            # Recorded so `index` can store it and the server embeds queries with it.
+            query_prompt=resolve_query_prompt(self.model, self.model_name),
             embeddings=embeddings
         )
 

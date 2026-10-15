@@ -299,14 +299,16 @@ The command accepts the following flags:
 |---|---|
 | `--chunks-file {PATH}` | Input chunks JSON file. Overrides the `AI_DOCS_CHUNKS_FILE` environment variable. |
 | `--embeddings-file {PATH}` | Output embeddings JSON file. Overrides the `AI_DOCS_EMBEDDINGS_FILE` environment variable. |
-| `--force` | Regenerates the embeddings even when the chunks and the document prompt are unchanged. Pass it after you change `EMBEDDING_MODEL`, because the skip check ignores the model. |
+| `--force` | Regenerates the embeddings even when the chunks and the document prompt are unchanged. Pass it after you change `EMBEDDING_MODEL`, because the skip check ignores the model. A changed query prompt needs no `--force`: a skipped run still writes it to the embeddings file. |
 
 #### Index the embeddings in Milvus with `opencrane index`
 
 The `opencrane index` command loads the chunks and their embeddings into Milvus. By default, it reads them from `.opencrane/chunks.json` and `.opencrane/embeddings.json`.
 
 > [!CAUTION]
-> When the collection has a different vector size or lacks fields that this OpenCrane version needs, the command deletes and rebuilds the collection. Searches fail until the rebuild finishes and the MCP server uses the same embedding model. First, check that the embeddings come from the model you want to serve.
+> The command deletes and rebuilds the collection in the following cases: the collection has a different vector size, it lacks fields that this OpenCrane version needs, or it records a different embedding model or prompt than the embeddings file. Searches fail until the rebuild finishes. First, check that the embeddings come from the model you want to serve.
+
+The command records the embedding model, the document prompt, the query prompt, and the vector size in the collection. The MCP server reads them, so it embeds queries the same way as the indexed chunks. See [Embedding settings in the index](docs/embeddings.md#embedding-settings-in-the-index).
 
 The command has the following syntax:
 
@@ -321,7 +323,7 @@ The command accepts the following flags:
 | `--chunks-file {PATH}` | Input chunks JSON file. Overrides the `AI_DOCS_CHUNKS_FILE` environment variable. |
 | `--embeddings-file {PATH}` | Input embeddings JSON file. Overrides the `AI_DOCS_EMBEDDINGS_FILE` environment variable. |
 
-When the Milvus collection already has rows, the command skips indexing and keeps the existing data. This also applies to the index step of `opencrane build`, so after a documentation update, the build leaves the old data in Milvus.
+When the Milvus collection already has rows and records the same embedding settings, the command skips indexing and keeps the existing data. A collection that an earlier OpenCrane version built records no settings. The command keeps it and logs a warning. This also applies to the index step of `opencrane build`, so after a documentation update, the build leaves the old data in Milvus.
 
 To replace the existing data, set `DROP_EXISTING=true`.
 
@@ -466,6 +468,7 @@ pip install 'opencrane[viz]'
 The HTTP transport of `opencrane serve` exposes `GET /health` for the liveness and readiness probes of a container platform, for example Cloud Run. The endpoint reports the following checks:
 
 - Embedding service and Milvus service state
+- The embedding model and query prompt in use, and the source of each: `env`, `index`, or `default`
 - Collection statistics, such as the row count
 - A test search for one result, with a timeout
 - Free memory, read from the cgroup
@@ -489,6 +492,12 @@ The following example shows a response with the `200` status code:
     "embeddings_service": "healthy",
     "milvus_service": "healthy",
     "collection_stats": { "row_count": 1234 },
+    "embedding": {
+      "model": "nomic-ai/nomic-embed-text-v1.5",
+      "model_source": "index",
+      "query_prompt": "search_query: ",
+      "query_prompt_source": "index"
+    },
     "heavy_maps": {
       "keyword_index_resident": true
     },
@@ -586,8 +595,9 @@ You need the following variables only if you run the `embed` step, directly or t
 
 | Variable | Default | Description |
 |---|---|---|
-| `EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | Hugging Face embedding model. The MCP server must use the same model. See [Choose an embedding model](docs/embeddings.md#choose-an-embedding-model). |
+| `EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | Hugging Face embedding model. `index` records it in the collection, and the MCP server uses the recorded model. See [Choose an embedding model](docs/embeddings.md#choose-an-embedding-model). |
 | `EMBEDDING_DOCUMENT_PROMPT` | the model's document prompt | Prefix that `embed` adds to every chunk. An empty value turns the prompt off. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
+| `EMBEDDING_QUERY_PROMPT` | the model's query prompt | Query prompt that `embed` writes to the embeddings file and `index` records in the collection. An empty value turns the prompt off. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
 
 #### Variables for the `index` and `serve` steps
 
@@ -607,8 +617,9 @@ The following table lists the variables:
 | `MILVUS_PORT` | `19530` | Milvus server port, in server mode only |
 | `MILVUS_COLLECTION` | `ai_docs_chunks_v1` | Milvus collection name |
 | `MILVUS_INSERT_BATCH_SIZE` | `2000` | Maximum number of chunks in each insert call during `index`. If `index` creates duplicate rows, lower this value. |
-| `DROP_EXISTING` | `false` | When `true`, `index` deletes and rebuilds the Milvus collection. When `false`, `index` keeps a collection that already has rows, unless its vector size or its fields no longer match. See [`opencrane index`](#index-the-embeddings-in-milvus-with-opencrane-index). |
-| `EMBEDDING_QUERY_PROMPT` | the model's query prompt | Prompt that `serve` and `visualize` apply to each query. An empty value turns the prompt off. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
+| `DROP_EXISTING` | `false` | When `true`, `index` deletes and rebuilds the Milvus collection. When `false`, `index` keeps a collection that already has rows, unless its vector size, its fields, or its recorded embedding settings no longer match. See [`opencrane index`](#index-the-embeddings-in-milvus-with-opencrane-index). |
+| `EMBEDDING_MODEL` | Recorded in the index | Embedding model for queries. Leave it unset so that the server uses the model that the index records. When it is set and differs from the recorded model, the server does not start. See [Embedding settings in the index](docs/embeddings.md#embedding-settings-in-the-index). |
+| `EMBEDDING_QUERY_PROMPT` | Recorded in the index | Prompt that `serve` and `visualize` apply to each query. An empty value turns the prompt off. The server follows the same rules as for `EMBEDDING_MODEL`. `visualize` uses the variable when it is set, and otherwise the prompt that the embeddings file records. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
 | `HYBRID_ALPHA` | `0.6` | Weight of vector search compared to keyword search. `1.0` is pure vector search, and `0.0` is pure BM25 keyword search. |
 | `HYBRID_CANDIDATE_POOL` | `0` | Number of results that the semantic search and the keyword search each return before hybrid search fuses them. `0` means the requested `limit`, or `RERANK_DEPTH` when a reranker is on. A wider pool, for example `50`, can surface chunks that both searches rank just below `limit`. |
 | `HYBRID_FUSION` | `minmax` | How hybrid search merges the results of the two searches. `minmax` blends normalized scores, and `rrf` blends ranks with Reciprocal Rank Fusion. See [Search modes](docs/architecture.md#search-modes). |

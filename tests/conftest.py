@@ -47,6 +47,7 @@ def isolate_outputs(monkeypatch, setup_session_temp_root):
     monkeypatch.setattr('opencrane.mcp.server._chunk_types_cache', None)
     monkeypatch.setattr('opencrane.mcp.server._milvus_service', None)
     monkeypatch.setattr('opencrane.mcp.server._embeddings_service', None)
+    monkeypatch.setattr('opencrane.mcp.server._embedding_settings', None)
 
     # Patch ROOT in generate_llms_txt to point to session temp directory
     monkeypatch.setattr('opencrane.rag.generate_llms_txt.ROOT', setup_session_temp_root)
@@ -65,3 +66,4 @@ def isolate_outputs(monkeypatch, setup_session_temp_root):
     monkeypatch.setattr('opencrane.mcp.server._chunk_types_cache', None)
     monkeypatch.setattr('opencrane.mcp.server._milvus_service', None)
     monkeypatch.setattr('opencrane.mcp.server._embeddings_service', None)
+    monkeypatch.setattr('opencrane.mcp.server._embedding_settings', None)

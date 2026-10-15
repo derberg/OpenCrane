@@ -362,7 +362,8 @@ class TestMCPServer:
         mock_cm.__aenter__ = AsyncMock(return_value=(mock_read_stream, mock_write_stream))
         mock_cm.__aexit__ = AsyncMock(return_value=None)
 
-        with patch('opencrane.mcp.server.stdio_server', return_value=mock_cm):
+        with patch('opencrane.mcp.server.stdio_server', return_value=mock_cm), \
+                patch('opencrane.mcp.server.check_embedding_settings'):
             mock_app.run = AsyncMock()
             mock_app.create_initialization_options.return_value = {}
 
@@ -1423,6 +1424,7 @@ def test_get_embeddings_service_warns_on_inconsistent_prompts(mock_embedding_ser
     import logging
     import opencrane.mcp.server as server_module
     monkeypatch.setattr(server_module, "_embeddings_service", None)
+    monkeypatch.setattr(server_module, "get_milvus_service", lambda: Mock(embedding_metadata=Mock(return_value=None)))
     monkeypatch.setenv("EMBEDDING_DOCUMENT_PROMPT", "search_document: ")
     monkeypatch.delenv("EMBEDDING_QUERY_PROMPT", raising=False)
 

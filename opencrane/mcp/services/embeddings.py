@@ -127,6 +127,7 @@ class EmbeddingService:
             created_at=datetime.now(timezone.utc).isoformat(),
             chunks_sha256=chunks_sha256,
             document_prompt=document_prompt,
+            query_prompt=self.config.embedding_query_prompt,
             embeddings=embeddings
         )
 

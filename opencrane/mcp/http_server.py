@@ -26,6 +26,8 @@ from mcp.server.fastmcp.tools.base import Tool
 from mcp.server.fastmcp.utilities.func_metadata import FuncMetadata, ArgModelBase
 from pydantic import ConfigDict
 
+from opencrane.mcp.services.embedding_settings import EmbeddingSettingsMismatch
+
 logger = logging.getLogger(__name__)
 
 _services_ready = False
@@ -57,6 +59,11 @@ async def init_services():
         _services_ready = True
         logger.info("All services ready")
 
+    except EmbeddingSettingsMismatch as e:
+        # Serving would return poor results without any error, so stop the
+        # server instead of reporting "not ready" forever.
+        logger.error(f"Failed to initialize services: {e}")
+        raise
     except Exception as e:
         logger.error(f"Failed to initialize services: {e}")
         _services_ready = False

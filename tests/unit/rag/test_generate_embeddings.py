@@ -84,6 +84,7 @@ class TestGenerateEmbeddings:
 
         assert _embeddings_up_to_date(chunks_file, embeddings_file) is False
 
+    @patch.dict('os.environ', {'EMBEDDING_DOCUMENT_PROMPT': ''})
     def test_embeddings_up_to_date_matching_hash(self, tmp_path):
         """Returns True when stored chunks_sha256 matches the current chunks file."""
         chunks_file = tmp_path / "chunks.json"
@@ -191,3 +192,19 @@ def test_main_second_run_skips_on_unchanged_chunks_file(mock_logging, tmp_path, 
         main(chunks_file, embeddings_file)
 
     assert spy.call_count == 1
+
+
+def test_embeddings_up_to_date_false_when_default_prompt_changed(tmp_path, monkeypatch):
+    """Embeddings recorded without a prompt are stale once the model's default prompt applies."""
+    monkeypatch.delenv("EMBEDDING_DOCUMENT_PROMPT", raising=False)
+    monkeypatch.setenv("EMBEDDING_MODEL", "nomic-ai/nomic-embed-text-v1.5")
+    chunks_file = tmp_path / "chunks.json"
+    chunks_file.write_bytes(b'[{"content": "x"}]')
+    embeddings_file = tmp_path / "embeddings.json"
+    record = {"chunks_sha256": _chunks_sha256(chunks_file), "document_prompt": ""}
+    embeddings_file.write_text(json.dumps(record))
+
+    assert _embeddings_up_to_date(chunks_file, embeddings_file) is False
+    record["document_prompt"] = "search_document: "
+    embeddings_file.write_text(json.dumps(record))
+    assert _embeddings_up_to_date(chunks_file, embeddings_file) is True

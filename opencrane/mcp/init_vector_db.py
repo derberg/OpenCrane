@@ -62,7 +62,7 @@ def main(chunks_file=None, embeddings_file=None):
     if embeddings.document_prompt:
         logger.info(
             f"The embeddings use document prompt {embeddings.document_prompt!r}; "
-            "serve with the matching EMBEDDING_QUERY_PROMPT"
+            "serve with the matching query prompt"
         )
 
     logger.info(f"Initializing Milvus with {len(chunks_data)} chunks...")

@@ -154,8 +154,9 @@ def subsample_for_scatter(corpus: CorpusData, sample_size: int,
 def encode_paragraph(model_name: str, paragraph: str):
     """Encode a single paragraph using the same model as the corpus.
 
-    The paragraph is treated like a search query, so ``EMBEDDING_QUERY_PROMPT``
-    is applied, mirroring how ``serve`` encodes queries against the corpus.
+    The paragraph is treated like a search query, so the effective query prompt
+    (``EMBEDDING_QUERY_PROMPT`` or the model's default) is applied, mirroring
+    how ``serve`` encodes queries against the corpus.
     """
     np = _require("numpy")
     _require("sentence_transformers")
@@ -164,7 +165,7 @@ def encode_paragraph(model_name: str, paragraph: str):
     logger.info("Loading model %s (CPU)…", model_name)
     model = SentenceTransformer(model_name, trust_remote_code=True, device="cpu")
     logger.info("Encoding paragraph (%d chars)…", len(paragraph))
-    vec = model.encode([format_query(paragraph)], show_progress_bar=False)[0]
+    vec = model.encode([format_query(paragraph, model=model, model_name=model_name)], show_progress_bar=False)[0]
     return np.asarray(vec, dtype=np.float32)
 
 

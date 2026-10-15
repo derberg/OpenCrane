@@ -6,6 +6,9 @@ from pathlib import Path
 LOG_LEVEL_ENV = 'LOG_LEVEL'
 _VALID_LEVELS = ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')
 _warned_values: set[str] = set()
+_LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+# `opencrane fetch` appends its log to this file.
+FETCH_LOG_FILE = Path('.opencrane') / 'fetch_docs.log'
 
 
 def _parse_log_level(default):
@@ -43,10 +46,25 @@ def resolve_log_level(default=logging.INFO):
     return level
 
 
-def setup_logging(level=None):
+def _add_file_handler(log_file):
+    """Append the root log to ``log_file`` once, creating its directory."""
+    log_path = Path(log_file).resolve()
+    root = logging.getLogger()
+    for handler in root.handlers:
+        if isinstance(handler, logging.FileHandler) and handler.baseFilename == str(log_path):
+            return
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    handler = logging.FileHandler(log_path, mode='a')
+    handler.setFormatter(logging.Formatter(_LOG_FORMAT))
+    root.addHandler(handler)
+
+
+def setup_logging(level=None, log_file=None):
     """Setup logging configuration for the application.
 
     Without an explicit ``level``, the level comes from LOG_LEVEL (default INFO).
+    The log always goes to stderr. With ``log_file``, it is also appended to
+    that file. Without it, no file is created.
     """
     invalid = None
     # Only an explicit level or a valid LOG_LEVEL overrides the root level of
@@ -57,16 +75,13 @@ def setup_logging(level=None):
         explicit = level is not None
         if level is None:
             level = logging.INFO
-    log_path = Path('.opencrane/fetch_docs.log')
-    log_path.parent.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
         level=level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(sys.stderr),
-            logging.FileHandler(log_path, mode='a')
-        ]
+        format=_LOG_FORMAT,
+        handlers=[logging.StreamHandler(sys.stderr)]
     )
+    if log_file is not None:
+        _add_file_handler(log_file)
     # basicConfig is a no-op once the root logger has handlers, so set the
     # level directly; a later call then still applies its level.
     if explicit:
@@ -82,5 +97,6 @@ def setup_logging(level=None):
     logging.getLogger('opencrane.mcp_server').setLevel(level)
 
 
-# Setup default logging
+# Set up stderr logging on import. No file is written here: importing
+# opencrane must not create files in the working directory.
 setup_logging()

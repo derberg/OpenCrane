@@ -8,7 +8,7 @@ from opencrane.shared.config import get_config
 from opencrane.rag.github_client import GitHubClient
 from opencrane.rag.repo_fetcher import RepoFetcher
 from opencrane.rag.file_manager import FileManager
-from opencrane.shared.logging_config import setup_logging
+from opencrane.shared.logging_config import FETCH_LOG_FILE, setup_logging
 from opencrane.rag.services.source_mapping import SourceMapping
 from opencrane.shared.utils.repo_name_detector import get_current_repo_name
 from opencrane.shared.utils.github_url_parser import parse_github_url
@@ -33,7 +33,7 @@ def main(config=None):
     """Main entry point for the documentation fetcher."""
     try:
         # Setup logging
-        setup_logging()
+        setup_logging(log_file=FETCH_LOG_FILE)
 
         # Get configuration
         if config is None:

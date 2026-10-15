@@ -1,9 +1,21 @@
 """Pytest configuration for test isolation."""
+import atexit
+import os
 import pytest
 from pathlib import Path
 import tempfile
 import shutil
 from unittest.mock import MagicMock
+
+# Point Milvus Lite at a temp file before any test module is imported. Importing
+# opencrane.mcp.http_server builds the app at module level, which connects to
+# Milvus, so without this, collection alone writes .opencrane/milvus.db in the
+# working directory. A fixture would run too late. Tests that check the default
+# path unset the variable themselves.
+_milvus_temp_dir = tempfile.mkdtemp(prefix="opencrane-test-milvus-")
+os.environ["MILVUS_DB_PATH"] = str(Path(_milvus_temp_dir) / "milvus.db")
+atexit.register(shutil.rmtree, _milvus_temp_dir, ignore_errors=True)
+
 from opencrane.shared.config import get_config
 
 

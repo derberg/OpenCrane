@@ -1150,8 +1150,11 @@ class TestGenerateOutputsSkipBehavior:
 
         assert (llmstxt_dir / "llms-full.txt").exists()
 
-    def test_skip_does_not_call_has_changes_for_legacy_path(self, tmp_path):
+    def test_skip_does_not_call_has_changes_for_legacy_path(self, tmp_path, monkeypatch):
         """Legacy selected_projects path is unaffected by git-change logic."""
+        # generate_outputs resets OUTPUT_ROOT to <cwd>/.opencrane/llmstxt, so run
+        # from tmp_path to keep its output out of the working directory.
+        monkeypatch.chdir(tmp_path)
         source_dir = tmp_path / "sources"
         source_dir.mkdir()
         proj = source_dir / "proj1"

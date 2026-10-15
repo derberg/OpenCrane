@@ -108,3 +108,47 @@ class TestLogLevelVariable:
             setup_logging()
 
         assert logging.getLogger().level == logging.WARNING
+
+
+def _handlers_writing_to(directory):
+    """Root file handlers whose file is under ``directory``.
+
+    Pytest adds its own FileHandler to the root logger, so match by path.
+    """
+    prefix = str(directory.resolve())
+    return [h for h in logging.getLogger().handlers
+            if isinstance(h, logging.FileHandler) and h.baseFilename.startswith(prefix)]
+
+
+@pytest.mark.unit
+class TestLogFile:
+    """Only an explicit log_file writes the log to a file."""
+
+    @pytest.fixture(autouse=True)
+    def _isolate(self, monkeypatch, tmp_path):
+        monkeypatch.chdir(tmp_path)
+        root = logging.getLogger()
+        saved_handlers = list(root.handlers)
+        yield
+        for handler in root.handlers:
+            if handler not in saved_handlers:
+                handler.close()
+        root.handlers[:] = saved_handlers
+
+    def test_without_log_file_creates_no_file(self, tmp_path):
+        setup_logging()
+
+        assert list(tmp_path.iterdir()) == []
+        assert _handlers_writing_to(tmp_path) == []
+
+    def test_log_file_gets_one_handler_and_the_log(self, tmp_path):
+        from opencrane.shared.logging_config import FETCH_LOG_FILE
+
+        setup_logging(log_file=FETCH_LOG_FILE)
+        setup_logging(log_file=FETCH_LOG_FILE)
+        logging.getLogger("opencrane.test").warning("fetch line")
+
+        file_handlers = _handlers_writing_to(tmp_path)
+        assert len(file_handlers) == 1
+        file_handlers[0].flush()
+        assert "fetch line" in (tmp_path / ".opencrane" / "fetch_docs.log").read_text()

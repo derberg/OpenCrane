@@ -556,7 +556,7 @@ Every `opencrane` command reads the following variable:
 
 | Variable | Default | Description |
 |---|---|---|
-| `LOG_LEVEL` | `INFO` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`, in uppercase or lowercase. OpenCrane writes its log to stderr and to `.opencrane/fetch_docs.log`. An unknown value logs one warning and uses `INFO`. |
+| `LOG_LEVEL` | `INFO` | Log level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`, in uppercase or lowercase. OpenCrane writes its log to stderr. `opencrane fetch` also appends it to `.opencrane/fetch_docs.log`. An unknown value logs one warning and uses `INFO`. |
 
 #### Variables for the `fetch` step
 

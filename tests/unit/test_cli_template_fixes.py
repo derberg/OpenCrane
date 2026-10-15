@@ -172,8 +172,8 @@ def test_runtime_image_uses_the_embedding_model_it_downloaded():
     from opencrane.templates import DOCKERFILE
 
     runtime = DOCKERFILE.split("# Stage 4", 1)[1]
-    assert "ARG EMBEDDING_MODEL=" in runtime
-    assert "ENV EMBEDDING_MODEL=${EMBEDDING_MODEL}" in runtime
+    assert "COPY --from=settings /build/image.env /app/image.env" in runtime
+    assert ". /app/image.env && exec opencrane serve" in runtime
 
 
 # === init: README build command names the written container file ===

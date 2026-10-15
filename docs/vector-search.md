@@ -67,6 +67,28 @@ To use Podman, run the same files with `podman-compose`:
 podman-compose -f .opencrane/docker-compose.yml up --build
 ```
 
+#### Embedding settings in the image
+
+The image build reads the embedding model from `.opencrane/embeddings.json`, which records the model that `opencrane embed` used. The model download, the index, and the server then use the same model. The build fails when `embeddings.json` is missing and you do not set the model.
+
+The build reads the following build arguments. The compose file passes each one only when your shell sets the environment variable of the same name.
+
+| Build argument | Description |
+|---|---|
+| `EMBEDDING_MODEL` | Overrides the model from `embeddings.json`. The build warns when the two differ. An empty value counts as not set. |
+| `EMBEDDING_TRUST_REMOTE_CODE` | `true` or `false`. When unset, it is `true` only for `nomic-ai/*` models. The download and the server use the same value. |
+| `EMBEDDING_QUERY_PROMPT`, `EMBEDDING_DOCUMENT_PROMPT` | The image passes a prompt to the server only when you set it. A prompt set to an empty value means no prompt. See [Embedding prompts](embeddings.md#embedding-prompts). |
+| `RERANKER_MODEL` | Optional reranker model that the build downloads into the image. |
+| `RERANKER_TRUST_REMOTE_CODE` | The same as `EMBEDDING_TRUST_REMOTE_CODE`, for the reranker model. |
+
+The build writes these settings to `/app/image.env`, and the entrypoint loads them before it starts the server. A variable that you set when you start the container, for example with `docker run -e`, overrides the value from the build.
+
+To set the query prompt in an image that you build without compose, run the following command from the project root:
+
+```bash
+docker build --build-arg EMBEDDING_QUERY_PROMPT="search_query: " -t {REGISTRY}/{IMAGE_NAME}:latest -f .opencrane/Dockerfile .
+```
+
 ### Run a prebuilt image
 
 > [!CAUTION]

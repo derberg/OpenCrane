@@ -66,7 +66,7 @@ export EMBEDDING_QUERY_PROMPT="search_query: "
 opencrane embed && DROP_EXISTING=true opencrane index
 ```
 
-A new query prompt needs only a server restart. The `.opencrane/docker-compose.yml` file from `opencrane init` passes `EMBEDDING_QUERY_PROMPT` from your shell to the container.
+A new query prompt needs only a server restart. The container image from `opencrane init` takes both prompts as build arguments, and `.opencrane/docker-compose.yml` passes them from your shell. See [Embedding settings in the image](vector-search.md#embedding-settings-in-the-image).
 
 ## Collection schema
 

@@ -138,7 +138,7 @@ The command creates the `.opencrane/` directory with the following files:
 |---|---|
 | `.opencrane/config.yaml` | Template for the source mapping and the project configuration, with commented examples of a GitHub source and an `llmstxt` source |
 | `.opencrane/README.md` | Quick reference for the `.opencrane/` directory |
-| `.opencrane/Dockerfile` | Multi-stage build: dependencies → model download → Milvus index → runtime |
+| `.opencrane/Dockerfile` | Multi-stage build: dependencies → embedding settings from `embeddings.json` and model download → Milvus index → runtime |
 | `.opencrane/docker-compose.yml` | Builds and runs the MCP server on port 8000 |
 | `.opencrane/extensions.py` | Template for custom Python extensions. The command generates it only with `--extensions`. |
 

@@ -26,7 +26,7 @@ def _run_download(tmp_path, reranker_model: str) -> list[str]:
     stub.chmod(0o755)
     script = _model_download_script().replace(
         "mkdir -p /build/hf_cache && cp -r /root/.cache/huggingface /build/hf_cache/", "true"
-    )
+    ).replace(". /build/image.env && ", "")
     env = {
         "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
         "EMBEDDING_MODEL": "embed/model",

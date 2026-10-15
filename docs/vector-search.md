@@ -67,6 +67,29 @@ To use Podman, run the same files with `podman-compose`:
 podman-compose -f .opencrane/docker-compose.yml up --build
 ```
 
+#### Embedding settings in the image
+
+The image build reads the embedding model from `.opencrane/embeddings.json`, which records the model and the prompts that `opencrane embed` used. The model download and the index use that model, and the index records the model and the prompts. The server then embeds queries with the recorded settings. See [Embedding settings in the index](embeddings.md#embedding-settings-in-the-index). The build fails when `embeddings.json` is missing and you do not set the model.
+
+The build reads the following build arguments. The compose file passes each one only when your shell sets the environment variable of the same name.
+
+| Build argument | Description |
+|---|---|
+| `EMBEDDING_MODEL` | Must match the model in `embeddings.json`, or the build fails. An empty value counts as not set. |
+| `EMBEDDING_QUERY_PROMPT` | Must match the query prompt in `embeddings.json`, or the build fails. When unset, the server uses the query prompt that the index records. An empty value means no prompt. |
+| `EMBEDDING_TRUST_REMOTE_CODE` | `true` or `false`. When unset, it is `true` only for `nomic-ai/*` models. The download and the server use the same value. |
+| `EMBEDDING_DTYPE`, `EMBEDDING_DEVICE` | Precision and device of the embedding model in the container. See [Model loading settings](embeddings.md#model-loading-settings). |
+| `RERANKER_MODEL` | Optional reranker model that the build downloads into the image. |
+| `RERANKER_TRUST_REMOTE_CODE` | The same as `EMBEDDING_TRUST_REMOTE_CODE`, for the reranker model. |
+
+The build writes these settings to `/app/image.env`, and the entrypoint loads them before it starts the server. A variable that you set when you start the container, for example with `docker run -e`, overrides the value from the build.
+
+To load the embedding model in `bfloat16` in an image that you build without compose, run the following command from the project root:
+
+```bash
+docker build --build-arg EMBEDDING_DTYPE=bfloat16 -t {REGISTRY}/{IMAGE_NAME}:latest -f .opencrane/Dockerfile .
+```
+
 ### Run a prebuilt image
 
 > [!CAUTION]

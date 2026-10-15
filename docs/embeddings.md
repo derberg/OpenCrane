@@ -142,6 +142,8 @@ An embeddings file from an earlier version has no query prompt. `opencrane index
 
 The `health` tool reports the model and the query prompt in use, and the source of each: `env`, `index`, or `default`.
 
+The container image from `opencrane init` builds its index from `.opencrane/embeddings.json` and serves with the recorded settings. See [Embedding settings in the image](vector-search.md#embedding-settings-in-the-image).
+
 ## Collection schema
 
 When the `index` step loads the embeddings into Milvus, each chunk becomes one record in the collection. For the rules that decide when `index` rebuilds the collection, see [`opencrane index`](../README.md#index-the-embeddings-in-milvus-with-opencrane-index). The following table lists the fields of each record:

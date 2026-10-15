@@ -21,6 +21,7 @@ from opencrane.mcp.services.embedding_settings import (
     EmbeddingSettings,
     EmbeddingSettingsMismatch,
     resolve_embedding_settings,
+    with_model_prompts,
 )
 from opencrane.mcp.services.milvus_client import MilvusService
 from opencrane.mcp.services.keyword_search import KeywordSearchService
@@ -142,18 +143,25 @@ def get_embedding_settings() -> EmbeddingSettings:
 
 
 def _query_prompt() -> str | None:
-    """The resolved query prompt, or ``None`` (the configured one) before resolution."""
+    """The resolved query prompt, or ``None`` (resolve it for the model) before resolution."""
     return _embedding_settings.query_prompt if _embedding_settings is not None else None
 
 
 def get_embeddings_service():
-    global _embeddings_service
+    global _embeddings_service, _embedding_settings
     if _embeddings_service is None:
         settings = get_embedding_settings()
         with _service_init_lock:
             if _embeddings_service is None:
-                _embeddings_service = EmbeddingService(model_name=settings.model)
-                warn_if_inconsistent(settings.document_prompt, settings.query_prompt)
+                service = EmbeddingService(model_name=settings.model)
+                # Without an index value, the prompts come from the loaded
+                # model, which can know more than its cached config file.
+                _embedding_settings = with_model_prompts(settings, service.model)
+                warn_if_inconsistent(
+                    document_prompt=_embedding_settings.document_prompt,
+                    query_prompt=_embedding_settings.query_prompt,
+                )
+                _embeddings_service = service
     return _embeddings_service
 
 
@@ -1105,7 +1113,13 @@ async def _search_documentation_impl(
 
         def _semantic_results(arm_limit: int = fetch_limit) -> list[dict]:
             embeddings_service = get_embeddings_service()
-            query_embedding = embeddings_service.model.encode([format_query(query, _query_prompt())], batch_size=8, show_progress_bar=False)
+            query_text = format_query(
+                query,
+                _query_prompt(),
+                model=embeddings_service.model,
+                model_name=getattr(embeddings_service, "model_name", None),
+            )
+            query_embedding = embeddings_service.model.encode([query_text], batch_size=8, show_progress_bar=False)
             if hasattr(query_embedding, 'tolist'):
                 query_embedding = query_embedding.tolist()
             query_vec = query_embedding[0]

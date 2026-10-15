@@ -11,11 +11,11 @@ opencrane embed
 The `opencrane embed` command performs the following steps:
 
 1. Loads the chunks from `.opencrane/chunks.json`.
-2. Adds the document prompt, if set, to the start of each chunk. See [Embedding prompts](#embedding-prompts).
+2. Adds the document prompt of the model, if it has one, to the start of each chunk. See [Embedding prompts](#embedding-prompts).
 3. Generates a vector embedding for each chunk on the CPU, in small batches to limit memory use. The default model is Nomic Embed, `nomic-ai/nomic-embed-text-v1.5`.
 4. Saves the embeddings to `.opencrane/embeddings.json`, together with the model name, the document prompt, and the query prompt.
 
-The command skips the run when the chunks and the document prompt match the last run. The check does not compare the model. A skipped run still writes the current `EMBEDDING_QUERY_PROMPT` to the file, because the query prompt does not change the vectors. To regenerate the embeddings anyway, add the `--force` flag.
+The command skips the run when the chunks and the document prompt match the last run. The check does not compare the model. A skipped run still writes the query prompt that applies now to the file, because the query prompt does not change the vectors. To regenerate the embeddings anyway, add the `--force` flag.
 
 ## Choose an embedding model
 
@@ -39,30 +39,35 @@ Then restart the Model Context Protocol (MCP) server. The server reads the model
 
 ## Embedding prompts
 
-Many embedding models need one prompt for documents and another for queries, or search returns less relevant results. The following environment variables set the prompts:
+Many embedding models need one prompt for documents and another for queries, or search returns less relevant results. For example, Nomic Embed expects `search_document: ` before each chunk and `search_query: ` before each query. OpenCrane adds a document prompt to the start of every chunk in `embed`. `serve` and `visualize` apply a query prompt to each query. A query prompt that contains `{query}` is a template, and OpenCrane puts the query in its place. Any other query prompt is a prefix.
 
-- `EMBEDDING_DOCUMENT_PROMPT` is a prefix that `embed` adds to every chunk.
-- `EMBEDDING_QUERY_PROMPT` is a `{query}` template or a prefix that `serve` and `visualize` apply to each query. `embed` writes it to the embeddings file, and `index` records it in the collection, where the server reads it.
+OpenCrane resolves each prompt in the following order and uses the first match:
 
-Both default to empty. A literal `\n` in either value becomes a newline.
+1. The `EMBEDDING_DOCUMENT_PROMPT` or `EMBEDDING_QUERY_PROMPT` environment variable, when it is set. An empty value means no prompt.
+2. The non-empty `document` or `query` prompt that the model ships in `config_sentence_transformers.json`. OpenCrane also accepts the `passage`, `search_document`, and `search_query` prompt names. For example, `Qwen/Qwen3-Embedding-0.6B` ships a query prompt and no document prompt.
+3. A built-in table of models whose model card requires prompts that the model does not ship.
+4. No prompt. OpenCrane encodes the text as it is.
 
-The following table lists prompts for common models:
+The following table lists the models in the built-in table:
 
-| Model | `EMBEDDING_DOCUMENT_PROMPT` | `EMBEDDING_QUERY_PROMPT` |
+| Model | Document prompt | Query prompt |
 |---|---|---|
-| `nomic-ai/nomic-embed-text-v1.5`, the default | `search_document: ` | `search_query: ` |
-| `intfloat/e5-base-v2` | `passage: ` | `query: ` |
+| `nomic-ai/nomic-embed-text-v1.5`, the default, and `nomic-ai/nomic-embed-text-v1` | `search_document: ` | `search_query: ` |
+| `intfloat/e5-small-v2`, `intfloat/e5-base-v2`, `intfloat/e5-large-v2` | `passage: ` | `query: ` |
+| `intfloat/multilingual-e5-small`, `intfloat/multilingual-e5-base`, `intfloat/multilingual-e5-large` | `passage: ` | `query: ` |
 
-A new document prompt needs new embeddings and a rebuilt collection.
+A literal `\n` in either environment variable becomes a newline.
+
+`embeddings.json` records the document prompt and the query prompt that apply when `embed` runs. `opencrane index` stores both in the collection, and the server embeds queries with the stored query prompt. See [Embedding settings in the index](#embedding-settings-in-the-index). `embed` compares the document prompt with the prompt that applies now and generates new embeddings when they differ, also when only the default changed. The skip check reads the model's prompts from a local model directory or the Hugging Face cache, so it does not load the model.
+
+The query prompt must match the document prompt that built the collection. A new document prompt needs new embeddings and a rebuilt collection.
 
 > [!CAUTION]
 > `DROP_EXISTING=true` deletes the Milvus collection before `index` rebuilds it. Searches fail until the rebuild finishes. First confirm that `MILVUS_COLLECTION` and the connection variables name the right collection.
 
-The following commands set both prompts for the default model and rebuild the collection:
+The following commands build the embeddings and the collection with the prompts that apply now:
 
 ```bash
-export EMBEDDING_DOCUMENT_PROMPT="search_document: "
-export EMBEDDING_QUERY_PROMPT="search_query: "
 opencrane embed && DROP_EXISTING=true opencrane index
 ```
 
@@ -74,7 +79,7 @@ A new query prompt needs no new vectors, but the collection must record it. `ope
 The following commands record a new query prompt:
 
 ```bash
-export EMBEDDING_QUERY_PROMPT="search_query: "
+export EMBEDDING_QUERY_PROMPT="{QUERY_PROMPT}"
 opencrane embed && opencrane index
 ```
 
@@ -101,7 +106,14 @@ An empty `EMBEDDING_MODEL` counts as unset. An empty `EMBEDDING_QUERY_PROMPT` me
 
 To fix a mismatch, unset the variable, or rebuild the index with the new value.
 
-A collection that an earlier OpenCrane version built records no settings. The server then uses `EMBEDDING_MODEL` and `EMBEDDING_QUERY_PROMPT`, or their defaults, and logs a warning. `opencrane index` keeps such a collection.
+A collection that an earlier OpenCrane version built records no settings. The server then uses `EMBEDDING_MODEL` or its default, resolves the query prompt as described in [Embedding prompts](#embedding-prompts), and logs a warning. `opencrane index` keeps such a collection.
+
+If an earlier version built that collection without prompts, the default prompts of the model no longer match it. To keep it working without a rebuild, turn the default prompts off. The following commands turn them off:
+
+```bash
+export EMBEDDING_DOCUMENT_PROMPT=""
+export EMBEDDING_QUERY_PROMPT=""
+```
 
 > [!CAUTION]
 > `DROP_EXISTING=true` deletes the Milvus collection before `index` rebuilds it. Searches fail until the rebuild finishes. First confirm that `MILVUS_COLLECTION` and the connection variables name the right collection.
@@ -112,7 +124,7 @@ The following commands rebuild the index with the current settings and record th
 opencrane embed --force && DROP_EXISTING=true opencrane index
 ```
 
-An embeddings file from an earlier version has no query prompt. `opencrane index` then records no query prompt, and the server uses `EMBEDDING_QUERY_PROMPT`.
+An embeddings file from an earlier version has no query prompt. `opencrane index` then records no query prompt, and the server resolves it as described in [Embedding prompts](#embedding-prompts).
 
 The `health` tool reports the model and the query prompt in use, and the source of each: `env`, `index`, or `default`.
 

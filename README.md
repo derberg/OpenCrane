@@ -299,7 +299,7 @@ The command accepts the following flags:
 |---|---|
 | `--chunks-file {PATH}` | Input chunks JSON file. Overrides the `AI_DOCS_CHUNKS_FILE` environment variable. |
 | `--embeddings-file {PATH}` | Output embeddings JSON file. Overrides the `AI_DOCS_EMBEDDINGS_FILE` environment variable. |
-| `--force` | Regenerates the embeddings even when the chunks and `EMBEDDING_DOCUMENT_PROMPT` are unchanged. Pass it after you change `EMBEDDING_MODEL`, because the skip check ignores the model. A changed `EMBEDDING_QUERY_PROMPT` needs no `--force`: a skipped run still writes it to the embeddings file. |
+| `--force` | Regenerates the embeddings even when the chunks and the document prompt are unchanged. Pass it after you change `EMBEDDING_MODEL`, because the skip check ignores the model. A changed query prompt needs no `--force`: a skipped run still writes it to the embeddings file. |
 
 #### Index the embeddings in Milvus with `opencrane index`
 
@@ -596,8 +596,8 @@ You need the following variables only if you run the `embed` step, directly or t
 | Variable | Default | Description |
 |---|---|---|
 | `EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | Hugging Face embedding model. `index` records it in the collection, and the MCP server uses the recorded model. See [Choose an embedding model](docs/embeddings.md#choose-an-embedding-model). |
-| `EMBEDDING_DOCUMENT_PROMPT` | none | Prefix that `embed` adds to every chunk. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
-| `EMBEDDING_QUERY_PROMPT` | none | Query prompt that `embed` writes to the embeddings file and `index` records in the collection. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
+| `EMBEDDING_DOCUMENT_PROMPT` | the model's document prompt | Prefix that `embed` adds to every chunk. An empty value turns the prompt off. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
+| `EMBEDDING_QUERY_PROMPT` | the model's query prompt | Query prompt that `embed` writes to the embeddings file and `index` records in the collection. An empty value turns the prompt off. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
 
 #### Variables for the `index` and `serve` steps
 
@@ -619,7 +619,7 @@ The following table lists the variables:
 | `MILVUS_INSERT_BATCH_SIZE` | `2000` | Maximum number of chunks in each insert call during `index`. If `index` creates duplicate rows, lower this value. |
 | `DROP_EXISTING` | `false` | When `true`, `index` deletes and rebuilds the Milvus collection. When `false`, `index` keeps a collection that already has rows, unless its vector size, its fields, or its recorded embedding settings no longer match. See [`opencrane index`](#index-the-embeddings-in-milvus-with-opencrane-index). |
 | `EMBEDDING_MODEL` | Recorded in the index | Embedding model for queries. Leave it unset so that the server uses the model that the index records. When it is set and differs from the recorded model, the server does not start. See [Embedding settings in the index](docs/embeddings.md#embedding-settings-in-the-index). |
-| `EMBEDDING_QUERY_PROMPT` | Recorded in the index | Prompt that `serve` and `visualize` apply to each query. The server follows the same rules as for `EMBEDDING_MODEL`, and `visualize` uses the variable only. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
+| `EMBEDDING_QUERY_PROMPT` | Recorded in the index | Prompt that `serve` and `visualize` apply to each query. An empty value turns the prompt off. The server follows the same rules as for `EMBEDDING_MODEL`. `visualize` uses the variable when it is set, and otherwise the prompt that the embeddings file records. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
 | `HYBRID_ALPHA` | `0.6` | Weight of vector search compared to keyword search. `1.0` is pure vector search, and `0.0` is pure BM25 keyword search. |
 | `HYBRID_CANDIDATE_POOL` | `0` | Number of results that the semantic search and the keyword search each return before hybrid search fuses them. `0` means the requested `limit`, or `RERANK_DEPTH` when a reranker is on. A wider pool, for example `50`, can surface chunks that both searches rank just below `limit`. |
 | `HYBRID_FUSION` | `minmax` | How hybrid search merges the results of the two searches. `minmax` blends normalized scores, and `rrf` blends ranks with Reciprocal Rank Fusion. See [Search modes](docs/architecture.md#search-modes). |

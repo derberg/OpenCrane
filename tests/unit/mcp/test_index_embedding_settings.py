@@ -13,6 +13,7 @@ from opencrane.mcp.services.embedding_settings import (
     EmbeddingSettings,
     EmbeddingSettingsMismatch,
     resolve_embedding_settings,
+    with_model_prompts,
 )
 from opencrane.mcp.services.milvus_client import MilvusService
 from opencrane.rag.generate_embeddings import _sync_query_prompt
@@ -86,6 +87,7 @@ class TestResolveEmbeddingSettings:
             query_prompt="query: ",
             query_prompt_source="index",
             document_prompt="passage: ",
+            document_prompt_source="index",
         )
 
     def test_empty_model_counts_as_unset(self, clean_env):
@@ -132,7 +134,9 @@ class TestResolveEmbeddingSettings:
             settings = resolve_embedding_settings(None)
         assert settings.model == "nomic-ai/nomic-embed-text-v1.5"
         assert settings.model_source == "default"
-        assert (settings.query_prompt, settings.query_prompt_source) == ("", "default")
+        # No index value: the known-model table gives the default model's prompts.
+        assert (settings.query_prompt, settings.query_prompt_source) == ("search_query: ", "default")
+        assert settings.document_prompt == "search_document: "
         assert "DROP_EXISTING=true opencrane index" in caplog.text
 
     def test_old_collection_uses_env(self, clean_env):
@@ -155,10 +159,10 @@ class TestResolveEmbeddingSettings:
 
 def test_warn_if_inconsistent_uses_given_prompts(clean_env, caplog):
     with caplog.at_level(logging.WARNING):
-        warn_if_inconsistent("passage: ", "query: ")
+        warn_if_inconsistent(document_prompt="passage: ", query_prompt="query: ")
     assert caplog.text == ""
     with caplog.at_level(logging.WARNING):
-        warn_if_inconsistent("passage: ", "")
+        warn_if_inconsistent(document_prompt="passage: ", query_prompt="")
     assert "EMBEDDING_QUERY_PROMPT is empty" in caplog.text
 
 
@@ -391,3 +395,43 @@ class TestEmbedRecordsQueryPrompt:
         with caplog.at_level(logging.WARNING):
             _sync_query_prompt(tmp_path / "missing.json")
         assert "Could not record the query prompt" in caplog.text
+
+
+# --- #95 prompt resolution -------------------------------------------------
+
+
+class TestModelPromptFallback:
+    def test_loaded_model_prompts_replace_defaults(self, clean_env):
+        clean_env.setenv("EMBEDDING_MODEL", "acme/no-table-entry")
+        settings = resolve_embedding_settings(None)
+        assert (settings.query_prompt, settings.document_prompt) == ("", "")
+        model = Mock(prompts={"query": "Instruct: find\nQuery: ", "document": "doc: "})
+        updated = with_model_prompts(settings, model)
+        assert updated.query_prompt == "Instruct: find\nQuery: "
+        assert updated.document_prompt == "doc: "
+        assert updated.query_prompt_source == "default"
+
+    def test_index_and_env_values_are_kept(self, clean_env):
+        settings = resolve_embedding_settings(_RECORDED)
+        assert with_model_prompts(settings, Mock(prompts={"query": "other: "})) is settings
+
+    def test_explicit_empty_query_prompt_without_index_value(self, clean_env):
+        clean_env.setenv("EMBEDDING_QUERY_PROMPT", "")
+        settings = resolve_embedding_settings(None)
+        assert (settings.query_prompt, settings.query_prompt_source) == ("", "env")
+
+    def test_embed_records_the_effective_query_prompt(self, clean_env):
+        clean_env.setenv("AI_DOCS_EMBEDDINGS_BACKEND", "mock")
+        clean_env.setenv("EMBEDDING_MODEL", "intfloat/e5-base-v2")
+        from opencrane.mcp.services.embeddings import EmbeddingService
+
+        result = EmbeddingService().generate_embeddings(
+            [{"chunk_id": "c1", "content": "x", "source_file": "a.md", "chunk_type": "prose"}]
+        )
+        assert (result.document_prompt, result.query_prompt) == ("passage: ", "query: ")
+
+    def test_sync_resolves_the_prompt_for_the_file_model(self, clean_env, tmp_path):
+        path = tmp_path / "embeddings.json"
+        path.write_text(json.dumps({"model": "intfloat/e5-base-v2"}))
+        _sync_query_prompt(path)
+        assert json.loads(path.read_text())["query_prompt"] == "query: "

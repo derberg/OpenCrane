@@ -45,7 +45,7 @@ class TestEmbeddingService:
 
         service = EmbeddingService("test-model")
 
-        mock_transformer.assert_called_once_with("test-model", trust_remote_code=True, device='cpu')
+        mock_transformer.assert_called_once_with("test-model", trust_remote_code=False, device='cpu')
         assert service.model == mock_model
 
     @patch('opencrane.mcp.services.embeddings.SentenceTransformer')

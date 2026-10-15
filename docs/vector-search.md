@@ -11,7 +11,7 @@ The following table lists the search modes and filters of the MCP server:
 | Semantic search | Cosine similarity between the query and the chunk embeddings. The server embeds the query with the model and query prompt that the index records. See [Embedding settings in the index](embeddings.md#embedding-settings-in-the-index). |
 | Keyword search | Best Matching 25 (BM25) ranking over the chunks file. To keep identifiers such as `5.4.1` or `GTP-U` as one token, set `BM25_TOKENIZER` to `identifier`. |
 | Hybrid search | The default mode. It merges the semantic and keyword results, weighted by **alpha**. `HYBRID_FUSION` selects a merge of normalized scores (`minmax`, the default) or of ranks (`rrf`). |
-| Reranking | Optional. A cross-encoder model from `RERANKER_MODEL`, or your own reranker, reorders the results of every mode. |
+| Reranking | Optional. A cross-encoder model from `RERANKER_MODEL`, or your own reranker, reorders the results of every mode. `RERANKER_TRUST_REMOTE_CODE` allows a cross-encoder that ships its own code. See [Search modes](architecture.md#search-modes). |
 | Filters | Chunk type, source name, and metadata content |
 
 For the scoring formulas and the tuning variables, see [Search modes](architecture.md#search-modes).

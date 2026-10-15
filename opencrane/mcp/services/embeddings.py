@@ -6,7 +6,7 @@ import random
 import yaml
 from typing import List, Dict, Any, Union
 from sentence_transformers import SentenceTransformer
-from opencrane.shared.config import get_config
+from opencrane.shared.config import get_config, resolve_trust_remote_code
 from opencrane.shared.models.vector_chunk import DEFAULT_EMBEDDING_DIM, EmbeddingRecord, EmbeddingsFile, generate_chunk_id
 from opencrane.shared.utils.embedding_prompts import format_document, resolve_document_prompt, resolve_query_prompt
 import json
@@ -14,6 +14,30 @@ import hashlib
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
+
+
+def _dtype_kwarg_name() -> str:
+    """Name of the from_pretrained dtype keyword for the installed transformers.
+
+    transformers 4.56 renamed ``torch_dtype`` to ``dtype`` and logs a
+    deprecation warning for the old name; older releases know only ``torch_dtype``.
+    """
+    import transformers
+    from packaging.version import Version
+
+    return "dtype" if Version(transformers.__version__) >= Version("4.56") else "torch_dtype"
+
+
+def encoder_model_kwargs(dtype: str) -> Dict[str, Any]:
+    """Keyword arguments for SentenceTransformer that load the weights in *dtype*.
+
+    float32 is the library default, so it adds nothing.
+    """
+    if dtype == "float32":
+        return {}
+    import torch
+
+    return {"model_kwargs": {_dtype_kwarg_name(): getattr(torch, dtype)}}
 
 
 class EmbeddingService:
@@ -45,10 +69,22 @@ class EmbeddingService:
             logger.info("Using mock embeddings backend (no model load)")
             return
 
+        config = self.config
+        trust_remote_code = resolve_trust_remote_code(self.model_name, config.embedding_trust_remote_code)
         try:
-            # Use CPU to avoid MPS memory issues on macOS
-            self.model = SentenceTransformer(self.model_name, trust_remote_code=True, device='cpu')
-            logger.info("Embedding model loaded successfully (using CPU)")
+            # Device defaults to CPU to avoid MPS memory issues on macOS
+            self.model = SentenceTransformer(
+                self.model_name,
+                trust_remote_code=trust_remote_code,
+                device=config.embedding_device,
+                **encoder_model_kwargs(config.embedding_dtype),
+            )
+            if config.embedding_max_seq_length > 0:
+                self.model.max_seq_length = config.embedding_max_seq_length
+            logger.info(
+                f"Embedding model loaded successfully (device={config.embedding_device}, "
+                f"dtype={config.embedding_dtype}, trust_remote_code={trust_remote_code})"
+            )
         except Exception as e:
             logger.error(f"Failed to load embedding model: {e}")
             raise
@@ -92,9 +128,12 @@ class EmbeddingService:
                 if self.model is None:
                     raise RuntimeError("Embedding model is not loaded")
 
-                # Encode in smaller batches to avoid memory issues
-                batch_size = 8
+                # Encode in small batches (EMBEDDING_BATCH_SIZE) to bound memory use
+                batch_size = self.config.embedding_batch_size
                 vectors = self.model.encode(texts, batch_size=batch_size, show_progress_bar=True)
+                # A float16 model returns float16 arrays; store float32 like the default model
+                if hasattr(vectors, 'astype'):
+                    vectors = vectors.astype("float32")
                 # Convert to list if needed (some models return numpy arrays)
                 if hasattr(vectors, 'tolist'):
                     vectors = vectors.tolist()

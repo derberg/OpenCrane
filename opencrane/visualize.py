@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from opencrane.shared.config import get_config
+from opencrane.shared.config import get_config, resolve_trust_remote_code
 from opencrane.shared.models.vector_chunk import DEFAULT_EMBEDDING_DIM
 from opencrane.shared.utils.embedding_prompts import format_query
 
@@ -167,11 +167,19 @@ def encode_paragraph(model_name: str, paragraph: str, query_prompt: str | None =
     np = _require("numpy")
     _require("sentence_transformers")
     from sentence_transformers import SentenceTransformer
+    from opencrane.mcp.services.embeddings import encoder_model_kwargs
 
-    logger.info("Loading model %s (CPU)…", model_name)
-    model = SentenceTransformer(model_name, trust_remote_code=True, device="cpu")
+    # Load the model the way embed and serve do, so the paragraph vector is comparable
+    config = get_config()
+    logger.info("Loading model %s (%s)…", model_name, config.embedding_device)
+    model = SentenceTransformer(
+        model_name,
+        trust_remote_code=resolve_trust_remote_code(model_name, config.embedding_trust_remote_code),
+        device=config.embedding_device,
+        **encoder_model_kwargs(config.embedding_dtype),
+    )
     logger.info("Encoding paragraph (%d chars)…", len(paragraph))
-    template = get_config().embedding_query_prompt
+    template = config.embedding_query_prompt
     if template is None:
         template = query_prompt
     vec = model.encode([format_query(paragraph, template, model=model, model_name=model_name)], show_progress_bar=False)[0]

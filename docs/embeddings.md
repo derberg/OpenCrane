@@ -12,7 +12,7 @@ The `opencrane embed` command performs the following steps:
 
 1. Loads the chunks from `.opencrane/chunks.json`.
 2. Adds the document prompt of the model, if it has one, to the start of each chunk. See [Embedding prompts](#embedding-prompts).
-3. Generates a vector embedding for each chunk on the CPU, in small batches to limit memory use. The default model is Nomic Embed, `nomic-ai/nomic-embed-text-v1.5`.
+3. Generates a vector embedding for each chunk on the CPU, in batches of `EMBEDDING_BATCH_SIZE` chunks to limit memory use. See [Model loading settings](#model-loading-settings). The default model is Nomic Embed, `nomic-ai/nomic-embed-text-v1.5`.
 4. Saves the embeddings to `.opencrane/embeddings.json`, together with the model name, the document prompt, and the query prompt.
 
 The command skips the run when the chunks and the document prompt match the last run. The check does not compare the model. A skipped run still writes the query prompt that applies now to the file, because the query prompt does not change the vectors. To regenerate the embeddings anyway, add the `--force` flag.
@@ -21,7 +21,7 @@ The command skips the run when the chunks and the document prompt match the last
 
 To use a different model, set the `EMBEDDING_MODEL` environment variable. The value is a Hugging Face model ID or a local path that the `sentence-transformers` library can load. Any vector size works, because `opencrane index` sizes the collection from the embeddings. A larger model can improve results, and a smaller one embeds faster.
 
-OpenCrane loads the model with `trust_remote_code=True`, so the model can run its own Python code on your machine. Use only models whose code you trust.
+Some models, such as Nomic Embed, ship their own Python code and load only with `trust_remote_code`. That code runs on your machine, so OpenCrane allows it only for models known to need it. See `EMBEDDING_TRUST_REMOTE_CODE` in [Model loading settings](#model-loading-settings).
 
 > [!CAUTION]
 > When the embeddings come from a different model, `opencrane index` deletes and rebuilds the collection without `DROP_EXISTING`. A collection that an earlier OpenCrane version built records no model. For that collection, you must set `DROP_EXISTING=true`, which also deletes the collection. Searches fail until the rebuild finishes. Check that `MILVUS_COLLECTION` and the [connection variables](../README.md#variables-for-the-index-and-serve-steps) point to the collection to replace.
@@ -36,6 +36,20 @@ opencrane embed --force && DROP_EXISTING=true opencrane index
 If you pass `--embeddings-file` to `opencrane embed`, pass the same flag to `opencrane index`.
 
 Then restart the Model Context Protocol (MCP) server. The server reads the model from the index, so leave `EMBEDDING_MODEL` unset or set it to the same model.
+
+## Model loading settings
+
+The following variables control how `embed`, `serve`, and `visualize` load and run the embedding model. Each command reads them separately, so set the same values for all of them.
+
+| Variable | Default | Description |
+|---|---|---|
+| `EMBEDDING_DTYPE` | `float32` | Weight precision: `float32`, `bfloat16`, or `float16`. `bfloat16` about halves the model's memory, which matters for a model with hundreds of millions of parameters on a server. OpenCrane stores the vectors as `float32` in every case. Lower precision changes the vectors slightly, so use the same value for `embed` and `serve`. |
+| `EMBEDDING_DEVICE` | `cpu` | Torch device, for example `cuda`, `cuda:1`, or `mps`. The default is `cpu`, because `mps` can run out of memory on macOS. |
+| `EMBEDDING_BATCH_SIZE` | `8` | Number of chunks that `embed` encodes at once. A larger batch is faster and uses more memory. |
+| `EMBEDDING_MAX_SEQ_LENGTH` | `0` | Maximum tokens per input. `0` keeps the model's own limit. A long-context model can use a lot of memory on one large chunk. With a cap, OpenCrane truncates such a chunk instead. |
+| `EMBEDDING_TRUST_REMOTE_CODE` | auto | `true` or `false`. When unset, OpenCrane allows remote code only for the model families that need it, `nomic-ai/*`. Set `true` for another model that ships its own code. |
+
+An invalid value stops the command with an error that names the variable. `visualize` ignores `EMBEDDING_BATCH_SIZE` and `EMBEDDING_MAX_SEQ_LENGTH`, because it encodes one short paragraph.
 
 ## Embedding prompts
 

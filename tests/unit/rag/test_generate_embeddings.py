@@ -204,8 +204,7 @@ def test_embeddings_up_to_date_false_when_default_prompt_changed(tmp_path, monke
     record = {"chunks_sha256": _chunks_sha256(chunks_file), "document_prompt": ""}
     embeddings_file.write_text(json.dumps(record))
 
-    with patch('opencrane.shared.utils.embedding_prompts.read_model_prompts', return_value=None):
-        assert _embeddings_up_to_date(chunks_file, embeddings_file) is False
-        record["document_prompt"] = "search_document: "
-        embeddings_file.write_text(json.dumps(record))
-        assert _embeddings_up_to_date(chunks_file, embeddings_file) is True
+    assert _embeddings_up_to_date(chunks_file, embeddings_file) is False
+    record["document_prompt"] = "search_document: "
+    embeddings_file.write_text(json.dumps(record))
+    assert _embeddings_up_to_date(chunks_file, embeddings_file) is True

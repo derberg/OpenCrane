@@ -95,7 +95,7 @@ NOMIC = SimpleNamespace(prompts={"query": "", "document": ""})
 
 @pytest.fixture
 def no_model_files():
-    """Isolate resolution from any locally cached model config."""
+    """Mock the model-file lookup to report no file, so a test can assert on its calls."""
     with patch.object(embedding_prompts, "read_model_prompts", return_value=None) as m:
         yield m
 
@@ -106,7 +106,7 @@ def test_default_model_uses_known_nomic_prefixes(no_model_files):
     no_model_files.assert_called_with("nomic-ai/nomic-embed-text-v1.5")
 
 
-def test_empty_env_means_no_prompt_even_for_known_model(monkeypatch, no_model_files):
+def test_empty_env_means_no_prompt_even_for_known_model(monkeypatch):
     monkeypatch.setenv("EMBEDDING_DOCUMENT_PROMPT", "")
     monkeypatch.setenv("EMBEDDING_QUERY_PROMPT", "")
     assert format_document("passage") == "passage"
@@ -146,7 +146,7 @@ def test_non_dict_prompts_and_non_string_name_resolve_empty():
     assert resolve_query_prompt(object(), "x/unknown") == ""
 
 
-def test_unknown_model_resolves_empty(no_model_files):
+def test_unknown_model_resolves_empty():
     assert resolve_document_prompt(model_name="x/unknown") == ""
 
 
@@ -180,17 +180,17 @@ def test_read_model_prompts_from_hf_cache(tmp_path, monkeypatch):
     cached = tmp_path / "config_sentence_transformers.json"
     cached.write_text('{"prompts": {"document": "d: "}}')
     monkeypatch.setenv("SENTENCE_TRANSFORMERS_HOME", str(tmp_path / "st-home"))
-    with patch("huggingface_hub.try_to_load_from_cache", return_value=str(cached)) as m:
+    with patch.object(embedding_prompts, "try_to_load_from_cache", return_value=str(cached)) as m:
         assert read_model_prompts("org/model") == {"document": "d: "}
     m.assert_called_once_with("org/model", "config_sentence_transformers.json", cache_dir=str(tmp_path / "st-home"))
 
 
 def test_read_model_prompts_not_cached():
-    with patch("huggingface_hub.try_to_load_from_cache", return_value=None):
+    with patch.object(embedding_prompts, "try_to_load_from_cache", return_value=None):
         assert read_model_prompts("org/model") is None
 
 
-def test_warns_for_model_defaults_with_empty_query_env(monkeypatch, caplog, no_model_files):
+def test_warns_for_model_defaults_with_empty_query_env(monkeypatch, caplog):
     monkeypatch.setenv("EMBEDDING_QUERY_PROMPT", "")
     with caplog.at_level(logging.WARNING):
         warn_if_inconsistent()

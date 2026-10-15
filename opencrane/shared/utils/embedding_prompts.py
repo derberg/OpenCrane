@@ -20,6 +20,8 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
+from huggingface_hub import try_to_load_from_cache
+
 from opencrane.shared.config import get_config
 
 logger = logging.getLogger(__name__)
@@ -63,8 +65,6 @@ def read_model_prompts(model_name: str) -> Optional[Dict[str, Any]]:
         if local.is_file():
             path = str(local)
         else:
-            from huggingface_hub import try_to_load_from_cache
-
             path = try_to_load_from_cache(
                 model_name, _ST_CONFIG_FILE, cache_dir=os.getenv("SENTENCE_TRANSFORMERS_HOME")
             )

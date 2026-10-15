@@ -221,7 +221,9 @@ services:
     environment:
       MILVUS_DB_PATH: /app/milvus_data/milvus.db
       MILVUS_COLLECTION: opencrane_chunks
-      EMBEDDING_QUERY_PROMPT: "${EMBEDDING_QUERY_PROMPT:-}"
+      # No value: passed from your shell when set, left unset otherwise so the
+      # server uses the model's default query prompt.
+      EMBEDDING_QUERY_PROMPT:
 '''
 
 README_MD = '''\

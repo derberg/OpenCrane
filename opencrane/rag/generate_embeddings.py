@@ -7,8 +7,8 @@ import json
 import logging
 from pathlib import Path
 from opencrane.mcp.services.embeddings import EmbeddingService
-from opencrane.shared.config import get_config
 from opencrane.shared.logging_config import setup_logging
+from opencrane.shared.utils.embedding_prompts import resolve_document_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,11 @@ def _chunks_sha256(chunks_file: Path) -> str:
 
 
 def _embeddings_up_to_date(chunks_file: Path, embeddings_file: Path) -> bool:
-    """Check if embeddings were already generated from the current chunks file and document prompt."""
+    """Check if embeddings were already generated from the current chunks file and document prompt.
+
+    The prompt compared is the effective one for ``EMBEDDING_MODEL``, so a new
+    default prompt (from the model or the known-model table) re-embeds too.
+    """
     if not embeddings_file.exists():
         return False
     try:
@@ -28,7 +32,7 @@ def _embeddings_up_to_date(chunks_file: Path, embeddings_file: Path) -> bool:
             data = json.load(f)
         return (
             data.get("chunks_sha256") == _chunks_sha256(chunks_file)
-            and data.get("document_prompt", "") == get_config().embedding_document_prompt
+            and data.get("document_prompt", "") == resolve_document_prompt()
         )
     except Exception:
         return False

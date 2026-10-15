@@ -125,7 +125,7 @@ def get_embeddings_service():
         with _service_init_lock:
             if _embeddings_service is None:
                 _embeddings_service = EmbeddingService()
-                warn_if_inconsistent()
+                warn_if_inconsistent(_embeddings_service.model, _embeddings_service.model_name)
     return _embeddings_service
 
 def get_milvus_service():
@@ -1058,7 +1058,12 @@ async def _search_documentation_impl(
 
         def _semantic_results(arm_limit: int = fetch_limit) -> list[dict]:
             embeddings_service = get_embeddings_service()
-            query_embedding = embeddings_service.model.encode([format_query(query)], batch_size=8, show_progress_bar=False)
+            query_text = format_query(
+                query,
+                model=embeddings_service.model,
+                model_name=getattr(embeddings_service, "model_name", None),
+            )
+            query_embedding = embeddings_service.model.encode([query_text], batch_size=8, show_progress_bar=False)
             if hasattr(query_embedding, 'tolist'):
                 query_embedding = query_embedding.tolist()
             query_vec = query_embedding[0]

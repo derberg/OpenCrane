@@ -12,9 +12,14 @@ EMBEDDING_DTYPES = ("float32", "bfloat16", "float16")
 REMOTE_CODE_MODEL_PREFIXES = ("nomic-ai/",)
 
 
-def _prompt_env(name: str) -> str:
-    """Read an embedding prompt from env, unescaping a literal ``\\n`` to a newline."""
-    return os.getenv(name, "").replace("\\n", "\n")
+def _prompt_env(name: str) -> Optional[str]:
+    """Read an embedding prompt from env, unescaping a literal ``\\n`` to a newline.
+
+    Returns ``None`` when the variable is unset, so an explicit empty value
+    ("no prompt") stays distinct from "use the model's default prompt".
+    """
+    value = os.getenv(name)
+    return None if value is None else value.replace("\\n", "\n")
 
 
 def _optional_bool_env(name: str) -> Optional[bool]:
@@ -97,10 +102,11 @@ class Config:
     milvus_insert_batch_size: int = field(default_factory=lambda: int(os.getenv("MILVUS_INSERT_BATCH_SIZE", "2000")))
     # Embedding configuration
     embedding_model: str = field(default_factory=lambda: os.getenv("EMBEDDING_MODEL", "nomic-ai/nomic-embed-text-v1.5"))
-    # Task prompts for asymmetric embedding models (empty = encode text as-is).
+    # Task prompts for asymmetric embedding models. None (unset) = the model's
+    # default, see shared/utils/embedding_prompts.py; empty = encode text as-is.
     # A literal backslash-n in the env value becomes a newline (for Qwen3-style templates).
-    embedding_document_prompt: str = field(default_factory=lambda: _prompt_env("EMBEDDING_DOCUMENT_PROMPT"))
-    embedding_query_prompt: str = field(default_factory=lambda: _prompt_env("EMBEDDING_QUERY_PROMPT"))
+    embedding_document_prompt: Optional[str] = field(default_factory=lambda: _prompt_env("EMBEDDING_DOCUMENT_PROMPT"))
+    embedding_query_prompt: Optional[str] = field(default_factory=lambda: _prompt_env("EMBEDDING_QUERY_PROMPT"))
     # Weight dtype for the embedding model: float32, bfloat16 (about half the RAM), or float16
     embedding_dtype: str = field(default_factory=lambda: _dtype_env("EMBEDDING_DTYPE"))
     # Torch device for the embedding model. CPU by default, because MPS runs out of memory on macOS.

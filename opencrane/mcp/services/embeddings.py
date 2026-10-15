@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Union
 from sentence_transformers import SentenceTransformer
 from opencrane.shared.config import get_config, resolve_trust_remote_code
 from opencrane.shared.models.vector_chunk import DEFAULT_EMBEDDING_DIM, EmbeddingRecord, EmbeddingsFile, generate_chunk_id
-from opencrane.shared.utils.embedding_prompts import format_document
+from opencrane.shared.utils.embedding_prompts import format_document, resolve_document_prompt
 import json
 import hashlib
 from datetime import datetime, timezone
@@ -114,7 +114,9 @@ class EmbeddingService:
                 texts.append(yaml.dump(content, default_flow_style=False, allow_unicode=True))
             else:
                 texts.append(content)
-        document_prompt = self.config.embedding_document_prompt
+        # The effective prompt (env, the model's own, or a known default) is
+        # recorded in the file so `embed` re-embeds when it changes.
+        document_prompt = resolve_document_prompt(self.model, self.model_name)
         texts = [format_document(text, document_prompt) for text in texts]
 
         try:

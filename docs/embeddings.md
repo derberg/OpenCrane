@@ -11,7 +11,7 @@ opencrane embed
 The `opencrane embed` command performs the following steps:
 
 1. Loads the chunks from `.opencrane/chunks.json`.
-2. Adds the document prompt, if set, to the start of each chunk. See [Embedding prompts](#embedding-prompts).
+2. Adds the document prompt of the model, if it has one, to the start of each chunk. See [Embedding prompts](#embedding-prompts).
 3. Generates a vector embedding for each chunk on the CPU, in batches of `EMBEDDING_BATCH_SIZE` chunks to limit memory use. See [Model loading settings](#model-loading-settings). The default model is Nomic Embed, `nomic-ai/nomic-embed-text-v1.5`.
 4. Saves the embeddings to `.opencrane/embeddings.json`, together with the model name and the document prompt.
 
@@ -39,7 +39,7 @@ Then restart the MCP server with the same `EMBEDDING_MODEL`.
 
 ## Model loading settings
 
-The following variables control how `embed` and `serve` load and run the embedding model. `embed` and the MCP server read the same variables, so set them in both places.
+The following variables control how `embed`, `serve`, and `visualize` load and run the embedding model. Each command reads them separately, so set the same values for all of them.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -49,38 +49,50 @@ The following variables control how `embed` and `serve` load and run the embeddi
 | `EMBEDDING_MAX_SEQ_LENGTH` | `0` | Maximum tokens per input. `0` keeps the model's own limit. A long-context model can use a lot of memory on one large chunk. With a cap, OpenCrane truncates such a chunk instead. |
 | `EMBEDDING_TRUST_REMOTE_CODE` | auto | `true` or `false`. When unset, OpenCrane allows remote code only for the model families that need it, `nomic-ai/*`. Set `true` for another model that ships its own code. |
 
-An invalid value stops the command with an error that names the variable. `visualize` reads only `EMBEDDING_MODEL` and the prompts.
+An invalid value stops the command with an error that names the variable. `visualize` ignores `EMBEDDING_BATCH_SIZE` and `EMBEDDING_MAX_SEQ_LENGTH`, because it encodes one short paragraph.
 
 ## Embedding prompts
 
-Many embedding models need one prompt for documents and another for queries, or search returns less relevant results. The following environment variables set the prompts:
+Many embedding models need one prompt for documents and another for queries, or search returns less relevant results. For example, Nomic Embed expects `search_document: ` before each chunk and `search_query: ` before each query. OpenCrane adds a document prompt to the start of every chunk in `embed`. `serve` and `visualize` apply a query prompt to each query. A query prompt that contains `{query}` is a template, and OpenCrane puts the query in its place. Any other query prompt is a prefix.
 
-- `EMBEDDING_DOCUMENT_PROMPT` is a prefix that `embed` adds to every chunk.
-- `EMBEDDING_QUERY_PROMPT` is a `{query}` template or a prefix that `serve` and `visualize` apply to each query.
+OpenCrane resolves each prompt in the following order and uses the first match:
 
-Both default to empty. A literal `\n` in either value becomes a newline.
+1. The `EMBEDDING_DOCUMENT_PROMPT` or `EMBEDDING_QUERY_PROMPT` environment variable, when it is set. An empty value means no prompt.
+2. The non-empty `document` or `query` prompt that the model ships in `config_sentence_transformers.json`. OpenCrane also accepts the `passage`, `search_document`, and `search_query` prompt names. For example, `Qwen/Qwen3-Embedding-0.6B` ships a query prompt and no document prompt.
+3. A built-in table of models whose model card requires prompts that the model does not ship.
+4. No prompt. OpenCrane encodes the text as it is.
 
-The following table lists prompts for common models:
+The following table lists the models in the built-in table:
 
-| Model | `EMBEDDING_DOCUMENT_PROMPT` | `EMBEDDING_QUERY_PROMPT` |
+| Model | Document prompt | Query prompt |
 |---|---|---|
-| `nomic-ai/nomic-embed-text-v1.5`, the default | `search_document: ` | `search_query: ` |
-| `intfloat/e5-base-v2` | `passage: ` | `query: ` |
+| `nomic-ai/nomic-embed-text-v1.5`, the default, and `nomic-ai/nomic-embed-text-v1` | `search_document: ` | `search_query: ` |
+| `intfloat/e5-small-v2`, `intfloat/e5-base-v2`, `intfloat/e5-large-v2` | `passage: ` | `query: ` |
+| `intfloat/multilingual-e5-small`, `intfloat/multilingual-e5-base`, `intfloat/multilingual-e5-large` | `passage: ` | `query: ` |
 
-A new document prompt needs new embeddings and a rebuilt collection.
+A literal `\n` in either environment variable becomes a newline.
+
+`embeddings.json` records the document prompt that `embed` used. `embed` compares it with the prompt that applies now and generates new embeddings when they differ, also when only the default changed. The skip check reads the model's prompts from a local model directory or the Hugging Face cache, so it does not load the model.
+
+The query prompt must match the document prompt that built the collection. A new document prompt needs new embeddings and a rebuilt collection.
 
 > [!CAUTION]
 > `DROP_EXISTING=true` deletes the Milvus collection before `index` rebuilds it. Searches fail until the rebuild finishes. First confirm that `MILVUS_COLLECTION` and the connection variables name the right collection.
 
-The following commands set both prompts for the default model and rebuild the collection:
+The following commands build the embeddings and the collection with the prompts that apply now:
 
 ```bash
-export EMBEDDING_DOCUMENT_PROMPT="search_document: "
-export EMBEDDING_QUERY_PROMPT="search_query: "
 opencrane embed && DROP_EXISTING=true opencrane index
 ```
 
-A new query prompt needs only a server restart. The `.opencrane/docker-compose.yml` file from `opencrane init` passes `EMBEDDING_QUERY_PROMPT` from your shell to the container.
+A collection built without prompts keeps working if you turn the default prompts off. The following commands turn them off for the default model:
+
+```bash
+export EMBEDDING_DOCUMENT_PROMPT=""
+export EMBEDDING_QUERY_PROMPT=""
+```
+
+A new query prompt needs only a server restart. The `.opencrane/docker-compose.yml` file from `opencrane init` passes `EMBEDDING_QUERY_PROMPT` from your shell to the container only when the variable is set in your shell. When it is not set, the server uses the default query prompt of the model.
 
 ## Collection schema
 

@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from opencrane.shared.config import get_config, resolve_trust_remote_code
 from opencrane.shared.models.vector_chunk import DEFAULT_EMBEDDING_DIM
 from opencrane.shared.utils.embedding_prompts import format_query
 
@@ -154,17 +155,26 @@ def subsample_for_scatter(corpus: CorpusData, sample_size: int,
 def encode_paragraph(model_name: str, paragraph: str):
     """Encode a single paragraph using the same model as the corpus.
 
-    The paragraph is treated like a search query, so ``EMBEDDING_QUERY_PROMPT``
-    is applied, mirroring how ``serve`` encodes queries against the corpus.
+    The paragraph is treated like a search query, so the effective query prompt
+    (``EMBEDDING_QUERY_PROMPT`` or the model's default) is applied, mirroring
+    how ``serve`` encodes queries against the corpus.
     """
     np = _require("numpy")
     _require("sentence_transformers")
     from sentence_transformers import SentenceTransformer
+    from opencrane.mcp.services.embeddings import encoder_model_kwargs
 
-    logger.info("Loading model %s (CPU)…", model_name)
-    model = SentenceTransformer(model_name, trust_remote_code=True, device="cpu")
+    # Load the model the way embed and serve do, so the paragraph vector is comparable
+    config = get_config()
+    logger.info("Loading model %s (%s)…", model_name, config.embedding_device)
+    model = SentenceTransformer(
+        model_name,
+        trust_remote_code=resolve_trust_remote_code(model_name, config.embedding_trust_remote_code),
+        device=config.embedding_device,
+        **encoder_model_kwargs(config.embedding_dtype),
+    )
     logger.info("Encoding paragraph (%d chars)…", len(paragraph))
-    vec = model.encode([format_query(paragraph)], show_progress_bar=False)[0]
+    vec = model.encode([format_query(paragraph, model=model, model_name=model_name)], show_progress_bar=False)[0]
     return np.asarray(vec, dtype=np.float32)
 
 

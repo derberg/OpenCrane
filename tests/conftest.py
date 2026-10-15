@@ -34,6 +34,20 @@ def setup_session_temp_root():
 
 
 @pytest.fixture(autouse=True)
+def block_hf_cache_lookups(monkeypatch):
+    """Report every model config file as not cached.
+
+    Prompt resolution without a loaded model reads config_sentence_transformers.json
+    from the user's Hugging Face cache. Tests that exercise that path patch
+    ``embedding_prompts.try_to_load_from_cache`` themselves, which overrides this.
+    """
+    monkeypatch.setattr(
+        "opencrane.shared.utils.embedding_prompts.try_to_load_from_cache",
+        lambda *args, **kwargs: None,
+    )
+
+
+@pytest.fixture(autouse=True)
 def isolate_outputs(monkeypatch, setup_session_temp_root):
     """Isolate output directories and use temp copy of test fixture mapping to prevent writing to production files."""
     # Point MAPPING_FILE env var to temp copy of fixture (created in setup_session_temp_root)

@@ -182,3 +182,25 @@ def test_reranker_trust_remote_code(monkeypatch, model, env, expected):
     with patch("sentence_transformers.CrossEncoder") as ce:
         CrossEncoderReranker(model)._load_model()
     ce.assert_called_once_with(model, device="cpu", trust_remote_code=expected)
+
+
+# --- visualize --------------------------------------------------------------
+
+
+@pytest.mark.parametrize("model, env, expected", [
+    ("some/model", None, False),
+    ("nomic-ai/nomic-embed-text-v1.5", None, True),
+    ("some/model", "true", True),
+])
+def test_visualize_loads_model_with_encoder_settings(monkeypatch, model, env, expected):
+    from opencrane import visualize as viz
+
+    if env is not None:
+        monkeypatch.setenv("EMBEDDING_TRUST_REMOTE_CODE", env)
+    monkeypatch.setenv("EMBEDDING_DEVICE", "mps")
+    monkeypatch.setenv("EMBEDDING_QUERY_PROMPT", "")
+    st_model = MagicMock()
+    st_model.encode.return_value = np.array([[0.1, 0.2]], dtype=np.float32)
+    with patch("sentence_transformers.SentenceTransformer", return_value=st_model) as st:
+        viz.encode_paragraph(model, "hello")
+    st.assert_called_once_with(model, trust_remote_code=expected, device="mps")

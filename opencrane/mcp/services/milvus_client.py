@@ -105,6 +105,12 @@ _LOOKUP_FIELDS = [
     "parent_chunk_id",
 ]
 
+# Key of the embedding settings (model, prompts, vector size) in the collection
+# schema description. The description is the one place that both Milvus Lite and
+# server mode persist and return: Milvus Lite accepts collection properties at
+# create time but drops them, and has no API to alter them later.
+_EMBEDDING_METADATA_KEY = "opencrane_embedding"
+
 # Heaviest metadata fields, dropped first when metadata would overflow the column.
 _HEAVY_METADATA_FIELDS = ("neighbor_chunks", "sibling_ids", "sibling_previews")
 
@@ -161,6 +167,8 @@ class MilvusService:
         self.client = None
         # Cached vector dimension of the existing collection (see vector_dim()).
         self._vector_dim: Optional[int] = None
+        # Cached embedding settings of the existing collection (see embedding_metadata()).
+        self._embedding_metadata: Optional[Dict] = None
         self._connect()
 
     def _connect(self):
@@ -173,17 +181,25 @@ class MilvusService:
             logger.error(f"Failed to connect to Milvus: {e}")
             raise
 
-    def create_collection(self, dim: int = DEFAULT_EMBEDDING_DIM):
+    def create_collection(self, dim: int = DEFAULT_EMBEDDING_DIM, embedding_metadata: Optional[Dict] = None):
         """Create the collection with schema for chunks.
 
         ``dim`` is the embedding vector size and must match the model that
         produced the embeddings (it is recorded in the embeddings file).
+        ``embedding_metadata`` (model name, prompts, vector size) is stored as
+        JSON in the schema description, where :meth:`embedding_metadata` reads
+        it back so the server can embed queries the same way.
         """
         logger.info(f"Creating collection: {self.collection_name} (vector dim {dim})")
 
+        description = ""
+        if embedding_metadata is not None:
+            description = json.dumps({_EMBEDDING_METADATA_KEY: embedding_metadata}, ensure_ascii=False)
+
         schema = self.client.create_schema(
             auto_id=False,
-            enable_dynamic_field=True
+            enable_dynamic_field=True,
+            description=description,
         )
 
         schema.add_field(field_name="chunk_id", datatype=DataType.VARCHAR, max_length=64, is_primary=True)
@@ -229,6 +245,7 @@ class MilvusService:
                 index_params=index_params
             )
             self._vector_dim = dim
+            self._embedding_metadata = embedding_metadata
             logger.info("Collection created successfully")
         except Exception as e:
             logger.error(f"Failed to create collection: {e}")
@@ -577,6 +594,27 @@ class MilvusService:
         except Exception as e:
             logger.debug(f"Could not read vector dimension of collection: {e}")
         return None
+
+    def embedding_metadata(self) -> Optional[Dict]:
+        """Return the embedding settings that ``opencrane index`` recorded.
+
+        A dict with ``model``, ``document_prompt``, ``dim`` and, when the
+        embeddings file recorded it, ``query_prompt``. ``None`` when the
+        collection is missing, unreadable, or was built before the settings
+        were recorded. A successful lookup is cached: the description cannot
+        change without dropping and recreating the collection.
+        """
+        if self._embedding_metadata is not None:
+            return self._embedding_metadata
+        try:
+            desc = self.client.describe_collection(collection_name=self.collection_name)
+            recorded = json.loads(desc.get("description") or "{}").get(_EMBEDDING_METADATA_KEY)
+        except Exception as e:
+            logger.debug(f"Could not read embedding settings of collection: {e}")
+            return None
+        if isinstance(recorded, dict):
+            self._embedding_metadata = recorded
+        return self._embedding_metadata
 
     def distinct_chunk_types(self, batch_size: int = 1000) -> set:
         """Return the distinct ``chunk_type`` values present in the collection.

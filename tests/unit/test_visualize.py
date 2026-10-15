@@ -690,3 +690,25 @@ def test_encode_paragraph_applies_query_prompt(monkeypatch):
         with patch("sentence_transformers.SentenceTransformer", return_value=mock_model):
             viz.encode_paragraph("dummy-model", "hello world")
     mock_model.encode.assert_called_once_with(["search_query: hello world"], show_progress_bar=False)
+
+
+def test_encode_paragraph_uses_recorded_query_prompt_when_env_unset(monkeypatch):
+    monkeypatch.delenv("EMBEDDING_QUERY_PROMPT", raising=False)
+    mock_model = MagicMock()
+    mock_model.encode.return_value = np.array([[0.1, 0.2, 0.3]], dtype=np.float32)
+    with patch.object(viz, "_require") as req:
+        req.side_effect = lambda name, *args: {"numpy": np, "sentence_transformers": MagicMock()}.get(name, MagicMock())
+        with patch("sentence_transformers.SentenceTransformer", return_value=mock_model):
+            viz.encode_paragraph("dummy-model", "hello world", "query: ")
+    mock_model.encode.assert_called_once_with(["query: hello world"], show_progress_bar=False)
+
+
+def test_load_corpus_reads_recorded_query_prompt(tmp_path):
+    emb = tmp_path / "embeddings.json"
+    chunks = tmp_path / "chunks.json"
+    emb.write_text(json.dumps({
+        "model": "m", "dimensions": 2, "query_prompt": "query: ",
+        "embeddings": [{"chunk_index": 0, "chunk_id": "c1", "vector": [0.1, 0.2]}],
+    }))
+    chunks.write_text(json.dumps([{"chunk_id": "c1", "content": "x"}]))
+    assert viz.load_corpus(emb, chunks).query_prompt == "query: "

@@ -151,15 +151,24 @@ def format_query(
     return template + query
 
 
-def warn_if_inconsistent(model: Any = None, model_name: Optional[str] = None) -> None:
+def warn_if_inconsistent(
+    model: Any = None,
+    model_name: Optional[str] = None,
+    document_prompt: Optional[str] = None,
+    query_prompt: Optional[str] = None,
+) -> None:
     """Log a warning when the effective prompts look mismatched.
 
     A document prompt with no query prompt almost always means the corpus was
     encoded for an asymmetric model while queries are encoded bare, for example
     when only ``EMBEDDING_QUERY_PROMPT=""`` is set for a model with built-in prompts.
+    A prompt passed in, such as one the index records, replaces its resolved value.
     """
-    document_prompt = resolve_document_prompt(model, model_name)
-    if document_prompt and not resolve_query_prompt(model, model_name):
+    if document_prompt is None:
+        document_prompt = resolve_document_prompt(model, model_name)
+    if query_prompt is None:
+        query_prompt = resolve_query_prompt(model, model_name)
+    if document_prompt and not query_prompt:
         logger.warning(
             "The document prompt is %r but EMBEDDING_QUERY_PROMPT is empty; "
             "the server encodes queries with no prompt",

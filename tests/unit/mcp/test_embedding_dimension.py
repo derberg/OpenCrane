@@ -85,7 +85,7 @@ class TestInitVectorDbDim:
         milvus = MagicMock()
         milvus.client.has_collection.return_value = False
         _run_init(milvus, [[0.1] * 1024], dimensions=1024)
-        milvus.create_collection.assert_called_once_with(dim=1024)
+        milvus.create_collection.assert_called_once_with(dim=1024, embedding_metadata=ANY)
 
     def test_populated_collection_with_other_dim_is_rebuilt(self):
         milvus = MagicMock()
@@ -95,7 +95,7 @@ class TestInitVectorDbDim:
         milvus.vector_dim.return_value = 768
         _run_init(milvus, [[0.1] * 384], dimensions=384)
         milvus.client.drop_collection.assert_called_once()
-        milvus.create_collection.assert_called_once_with(dim=384)
+        milvus.create_collection.assert_called_once_with(dim=384, embedding_metadata=ANY)
         milvus.insert_chunks.assert_called_once()
 
     def test_populated_collection_with_same_dim_is_kept(self):
@@ -113,14 +113,14 @@ class TestInitVectorDbDim:
         milvus.client.has_collection.return_value = False
         with patch('opencrane.mcp.init_vector_db.json.load', return_value=[]):
             _run_init(milvus, [], dimensions=1024)
-        milvus.create_collection.assert_called_once_with(dim=1024)
+        milvus.create_collection.assert_called_once_with(dim=1024, embedding_metadata=ANY)
 
     def test_empty_embeddings_without_dimensions_use_default(self):
         milvus = MagicMock()
         milvus.client.has_collection.return_value = False
         with patch('opencrane.mcp.init_vector_db.json.load', return_value=[]):
             _run_init(milvus, [], dimensions=0)
-        milvus.create_collection.assert_called_once_with(dim=DEFAULT_EMBEDDING_DIM)
+        milvus.create_collection.assert_called_once_with(dim=DEFAULT_EMBEDDING_DIM, embedding_metadata=ANY)
 
 
 @pytest.mark.anyio

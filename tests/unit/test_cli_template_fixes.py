@@ -239,3 +239,11 @@ def test_init_extensions_no_hint_when_config_loads_extensions(runner, tmp_path, 
     result = runner.invoke(cli_main, ["init", "--no-add", "--extensions"])
     assert result.exit_code == 0
     assert "To load extensions.py" not in result.output
+
+
+def test_docker_compose_leaves_query_prompt_unset_when_shell_has_none():
+    """An empty EMBEDDING_QUERY_PROMPT would disable the model's default query prompt."""
+    compose = yaml.safe_load(DOCKER_COMPOSE)
+    env = compose["services"]["opencrane-mcp"]["environment"]
+    assert "EMBEDDING_QUERY_PROMPT" in env
+    assert env["EMBEDDING_QUERY_PROMPT"] is None

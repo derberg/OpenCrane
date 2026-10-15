@@ -45,7 +45,7 @@ class TestEmbeddingService:
 
         service = EmbeddingService("test-model")
 
-        mock_transformer.assert_called_once_with("test-model", trust_remote_code=True, device='cpu')
+        mock_transformer.assert_called_once_with("test-model", trust_remote_code=False, device='cpu')
         assert service.model == mock_model
 
     @patch('opencrane.mcp.services.embeddings.SentenceTransformer')
@@ -92,8 +92,9 @@ class TestEmbeddingService:
         assert result.embeddings[1].chunk_index == 1
         assert result.embeddings[0].vector == [0.1] * 768
 
+        # The default model (nomic-embed-text-v1.5) gets its known document prefix
         mock_model.encode.assert_called_once_with(
-            ["test content 1", "test content 2"],
+            ["search_document: test content 1", "search_document: test content 2"],
             batch_size=8,
             show_progress_bar=True
         )
@@ -234,3 +235,20 @@ def test_embeddings_file_without_document_prompt_loads_as_empty():
     """Embeddings files written before the field existed still load."""
     ef = EmbeddingsFile(model="m", dimensions=1, created_at="t", chunks_sha256="s", embeddings=[])
     assert ef.document_prompt == ""
+
+
+@patch('opencrane.mcp.services.embeddings.SentenceTransformer')
+def test_generate_embeddings_uses_and_records_model_document_prompt(mock_transformer, monkeypatch):
+    """Without EMBEDDING_DOCUMENT_PROMPT, the model's own document prompt is applied and recorded."""
+    monkeypatch.delenv("EMBEDDING_DOCUMENT_PROMPT", raising=False)
+    mock_model = Mock()
+    mock_model.prompts = {"query": "q: ", "document": "doc: "}
+    mock_model.encode.return_value = [[0.1] * 4]
+    mock_transformer.return_value = mock_model
+
+    result = EmbeddingService("org/model").generate_embeddings(
+        [{"content": "x", "chunk_id": "a", "source_file": "a.md", "chunk_type": "prose"}]
+    )
+
+    assert mock_model.encode.call_args.args[0] == ["doc: x"]
+    assert result.document_prompt == "doc: "

@@ -7,8 +7,8 @@ import json
 import logging
 from pathlib import Path
 from opencrane.mcp.services.embeddings import EmbeddingService
-from opencrane.shared.config import get_config
 from opencrane.shared.logging_config import setup_logging
+from opencrane.shared.utils.embedding_prompts import resolve_document_prompt, resolve_query_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,11 @@ def _chunks_sha256(chunks_file: Path) -> str:
 
 
 def _embeddings_up_to_date(chunks_file: Path, embeddings_file: Path) -> bool:
-    """Check if embeddings were already generated from the current chunks file and document prompt."""
+    """Check if embeddings were already generated from the current chunks file and document prompt.
+
+    The prompt compared is the effective one for ``EMBEDDING_MODEL``, so a new
+    default prompt (from the model or the known-model table) re-embeds too.
+    """
     if not embeddings_file.exists():
         return False
     try:
@@ -28,10 +32,32 @@ def _embeddings_up_to_date(chunks_file: Path, embeddings_file: Path) -> bool:
             data = json.load(f)
         return (
             data.get("chunks_sha256") == _chunks_sha256(chunks_file)
-            and data.get("document_prompt", "") == get_config().embedding_document_prompt
+            and data.get("document_prompt", "") == resolve_document_prompt()
         )
     except Exception:
         return False
+
+
+def _sync_query_prompt(embeddings_file: Path) -> None:
+    """Record the current query prompt in an up-to-date embeddings file.
+
+    The query prompt does not change the vectors, so a new one is written into
+    the file header instead of re-encoding. ``opencrane index`` then stores it in
+    the collection, where the MCP server reads it.
+    """
+    try:
+        with open(embeddings_file, 'r') as f:
+            data = json.load(f)
+        query_prompt = resolve_query_prompt(model_name=data.get("model"))
+        if data.get("query_prompt") == query_prompt:
+            return
+        data["query_prompt"] = query_prompt
+        with open(embeddings_file, 'w') as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Could not record the query prompt in {embeddings_file}: {e}")
+        return
+    logger.info(f"Recorded query prompt {query_prompt!r} in {embeddings_file}; run 'opencrane index' to apply it")
 
 
 def main(chunks_file=None, embeddings_file=None, force=False):
@@ -57,6 +83,7 @@ def main(chunks_file=None, embeddings_file=None, force=False):
     if not force and _embeddings_up_to_date(chunks_file, embeddings_file):
         logger.info("⊘ Skipping embedding generation: chunks and document prompt unchanged since last run")
         logger.info("  To force regeneration, use: --force")
+        _sync_query_prompt(embeddings_file)
         return
 
     logger.info(f"Loading chunks from {chunks_file}...")

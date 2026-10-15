@@ -17,6 +17,12 @@ from mcp.server import Server
 from mcp.types import TextContent, PromptMessage
 from mcp.server.stdio import stdio_server
 from opencrane.mcp.services.embeddings import EmbeddingService
+from opencrane.mcp.services.embedding_settings import (
+    EmbeddingSettings,
+    EmbeddingSettingsMismatch,
+    resolve_embedding_settings,
+    with_model_prompts,
+)
 from opencrane.mcp.services.milvus_client import MilvusService
 from opencrane.mcp.services.keyword_search import KeywordSearchService
 from opencrane.mcp.services.reranker import CrossEncoderReranker, apply_reranker
@@ -38,6 +44,8 @@ logger = logging.getLogger(__name__)
 
 # Lazy initialization of services
 _embeddings_service = None
+# Model and query prompt resolved from the env and the index (see get_embedding_settings).
+_embedding_settings: EmbeddingSettings | None = None
 _milvus_service = None
 _keyword_service = None
 _reranker = None
@@ -119,14 +127,61 @@ def _rehydrate_to_yaml(content: dict | str, metadata: dict, chunk_type: str = ""
 
 
 
+def get_embedding_settings() -> EmbeddingSettings:
+    """Resolve the embedding model and query prompt once.
+
+    Combines ``EMBEDDING_MODEL`` / ``EMBEDDING_QUERY_PROMPT`` with the settings
+    that ``opencrane index`` recorded in the collection. Raises
+    ``EmbeddingSettingsMismatch`` when an env var contradicts the index; a
+    mismatch is not cached, so every later call raises it too.
+    """
+    global _embedding_settings
+    if _embedding_settings is None:
+        # Resolved outside _service_init_lock: get_milvus_service takes it too.
+        _embedding_settings = resolve_embedding_settings(get_milvus_service().embedding_metadata())
+    return _embedding_settings
+
+
+def _query_prompt() -> str | None:
+    """The resolved query prompt, or ``None`` (resolve it for the model) before resolution."""
+    return _embedding_settings.query_prompt if _embedding_settings is not None else None
+
+
 def get_embeddings_service():
-    global _embeddings_service
+    global _embeddings_service, _embedding_settings
     if _embeddings_service is None:
+        settings = get_embedding_settings()
         with _service_init_lock:
             if _embeddings_service is None:
-                _embeddings_service = EmbeddingService()
-                warn_if_inconsistent()
+                service = EmbeddingService(model_name=settings.model)
+                # Without an index value, the prompts come from the loaded
+                # model, which can know more than its cached config file.
+                _embedding_settings = with_model_prompts(settings, service.model)
+                warn_if_inconsistent(
+                    document_prompt=_embedding_settings.document_prompt,
+                    query_prompt=_embedding_settings.query_prompt,
+                )
+                _embeddings_service = service
     return _embeddings_service
+
+
+def check_embedding_settings() -> None:
+    """Fail at startup when the env contradicts the index's embedding settings.
+
+    Only a mismatch is raised. Any other error (Milvus unreachable, no
+    collection yet) is logged and left to the first search, as before.
+    """
+    try:
+        settings = get_embedding_settings()
+    except EmbeddingSettingsMismatch:
+        raise
+    except Exception as exc:
+        logger.warning(f"Could not read the index's embedding settings at startup: {exc}")
+        return
+    logger.info(
+        f"Embedding model {settings.model!r} (from {settings.model_source}), "
+        f"query prompt {settings.query_prompt!r} (from {settings.query_prompt_source})"
+    )
 
 def get_milvus_service():
     global _milvus_service
@@ -1058,7 +1113,13 @@ async def _search_documentation_impl(
 
         def _semantic_results(arm_limit: int = fetch_limit) -> list[dict]:
             embeddings_service = get_embeddings_service()
-            query_embedding = embeddings_service.model.encode([format_query(query)], batch_size=8, show_progress_bar=False)
+            query_text = format_query(
+                query,
+                _query_prompt(),
+                model=embeddings_service.model,
+                model_name=getattr(embeddings_service, "model_name", None),
+            )
+            query_embedding = embeddings_service.model.encode([query_text], batch_size=8, show_progress_bar=False)
             if hasattr(query_embedding, 'tolist'):
                 query_embedding = query_embedding.tolist()
             query_vec = query_embedding[0]
@@ -1335,6 +1396,10 @@ async def compute_health() -> dict:
             "embeddings_service": "healthy" if embeddings_service.model else "unhealthy",
             "milvus_service": "healthy" if milvus_service.client else "unhealthy",
         }
+        if _embedding_settings is not None:
+            # Model and query prompt in use, and whether each came from the env,
+            # the index, or the built-in default.
+            checks["embedding"] = _embedding_settings.as_dict()
 
         try:
             checks["collection_stats"] = milvus_service.get_collection_stats()
@@ -1941,6 +2006,11 @@ async def main():
     from opencrane.mcp.auth.runtime import mark_stdio_transport
 
     mark_stdio_transport()
+    try:
+        check_embedding_settings()
+    except EmbeddingSettingsMismatch as exc:
+        logger.error(f"Refusing to start: {exc}")
+        raise SystemExit(1)
 
     async with stdio_server() as (read_stream, write_stream):
         await app.run(

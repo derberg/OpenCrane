@@ -362,7 +362,8 @@ class TestMCPServer:
         mock_cm.__aenter__ = AsyncMock(return_value=(mock_read_stream, mock_write_stream))
         mock_cm.__aexit__ = AsyncMock(return_value=None)
 
-        with patch('opencrane.mcp.server.stdio_server', return_value=mock_cm):
+        with patch('opencrane.mcp.server.stdio_server', return_value=mock_cm), \
+                patch('opencrane.mcp.server.check_embedding_settings'):
             mock_app.run = AsyncMock()
             mock_app.create_initialization_options.return_value = {}
 
@@ -1423,6 +1424,9 @@ def test_get_embeddings_service_warns_on_inconsistent_prompts(mock_embedding_ser
     import logging
     import opencrane.mcp.server as server_module
     monkeypatch.setattr(server_module, "_embeddings_service", None)
+    monkeypatch.setattr(server_module, "get_milvus_service", lambda: Mock(embedding_metadata=Mock(return_value=None)))
+    # A model without default prompts, so the query prompt resolves to empty.
+    monkeypatch.setenv("EMBEDDING_MODEL", "acme/no-prompts")
     monkeypatch.setenv("EMBEDDING_DOCUMENT_PROMPT", "search_document: ")
     monkeypatch.delenv("EMBEDDING_QUERY_PROMPT", raising=False)
 
@@ -1430,3 +1434,23 @@ def test_get_embeddings_service_warns_on_inconsistent_prompts(mock_embedding_ser
         get_embeddings_service()
 
     assert "EMBEDDING_QUERY_PROMPT is empty" in caplog.text
+
+
+@patch('opencrane.mcp.server.get_embeddings_service')
+@patch('opencrane.mcp.server.get_milvus_service')
+@pytest.mark.anyio
+async def test_semantic_search_applies_model_query_prompt(mock_milvus_get, mock_embeddings_get, monkeypatch):
+    """Without EMBEDDING_QUERY_PROMPT, the loaded model's own query prompt is applied."""
+    monkeypatch.delenv("EMBEDDING_QUERY_PROMPT", raising=False)
+    mock_embeddings = Mock()
+    mock_embeddings.model_name = "Qwen/Qwen3-Embedding-0.6B"
+    mock_embeddings.model.prompts = {"query": "Instruct: find\nQuery:", "document": ""}
+    mock_embeddings.model.encode.return_value = [[0.1] * 768]
+    mock_embeddings_get.return_value = mock_embeddings
+    mock_milvus_get.return_value = Mock(search=Mock(return_value=[]))
+
+    await _search_documentation_impl({"query": "what is AMF", "search_mode": "semantic"})
+
+    mock_embeddings.model.encode.assert_called_once_with(
+        ["Instruct: find\nQuery:what is AMF"], batch_size=8, show_progress_bar=False
+    )

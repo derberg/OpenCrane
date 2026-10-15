@@ -165,6 +165,8 @@ An optional reranker reorders the results of every search mode. The reranker sco
 
 To turn on the built-in reranker, set the `RERANKER_MODEL` environment variable to a sentence-transformers cross-encoder model, for example `cross-encoder/ms-marco-MiniLM-L-6-v2`. To use your own reranker, see [Custom reranker](#custom-reranker). The Docker image from `opencrane init` runs offline, so set `RERANKER_MODEL` before you build the image. The build then downloads the model into the image.
 
+`RERANKER_TRUST_REMOTE_CODE` controls whether the cross-encoder can run its own Python code. When unset, OpenCrane allows it only for the model families that need it, the same list as `EMBEDDING_TRUST_REMOTE_CODE`. Set `true` for a reranker that ships its own code.
+
 The server reranks the first `RERANK_DEPTH` candidates, `50` by default, and returns the top **limit** results. A value below **limit** counts as **limit**, and OpenCrane caps the value at `16384`. The built-in reranker runs on the CPU, so a higher `RERANK_DEPTH` makes each search slower. With the built-in reranker, the `Score` line of each result shows the reranker score.
 
 If the reranker fails, the server logs the `Reranker failed, returning unreranked results` warning and returns the results in search order. The health check skips the reranker.

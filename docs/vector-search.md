@@ -8,10 +8,10 @@ The following table lists the search modes and filters of the MCP server:
 
 | Capability | Description |
 |---|---|
-| Semantic search | Cosine similarity between the query and the chunk embeddings. The `EMBEDDING_MODEL` environment variable sets the model, by default `nomic-ai/nomic-embed-text-v1.5`. |
+| Semantic search | Cosine similarity between the query and the chunk embeddings. The server embeds the query with the model and query prompt that the index records. See [Embedding settings in the index](embeddings.md#embedding-settings-in-the-index). |
 | Keyword search | Best Matching 25 (BM25) ranking over the chunks file. To keep identifiers such as `5.4.1` or `GTP-U` as one token, set `BM25_TOKENIZER` to `identifier`. |
 | Hybrid search | The default mode. It merges the semantic and keyword results, weighted by **alpha**. `HYBRID_FUSION` selects a merge of normalized scores (`minmax`, the default) or of ranks (`rrf`). |
-| Reranking | Optional. A cross-encoder model from `RERANKER_MODEL`, or your own reranker, reorders the results of every mode. |
+| Reranking | Optional. A cross-encoder model from `RERANKER_MODEL`, or your own reranker, reorders the results of every mode. `RERANKER_TRUST_REMOTE_CODE` allows a cross-encoder that ships its own code. See [Search modes](architecture.md#search-modes). |
 | Filters | Chunk type, source name, and metadata content |
 
 For the scoring formulas and the tuning variables, see [Search modes](architecture.md#search-modes).
@@ -69,24 +69,25 @@ podman-compose -f .opencrane/docker-compose.yml up --build
 
 #### Embedding settings in the image
 
-The image build reads the embedding model from `.opencrane/embeddings.json`, which records the model that `opencrane embed` used. The model download, the index, and the server then use the same model. The build fails when `embeddings.json` is missing and you do not set the model.
+The image build reads the embedding model from `.opencrane/embeddings.json`, which records the model and the prompts that `opencrane embed` used. The model download and the index use that model, and the index records the model and the prompts. The server then embeds queries with the recorded settings. See [Embedding settings in the index](embeddings.md#embedding-settings-in-the-index). The build fails when `embeddings.json` is missing and you do not set the model.
 
 The build reads the following build arguments. The compose file passes each one only when your shell sets the environment variable of the same name.
 
 | Build argument | Description |
 |---|---|
-| `EMBEDDING_MODEL` | Overrides the model from `embeddings.json`. The build warns when the two differ. An empty value counts as not set. |
+| `EMBEDDING_MODEL` | Must match the model in `embeddings.json`, or the build fails. An empty value counts as not set. |
+| `EMBEDDING_QUERY_PROMPT` | Must match the query prompt in `embeddings.json`, or the build fails. When unset, the server uses the query prompt that the index records. An empty value means no prompt. |
 | `EMBEDDING_TRUST_REMOTE_CODE` | `true` or `false`. When unset, it is `true` only for `nomic-ai/*` models. The download and the server use the same value. |
-| `EMBEDDING_QUERY_PROMPT`, `EMBEDDING_DOCUMENT_PROMPT` | The image passes a prompt to the server only when you set it. A prompt set to an empty value means no prompt. See [Embedding prompts](embeddings.md#embedding-prompts). |
+| `EMBEDDING_DTYPE`, `EMBEDDING_DEVICE` | Precision and device of the embedding model in the container. See [Model loading settings](embeddings.md#model-loading-settings). |
 | `RERANKER_MODEL` | Optional reranker model that the build downloads into the image. |
 | `RERANKER_TRUST_REMOTE_CODE` | The same as `EMBEDDING_TRUST_REMOTE_CODE`, for the reranker model. |
 
 The build writes these settings to `/app/image.env`, and the entrypoint loads them before it starts the server. A variable that you set when you start the container, for example with `docker run -e`, overrides the value from the build.
 
-To set the query prompt in an image that you build without compose, run the following command from the project root:
+To load the embedding model in `bfloat16` in an image that you build without compose, run the following command from the project root:
 
 ```bash
-docker build --build-arg EMBEDDING_QUERY_PROMPT="search_query: " -t {REGISTRY}/{IMAGE_NAME}:latest -f .opencrane/Dockerfile .
+docker build --build-arg EMBEDDING_DTYPE=bfloat16 -t {REGISTRY}/{IMAGE_NAME}:latest -f .opencrane/Dockerfile .
 ```
 
 ### Run a prebuilt image

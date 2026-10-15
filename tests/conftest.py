@@ -34,6 +34,20 @@ def setup_session_temp_root():
 
 
 @pytest.fixture(autouse=True)
+def block_hf_cache_lookups(monkeypatch):
+    """Report every model config file as not cached.
+
+    Prompt resolution without a loaded model reads config_sentence_transformers.json
+    from the user's Hugging Face cache. Tests that exercise that path patch
+    ``embedding_prompts.try_to_load_from_cache`` themselves, which overrides this.
+    """
+    monkeypatch.setattr(
+        "opencrane.shared.utils.embedding_prompts.try_to_load_from_cache",
+        lambda *args, **kwargs: None,
+    )
+
+
+@pytest.fixture(autouse=True)
 def isolate_outputs(monkeypatch, setup_session_temp_root):
     """Isolate output directories and use temp copy of test fixture mapping to prevent writing to production files."""
     # Point MAPPING_FILE env var to temp copy of fixture (created in setup_session_temp_root)
@@ -47,6 +61,7 @@ def isolate_outputs(monkeypatch, setup_session_temp_root):
     monkeypatch.setattr('opencrane.mcp.server._chunk_types_cache', None)
     monkeypatch.setattr('opencrane.mcp.server._milvus_service', None)
     monkeypatch.setattr('opencrane.mcp.server._embeddings_service', None)
+    monkeypatch.setattr('opencrane.mcp.server._embedding_settings', None)
 
     # Patch ROOT in generate_llms_txt to point to session temp directory
     monkeypatch.setattr('opencrane.rag.generate_llms_txt.ROOT', setup_session_temp_root)
@@ -65,3 +80,4 @@ def isolate_outputs(monkeypatch, setup_session_temp_root):
     monkeypatch.setattr('opencrane.mcp.server._chunk_types_cache', None)
     monkeypatch.setattr('opencrane.mcp.server._milvus_service', None)
     monkeypatch.setattr('opencrane.mcp.server._embeddings_service', None)
+    monkeypatch.setattr('opencrane.mcp.server._embedding_settings', None)

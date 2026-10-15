@@ -136,21 +136,25 @@ RUN --mount=type=cache,target=/root/.cache/pip \\
 
 # =============================================================================
 # Stage 2: Embedding model
-# The settings stage resolves the model and prompts into /build/image.env, which
-# the model download, the index build and the runtime entrypoint all source.
+# The settings stage checks the build args against .opencrane/embeddings.json and
+# writes /build/image.env, which the model download, the index build and the
+# runtime entrypoint all source.
 # =============================================================================
 FROM deps AS settings
 
 # EMBEDDING_MODEL defaults to the model that `opencrane embed` recorded in
-# .opencrane/embeddings.json; set it only to override that model.
-# EMBEDDING_TRUST_REMOTE_CODE and RERANKER_TRUST_REMOTE_CODE take true or false,
-# and default to true only for nomic-ai/* models. An empty value of these
-# counts as not set. The prompts have no default: an unset prompt does not
-# reach the server, and a prompt set to an empty value means no prompt.
+# .opencrane/embeddings.json. The index records that model, and the server
+# refuses to start with another one, so a different value fails the build.
+# EMBEDDING_QUERY_PROMPT has no default: when unset, the server uses the query
+# prompt that the index records. When set, even to empty, it must match the
+# prompt in embeddings.json. EMBEDDING_TRUST_REMOTE_CODE and
+# RERANKER_TRUST_REMOTE_CODE take true or false, and default to true only for
+# nomic-ai/* models. An empty value of the other args counts as not set.
 ARG EMBEDDING_MODEL=
-ARG EMBEDDING_TRUST_REMOTE_CODE=
 ARG EMBEDDING_QUERY_PROMPT
-ARG EMBEDDING_DOCUMENT_PROMPT
+ARG EMBEDDING_TRUST_REMOTE_CODE=
+ARG EMBEDDING_DTYPE=
+ARG EMBEDDING_DEVICE=
 ARG RERANKER_MODEL=
 ARG RERANKER_TRUST_REMOTE_CODE=
 
@@ -242,9 +246,10 @@ services:
       # An unset EMBEDDING_MODEL means the model in .opencrane/embeddings.json.
       args:
         EMBEDDING_MODEL:
-        EMBEDDING_TRUST_REMOTE_CODE:
         EMBEDDING_QUERY_PROMPT:
-        EMBEDDING_DOCUMENT_PROMPT:
+        EMBEDDING_TRUST_REMOTE_CODE:
+        EMBEDDING_DTYPE:
+        EMBEDDING_DEVICE:
         RERANKER_MODEL: "${RERANKER_MODEL:-}"
         RERANKER_TRUST_REMOTE_CODE:
     ports:
@@ -252,8 +257,9 @@ services:
     environment:
       MILVUS_DB_PATH: /app/milvus_data/milvus.db
       MILVUS_COLLECTION: opencrane_chunks
+      # No value: passed from your shell when set, left unset otherwise so the
+      # server uses the query prompt that the index records.
       EMBEDDING_QUERY_PROMPT:
-      EMBEDDING_DOCUMENT_PROMPT:
 '''
 
 README_MD = '''\
@@ -306,11 +312,11 @@ To build and start the container, run the following command from the project roo
 {container_tool}-compose -f .opencrane/docker-compose.yml up --build
 ```
 
-The image build reads the embedding model from `embeddings.json`, which records the model that `opencrane embed` used. The image contains that model, and the server embeds search queries with it. To override the model, set the `EMBEDDING_MODEL` environment variable before the build. The build warns when it differs from the model in `embeddings.json`.
+The image build reads the embedding model from `embeddings.json`, which records the model and the prompts that `opencrane embed` used. The image contains that model, and the index records the model and the prompts. The server embeds search queries with the recorded settings, so you do not need to set `EMBEDDING_MODEL` or `EMBEDDING_QUERY_PROMPT`. If you set either one before the build, it must match `embeddings.json`, or the build fails.
 
-To give the server the query prompt and the document prompt, set `EMBEDDING_QUERY_PROMPT` and `EMBEDDING_DOCUMENT_PROMPT` before the build. The image passes a prompt to the server only when you set it. A prompt set to an empty value means no prompt. `EMBEDDING_TRUST_REMOTE_CODE` and `RERANKER_TRUST_REMOTE_CODE` set whether the build and the server run the code that a model ships. When unset, they are `true` for `nomic-ai/*` models and `false` for other models. A variable that you set when you start the container, for example with `{container_tool} run -e`, overrides the value from the build. To add the optional reranker model, set `RERANKER_MODEL` before the build.
+`EMBEDDING_TRUST_REMOTE_CODE` and `RERANKER_TRUST_REMOTE_CODE` set whether the build and the server run the code that a model ships. When unset, they are `true` for `nomic-ai/*` models and `false` for other models. To set the precision or the device of the embedding model in the container, set `EMBEDDING_DTYPE` or `EMBEDDING_DEVICE` before the build. To add the optional reranker model, set `RERANKER_MODEL` before the build. A variable that you set when you start the container, for example with `{container_tool} run -e`, overrides the value from the build.
 
-To pass the same settings to `{container_tool} build`, use `--build-arg`, for example `--build-arg EMBEDDING_QUERY_PROMPT="search_query: "`.
+To pass the same settings to `{container_tool} build`, use `--build-arg`, for example `--build-arg EMBEDDING_DTYPE=bfloat16`.
 
 > [!CAUTION]
 > Do not mount a volume over `/app/milvus_data`. Milvus Lite cannot open a database file on a bind mount and fails with `Open local milvus failed`. Use the database that the image build creates.

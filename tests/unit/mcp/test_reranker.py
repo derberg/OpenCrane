@@ -68,7 +68,7 @@ def test_cross_encoder_scores_sorts_and_loads_lazily_once():
         out = rr.rerank("question", cands)
         rr.rerank("question", [_cand("d")])
 
-    ce.assert_called_once_with("cross/model", device="cpu", trust_remote_code=True)
+    ce.assert_called_once_with("cross/model", device="cpu", trust_remote_code=False)
     assert [r["chunk_id"] for r in out] == ["b", "c", "a"]
     assert [r["distance"] for r in out] == [0.9, 0.5, 0.1]
     # Input dicts are not mutated.

@@ -588,6 +588,11 @@ You need the following variables only if you run the `embed` step, directly or t
 |---|---|---|
 | `EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | Hugging Face embedding model. The MCP server must use the same model. See [Choose an embedding model](docs/embeddings.md#choose-an-embedding-model). |
 | `EMBEDDING_DOCUMENT_PROMPT` | none | Prefix that `embed` adds to every chunk. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
+| `EMBEDDING_DTYPE` | `float32` | Model weight precision: `float32`, `bfloat16`, or `float16`. `bfloat16` about halves model memory. `serve` reads it too. See [Model loading settings](docs/embeddings.md#model-loading-settings). |
+| `EMBEDDING_DEVICE` | `cpu` | Torch device for the embedding model, for example `cuda` or `mps`. `serve` reads it too. |
+| `EMBEDDING_BATCH_SIZE` | `8` | Number of chunks that `embed` encodes at once |
+| `EMBEDDING_MAX_SEQ_LENGTH` | `0` | Maximum tokens per input. `0` keeps the model's limit. `serve` reads it too. |
+| `EMBEDDING_TRUST_REMOTE_CODE` | auto | `true` or `false`. When unset, only `nomic-ai/*` models can run their own code. `serve` reads it too. |
 
 #### Variables for the `index` and `serve` steps
 
@@ -616,6 +621,7 @@ The following table lists the variables:
 | `BM25_TOKENIZER` | `simple` | Keyword (BM25) tokenizer. `simple` splits text on every character that is not a letter, a digit, or an underscore. `identifier` also keeps dotted and hyphenated identifiers such as `5.4.1` or `GTP-U` as one token. A change needs a server restart, but no new index. See [Search modes](docs/architecture.md#search-modes). |
 | `RERANKER_MODEL` | none | Cross-encoder model that turns on the built-in reranker. See [Search modes](docs/architecture.md#search-modes). |
 | `RERANK_DEPTH` | `50` | Number of candidates the reranker reorders |
+| `RERANKER_TRUST_REMOTE_CODE` | auto | `true` or `false`. When unset, only `nomic-ai/*` reranker models can run their own code. |
 
 #### Variables for the HTTP transport
 

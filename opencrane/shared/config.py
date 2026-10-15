@@ -1,12 +1,64 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 import os
+
+# Values accepted by EMBEDDING_DTYPE; the embedding service maps each to a torch dtype.
+EMBEDDING_DTYPES = ("float32", "bfloat16", "float16")
+
+# Model ID prefixes whose models ship custom modeling code and fail to load
+# without trust_remote_code. Nomic Embed (v1, v1.5, v2) uses its own nomic_bert /
+# NomicBert architecture. The *_TRUST_REMOTE_CODE "auto" setting trusts only these.
+REMOTE_CODE_MODEL_PREFIXES = ("nomic-ai/",)
 
 
 def _prompt_env(name: str) -> str:
     """Read an embedding prompt from env, unescaping a literal ``\\n`` to a newline."""
     return os.getenv(name, "").replace("\\n", "\n")
+
+
+def _optional_bool_env(name: str) -> Optional[bool]:
+    """Read a true/false env var; unset or empty means None (auto)."""
+    value = os.getenv(name, "").strip().lower()
+    if not value or value == "auto":
+        return None
+    if value in ("true", "1", "yes"):
+        return True
+    if value in ("false", "0", "no"):
+        return False
+    raise ValueError(f"{name} must be true, false, or unset (auto), got {value!r}")
+
+
+def _int_env(name: str, default: int, minimum: int) -> int:
+    """Read an integer env var that must be at least *minimum*."""
+    raw = os.getenv(name, "").strip() or str(default)
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ValueError(f"{name} must be an integer, got {raw!r}") from None
+    if value < minimum:
+        raise ValueError(f"{name} must be at least {minimum}, got {value}")
+    return value
+
+
+def _dtype_env(name: str) -> str:
+    """Read EMBEDDING_DTYPE, rejecting values outside EMBEDDING_DTYPES."""
+    value = os.getenv(name, "").strip().lower() or "float32"
+    if value not in EMBEDDING_DTYPES:
+        raise ValueError(f"{name} must be one of {', '.join(EMBEDDING_DTYPES)}, got {value!r}")
+    return value
+
+
+def resolve_trust_remote_code(model_name: str, setting: Optional[bool]) -> bool:
+    """Decide whether a model may run its own code.
+
+    An explicit setting wins. Unset (None) trusts only models known to need
+    remote code (REMOTE_CODE_MODEL_PREFIXES), so naming an arbitrary model does
+    not run arbitrary code from it.
+    """
+    if setting is not None:
+        return setting
+    return model_name.startswith(REMOTE_CODE_MODEL_PREFIXES)
 
 
 @dataclass
@@ -49,6 +101,15 @@ class Config:
     # A literal backslash-n in the env value becomes a newline (for Qwen3-style templates).
     embedding_document_prompt: str = field(default_factory=lambda: _prompt_env("EMBEDDING_DOCUMENT_PROMPT"))
     embedding_query_prompt: str = field(default_factory=lambda: _prompt_env("EMBEDDING_QUERY_PROMPT"))
+    # Weight dtype for the embedding model: float32, bfloat16 (about half the RAM), or float16
+    embedding_dtype: str = field(default_factory=lambda: _dtype_env("EMBEDDING_DTYPE"))
+    # Torch device for the embedding model. CPU by default, because MPS runs out of memory on macOS.
+    embedding_device: str = field(default_factory=lambda: os.getenv("EMBEDDING_DEVICE", "").strip() or "cpu")
+    embedding_batch_size: int = field(default_factory=lambda: _int_env("EMBEDDING_BATCH_SIZE", 8, 1))
+    # Token cap per input (0 = the model's own maximum); bounds memory on long-context models
+    embedding_max_seq_length: int = field(default_factory=lambda: _int_env("EMBEDDING_MAX_SEQ_LENGTH", 0, 0))
+    # true / false / unset (auto: only models in REMOTE_CODE_MODEL_PREFIXES)
+    embedding_trust_remote_code: Optional[bool] = field(default_factory=lambda: _optional_bool_env("EMBEDDING_TRUST_REMOTE_CODE"))
     # Search configuration
     hybrid_alpha: float = field(default_factory=lambda: float(os.getenv("HYBRID_ALPHA", "0.6")))
     # Results fetched per arm (semantic, keyword) before hybrid fusion; 0 = the requested limit
@@ -64,6 +125,8 @@ class Config:
     # fetched and passed to the reranker before cutting to the requested limit.
     reranker_model: str = field(default_factory=lambda: os.getenv("RERANKER_MODEL", ""))
     rerank_depth: int = field(default_factory=lambda: int(os.getenv("RERANK_DEPTH", "50")))
+    # true / false / unset (auto: only models in REMOTE_CODE_MODEL_PREFIXES)
+    reranker_trust_remote_code: Optional[bool] = field(default_factory=lambda: _optional_bool_env("RERANKER_TRUST_REMOTE_CODE"))
     # Source mapping file configuration
     mapping_file: Path = field(default_factory=lambda: Path(os.getenv("MAPPING_FILE", ".opencrane/config.yaml")))
     # Optional: restrict fetch to a single repo by path key (e.g. "external-sources/cgw")
@@ -75,4 +138,4 @@ def get_config() -> Config:
     return Config()
 
 
-__all__ = ["Config", "get_config"]
+__all__ = ["Config", "EMBEDDING_DTYPES", "REMOTE_CODE_MODEL_PREFIXES", "get_config", "resolve_trust_remote_code"]

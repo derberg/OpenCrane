@@ -167,7 +167,7 @@ def encode_paragraph(model_name: str, paragraph: str, query_prompt: str | None =
     np = _require("numpy")
     _require("sentence_transformers")
     from sentence_transformers import SentenceTransformer
-    from opencrane.mcp.services.embeddings import encoder_model_kwargs
+    from opencrane.mcp.services.embeddings import cast_to_dtype, encoder_model_kwargs
 
     # Load the model the way embed and serve do, so the paragraph vector is comparable
     config = get_config()
@@ -178,6 +178,7 @@ def encode_paragraph(model_name: str, paragraph: str, query_prompt: str | None =
         device=config.embedding_device,
         **encoder_model_kwargs(config.embedding_dtype),
     )
+    cast_to_dtype(model, config.embedding_dtype)
     logger.info("Encoding paragraph (%d chars)…", len(paragraph))
     template = config.embedding_query_prompt
     if template is None:

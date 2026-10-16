@@ -79,14 +79,15 @@ def test_reads_header_of_compact_file(tmp_path):
     assert read_embeddings_header(path) == {"model": 'a\\b"c'}
 
 
-def test_missing_or_unreadable_header_gives_none(tmp_path, monkeypatch):
+def test_missing_header_gives_none_and_unreadable_header_raises(tmp_path, monkeypatch):
     assert read_embeddings_header(tmp_path / "missing.json") is None
     no_list = tmp_path / "no_list.json"
     no_list.write_text('{"model": "x"}')
-    assert read_embeddings_header(no_list) is None
+    assert read_embeddings_header(no_list) == {"model": "x"}
     broken = tmp_path / "broken.json"
     broken.write_text('{"model": "x" "y", "embeddings": []}')
-    assert read_embeddings_header(broken) is None
+    with pytest.raises(ContainerEnvError, match="cannot be parsed"):
+        read_embeddings_header(broken)
 
 
 # === choosing the model ===

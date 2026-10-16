@@ -26,6 +26,7 @@ value given at run time, for example ``docker run -e``, still wins.
 
 import json
 import os
+import re
 import shlex
 import sys
 from pathlib import Path
@@ -33,10 +34,17 @@ from typing import Dict, Optional
 
 from opencrane.shared.config import Config, resolve_trust_remote_code
 
-# EmbeddingsFile serializes its scalar fields before the ``embeddings`` list,
-# so a short read of the file holds them.
+# The header is read in chunks of this size. The ``embeddings`` list is skipped
+# without decoding, so the read uses little memory whatever the file size and
+# wherever the list sits among the keys.
 _HEADER_BYTES = 64 * 1024
-_EMBEDDINGS_KEY = '"embeddings"'
+# A value other than the list, such as a prompt, is at most this many characters.
+_MAX_VALUE_CHARS = 1024 * 1024
+_EMBEDDINGS_KEY = "embeddings"
+_DECODER = json.JSONDecoder()
+_WHITESPACE = " \t\n\r"
+_STRUCTURE = re.compile(r'["\[\]{}]')
+_STRING_END = re.compile(r'["\\]')
 
 # Runtime-only settings, forwarded only when the build sets them.
 _FORWARDED_IF_SET = ("EMBEDDING_DTYPE", "EMBEDDING_DEVICE")
@@ -46,24 +54,136 @@ class ContainerEnvError(Exception):
     """The build cannot determine consistent embedding settings."""
 
 
-def read_embeddings_header(path: Path) -> Optional[Dict]:
-    """Return the scalar fields of an embeddings file, reading only its start.
+class _JsonStream:
+    """Read a JSON document from a text file in chunks, a value at a time."""
 
-    Returns ``None`` when the file does not exist or its start holds no
-    complete header before the ``embeddings`` list.
+    def __init__(self, f):
+        self._file = f
+        self._buf = ""
+        self._pos = 0
+        self._eof = False
+
+    def _more(self) -> bool:
+        """Append the next chunk of the file and drop the consumed text."""
+        if self._eof:
+            return False
+        data = self._file.read(_HEADER_BYTES)
+        if not data:
+            self._eof = True
+            return False
+        self._buf = self._buf[self._pos:] + data
+        self._pos = 0
+        return True
+
+    def peek(self) -> str:
+        """Return the next character that is not whitespace, or ``""`` at the end."""
+        while True:
+            while self._pos < len(self._buf) and self._buf[self._pos] in _WHITESPACE:
+                self._pos += 1
+            if self._pos < len(self._buf):
+                return self._buf[self._pos]
+            if not self._more():
+                return ""
+
+    def expect(self, chars: str) -> str:
+        """Consume the next character, which must be one of *chars*."""
+        char = self.peek()
+        if not char or char not in chars:
+            raise ValueError(f"expected one of {chars!r}, found {char or 'end of file'!r}")
+        self._pos += 1
+        return char
+
+    def _more_for_value(self) -> bool:
+        """Read more text for a value, up to a bound, so a broken file is not read whole."""
+        return len(self._buf) - self._pos < _MAX_VALUE_CHARS and self._more()
+
+    def value(self):
+        """Decode the next value. Values other than the ``embeddings`` list are short."""
+        self.peek()
+        while True:
+            try:
+                value, end = _DECODER.raw_decode(self._buf, self._pos)
+            except json.JSONDecodeError:
+                if self._more_for_value():
+                    continue
+                raise
+            # A number can continue in the next chunk, so decode it again with more text.
+            if end == len(self._buf) and self._more_for_value():
+                continue
+            self._pos = end
+            return value
+
+    def skip_value(self) -> None:
+        """Consume the next value without decoding it."""
+        if self.peek() not in ("[", "{"):
+            self.value()
+            return
+        depth = 0
+        in_string = False
+        while True:
+            pattern = _STRING_END if in_string else _STRUCTURE
+            match = pattern.search(self._buf, self._pos)
+            if match is None:
+                self._pos = len(self._buf)
+                if not self._more():
+                    raise ValueError("unexpected end of file")
+                continue
+            char = match.group()
+            self._pos = match.end()
+            if char == "\\":
+                # The escaped character can be in the next chunk.
+                if self._pos == len(self._buf) and not self._more():
+                    raise ValueError("unexpected end of file")
+                self._pos += 1
+            elif char == '"':
+                in_string = not in_string
+            elif char in "[{":
+                depth += 1
+            else:
+                depth -= 1
+                if depth == 0:
+                    return
+
+
+def _parse_header(f) -> Dict:
+    stream = _JsonStream(f)
+    stream.expect("{")
+    header = {}
+    if stream.peek() == "}":
+        return header
+    while True:
+        if stream.peek() != '"':
+            raise ValueError("expected a key")
+        key = stream.value()
+        stream.expect(":")
+        if key == _EMBEDDINGS_KEY:
+            stream.skip_value()
+        else:
+            header[key] = stream.value()
+        if stream.expect(",}") == "}":
+            return header
+
+
+def read_embeddings_header(path: Path) -> Optional[Dict]:
+    """Return the top-level fields of an embeddings file, without the ``embeddings`` list.
+
+    The fields can come in any order. The list is skipped without decoding it.
+    Returns ``None`` when the file does not exist.
+
+    Raises:
+        ContainerEnvError: the file exists but cannot be parsed.
     """
     try:
         with open(path, "r", encoding="utf-8") as f:
-            start = f.read(_HEADER_BYTES)
+            return _parse_header(f)
     except FileNotFoundError:
         return None
-    end = start.find(_EMBEDDINGS_KEY)
-    if end < 0:
-        return None
-    try:
-        return json.loads(start[:end].rstrip().rstrip(",") + "}")
-    except json.JSONDecodeError:
-        return None
+    except ValueError as exc:
+        # json.JSONDecodeError and UnicodeDecodeError are ValueErrors too
+        raise ContainerEnvError(
+            f"{path} exists but cannot be parsed as an embeddings file: {exc}. "
+            "Run 'opencrane embed --force' to write it again."
+        ) from exc
 
 
 def _bool(value: bool) -> str:
@@ -79,8 +199,9 @@ def build_settings(embeddings_path: Path) -> Dict[str, str]:
         ValueError: a build arg has an invalid value (from ``Config``).
     """
     config = Config()
-    header = read_embeddings_header(embeddings_path) or {}
-    recorded_model = header.get("model") or None
+    header = read_embeddings_header(embeddings_path)
+    fields = header or {}
+    recorded_model = fields.get("model") or None
     arg_model = os.getenv("EMBEDDING_MODEL") or None
 
     if arg_model and recorded_model and arg_model != recorded_model:
@@ -91,9 +212,10 @@ def build_settings(embeddings_path: Path) -> Dict[str, str]:
         )
     model = arg_model or recorded_model
     if not model:
+        problem = "is missing" if header is None else "has no model field"
         raise ContainerEnvError(
             f"Cannot determine the embedding model: the EMBEDDING_MODEL build arg is "
-            f"empty and {embeddings_path} is missing or has no model field. Run "
+            f"empty and {embeddings_path} {problem}. Run "
             "'opencrane embed' before the build, or pass "
             "--build-arg EMBEDDING_MODEL={MODEL_ID}."
         )
@@ -107,10 +229,10 @@ def build_settings(embeddings_path: Path) -> Dict[str, str]:
 
     query_prompt = config.embedding_query_prompt
     if query_prompt is not None:
-        if "query_prompt" in header and header["query_prompt"] != query_prompt:
+        if "query_prompt" in fields and fields["query_prompt"] != query_prompt:
             raise ContainerEnvError(
                 f"EMBEDDING_QUERY_PROMPT is {query_prompt!r} but {embeddings_path} records "
-                f"{header['query_prompt']!r}, and the server refuses to serve an index with "
+                f"{fields['query_prompt']!r}, and the server refuses to serve an index with "
                 "another query prompt. Unset EMBEDDING_QUERY_PROMPT, or run "
                 "'opencrane embed' with the new prompt."
             )

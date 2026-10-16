@@ -11,7 +11,6 @@ import opencrane.mcp.http_server as http_server
 from opencrane.mcp.http_server import (
     init_services,
     build_app,
-    lifespan,
     main,
     app,
     health_handler,
@@ -60,12 +59,13 @@ class TestInitServices:
 
 
 class TestLifespan:
-    @pytest.mark.anyio
-    async def test_lifespan_runs_init_services(self):
-        """The FastMCP lifespan invokes init_services on startup."""
-        mcp = build_app()
+    def test_lifespan_runs_init_services(self, tmp_path, monkeypatch):
+        """The single-endpoint app's lifespan invokes init_services on startup."""
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text("", encoding="utf-8")
+        monkeypatch.setenv("MAPPING_FILE", str(cfg))
         with patch("opencrane.mcp.http_server.init_services", new=AsyncMock()) as mock_init:
-            async with lifespan(mcp):
+            with TestClient(http_server.build_asgi_app()):
                 pass
         mock_init.assert_awaited_once()
 

@@ -299,7 +299,7 @@ The command accepts the following flags:
 |---|---|
 | `--chunks-file {PATH}` | Input chunks JSON file. Overrides the `AI_DOCS_CHUNKS_FILE` environment variable. |
 | `--embeddings-file {PATH}` | Output embeddings JSON file. Overrides the `AI_DOCS_EMBEDDINGS_FILE` environment variable. |
-| `--force` | Regenerates the embeddings even when the chunks and the document prompt are unchanged. Pass it after you change `EMBEDDING_MODEL`, because the skip check ignores the model. A changed query prompt needs no `--force`: a skipped run still writes it to the embeddings file. |
+| `--force` | Regenerates the embeddings even when the chunks, the model, and the document prompt are unchanged. A changed query prompt needs no `--force`: a skipped run still writes it to the embeddings file. |
 
 #### Index the embeddings in Milvus with `opencrane index`
 
@@ -481,7 +481,7 @@ The overall `status` is the worst status of the individual checks. The following
 | `healthy` | `200` | Serving queries normally |
 | `degraded` | `200` | Still serving, but a check found a problem: a slow probe, low memory headroom, or missing collection stats |
 | `unhealthy` | `503` | Cannot serve a query, because a service is down or the probe failed or timed out |
-| `initializing` | `503` | Services are still loading at startup |
+| `initializing` | `503` | Services failed to load at startup, for example because Milvus was unreachable |
 
 The following example shows a response with the `200` status code:
 
@@ -521,7 +521,7 @@ When OpenCrane finds no readable cgroup memory files, for example outside a cont
 To use the endpoint on a container platform, configure the probes as follows:
 
 - Point the liveness and readiness probes at `GET /health` on port 8000.
-- Set the startup or initial delay long enough for the embedding model to load. Until the model loads, `/health` returns `503 initializing`.
+- Set the startup or initial delay long enough for the embedding model to load. The server loads the model and connects to Milvus before it accepts connections, so the probe fails until then. Afterwards, `/health` reports the status without waiting for a first MCP request.
 - Use a long liveness period, so that the probe does not run a real search every few seconds.
 
 ### Default file and directory names
@@ -595,7 +595,7 @@ You need the following variables only if you run the `embed` step, directly or t
 
 | Variable | Default | Description |
 |---|---|---|
-| `EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | Hugging Face embedding model. `index` records it in the collection, and the MCP server uses the recorded model. See [Choose an embedding model](docs/embeddings.md#choose-an-embedding-model). |
+| `EMBEDDING_MODEL` | The model that `.opencrane/embeddings.json` records, else `nomic-ai/nomic-embed-text-v1.5` | Hugging Face embedding model. When it is unset, `embed` keeps the model of the existing embeddings file. When it differs from that model, `embed` generates new embeddings. To switch back to the default model, set it to `nomic-ai/nomic-embed-text-v1.5`. `index` records the model in the collection, and the MCP server uses the recorded model. See [Choose an embedding model](docs/embeddings.md#choose-an-embedding-model). |
 | `EMBEDDING_DOCUMENT_PROMPT` | the model's document prompt | Prefix that `embed` adds to every chunk. An empty value turns the prompt off. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
 | `EMBEDDING_QUERY_PROMPT` | the model's query prompt | Query prompt that `embed` writes to the embeddings file and `index` records in the collection. An empty value turns the prompt off. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
 | `EMBEDDING_DTYPE` | `float32` | Model weight precision: `float32`, `bfloat16`, or `float16`. `bfloat16` about halves model memory. `serve` reads it too. See [Model loading settings](docs/embeddings.md#model-loading-settings). |

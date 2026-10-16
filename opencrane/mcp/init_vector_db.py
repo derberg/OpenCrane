@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 from opencrane.mcp.services.milvus_client import MilvusService
 from opencrane.mcp.services.embeddings import EmbeddingService
+from opencrane.shared.config import get_config
 from opencrane.shared.models.vector_chunk import DEFAULT_EMBEDDING_DIM, VectorChunk
 from opencrane.shared.logging_config import setup_logging
 
@@ -26,13 +27,21 @@ _EMBEDDING_SETTING_KEYS = ("model", "document_prompt", "query_prompt")
 def _embedding_metadata(embeddings, dim: int) -> dict:
     """Settings recorded in the collection so the server embeds queries the same way.
 
-    ``query_prompt`` is left out when the embeddings file predates it: an
-    unknown prompt must not override the server's ``EMBEDDING_QUERY_PROMPT``.
+    An embeddings file that predates ``query_prompt`` was written by a version
+    that served queries with ``EMBEDDING_QUERY_PROMPT``, or with no prompt when
+    it was unset. That rule is recorded, so the server does not add the model's
+    default query prompt to queries for documents encoded without one.
     """
-    metadata = {"model": embeddings.model, "document_prompt": embeddings.document_prompt, "dim": dim}
     if "query_prompt" in embeddings.model_fields_set:
-        metadata["query_prompt"] = embeddings.query_prompt
-    return metadata
+        query_prompt = embeddings.query_prompt
+    else:
+        query_prompt = get_config().embedding_query_prompt or ""
+    return {
+        "model": embeddings.model,
+        "document_prompt": embeddings.document_prompt,
+        "query_prompt": query_prompt,
+        "dim": dim,
+    }
 
 
 def _changed_settings(recorded: dict, metadata: dict) -> list:
@@ -71,7 +80,10 @@ def main(chunks_file=None, embeddings_file=None):
     with open(chunks_file, 'r') as f:
         chunks_data = json.load(f)
 
-    embeddings_service = EmbeddingService()
+    # Reading the file needs no model, so the mock backend skips loading one.
+    # Loading it would download the model and fail on a host without the
+    # EMBEDDING_DEVICE, such as a GPU-less Docker build.
+    embeddings_service = EmbeddingService(model_name="mock")
     embeddings = embeddings_service.load_embeddings(str(embeddings_file))
     # The collection's vector size comes from the model that produced the
     # embeddings, not a fixed constant. Prefer the actual vectors over the

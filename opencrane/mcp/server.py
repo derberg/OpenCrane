@@ -23,7 +23,7 @@ from opencrane.mcp.services.embedding_settings import (
     resolve_embedding_settings,
     with_model_prompts,
 )
-from opencrane.mcp.services.milvus_client import MilvusService
+from opencrane.mcp.services.milvus_client import MilvusService, milvus_lite_path
 from opencrane.mcp.services.keyword_search import KeywordSearchService
 from opencrane.mcp.services.reranker import CrossEncoderReranker, apply_reranker
 from opencrane.shared.config import get_config
@@ -44,8 +44,15 @@ logger = logging.getLogger(__name__)
 
 # Lazy initialization of services
 _embeddings_service = None
+# (service, model) for the service get_embeddings_service created, so a service
+# made before the index could be read is replaced when the index names another model.
+_embeddings_created: tuple | None = None
 # Model and query prompt resolved from the env and the index (see get_embedding_settings).
+# Set only once the index has been read.
 _embedding_settings: EmbeddingSettings | None = None
+# Seconds the startup check waits for a Milvus server, so an unreachable
+# MILVUS_HOST does not hold up the stdio handshake for the pymilvus default.
+_STARTUP_CONNECT_TIMEOUT = 3.0
 _milvus_service = None
 _keyword_service = None
 _reranker = None
@@ -134,11 +141,25 @@ def get_embedding_settings() -> EmbeddingSettings:
     that ``opencrane index`` recorded in the collection. Raises
     ``EmbeddingSettingsMismatch`` when an env var contradicts the index; a
     mismatch is not cached, so every later call raises it too.
+
+    When the collection cannot be read (not indexed yet, or a read error), the
+    env and model defaults are returned but not cached, so a later call reads
+    the index once it exists and checks it.
     """
     global _embedding_settings
     if _embedding_settings is None:
         # Resolved outside _service_init_lock: get_milvus_service takes it too.
-        _embedding_settings = resolve_embedding_settings(get_milvus_service().embedding_metadata())
+        milvus = get_milvus_service()
+        try:
+            metadata = milvus.embedding_metadata(raise_on_error=True)
+        except Exception as exc:
+            logger.warning(
+                f"Could not read the embedding settings from the index ({exc}); using "
+                "EMBEDDING_MODEL and EMBEDDING_QUERY_PROMPT or the model's defaults "
+                "until the index can be read"
+            )
+            return resolve_embedding_settings({})
+        _embedding_settings = resolve_embedding_settings(metadata)
     return _embedding_settings
 
 
@@ -148,48 +169,82 @@ def _query_prompt() -> str | None:
 
 
 def get_embeddings_service():
-    global _embeddings_service, _embedding_settings
-    if _embeddings_service is None:
-        settings = get_embedding_settings()
-        with _service_init_lock:
-            if _embeddings_service is None:
-                service = EmbeddingService(model_name=settings.model)
-                # Without an index value, the prompts come from the loaded
-                # model, which can know more than its cached config file.
-                _embedding_settings = with_model_prompts(settings, service.model)
-                warn_if_inconsistent(
-                    document_prompt=_embedding_settings.document_prompt,
-                    query_prompt=_embedding_settings.query_prompt,
-                )
-                _embeddings_service = service
-    return _embeddings_service
+    """Return the embedding service for the model the index was built with.
+
+    Until the index can be read, the service uses the env or default model, and
+    each call reads the index again. Once it is read, a service for another
+    model is replaced, so a server started before ``opencrane index`` picks up
+    the indexed model.
+    """
+    global _embeddings_service, _embeddings_created, _embedding_settings
+    if _embeddings_service is not None and _embedding_settings is not None:
+        return _embeddings_service
+    settings = get_embedding_settings()
+    from_index = _embedding_settings is settings
+    with _service_init_lock:
+        service = _embeddings_service
+        created_for = (
+            _embeddings_created[1]
+            if _embeddings_created is not None and _embeddings_created[0] is service
+            else None
+        )
+        if service is None or (created_for is not None and created_for != settings.model):
+            service = EmbeddingService(model_name=settings.model)
+            _embeddings_created = (service, settings.model)
+        if from_index and _embedding_settings is settings:
+            # Without an index value, the prompts come from the loaded
+            # model, which can know more than its cached config file.
+            _embedding_settings = with_model_prompts(settings, service.model)
+            warn_if_inconsistent(
+                document_prompt=_embedding_settings.document_prompt,
+                query_prompt=_embedding_settings.query_prompt,
+            )
+        _embeddings_service = service
+    return service
 
 
 def check_embedding_settings() -> None:
     """Fail at startup when the env contradicts the index's embedding settings.
 
     Only a mismatch is raised. Any other error (Milvus unreachable, no
-    collection yet) is logged and left to the first search, as before.
+    collection yet) is logged and left to the first search, which reads the
+    index again. Without a Milvus Lite database file there is no index to
+    check, so the check neither connects nor creates the file. A Milvus server
+    gets ``_STARTUP_CONNECT_TIMEOUT`` seconds to answer.
     """
+    lite_path = milvus_lite_path()
+    if lite_path is not None and not os.path.exists(lite_path):
+        logger.info(f"No Milvus Lite database at {lite_path} yet; the embedding settings are read on first use")
+        return
     try:
+        if lite_path is None and _milvus_service is None:
+            _connect_milvus(connect_timeout=_STARTUP_CONNECT_TIMEOUT)
         settings = get_embedding_settings()
     except EmbeddingSettingsMismatch:
         raise
     except Exception as exc:
         logger.warning(f"Could not read the index's embedding settings at startup: {exc}")
         return
+    if _embedding_settings is None:
+        return  # The index could not be read; get_embedding_settings warned.
     logger.info(
         f"Embedding model {settings.model!r} (from {settings.model_source}), "
         f"query prompt {settings.query_prompt!r} (from {settings.query_prompt_source})"
     )
 
-def get_milvus_service():
+def _connect_milvus(connect_timeout: float | None = None):
+    """Create the Milvus service once; ``connect_timeout`` bounds the first connect."""
     global _milvus_service
     if _milvus_service is None:
         with _service_init_lock:
             if _milvus_service is None:
-                _milvus_service = MilvusService()
+                kwargs = {"connect_timeout": connect_timeout} if connect_timeout is not None else {}
+                _milvus_service = MilvusService(**kwargs)
     return _milvus_service
+
+
+def get_milvus_service():
+    return _connect_milvus()
 
 def get_keyword_service():
     global _keyword_service

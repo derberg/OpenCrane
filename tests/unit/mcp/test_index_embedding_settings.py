@@ -134,9 +134,9 @@ class TestResolveEmbeddingSettings:
             settings = resolve_embedding_settings(None)
         assert settings.model == "nomic-ai/nomic-embed-text-v1.5"
         assert settings.model_source == "default"
-        # No index value: the known-model table gives the default model's prompts.
-        assert (settings.query_prompt, settings.query_prompt_source) == ("search_query: ", "default")
-        assert settings.document_prompt == "search_document: "
+        # A collection from 0.33 or older: no prompt unless the env sets one, as then.
+        assert (settings.query_prompt, settings.query_prompt_source) == ("", "legacy")
+        assert (settings.document_prompt, settings.document_prompt_source) == ("", "legacy")
         assert "DROP_EXISTING=true opencrane index" in caplog.text
 
     def test_old_collection_uses_env(self, clean_env):
@@ -318,11 +318,12 @@ class TestIndexRecordsSettings:
     def test_metadata_from_embeddings(self):
         assert _embedding_metadata(_embeddings(), 768) == _RECORDED
 
-    def test_metadata_omits_query_prompt_of_old_embeddings_file(self):
+    def test_metadata_records_old_rule_for_embeddings_file_without_query_prompt(self, clean_env):
         data = _embeddings().model_dump()
         del data["query_prompt"]
         metadata = _embedding_metadata(EmbeddingsFile(**data), 768)
-        assert "query_prompt" not in metadata
+        # The old serving rule: EMBEDDING_QUERY_PROMPT, else no prompt.
+        assert metadata["query_prompt"] == ""
 
     def test_new_collection_records_settings(self):
         milvus = MagicMock()
@@ -403,7 +404,7 @@ class TestEmbedRecordsQueryPrompt:
 class TestModelPromptFallback:
     def test_loaded_model_prompts_replace_defaults(self, clean_env):
         clean_env.setenv("EMBEDDING_MODEL", "acme/no-table-entry")
-        settings = resolve_embedding_settings(None)
+        settings = resolve_embedding_settings({})
         assert (settings.query_prompt, settings.document_prompt) == ("", "")
         model = Mock(prompts={"query": "Instruct: find\nQuery: ", "document": "doc: "})
         updated = with_model_prompts(settings, model)

@@ -15,13 +15,23 @@ The `opencrane embed` command performs the following steps:
 3. Generates a vector embedding for each chunk, in batches of `EMBEDDING_BATCH_SIZE` chunks to limit memory use. The model runs on the device that `EMBEDDING_DEVICE` sets, `cpu` by default. See [Model loading settings](#model-loading-settings). The default model is Nomic Embed, `nomic-ai/nomic-embed-text-v1.5`.
 4. Saves the embeddings to `.opencrane/embeddings.json`, together with the model name, the document prompt, and the query prompt.
 
-The command skips the run when the chunks and the document prompt match the last run. The check does not compare the model. A skipped run still writes the query prompt that applies now to the file, because the query prompt does not change the vectors. To regenerate the embeddings anyway, add the `--force` flag.
+The command skips the run when the chunks, the model, and the document prompt match the last run. A skipped run still writes the query prompt that applies now to the file, because the query prompt does not change the vectors. To regenerate the embeddings anyway, add the `--force` flag.
 
 ## Choose an embedding model
 
 To use a different model, set the `EMBEDDING_MODEL` environment variable. The value is a Hugging Face model ID or a local path that the `sentence-transformers` library can load. Any vector size works, because `opencrane index` sizes the collection from the embeddings. A larger model can improve results, and a smaller one embeds faster.
 
-Some models, such as Nomic Embed, ship their own Python code and load only with `trust_remote_code`. That code runs on your machine, so OpenCrane allows it only for models known to need it. See `EMBEDDING_TRUST_REMOTE_CODE` in [Model loading settings](#model-loading-settings).
+`opencrane embed` picks the model with the following rules:
+
+| `EMBEDDING_MODEL` | Model that `embed` uses |
+|---|---|
+| Unset or empty, and `.opencrane/embeddings.json` exists | The model that the embeddings file records |
+| Unset or empty, and there is no embeddings file | The default model |
+| Set | That model. When it differs from the model that the embeddings file records, `embed` logs the change and generates new embeddings. |
+
+You can therefore set `EMBEDDING_MODEL` for one `embed` run only, and later runs, `opencrane build` included, keep that model. The MCP server follows the same rule with the model that the index records. To switch back to the default model, set `EMBEDDING_MODEL=nomic-ai/nomic-embed-text-v1.5` for the next `embed` run.
+
+Some models, such as Nomic Embed, ship their own Python code and load only with `trust_remote_code`. That code runs on your machine, so OpenCrane allows it only for models known to need it. When another model fails to load because it needs its own code, the error tells you to set `EMBEDDING_TRUST_REMOTE_CODE=true`. See `EMBEDDING_TRUST_REMOTE_CODE` in [Model loading settings](#model-loading-settings).
 
 > [!CAUTION]
 > When the embeddings come from a different model, `opencrane index` deletes and rebuilds the collection without `DROP_EXISTING`. A collection that an earlier OpenCrane version built records no model. For that collection, you must set `DROP_EXISTING=true`, which also deletes the collection. Searches fail until the rebuild finishes. Check that `MILVUS_COLLECTION` and the [connection variables](../README.md#variables-for-the-index-and-serve-steps) point to the collection to replace.
@@ -114,20 +124,15 @@ At startup, the server resolves `EMBEDDING_MODEL` and `EMBEDDING_QUERY_PROMPT` w
 |---|---|
 | Unset | Uses the value that the index records |
 | Set to the recorded value | Uses that value |
-| Set to a different value, including an empty `EMBEDDING_QUERY_PROMPT` | Does not start, and logs both values. If the server cannot read the index at startup, the first search and the `health` tool return this error. |
+| Set to a different value, including an empty `EMBEDDING_QUERY_PROMPT` | Does not start, exits with a non-zero code, and logs both values |
 
 An empty `EMBEDDING_MODEL` counts as unset. An empty `EMBEDDING_QUERY_PROMPT` means "no prompt".
 
-To fix a mismatch, unset the variable, or rebuild the index with the new value.
+Both transports check the settings at startup. The HTTP server reads the index before it accepts requests. The stdio server checks only an index it can reach. It skips the check when the Milvus Lite database file does not exist yet, and it waits a few seconds at most for a Milvus server. When the stdio server cannot read the index at startup, it reads the index again on each search until the read succeeds. From then on, the server uses the model and query prompt that the index records, and a mismatch makes the search and the `health` tool return the error.
 
-A collection that an earlier OpenCrane version built records no settings. The server then uses `EMBEDDING_MODEL` or its default, resolves the query prompt as described in [Embedding prompts](#embedding-prompts), and logs a warning. `opencrane index` keeps such a collection.
+To fix a mismatch, unset the variable, or rebuild the index with the new value. If `EMBEDDING_QUERY_PROMPT` is set to an empty value, check your `docker-compose.yml`. The file that an older `opencrane init` wrote sets that variable to an empty value. Remove that line, or generate the file again.
 
-If an earlier version built that collection without prompts, the default prompts of the model no longer match it. To keep it working without a rebuild, turn the default prompts off. The following commands turn them off:
-
-```bash
-export EMBEDDING_DOCUMENT_PROMPT=""
-export EMBEDDING_QUERY_PROMPT=""
-```
+A collection that OpenCrane 0.33 or earlier built records no settings. The server then uses `EMBEDDING_MODEL` or the default model, as those versions did. It embeds queries with `EMBEDDING_QUERY_PROMPT`, or with no prompt when the variable is unset, and logs a warning. `opencrane index` keeps such a collection. The `health` tool reports the source of such a prompt as `legacy`.
 
 > [!CAUTION]
 > `DROP_EXISTING=true` deletes the Milvus collection before `index` rebuilds it. Searches fail until the rebuild finishes. First confirm that `MILVUS_COLLECTION` and the connection variables name the right collection.
@@ -138,9 +143,11 @@ The following commands rebuild the index with the current settings and record th
 opencrane embed --force && DROP_EXISTING=true opencrane index
 ```
 
-An embeddings file from an earlier version has no query prompt. `opencrane index` then records no query prompt, and the server resolves it as described in [Embedding prompts](#embedding-prompts).
+An embeddings file from OpenCrane 0.33 or earlier has no query prompt. `opencrane index` then records the query prompt that those versions served with: `EMBEDDING_QUERY_PROMPT` when it is set, and no prompt otherwise. The Docker image build relies on this, because it indexes the committed embeddings file without generating new embeddings. To use the default query prompt of the model instead, run `opencrane embed --force` to generate an embeddings file that records it.
 
-The `health` tool reports the model and the query prompt in use, and the source of each: `env`, `index`, or `default`.
+`opencrane index` reads the embeddings file without loading the embedding model, so it does not download the model or need the device that `EMBEDDING_DEVICE` names.
+
+The `health` tool reports the model and the query prompt in use, and the source of each: `env`, `index`, `default`, or `legacy`.
 
 The container image from `opencrane init` builds its index from `.opencrane/embeddings.json` and serves with the recorded settings. See [Embedding settings in the image](vector-search.md#embedding-settings-in-the-image).
 

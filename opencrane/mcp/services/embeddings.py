@@ -106,7 +106,12 @@ class EmbeddingService:
             )
         except Exception as e:
             logger.error(f"Failed to load embedding model: {e}")
-            raise
+            from opencrane.shared.config import remote_code_error
+
+            hinted = remote_code_error(e, trust_remote_code, "EMBEDDING_TRUST_REMOTE_CODE")
+            if hinted is None:
+                raise
+            raise hinted from e
 
     def generate_embeddings(self, chunks: List[Dict[str, Any]]) -> EmbeddingsFile:
         """Generate embeddings for a list of chunks.

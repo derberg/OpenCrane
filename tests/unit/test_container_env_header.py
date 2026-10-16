@@ -123,3 +123,29 @@ def test_main_reports_unparseable_file(tmp_path, capsys):
     assert container_env.main([str(path), str(out)]) == 1
     assert "exists but cannot be parsed" in capsys.readouterr().err
     assert not out.exists()
+
+
+_NUMBERS = {
+    "a": "x",
+    "s": -1.5e-3,
+    "f": 0.25,
+    "big": 12345.678,
+    "e": 2e10,
+    "neg_e": -3E+2,
+    "i": -17,
+    "m": "y",
+}
+_NUMBERS_TEXT = '{"a":"x","s":-1.5e-3,"f":0.25,"big":12345.678,"e":2e10,"neg_e":-3E+2,"i":-17,"m":"y"}'
+
+
+@pytest.mark.parametrize("chunk", [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13])
+@pytest.mark.parametrize("embeddings_first", [False, True])
+def test_reads_floats_and_exponents_split_across_chunks(tmp_path, monkeypatch, chunk, embeddings_first):
+    """A chunk can end inside a number, right after its sign, dot or exponent."""
+    path = tmp_path / "embeddings.json"
+    text = _NUMBERS_TEXT
+    if embeddings_first:
+        text = '{"embeddings":[[1.5e-3,-2]],' + text[1:]
+    path.write_text(text)
+    monkeypatch.setattr(container_env, "_HEADER_BYTES", chunk)
+    assert read_embeddings_header(path) == _NUMBERS

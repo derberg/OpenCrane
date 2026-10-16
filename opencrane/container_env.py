@@ -43,6 +43,8 @@ _MAX_VALUE_CHARS = 1024 * 1024
 _EMBEDDINGS_KEY = "embeddings"
 _DECODER = json.JSONDecoder()
 _WHITESPACE = " \t\n\r"
+# Characters that continue a number that raw_decode stopped before.
+_NUMBER_TAIL = ".eE+-"
 _STRUCTURE = re.compile(r'["\[\]{}]')
 _STRING_END = re.compile(r'["\\]')
 
@@ -107,8 +109,11 @@ class _JsonStream:
                 if self._more_for_value():
                     continue
                 raise
-            # A number can continue in the next chunk, so decode it again with more text.
-            if end == len(self._buf) and self._more_for_value():
+            # A number can continue in the next chunk. A chunk that ends in "-1." or
+            # "2e" decodes as -1 or 2 and leaves the tail, so decode it again with
+            # more text.
+            at_end = end == len(self._buf)
+            if (at_end or self._buf[end] in _NUMBER_TAIL) and self._more_for_value():
                 continue
             self._pos = end
             return value

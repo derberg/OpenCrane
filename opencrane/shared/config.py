@@ -66,6 +66,21 @@ def resolve_trust_remote_code(model_name: str, setting: Optional[bool]) -> bool:
     return model_name.startswith(REMOTE_CODE_MODEL_PREFIXES)
 
 
+def remote_code_error(exc: Exception, trusted: bool, env_name: str) -> Optional[Exception]:
+    """A clearer error for a model that failed to load because it needs remote code.
+
+    Returns ``None`` when *exc* is not about remote code, or when remote code
+    was already trusted, so the caller re-raises *exc* as is.
+    """
+    message = str(exc)
+    if trusted or ("remote code" not in message.lower() and "trust_remote_code" not in message):
+        return None
+    return RuntimeError(
+        f"{message}\nThe model runs its own code, which OpenCrane trusts only for known "
+        f"models. If you trust this model, set {env_name}=true."
+    )
+
+
 @dataclass
 class Config:
     org_name: str = field(default_factory=lambda: os.getenv("ORG_NAME", ""))
@@ -101,7 +116,8 @@ class Config:
     milvus_collection: str = field(default_factory=lambda: os.getenv("MILVUS_COLLECTION", "ai_docs_chunks_v1"))
     milvus_insert_batch_size: int = field(default_factory=lambda: int(os.getenv("MILVUS_INSERT_BATCH_SIZE", "2000")))
     # Embedding configuration
-    embedding_model: str = field(default_factory=lambda: os.getenv("EMBEDDING_MODEL", "nomic-ai/nomic-embed-text-v1.5"))
+    # An empty EMBEDDING_MODEL names no model, so it falls back to the default too.
+    embedding_model: str = field(default_factory=lambda: os.getenv("EMBEDDING_MODEL") or "nomic-ai/nomic-embed-text-v1.5")
     # Task prompts for asymmetric embedding models. None (unset) = the model's
     # default, see shared/utils/embedding_prompts.py; empty = encode text as-is.
     # A literal backslash-n in the env value becomes a newline (for Qwen3-style templates).

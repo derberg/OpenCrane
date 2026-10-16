@@ -25,7 +25,7 @@ from typing import Any
 
 import yaml
 
-from opencrane.shared.config import get_config, resolve_trust_remote_code
+from opencrane.shared.config import get_config, remote_code_error, resolve_trust_remote_code
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,13 @@ class CrossEncoderReranker:
                 )
                 logger.info(f"Loading reranker model: {self.model_name} (trust_remote_code={trust_remote_code})")
                 # CPU, matching the embedding service default (avoids MPS memory issues on macOS).
-                self.model = CrossEncoder(self.model_name, device="cpu", trust_remote_code=trust_remote_code)
+                try:
+                    self.model = CrossEncoder(self.model_name, device="cpu", trust_remote_code=trust_remote_code)
+                except Exception as e:
+                    hinted = remote_code_error(e, trust_remote_code, "RERANKER_TRUST_REMOTE_CODE")
+                    if hinted is None:
+                        raise
+                    raise hinted from e
                 logger.info("Reranker model loaded successfully (using CPU)")
         return self.model
 

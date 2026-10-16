@@ -727,7 +727,7 @@ def pack(name, output, version):
 def init(podman, force, no_add, with_extensions):
     """Scaffold a new OpenCrane project with .opencrane/ directory and container files."""
     from pathlib import Path
-    from opencrane.templates import EXTENSIONS_PY, DOCKERFILE, config_yaml, docker_compose, readme
+    from opencrane.templates import EXTENSIONS_PY, config_yaml, docker_compose, dockerfile, readme
 
     created = []
     skipped = []
@@ -756,7 +756,7 @@ def init(podman, force, no_add, with_extensions):
     write_file(opencrane_dir / "README.md", readme(podman=podman))
 
     dockerfile_name = "Containerfile" if podman else "Dockerfile"
-    write_file(opencrane_dir / dockerfile_name, DOCKERFILE)
+    write_file(opencrane_dir / dockerfile_name, dockerfile())
     write_file(opencrane_dir / "docker-compose.yml", docker_compose(dockerfile_name))
 
     if created:

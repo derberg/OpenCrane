@@ -326,9 +326,9 @@ The image build reads the embedding model from `embeddings.json`, which records 
 
 ### Configure health checks
 
-The server answers `GET /health` on port 8000. Each request runs a real search query and checks the free memory. The endpoint returns `200` when the instance can serve (`healthy` or `degraded`), and `503` when it cannot (`unhealthy`, or `initializing` while the services load).
+The server answers `GET /health` on port 8000. Each request runs a real search query and checks the free memory. The endpoint returns `200` when the instance can serve (`healthy` or `degraded`), and `503` when it cannot (`unhealthy`, or `initializing` when the services failed to load at startup).
 
-Point the liveness and readiness probes of your platform, for example Kubernetes or Cloud Run, at `/health`. Give the startup probe enough time for the model to load. Use a long liveness period, because every probe runs a search.
+The server loads the embedding model and its other services before it accepts connections. After that, `/health` returns `200` without a previous MCP request. Point the startup, readiness, and liveness probes of your platform, for example Kubernetes or Cloud Run, at `/health`. The first probe succeeds only after the model loads, so give the startup probe enough time for a large model. Use a long liveness period, because every probe runs a search.
 
 ### Build and publish the image
 

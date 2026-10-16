@@ -481,7 +481,7 @@ The overall `status` is the worst status of the individual checks. The following
 | `healthy` | `200` | Serving queries normally |
 | `degraded` | `200` | Still serving, but a check found a problem: a slow probe, low memory headroom, or missing collection stats |
 | `unhealthy` | `503` | Cannot serve a query, because a service is down or the probe failed or timed out |
-| `initializing` | `503` | Services failed to load at startup, for example because Milvus was unreachable |
+| `initializing` | `503` | Services failed to load at startup, for example because Milvus was unreachable. The server tries again every few seconds until they load. |
 
 The following example shows a response with the `200` status code:
 

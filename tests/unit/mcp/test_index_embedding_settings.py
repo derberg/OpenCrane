@@ -433,6 +433,6 @@ class TestModelPromptFallback:
 
     def test_sync_resolves_the_prompt_for_the_file_model(self, clean_env, tmp_path):
         path = tmp_path / "embeddings.json"
-        path.write_text(json.dumps({"model": "intfloat/e5-base-v2"}))
+        path.write_text(json.dumps({"model": "intfloat/e5-base-v2", "query_prompt": "old: "}))
         _sync_query_prompt(path)
         assert json.loads(path.read_text())["query_prompt"] == "query: "

@@ -88,7 +88,14 @@ def _sync_query_prompt(embeddings_file: Path) -> None:
     try:
         with open(embeddings_file, 'r') as f:
             data = json.load(f)
-        query_prompt = resolve_query_prompt(model_name=data.get("model"))
+        if "query_prompt" in data:
+            query_prompt = resolve_query_prompt(model_name=data.get("model"))
+        else:
+            # A file from 0.33 or older: its documents carry no default prompt,
+            # so keep the rule those versions served with, as `index` does.
+            # The model's default query prompt applies after a real re-embed.
+            env_query = get_config().embedding_query_prompt
+            query_prompt = env_query if env_query is not None else ""
         if data.get("query_prompt") == query_prompt:
             return
         data["query_prompt"] = query_prompt

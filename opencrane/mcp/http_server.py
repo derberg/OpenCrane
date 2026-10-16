@@ -12,6 +12,7 @@ Authentication is selected from the ``auth`` block in config.yaml: ``none`` leav
 the app open, ``local`` mounts a self-hosted OAuth authorization server (with a
 ``/login`` form) and wraps the MCP endpoint in a 401 challenge.
 """
+import asyncio
 import contextlib
 import json
 import os
@@ -33,6 +34,9 @@ logger = logging.getLogger(__name__)
 
 _services_ready = False
 _milvus_stats = None
+# Seconds between attempts to initialize services that failed at startup, for
+# example because the Milvus server was not up yet or the collection was missing.
+_INIT_RETRY_SECONDS = 5.0
 
 
 async def init_services():
@@ -238,16 +242,41 @@ class _EndpointRoutingMiddleware:
         await self.app(scope, receive, send)
 
 
+async def _retry_init_until_ready() -> None:
+    """Retry ``init_services`` every ``_INIT_RETRY_SECONDS`` until the services are ready.
+
+    A settings mismatch found on a retry is logged by ``init_services`` and
+    retried like any other failure, so ``/health`` keeps reporting not ready.
+    """
+    while not _services_ready:
+        await asyncio.sleep(_INIT_RETRY_SECONDS)
+        try:
+            await init_services()
+        except EmbeddingSettingsMismatch:
+            pass
+
+
 def _combined_lifespan(mcps):
-    """Lifespan that initializes services once and runs every endpoint's session manager."""
+    """Lifespan that initializes services and runs every endpoint's session manager.
+
+    A settings mismatch at startup stops the app. Any other failure leaves the
+    services not ready, and a background task retries until they are.
+    """
 
     @contextlib.asynccontextmanager
     async def _life(_app):
         await init_services()
-        async with contextlib.AsyncExitStack() as stack:
-            for mcp in mcps:
-                await stack.enter_async_context(mcp.session_manager.run())
-            yield
+        retry = None if _services_ready else asyncio.create_task(_retry_init_until_ready())
+        try:
+            async with contextlib.AsyncExitStack() as stack:
+                for mcp in mcps:
+                    await stack.enter_async_context(mcp.session_manager.run())
+                yield
+        finally:
+            if retry is not None:
+                retry.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await retry
 
     return _life
 

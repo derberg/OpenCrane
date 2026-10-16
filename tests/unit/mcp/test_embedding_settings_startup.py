@@ -4,8 +4,10 @@ Covers the HTTP and stdio startup checks, the ``embed`` skip check, the settings
 recorded for older embeddings files and collections, and model load errors.
 """
 
+import asyncio
 import json
 import logging
+import time
 from unittest.mock import AsyncMock, MagicMock, Mock, mock_open, patch
 
 import pytest
@@ -116,6 +118,66 @@ class TestHttpStartup:
                 await http_server.main()
         assert exc.value.code not in (0, None)
         assert "EMBEDDING_MODEL is 'a'" in caplog.text
+
+
+class TestHttpInitRetry:
+    @pytest.mark.parametrize("config_yaml", [
+        "",
+        "auth:\n  public:\n    type: none\n  docs:\n    type: none\n",
+    ])
+    def test_failed_startup_init_is_retried_until_ready(self, config_yaml, tmp_path, monkeypatch):
+        """Milvus not up yet at startup: /health turns ready once a retry succeeds."""
+        cfg = tmp_path / "config.yaml"
+        cfg.write_text(config_yaml, encoding="utf-8")
+        monkeypatch.setenv("MAPPING_FILE", str(cfg))
+        monkeypatch.setattr(http_server, "_services_ready", False)
+        monkeypatch.setattr(http_server, "_INIT_RETRY_SECONDS", 0.01)
+        attempts = []
+
+        async def _init():
+            attempts.append(1)
+            http_server._services_ready = len(attempts) >= 3
+
+        app = http_server.build_asgi_app()
+        payload = {"status": "healthy", "checks": {}}
+        with patch.object(http_server, "init_services", new=_init), \
+             patch("opencrane.mcp.server.compute_health", new=AsyncMock(return_value=payload)):
+            with TestClient(app) as client:
+                assert client.get("/health").status_code == 503
+                deadline = time.monotonic() + 5
+                while not http_server._services_ready and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                assert client.get("/health").status_code == 200
+        assert len(attempts) == 3
+        http_server._services_ready = False
+
+    @pytest.mark.anyio
+    async def test_retry_keeps_going_after_a_mismatch(self, monkeypatch):
+        monkeypatch.setattr(http_server, "_services_ready", False)
+        monkeypatch.setattr(http_server, "_INIT_RETRY_SECONDS", 0)
+        calls = []
+
+        async def _init():
+            calls.append(1)
+            if len(calls) == 1:
+                raise EmbeddingSettingsMismatch("EMBEDDING_MODEL is 'a'")
+            http_server._services_ready = True
+
+        with patch.object(http_server, "init_services", new=_init):
+            await asyncio.wait_for(http_server._retry_init_until_ready(), timeout=5)
+        assert len(calls) == 2
+        http_server._services_ready = False
+
+    def test_no_retry_task_when_startup_succeeds(self, open_config):
+        async def _init():
+            http_server._services_ready = True
+
+        app = http_server.build_asgi_app()
+        with patch.object(http_server, "init_services", new=_init), \
+             patch.object(http_server, "_retry_init_until_ready") as retry:
+            with TestClient(app):
+                pass
+        retry.assert_not_called()
 
 
 # --- stdio startup ---------------------------------------------------------
@@ -363,6 +425,39 @@ class TestEmbedModel:
              patch.object(generate_embeddings, "EmbeddingService") as service_class:
             generate_embeddings.main(chunks, embeddings, force=True)
         service_class.assert_called_once_with(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
+
+class TestSyncQueryPromptLegacyFile:
+    def test_file_without_query_prompt_gets_no_default_prompt(self, clean_env, tmp_path):
+        """A 0.33 file whose documents have no prompt must not get 'search_query: '."""
+        path = tmp_path / "embeddings.json"
+        path.write_text(json.dumps({"model": _DEFAULT_MODEL, "document_prompt": ""}))
+        _sync_query_prompt(path)
+        assert json.loads(path.read_text())["query_prompt"] == ""
+
+    def test_file_without_query_prompt_gets_env_prompt(self, clean_env, tmp_path):
+        clean_env.setenv("EMBEDDING_QUERY_PROMPT", "q: ")
+        path = tmp_path / "embeddings.json"
+        path.write_text(json.dumps({"model": _DEFAULT_MODEL, "document_prompt": ""}))
+        _sync_query_prompt(path)
+        assert json.loads(path.read_text())["query_prompt"] == "q: "
+
+    def test_skipped_embed_then_index_records_matching_pair(self, clean_env, tmp_path):
+        """The 'opencrane build' order: embed skips, then index records the file."""
+        chunks = tmp_path / "chunks.json"
+        chunks.write_text(json.dumps(_CHUNKS))
+        embeddings = tmp_path / "embeddings.json"
+        _old_embeddings_file(embeddings)
+        data = json.loads(embeddings.read_text())
+        data["chunks_sha256"] = _chunks_sha256(chunks)
+        embeddings.write_text(json.dumps(data))
+        # The 0.33 setup: documents embedded with no prompt, so the doc prompt matches.
+        clean_env.setenv("EMBEDDING_DOCUMENT_PROMPT", "")
+        with patch.object(generate_embeddings, "setup_logging"), \
+             patch.object(generate_embeddings, "EmbeddingService") as service_class:
+            generate_embeddings.main(chunks, embeddings)
+        service_class.assert_not_called()  # skipped
+        assert json.loads(embeddings.read_text())["query_prompt"] == ""
 
 
 class TestSyncQueryPromptAtomic:

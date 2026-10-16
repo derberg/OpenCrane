@@ -143,7 +143,7 @@ The following commands rebuild the index with the current settings and record th
 opencrane embed --force && DROP_EXISTING=true opencrane index
 ```
 
-An embeddings file from OpenCrane 0.33 or earlier has no query prompt. `opencrane index` then records the query prompt that those versions served with: `EMBEDDING_QUERY_PROMPT` when it is set, and no prompt otherwise. The Docker image build relies on this, because it indexes the committed embeddings file without generating new embeddings. To use the default query prompt of the model instead, run `opencrane embed --force` to generate an embeddings file that records it.
+An embeddings file from OpenCrane 0.33 or earlier has no query prompt. `opencrane index` then records the query prompt that those versions served with: `EMBEDDING_QUERY_PROMPT` when it is set, and no prompt otherwise. A skipped `opencrane embed` run writes the same query prompt to such a file. The Docker image build relies on this, because it indexes the committed embeddings file without generating new embeddings. The default query prompt of the model applies only after `embed` generates new embeddings, for example with `opencrane embed --force`.
 
 `opencrane index` reads the embeddings file without loading the embedding model, so it does not download the model or need the device that `EMBEDDING_DEVICE` names.
 

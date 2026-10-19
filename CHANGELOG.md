@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.34.0](https://github.com/derberg/OpenCrane/compare/v0.33.1...v0.34.0) (2026-10-19)
+
+
+### Features
+
+* make embedding and reranker encoder settings configurable ([#94](https://github.com/derberg/OpenCrane/issues/94)) ([5ce2ead](https://github.com/derberg/OpenCrane/commit/5ce2eadcb2228011402c554334c6bd10367a975b))
+* record the embedding model and prompts in the index and serve with them ([#96](https://github.com/derberg/OpenCrane/issues/96)) ([ff3d873](https://github.com/derberg/OpenCrane/commit/ff3d873f4a63bbe6ddaaef713b802d148a843fd9))
+* take the container image's embedding model from embeddings.json ([#97](https://github.com/derberg/OpenCrane/issues/97)) ([2662284](https://github.com/derberg/OpenCrane/commit/26622845933c6e18648493240440fb9670072b55))
+* use the embedding model's own prompts when none are configured ([#95](https://github.com/derberg/OpenCrane/issues/95)) ([0ab5d0e](https://github.com/derberg/OpenCrane/commit/0ab5d0e25d58842748a0aa86877f8727c1b8673e))
+
+
+### Bug Fixes
+
+* apply EMBEDDING_DTYPE to every model and harden the container build ([#100](https://github.com/derberg/OpenCrane/issues/100)) ([f980c11](https://github.com/derberg/OpenCrane/commit/f980c11fdfbbcce2222169c1afe6e9531925616a))
+* check embedding settings at HTTP startup and keep older indexes on their prompts ([#101](https://github.com/derberg/OpenCrane/issues/101)) ([ea0df76](https://github.com/derberg/OpenCrane/commit/ea0df76c7e90057319c79d740b96f3534bc24ce5))
+
 ## [0.33.1](https://github.com/derberg/OpenCrane/compare/v0.33.0...v0.33.1) (2026-10-14)
 
 

@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import re
 from typing import List, Optional, Dict
 from pymilvus import MilvusClient, DataType
@@ -143,20 +144,38 @@ def _truncate_metadata(metadata_json: str) -> str:
     return '{"truncated": true}'
 
 
+def milvus_lite_path() -> Optional[str]:
+    """The Milvus Lite database file in use, or ``None`` in server mode.
+
+    An explicit MILVUS_DB_PATH always wins (a file path means Milvus Lite, an
+    empty value means server mode). When MILVUS_DB_PATH is unset, MILVUS_HOST
+    selects server mode; with neither set, Lite is the default.
+    """
+    # MILVUS_DB_PATH instead of MILVUS_URI, because pymilvus reads MILVUS_URI
+    # at import time and fails if it's a file path.
+    milvus_db_path = os.getenv("MILVUS_DB_PATH")
+    if milvus_db_path is None:
+        milvus_db_path = "" if os.getenv("MILVUS_HOST") else ".opencrane/milvus.db"
+    return milvus_db_path or None
+
+
 class MilvusService:
     """Service for interacting with Milvus vector database."""
 
-    def __init__(self, host: str = None, port: int = None, collection_name: str = None):
+    def __init__(
+        self,
+        host: str = None,
+        port: int = None,
+        collection_name: str = None,
+        connect_timeout: Optional[float] = None,
+    ):
+        """Connect to Milvus.
+
+        ``connect_timeout`` bounds the wait for a Milvus server to answer, in
+        seconds. ``None`` keeps the pymilvus default.
+        """
         self.config = get_config()
-        # Mode selection: an explicit MILVUS_DB_PATH always wins (a file path means
-        # Milvus Lite, an empty value means server mode). When MILVUS_DB_PATH is unset,
-        # MILVUS_HOST selects server mode; with neither set, Lite is the default.
-        # Note: We use MILVUS_DB_PATH instead of MILVUS_URI because pymilvus reads MILVUS_URI
-        # at import time and fails if it's a file path
-        import os
-        milvus_db_path = os.getenv("MILVUS_DB_PATH")
-        if milvus_db_path is None:
-            milvus_db_path = "" if os.getenv("MILVUS_HOST") else ".opencrane/milvus.db"
+        milvus_db_path = milvus_lite_path()
         if milvus_db_path:
             self.uri = milvus_db_path
         else:
@@ -169,13 +188,14 @@ class MilvusService:
         self._vector_dim: Optional[int] = None
         # Cached embedding settings of the existing collection (see embedding_metadata()).
         self._embedding_metadata: Optional[Dict] = None
-        self._connect()
+        self._connect(connect_timeout)
 
-    def _connect(self):
+    def _connect(self, timeout: Optional[float] = None):
         """Connect to Milvus database."""
         logger.info(f"Connecting to Milvus at {self.uri}")
         try:
-            self.client = MilvusClient(uri=self.uri)
+            kwargs = {"timeout": timeout} if timeout is not None else {}
+            self.client = MilvusClient(uri=self.uri, **kwargs)
             logger.info("Connected to Milvus successfully")
         except Exception as e:
             logger.error(f"Failed to connect to Milvus: {e}")
@@ -595,22 +615,31 @@ class MilvusService:
             logger.debug(f"Could not read vector dimension of collection: {e}")
         return None
 
-    def embedding_metadata(self) -> Optional[Dict]:
+    def embedding_metadata(self, raise_on_error: bool = False) -> Optional[Dict]:
         """Return the embedding settings that ``opencrane index`` recorded.
 
-        A dict with ``model``, ``document_prompt``, ``dim`` and, when the
-        embeddings file recorded it, ``query_prompt``. ``None`` when the
-        collection is missing, unreadable, or was built before the settings
-        were recorded. A successful lookup is cached: the description cannot
-        change without dropping and recreating the collection.
+        A dict with ``model``, ``document_prompt``, ``query_prompt`` and
+        ``dim`` (an index built by an earlier release may lack
+        ``query_prompt``). ``None`` when the collection was built before the
+        settings were recorded. A missing or unreadable collection also gives
+        ``None``, unless ``raise_on_error`` is set: then the error is raised, so
+        the caller can tell it from a collection without settings. A
+        successful lookup is cached: the description cannot change without
+        dropping and recreating the collection.
         """
         if self._embedding_metadata is not None:
             return self._embedding_metadata
         try:
             desc = self.client.describe_collection(collection_name=self.collection_name)
+        except Exception as e:
+            if raise_on_error:
+                raise
+            logger.debug(f"Could not read embedding settings of collection: {e}")
+            return None
+        try:
             recorded = json.loads(desc.get("description") or "{}").get(_EMBEDDING_METADATA_KEY)
         except Exception as e:
-            logger.debug(f"Could not read embedding settings of collection: {e}")
+            logger.debug(f"Could not parse embedding settings of collection: {e}")
             return None
         if isinstance(recorded, dict):
             self._embedding_metadata = recorded

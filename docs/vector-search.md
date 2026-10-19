@@ -78,17 +78,19 @@ The build reads the following build arguments. The compose file passes each one 
 | `EMBEDDING_MODEL` | Must match the model in `embeddings.json`, or the build fails. An empty value counts as not set. |
 | `EMBEDDING_QUERY_PROMPT` | Must match the query prompt in `embeddings.json`, or the build fails. When unset, the server uses the query prompt that the index records. An empty value means no prompt. |
 | `EMBEDDING_TRUST_REMOTE_CODE` | `true` or `false`. When unset, it is `true` only for `nomic-ai/*` models. The download and the server use the same value. |
-| `EMBEDDING_DTYPE`, `EMBEDDING_DEVICE` | Precision and device of the embedding model in the container. See [Model loading settings](embeddings.md#model-loading-settings). |
+| `EMBEDDING_DTYPE`, `EMBEDDING_DEVICE` | Default precision and device of the embedding model in the container. Only the server uses them, so you can set them when you start the container instead. See [Model loading settings](embeddings.md#model-loading-settings). |
 | `RERANKER_MODEL` | Optional reranker model that the build downloads into the image. |
 | `RERANKER_TRUST_REMOTE_CODE` | The same as `EMBEDDING_TRUST_REMOTE_CODE`, for the reranker model. |
 
 The build writes these settings to `/app/image.env`, and the entrypoint loads them before it starts the server. A variable that you set when you start the container, for example with `docker run -e`, overrides the value from the build.
 
-To load the embedding model in `bfloat16` in an image that you build without compose, run the following command from the project root:
+To load the embedding model in `bfloat16`, set `EMBEDDING_DTYPE` when you start the container. Run the following command:
 
 ```bash
-docker build --build-arg EMBEDDING_DTYPE=bfloat16 -t {REGISTRY}/{IMAGE_NAME}:latest -f .opencrane/Dockerfile .
+docker run -e EMBEDDING_DTYPE=bfloat16 -p 8000:8000 {REGISTRY}/{IMAGE_NAME}:latest
 ```
+
+With compose, set `EMBEDDING_DTYPE` or `EMBEDDING_DEVICE` in your shell before `docker compose up --build`. The compose file passes them as build arguments, which set the default value in the image.
 
 ### Run a prebuilt image
 

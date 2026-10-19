@@ -598,7 +598,7 @@ You need the following variables only if you run the `embed` step, directly or t
 | `EMBEDDING_MODEL` | `nomic-ai/nomic-embed-text-v1.5` | Hugging Face embedding model. `index` records it in the collection, and the MCP server uses the recorded model. See [Choose an embedding model](docs/embeddings.md#choose-an-embedding-model). |
 | `EMBEDDING_DOCUMENT_PROMPT` | the model's document prompt | Prefix that `embed` adds to every chunk. An empty value turns the prompt off. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
 | `EMBEDDING_QUERY_PROMPT` | the model's query prompt | Query prompt that `embed` writes to the embeddings file and `index` records in the collection. An empty value turns the prompt off. See [Embedding prompts](docs/embeddings.md#embedding-prompts). |
-| `EMBEDDING_DTYPE` | `float32` | Model weight precision: `float32`, `bfloat16`, or `float16`. `bfloat16` about halves model memory. `serve` reads it too. See [Model loading settings](docs/embeddings.md#model-loading-settings). |
+| `EMBEDDING_DTYPE` | `float32` | Model weight precision: `float32`, `bfloat16`, or `float16`. `bfloat16` about halves the memory of the loaded weights. `serve` reads it too. See [Model loading settings](docs/embeddings.md#model-loading-settings). |
 | `EMBEDDING_DEVICE` | `cpu` | Torch device for the embedding model, for example `cuda` or `mps`. `serve` reads it too. |
 | `EMBEDDING_BATCH_SIZE` | `8` | Number of chunks that `embed` encodes at once |
 | `EMBEDDING_MAX_SEQ_LENGTH` | `0` | Maximum tokens per input. `0` keeps the model's limit. `serve` reads it too. |

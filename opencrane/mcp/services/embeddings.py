@@ -40,6 +40,24 @@ def encoder_model_kwargs(dtype: str) -> Dict[str, Any]:
     return {"model_kwargs": {_dtype_kwarg_name(): getattr(torch, dtype)}}
 
 
+def cast_to_dtype(model, dtype: str) -> str:
+    """Cast *model* to *dtype* and return the dtype of its first parameter.
+
+    The ``model_kwargs`` dtype does not reach every model: the remote code of
+    ``nomic-ai/*`` models overrides ``from_pretrained`` and drops ``dtype``, so
+    the weights stay float32. Casting after the load applies the setting to
+    every model. Returns *dtype* when the model exposes no parameters.
+    """
+    import torch
+
+    model.to(getattr(torch, dtype))
+    try:
+        first = next(iter(model.parameters()), None)
+    except TypeError:
+        first = None
+    return str(first.dtype).removeprefix("torch.") if first is not None else dtype
+
+
 class EmbeddingService:
     """Service for generating and managing embeddings."""
 
@@ -79,11 +97,12 @@ class EmbeddingService:
                 device=config.embedding_device,
                 **encoder_model_kwargs(config.embedding_dtype),
             )
+            loaded_dtype = cast_to_dtype(self.model, config.embedding_dtype)
             if config.embedding_max_seq_length > 0:
                 self.model.max_seq_length = config.embedding_max_seq_length
             logger.info(
                 f"Embedding model loaded successfully (device={config.embedding_device}, "
-                f"dtype={config.embedding_dtype}, trust_remote_code={trust_remote_code})"
+                f"dtype={loaded_dtype}, trust_remote_code={trust_remote_code})"
             )
         except Exception as e:
             logger.error(f"Failed to load embedding model: {e}")

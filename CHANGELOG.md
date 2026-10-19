@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.1](https://github.com/derberg/OpenCrane/compare/v0.34.0...v0.34.1) (2026-10-19)
+
+
+### Documentation
+
+* explain how the 0.34 prompt default changes search after an upgrade ([#102](https://github.com/derberg/OpenCrane/issues/102)) ([64fb89d](https://github.com/derberg/OpenCrane/commit/64fb89dc70c83e475e3f238a535209b06599ac12))
+
 ## [0.34.0](https://github.com/derberg/OpenCrane/compare/v0.33.1...v0.34.0) (2026-10-19)
 
 

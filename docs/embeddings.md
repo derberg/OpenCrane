@@ -107,6 +107,22 @@ export EMBEDDING_QUERY_PROMPT="{QUERY_PROMPT}"
 opencrane embed && opencrane index
 ```
 
+### Upgrade from OpenCrane 0.33 or earlier
+
+OpenCrane 0.33 and earlier encode chunks and queries with no prompt unless you set one. OpenCrane 0.34 and later use the prompts of the model when both variables are unset. With the default model, the first `opencrane embed` run after the upgrade adds `search_document: ` to every chunk, and the rebuilt collection serves queries with `search_query: `. Search results change, although the chunks and the model stay the same.
+
+The prompts from a model card do not improve results for every set of documents. Before you rely on them, compare the results for questions with known answers with and without the prompts.
+
+To keep encoding with no prompts, set both variables to an empty value wherever `opencrane embed` runs, for example in a CI step:
+
+```bash
+export EMBEDDING_DOCUMENT_PROMPT=""
+export EMBEDDING_QUERY_PROMPT=""
+opencrane embed
+```
+
+The server needs no setting, because it reads the query prompt from the index.
+
 ## Embedding settings in the index
 
 The server must embed each query with the model and query prompt that match the indexed chunks. A different model of the same vector size, or a missing query prompt, gives poor results and no error. To prevent this, `opencrane index` records the following values in the collection schema description:

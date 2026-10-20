@@ -1,0 +1,18 @@
+Result 1:
+Matched Table (2 of 3 rows):
+Source: https://docs.example.com/gateway/troubleshooting#log-settings
+Source Name: gateway-docs
+Location: Troubleshooting > Log settings
+Table ID: log-settings
+Matched rows:
+  [1] The gateway reads these environment variables at startup:
+Variable: GATEWAY_LOG_LEVEL.
+Default: info.
+Description: Sets the log level. Use debug to log every request.
+  [2] The gateway reads these environment variables at startup:
+Variable: GATEWAY_TRACE_API_CALLS.
+Default: off.
+Description: Logs every API call the gateway makes.
+Other rows in table (not matched):
+  - GATEWAY_LOG_FORMAT
+💡 Tip: Use get_table_members(table_id='log-settings') for the full table.

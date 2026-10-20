@@ -1,0 +1,152 @@
+[
+  {
+    "chunk_id": "upgrade-step-1",
+    "content": "# Upgrade guide > 1.6 to 1.7\n1. Back up the gateway configuration with `kubectl get configmap gateway-config -o yaml > backup.yaml`.",
+    "source_file": "gateway/upgrade.md",
+    "source_name": "gateway-docs",
+    "chunk_type": "list_item",
+    "metadata": {
+      "breadcrumb_path": "Upgrade guide > 1.6 to 1.7",
+      "list_id": "upgrade-1-7",
+      "list_style": "ordered",
+      "position": 1,
+      "total_siblings": 3,
+      "sibling_ids": ["upgrade-step-2", "upgrade-step-3"],
+      "sibling_previews": ["2. Install the gateway Helm …", "3. Check that every gateway …"],
+      "parent_item_id": null,
+      "depth": 0,
+      "source_url": "https://docs.example.com/gateway/upgrade#16-to-17"
+    }
+  },
+  {
+    "chunk_id": "upgrade-step-2",
+    "content": "# Upgrade guide > 1.6 to 1.7\n2. Install the gateway Helm chart in version 1.7.0.",
+    "source_file": "gateway/upgrade.md",
+    "source_name": "gateway-docs",
+    "chunk_type": "list_item",
+    "metadata": {
+      "breadcrumb_path": "Upgrade guide > 1.6 to 1.7",
+      "list_id": "upgrade-1-7",
+      "list_style": "ordered",
+      "position": 2,
+      "total_siblings": 3,
+      "sibling_ids": ["upgrade-step-1", "upgrade-step-3"],
+      "sibling_previews": ["1. Back up the gateway configu…", "3. Check that every gateway …"],
+      "parent_item_id": null,
+      "depth": 0,
+      "source_url": "https://docs.example.com/gateway/upgrade#16-to-17"
+    }
+  },
+  {
+    "chunk_id": "upgrade-step-3",
+    "content": "# Upgrade guide > 1.6 to 1.7\n3. Check that every gateway pod reports `Ready` with `kubectl get pods -l app=gateway`.",
+    "source_file": "gateway/upgrade.md",
+    "source_name": "gateway-docs",
+    "chunk_type": "list_item",
+    "metadata": {
+      "breadcrumb_path": "Upgrade guide > 1.6 to 1.7",
+      "list_id": "upgrade-1-7",
+      "list_style": "ordered",
+      "position": 3,
+      "total_siblings": 3,
+      "sibling_ids": ["upgrade-step-1", "upgrade-step-2"],
+      "sibling_previews": ["1. Back up the gateway configu…", "2. Install the gateway Helm …"],
+      "parent_item_id": null,
+      "depth": 0,
+      "source_url": "https://docs.example.com/gateway/upgrade#16-to-17"
+    }
+  },
+  {
+    "chunk_id": "log-level-row-1",
+    "content": "# Troubleshooting > Log settings\nThe gateway reads these environment variables at startup:\nVariable: GATEWAY_LOG_LEVEL.\nDefault: info.\nDescription: Sets the log level. Use debug to log every request.",
+    "source_file": "gateway/troubleshooting.md",
+    "source_name": "gateway-docs",
+    "chunk_type": "table_row",
+    "metadata": {
+      "breadcrumb_path": "Troubleshooting > Log settings",
+      "table_id": "log-settings",
+      "table_caption": "The gateway reads these environment variables at startup:",
+      "columns": ["Variable", "Default", "Description"],
+      "row_index": 1,
+      "row_key": "GATEWAY_LOG_LEVEL",
+      "total_rows": 3,
+      "sibling_ids": ["log-level-row-2", "log-level-row-3"],
+      "sibling_previews": ["GATEWAY_TRACE_API_CALLS", "GATEWAY_LOG_FORMAT"],
+      "source_url": "https://docs.example.com/gateway/troubleshooting#log-settings"
+    }
+  },
+  {
+    "chunk_id": "log-level-row-2",
+    "content": "# Troubleshooting > Log settings\nThe gateway reads these environment variables at startup:\nVariable: GATEWAY_TRACE_API_CALLS.\nDefault: off.\nDescription: Logs every API call the gateway makes.",
+    "source_file": "gateway/troubleshooting.md",
+    "source_name": "gateway-docs",
+    "chunk_type": "table_row",
+    "metadata": {
+      "breadcrumb_path": "Troubleshooting > Log settings",
+      "table_id": "log-settings",
+      "table_caption": "The gateway reads these environment variables at startup:",
+      "columns": ["Variable", "Default", "Description"],
+      "row_index": 2,
+      "row_key": "GATEWAY_TRACE_API_CALLS",
+      "total_rows": 3,
+      "sibling_ids": ["log-level-row-1", "log-level-row-3"],
+      "sibling_previews": ["GATEWAY_LOG_LEVEL", "GATEWAY_LOG_FORMAT"],
+      "source_url": "https://docs.example.com/gateway/troubleshooting#log-settings"
+    }
+  },
+  {
+    "chunk_id": "log-level-row-3",
+    "content": "# Troubleshooting > Log settings\nThe gateway reads these environment variables at startup:\nVariable: GATEWAY_LOG_FORMAT.\nDefault: text.\nDescription: Sets the log format. Use json for log collectors.",
+    "source_file": "gateway/troubleshooting.md",
+    "source_name": "gateway-docs",
+    "chunk_type": "table_row",
+    "metadata": {
+      "breadcrumb_path": "Troubleshooting > Log settings",
+      "table_id": "log-settings",
+      "table_caption": "The gateway reads these environment variables at startup:",
+      "columns": ["Variable", "Default", "Description"],
+      "row_index": 3,
+      "row_key": "GATEWAY_LOG_FORMAT",
+      "total_rows": 3,
+      "sibling_ids": ["log-level-row-1", "log-level-row-2"],
+      "sibling_previews": ["GATEWAY_LOG_LEVEL", "GATEWAY_TRACE_API_CALLS"],
+      "source_url": "https://docs.example.com/gateway/troubleshooting#log-settings"
+    }
+  },
+  {
+    "chunk_id": "prereq-1",
+    "content": "# Installation > Prerequisites\n- A Kubernetes cluster in version 1.29 or later.",
+    "source_file": "gateway/install.md",
+    "source_name": "gateway-docs",
+    "chunk_type": "list_item",
+    "metadata": {
+      "breadcrumb_path": "Installation > Prerequisites",
+      "list_id": "install-prereqs",
+      "list_style": "unordered",
+      "position": 1,
+      "total_siblings": 2,
+      "sibling_ids": ["prereq-2"],
+      "sibling_previews": ["- Helm in version 3.14 or lat…"],
+      "parent_item_id": null,
+      "depth": 0
+    }
+  },
+  {
+    "chunk_id": "prereq-2",
+    "content": "# Installation > Prerequisites\n- Helm in version 3.14 or later.",
+    "source_file": "gateway/install.md",
+    "source_name": "gateway-docs",
+    "chunk_type": "list_item",
+    "metadata": {
+      "breadcrumb_path": "Installation > Prerequisites",
+      "list_id": "install-prereqs",
+      "list_style": "unordered",
+      "position": 2,
+      "total_siblings": 2,
+      "sibling_ids": ["prereq-1"],
+      "sibling_previews": ["- A Kubernetes cluster in ver…"],
+      "parent_item_id": null,
+      "depth": 0
+    }
+  }
+]

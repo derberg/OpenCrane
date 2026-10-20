@@ -214,6 +214,8 @@ The following table lists the backing services in `opencrane/mcp/services/`:
 | `keyword_search.py` | Builds and queries the BM25 index. |
 | `reranker.py` | Runs the optional reranker. |
 
+The server handles searches and `health` probes in parallel, but it runs the embedding model for one query at a time, and the built-in reranker scores one candidate list at a time. Some models keep state between calls. For example, `nomic-ai/nomic-embed-text-v1.5` caches its position tensors, and parallel calls corrupt that cache. Vector search and keyword search still run in parallel. A [custom reranker](#custom-reranker) gets no such lock, so it must handle parallel calls itself.
+
 ### Configuration
 
 `OpenCraneConfig` in `opencrane/config.py` is the base class for project configuration. Its attributes and methods are the [extension points](#extension-points). `Config` in `opencrane/shared/config.py` is a different class. It holds the runtime settings that come from environment variables.

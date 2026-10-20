@@ -170,3 +170,58 @@ async def test_list_above_the_first_section_shows_before_its_text(monkeypatch, a
     ])
     text = await _call(args)
     assert text.endswith("[1] Fixed X\n[2] Added Y\n\n## Known issues\n\nSome text.\n")
+
+
+def _table_row(chunk_id, index, parent, order, total):
+    return _row(chunk_id, "table_row", f"# Page > Section\nKey: k{index}.", table_id="T1", row_index=index,
+                total_rows=total, breadcrumb_path="Page > Section", parent_chunk_id=parent, doc_order=order)
+
+
+@pytest.mark.anyio
+async def test_long_table_shows_capped_rows_and_names_the_member_tool(monkeypatch):
+    monkeypatch.setattr(s, "_SECTION_MAX_BLOCK_MEMBERS", 3)
+    _use(monkeypatch, [
+        _prose("p", "## Section\n\nThe parameters:", 1, order=1),
+        *[_table_row(f"r{i}", i, "p", i + 1, 5) for i in range(1, 6)],
+    ])
+    text = await _call({"chunk_id": "p"})
+    assert text.endswith(
+        "Table (5 of 5 rows)\nLocation: Page > Section\n[1] Key: k1.\n[2] Key: k2.\n[3] Key: k3.\n"
+        "... 2 more rows not shown; call get_table_members(table_id='T1') for the whole table.\n"
+    )
+
+
+@pytest.mark.anyio
+async def test_long_list_shows_capped_items_and_names_the_member_tool(monkeypatch):
+    monkeypatch.setattr(s, "_SECTION_MAX_BLOCK_MEMBERS", 2)
+    _use(monkeypatch, [
+        _prose("p", "## Section\n\nPick:", 1, order=1),
+        _item("a", "A.", 1, "outer", parent="p", order=2, total=2),
+        _item("a1", "A.\nA one.", 1, "inner", parent="p", order=3, depth=1, parent_item="a", total=2),
+        _item("a2", "A.\nA two.", 2, "inner", parent="p", order=4, depth=1, parent_item="a", total=2),
+        _item("b", "B.", 2, "outer", parent="p", order=5, total=2),
+    ])
+    text = await _call({"chunk_id": "p"})
+    assert text.endswith(
+        "[1] A.\n  [1] A one.\n"
+        "... 2 more list items not shown; call get_list_members(list_id='outer') for the whole list.\n"
+    )
+
+
+@pytest.mark.anyio
+async def test_subsection_cap_counts_the_rows_shown_and_always_shows_one_entry(monkeypatch):
+    monkeypatch.setattr(s, "_SECTION_MAX_SUBSECTION_CHUNKS", 2)
+    monkeypatch.setattr(s, "_SECTION_MAX_BLOCK_MEMBERS", 3)
+    _use(monkeypatch, [
+        _prose("p", "## Section\n\nIntro.", 1, order=1),
+        *[_row(f"r{i}", "table_row", f"# Page > Section > Child\nKey: k{i}.", table_id="T1", row_index=i,
+               total_rows=4, breadcrumb_path="Page > Section > Child", parent_chunk_id="p", doc_order=i + 1)
+          for i in range(1, 5)],
+        _prose("c", "### Later\n\nLater text.", 2, order=6, parent="p", path="Page > Section > Later"),
+    ])
+    text = await _call({"chunk_id": "p", "include_subsections": True})
+    # The table has more rows than the cap allows, but it comes first, so it shows its first three rows.
+    assert "Sub-sections (5 chunks):" in text
+    assert "[3] Key: k3.\n... 1 more row not shown;" in text
+    assert "Later text." not in text
+    assert text.endswith("... 1 more sub-section chunks not shown; call get_section on a sub-section chunk_id to read further.\n")

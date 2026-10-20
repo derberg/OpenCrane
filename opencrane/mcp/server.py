@@ -1701,9 +1701,11 @@ async def get_table_members(arguments: dict) -> list[TextContent]:
 
 
 # get_section limits: neighbour sections per side, sub-section chunks returned
-# in full, and chunks walked when following continuation links.
+# in full (list items and table rows included), items or rows shown per list or
+# table, and chunks walked when following continuation links.
 _SECTION_MAX_NEIGHBORS = 5
 _SECTION_MAX_SUBSECTION_CHUNKS = 50
+_SECTION_MAX_BLOCK_MEMBERS = 50
 _SECTION_WALK_CAP = 200
 
 _SECTION_HEADING_LINE_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*$")
@@ -1979,7 +1981,7 @@ def _format_section(
         lines.append(f"Parent Chunk ID: {meta['parent_chunk_id']}")
     if text is None:
         entries = [(_doc_order(r), str(r.get("content", ""))) for r in rows]
-        entries += [(order, block) for order, block, _ in _member_blocks(list(members))]
+        entries += [(order, block) for order, block, *_ in _member_blocks(list(members))]
         # A stable sort: without doc_order, the prose keeps its order and the lists and tables follow.
         text = "\n\n".join(entry for _, entry in sorted(entries, key=lambda e: e[0]))
     return "\n".join(lines) + "\n\n" + text + "\n"
@@ -2040,14 +2042,19 @@ def _member_block_key(member: dict, by_id: dict) -> tuple:
     return ("list", root["metadata"].get("list_id"))
 
 
-def _format_member_block(items: list[dict]) -> str:
-    """A list as its items or a table as its rows, under a header with its location."""
+def _format_member_block(key: tuple, items: list[dict]) -> str:
+    """A list as its items or a table as its rows, under a header with its location.
+
+    Shows up to ``_SECTION_MAX_BLOCK_MEMBERS`` items or rows, then names the
+    tool that returns the rest.
+    """
     meta = items[0]["metadata"]
     breadcrumb = meta.get("breadcrumb_path", "")
+    shown = items[:_SECTION_MAX_BLOCK_MEMBERS]
     if items[0]["chunk_type"] == "table_row":
         caption = meta.get("table_caption")
         lines = [f"Table ({len(items)} of {meta.get('total_rows', len(items))} rows)"]
-        for m in items:
+        for m in shown:
             body = _strip_breadcrumb(str(m.get("content", "")), breadcrumb)
             # The caption is the line before the table, which the section shows already.
             if caption and body.startswith(f"{caption}\n"):
@@ -2061,18 +2068,30 @@ def _format_member_block(items: list[dict]) -> str:
             f"List ({len(roots)} of {root_meta.get('total_siblings', len(roots))} items, "
             f"style={root_meta.get('list_style', '')})"
         ]
-        for m in items:
+        for m in shown:
             body = _strip_breadcrumb(str(m.get("content", "")), breadcrumb)
             # A nested item repeats the first line of each parent item; the block shows them already.
             own = "\n".join(body.split("\n")[m["metadata"].get("depth", 0):])
             lines.append(_list_item_line(m, own, base))
+    if len(items) > len(shown):
+        kind, block_id = key
+        hidden = len(items) - len(shown)
+        noun = ("row" if kind == "table" else "list item") + ("" if hidden == 1 else "s")
+        tool = _MEMBER_TYPES["table_row" if kind == "table" else "list_item"]
+        lines.append(
+            f"... {hidden} more {noun} not shown; "
+            f"call {tool[1]}({tool[2]}='{block_id}') for the whole {kind}."
+        )
     if breadcrumb:
         lines.insert(1, f"Location: {breadcrumb}")
     return "\n".join(lines)
 
 
-def _member_blocks(members: list[dict]) -> list[tuple[int, str, int]]:
-    """Group list items and table rows into lists and tables: ``(doc_order, text, chunk count)``."""
+def _member_blocks(members: list[dict]) -> list[tuple[int, str, int, int]]:
+    """Group list items and table rows into lists and tables.
+
+    One ``(doc_order, text, chunks shown, chunks)`` entry per list or table.
+    """
     by_id = {m["chunk_id"]: m for m in members}
     groups: dict = {}
     ordered = sorted(members, key=lambda m: (
@@ -2082,7 +2101,10 @@ def _member_blocks(members: list[dict]) -> list[tuple[int, str, int]]:
     ))
     for m in ordered:
         groups.setdefault(_member_block_key(m, by_id), []).append(m)
-    return [(_doc_order(items[0]), _format_member_block(items), len(items)) for items in groups.values()]
+    return [
+        (_doc_order(items[0]), _format_member_block(key, items), min(len(items), _SECTION_MAX_BLOCK_MEMBERS), len(items))
+        for key, items in groups.items()
+    ]
 
 
 def _format_subsections(rows: list[dict], include: bool, blocks: list[tuple] = ()) -> str:
@@ -2094,16 +2116,19 @@ def _format_subsections(rows: list[dict], include: bool, blocks: list[tuple] = (
             lines.append(f"  - {path.split(' > ')[-1]} (chunk_id={r['chunk_id']})")
         return "\n".join(lines) + "\n"
     entries = [
-        (_doc_order(r), f"--- {r['metadata'].get('heading_path') or ''} (chunk_id={r['chunk_id']}) ---\n{r.get('content', '')}", 1)
+        (_doc_order(r), f"--- {r['metadata'].get('heading_path') or ''} (chunk_id={r['chunk_id']}) ---\n{r.get('content', '')}", 1, 1)
         for r in rows
     ]
     # A stable sort: without doc_order, the prose keeps its order and the lists and tables follow.
     entries = sorted([*entries, *blocks], key=lambda e: e[0])
-    total = sum(e[2] for e in entries)
-    shown = entries[:_SECTION_MAX_SUBSECTION_CHUNKS]
-    parts = [f"Sub-sections ({total} chunks):"]
-    parts.extend(text for _, text, _ in shown)
-    hidden = total - sum(e[2] for e in shown)
+    # The cap counts the chunks shown, so a list or table counts its items or rows.
+    shown, budget = 0, _SECTION_MAX_SUBSECTION_CHUNKS
+    while shown < len(entries) and (not shown or entries[shown][2] <= budget):
+        budget -= entries[shown][2]
+        shown += 1
+    parts = [f"Sub-sections ({sum(e[3] for e in entries)} chunks):"]
+    parts.extend(e[1] for e in entries[:shown])
+    hidden = sum(e[3] for e in entries[shown:])
     if hidden:
         parts.append(
             f"... {hidden} more sub-section chunks not shown; "

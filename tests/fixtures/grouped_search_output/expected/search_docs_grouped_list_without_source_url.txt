@@ -1,0 +1,8 @@
+Result 1:
+Matched List (2 of 2 items):
+Location: Installation > Prerequisites
+List ID: install-prereqs  style=unordered
+Matched items:
+  [1] - A Kubernetes cluster in version 1.29 or later.
+  [2] - Helm in version 3.14 or later.
+💡 Tip: Use get_list_members(list_id='install-prereqs') for the full list.

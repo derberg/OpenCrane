@@ -1,0 +1,10 @@
+Result 1:
+Matched List (2 of 3 items):
+Location: Upgrade guide > 1.6 to 1.7
+List ID: upgrade-1-7  style=ordered
+Matched items:
+  [1] 1. Back up the gateway configuration with `kubectl get configmap gateway-config -o yaml > backup.yaml`.
+  [3] 3. Check that every gateway pod reports `Ready` with `kubectl get pods -l app=gateway`.
+Other items in list (not matched):
+  - 2. Install the gateway Helm …
+💡 Tip: Use get_list_members(list_id='upgrade-1-7') for the full list.

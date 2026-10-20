@@ -1,0 +1,6 @@
+List (3 of 3 items, style=ordered)
+Location: Upgrade guide > 1.6 to 1.7
+
+[1] 1. Back up the gateway configuration with `kubectl get configmap gateway-config -o yaml > backup.yaml`.
+[2] 2. Install the gateway Helm chart in version 1.7.0.
+[3] 3. Check that every gateway pod reports `Ready` with `kubectl get pods -l app=gateway`.

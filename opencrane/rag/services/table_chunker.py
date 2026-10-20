@@ -9,7 +9,7 @@ embeds like a sentence rather than a wall of pipes. Rows self-organize via
 import hashlib
 import re
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from opencrane.rag.services.utils.chunk_id_generator import generate_unique_chunk_id
 from opencrane.shared.models.chunk import Chunk
@@ -243,6 +243,9 @@ class TableChunkingStrategy(ProcessingStrategy):
         heading_stack: List[tuple] = list(getattr(node, "heading_ancestry", None) or [])
         caption = ""
         table_ordinal_in_section = 0     # counts tables per heading section
+        # Headings the delegated text dropped after its last chunk: they sit
+        # right above the next table, so they go with its first row.
+        pending_headings: List[str] = []
         for kind, lines in self._split_regions(text):
             if kind == "other":
                 ancestors = list(heading_stack)
@@ -250,7 +253,8 @@ class TableChunkingStrategy(ProcessingStrategy):
                 caption = self._update(heading_stack, lines)
                 if " > ".join(t for _, t in heading_stack) != breadcrumb_before:
                     table_ordinal_in_section = 0
-                chunks.extend(self._delegate(lines, source_url, source_file, ancestors))
+                delegated, pending_headings = self._delegate(lines, source_url, source_file, ancestors)
+                chunks.extend(delegated)
             else:
                 breadcrumb = " > ".join(t for _, t in heading_stack)
                 row_chunks = build_table_chunks(
@@ -259,12 +263,14 @@ class TableChunkingStrategy(ProcessingStrategy):
                     table_ordinal=table_ordinal_in_section + 1)
                 if row_chunks:
                     table_ordinal_in_section += 1
+                    row_chunks[0]._preceding_headings = pending_headings
+                    pending_headings = []
                     chunks.extend(row_chunks)
                 else:
                     # A pseudo-table (row-like line + separator with no data rows,
                     # or an empty table) yields no row chunks. Delegate rather than
                     # drop it, so the source lines still reach the corpus as prose.
-                    chunks.extend(self._delegate(lines, source_url, source_file, list(heading_stack)))
+                    chunks.extend(self._delegate(lines, source_url, source_file, list(heading_stack))[0])
         return chunks
 
     # --- region splitting ---------------------------------------------------
@@ -361,15 +367,18 @@ class TableChunkingStrategy(ProcessingStrategy):
     # --- delegation ---------------------------------------------------------
 
     @staticmethod
-    def _delegate(lines: List[str], source_url: Optional[str], source_file: Path, ancestors=None) -> List[Chunk]:
+    def _delegate(
+        lines: List[str], source_url: Optional[str], source_file: Path, ancestors=None,
+    ) -> Tuple[List[Chunk], List[str]]:
+        """Chunk a non-table region: ``(chunks, headings dropped after its last chunk)``."""
         text = "\n".join(lines).strip()
         if not text:
-            return []
+            return [], []
         node = _SyntheticNode(text, source_url, ancestors)
         list_strategy = ListChunkingStrategy()
         if list_strategy.can_process(node):
-            return list_strategy.process(node, source_file)
+            return list_strategy.process(node, source_file), list_strategy._pending_headings
         prose_strategy = ProseChunkingStrategy()
         if prose_strategy.can_process(node):
-            return prose_strategy.process(node, source_file)
-        return []  # pragma: no cover
+            return prose_strategy.process(node, source_file), prose_strategy._skipped_headings
+        return [], []  # pragma: no cover

@@ -120,8 +120,16 @@ class ListChunkingStrategy(ProcessingStrategy):
                     source_file=source_file,
                     source_url=source_url,
                 )
+                if list_chunks:
+                    # The headings dropped since the last prose chunk sit right
+                    # above this list, so they go with its first item.
+                    list_chunks[0]._preceding_headings = pending_headings
+                    pending_headings = []
                 chunks.extend(list_chunks)
 
+        # Headings dropped after the last chunk, for a caller that emits more
+        # chunks of the same page (a table that follows this text).
+        self._pending_headings = pending_headings
         return chunks
 
     # --- fence / segmentation helpers ---------------------------------------

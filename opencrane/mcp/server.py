@@ -88,6 +88,20 @@ def _source_lines(row: dict, metadata: dict) -> list[str]:
     return lines
 
 
+def _strip_breadcrumb(content: str, breadcrumb: str) -> str:
+    """Drop the ``# {breadcrumb}`` line that list item and table row chunks start with."""
+    if breadcrumb and content.startswith(f"# {breadcrumb}\n"):
+        return content[len(breadcrumb) + 3:].lstrip("\n")
+    return content
+
+
+def _list_item_line(member: dict, body: str, base_depth: int = 0) -> str:
+    """One list item as ``[position] text``, indented by its nesting depth."""
+    meta = member.get("metadata", {}) or {}
+    indent = "  " * (meta.get("depth", 0) - base_depth)
+    return f"{indent}[{meta.get('position')}] {body}"
+
+
 def _rehydrate_to_yaml(content: dict | str, metadata: dict, chunk_type: str = "") -> str:
     """Convert JSON chunk content to YAML with breadcrumb comments.
 
@@ -455,11 +469,8 @@ def _format_grouped_list_item(result: dict) -> str:
         except Exception:  # pragma: no cover
             mm = {}
         pos = mm.get("position")
-        content = m.get("content", "")
         # Drop breadcrumb header prefix when displaying inline for readability
-        stripped = content
-        if breadcrumb and stripped.startswith(f"# {breadcrumb}\n"):
-            stripped = stripped[len(breadcrumb) + 3:].lstrip("\n")
+        stripped = _strip_breadcrumb(m.get("content", ""), breadcrumb)
         lines.append(f"  [{pos}] {stripped}")
 
     unmatched_previews = head_meta.get("sibling_previews") or []
@@ -563,10 +574,8 @@ def _format_grouped_table_row(result: dict) -> str:
         except Exception:  # pragma: no cover
             mm = {}
         row_index = mm.get("row_index")
-        content = m.get("content", "")
         # Drop breadcrumb header prefix when displaying inline for readability
-        if breadcrumb and content.startswith(f"# {breadcrumb}\n"):
-            content = content[len(breadcrumb) + 3:].lstrip("\n")
+        content = _strip_breadcrumb(m.get("content", ""), breadcrumb)
         lines.append(f"  [{row_index}] {content}")
 
     unmatched_previews = head_meta.get("sibling_previews") or []
@@ -836,13 +845,13 @@ GET_METADATA_SCHEMA_TOOL_SCHEMA = {
     "required": []
 }
 
-GET_SECTION_TOOL_DESCRIPTION = "Read a whole documentation section by chunk_id or by clause number. Use search_docs to find information. Use get_section when a prose search result is cut off, when the question names a clause such as '5.4.1.2a' or 'Annex C', or when you need the sub-sections or the sections before and after a result. Returns the section text with its heading path and a list of its direct sub-sections."
+GET_SECTION_TOOL_DESCRIPTION = "Read a whole documentation section by chunk_id or by clause number. Use search_docs to find information. Use get_section when a search result is cut off, when the question names a clause such as '5.4.1.2a' or 'Annex C', or when you need the sub-sections or the sections before and after a result. Returns the section text with its lists and tables in page order, its heading path, and a list of its direct sub-sections."
 GET_SECTION_TOOL_SCHEMA = {
     "type": "object",
     "properties": {
         "chunk_id": {
             "type": "string",
-            "description": "Prose chunk ID from search results (the 'Chunk ID:' field); overrides clause_id"
+            "description": "Chunk ID from search results (the 'Chunk ID:' field) of a prose chunk, a list item, or a table row. A list item or table row opens the section it sits in. Overrides clause_id"
         },
         "clause_id": {
             "type": "string",
@@ -854,7 +863,7 @@ GET_SECTION_TOOL_SCHEMA = {
         },
         "include_subsections": {
             "type": "boolean",
-            "description": "Returns the full text of all nested sub-sections instead of a list of the direct sub-sections.",
+            "description": "Returns the full text of all nested sub-sections, with their lists and tables, instead of a list of the direct sub-sections.",
             "default": False
         },
         "neighbors": {
@@ -1666,15 +1675,8 @@ async def get_list_members(arguments: dict) -> list[TextContent]:
         lines.append(f"Location: {breadcrumb}")
     lines.append("")
     for m in members:
-        mm = m.get("metadata", {}) or {}
-        pos = mm.get("position")
-        depth = mm.get("depth", 0)
-        indent = "  " * depth
-        content = m.get("content", "")
         # Strip breadcrumb header for readable inline display
-        if breadcrumb and content.startswith(f"# {breadcrumb}\n"):
-            content = content[len(breadcrumb) + 3:].lstrip("\n")
-        lines.append(f"{indent}[{pos}] {content}")
+        lines.append(_list_item_line(m, _strip_breadcrumb(m.get("content", ""), breadcrumb)))
 
     return [TextContent(type="text", text="\n".join(lines) + "\n")]
 
@@ -1692,19 +1694,18 @@ async def get_table_members(arguments: dict) -> list[TextContent]:
     breadcrumb = first_meta.get("breadcrumb_path", "")
     lines = [*_source_lines(members[0], first_meta), ""]
     for m in members:
-        content = m.get("content", "")
         # Strip breadcrumb header for readable inline display
-        if breadcrumb and content.startswith(f"# {breadcrumb}\n"):
-            content = content[len(breadcrumb) + 3:].lstrip("\n")
-        lines.append(content)
+        lines.append(_strip_breadcrumb(m.get("content", ""), breadcrumb))
         lines.append("")
     return [TextContent(type="text", text="\n".join(lines).strip() + "\n")]
 
 
 # get_section limits: neighbour sections per side, sub-section chunks returned
-# in full, and chunks walked when following continuation links.
+# in full (list items and table rows included), items or rows shown per list or
+# table, and chunks walked when following continuation links.
 _SECTION_MAX_NEIGHBORS = 5
 _SECTION_MAX_SUBSECTION_CHUNKS = 50
+_SECTION_MAX_BLOCK_MEMBERS = 50
 _SECTION_WALK_CAP = 200
 
 _SECTION_HEADING_LINE_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*$")
@@ -1821,6 +1822,37 @@ def _slice_clause(text: str, clause: str) -> str | None:
     return "\n".join(lines[start:]).strip() if start is not None else None
 
 
+# List and table chunk types: the noun and the tool that reads the whole list
+# or table, with its id field.
+_MEMBER_TYPES = {
+    "list_item": ("list", "get_list_members", "list_id"),
+    "table_row": ("table", "get_table_members", "table_id"),
+}
+
+
+def _chunk_section(chunk_id: str, allowed) -> dict | str:
+    """The prose chunk *chunk_id* opens: the chunk itself, or for a list item or
+    table row the chunk of the section it sits in. A message when there is none."""
+    not_found = f"No prose section found for chunk_id={chunk_id!r}."
+    row = get_milvus_service().get_chunk(chunk_id)
+    kind = row.get("chunk_type") if row and allowed(row) else None
+    if kind == "prose":
+        return _with_metadata(row)
+    if kind not in _MEMBER_TYPES:
+        return not_found
+    member = _with_metadata(row)
+    section = _fetch_prose(member["metadata"].get("parent_chunk_id"))
+    if section is not None and section.get("source_name") == member.get("source_name"):
+        return section
+    # Indexes from before lists and tables were linked to their sections.
+    noun, tool, field = _MEMBER_TYPES[kind]
+    return (
+        f"{not_found} The chunk is a {kind} that the index does not link to a section. "
+        f"Read its {noun} with {tool}({field}='{member['metadata'].get(field)}'), "
+        f"or search for the {noun}'s heading and call get_section on a prose result."
+    )
+
+
 def _resolve_section(arguments: dict, permitted: set | None):
     """Return ``(head_row, inner_clause)`` for the request, or an error string.
 
@@ -1832,10 +1864,8 @@ def _resolve_section(arguments: dict, permitted: set | None):
 
     chunk_id = arguments.get("chunk_id")
     if chunk_id:
-        row = _fetch_prose(chunk_id)
-        if row is None or not allowed(row):
-            return f"No prose section found for chunk_id={chunk_id!r}."
-        return _section_head(row), None
+        row = _chunk_section(chunk_id, allowed)
+        return row if isinstance(row, str) else (_section_head(row), None)
 
     clause = str(arguments.get("clause_id") or "").strip()
     if not clause:
@@ -1930,8 +1960,10 @@ def _section_source(row: dict) -> str:
     return f"{url}#{anchor}" if url and anchor else url
 
 
-def _format_section(rows: list[dict], text: str | None = None, clause: str | None = None) -> str:
-    """Render a section (head + continuation chunks) with its location header."""
+def _format_section(
+    rows: list[dict], text: str | None = None, clause: str | None = None, members: list[dict] = (),
+) -> str:
+    """Render a section (head + continuation chunks, with its lists and tables) under its location header."""
     head = rows[0]
     meta = head["metadata"]
     clause = clause or meta.get("clause_id")
@@ -1947,26 +1979,148 @@ def _format_section(rows: list[dict], text: str | None = None, clause: str | Non
     lines.append(chunk_line)
     if meta.get("parent_chunk_id"):
         lines.append(f"Parent Chunk ID: {meta['parent_chunk_id']}")
-    body = text if text is not None else "\n\n".join(str(r.get("content", "")) for r in rows)
-    return "\n".join(lines) + "\n\n" + body + "\n"
+    if text is None:
+        entries = [(_doc_order(r), str(r.get("content", ""))) for r in rows]
+        entries += [(order, block) for order, block, *_ in _member_blocks(list(members))]
+        # A stable sort: without doc_order, the prose keeps its order and the lists and tables follow.
+        text = "\n\n".join(entry for _, entry in sorted(entries, key=lambda e: e[0]))
+    return "\n".join(lines) + "\n\n" + text + "\n"
 
 
-def _subsection_rows(section: list[dict], recursive: bool) -> list[dict]:
-    """Prose chunks below *section* via ``parent_chunk_id``, in document order."""
+def _section_tree(section: list[dict], recursive: bool) -> tuple[list[dict], list[dict]]:
+    """Chunks below *section* via ``parent_chunk_id``: ``(prose, lists_and_tables)``.
+
+    The prose chunks are the sub-sections, in document order. The list item and
+    table row chunks are those of *section* and, when *recursive*, of all its
+    sub-sections.
+    """
     seen = {r["chunk_id"] for r in section}
     frontier = list(seen)
-    collected: list[dict] = []
+    prose: list[dict] = []
+    members: list[dict] = []
     while frontier:
-        found = get_milvus_service().query_by_values("parent_chunk_id", frontier, chunk_type="prose")
-        children = [r for r in map(_with_metadata, found) if r["chunk_id"] not in seen]
+        found = get_milvus_service().query_by_values("parent_chunk_id", frontier)
+        children = []
+        for r in map(_with_metadata, found):
+            if r.get("chunk_type") in _MEMBER_TYPES:
+                members.append(r)
+            elif r.get("chunk_type") == "prose" and r["chunk_id"] not in seen:
+                children.append(r)
         seen.update(r["chunk_id"] for r in children)
-        collected.extend(children)
+        prose.extend(children)
         frontier = [r["chunk_id"] for r in children] if recursive else []
-    collected.sort(key=lambda r: r["metadata"].get("position", 0))
-    return collected
+    prose.sort(key=lambda r: r["metadata"].get("position", 0))
+    return prose, members
 
 
-def _format_subsections(rows: list[dict], include: bool) -> str:
+def _doc_order(row: dict) -> int:
+    """Order of a chunk on its page (``0`` for chunks indexed without one)."""
+    return row["metadata"].get("doc_order") or 0
+
+
+def _heading_titles(section: list[dict]) -> set[str]:
+    """Titles of the headings in the text of *section*."""
+    return {
+        m.group(2)
+        for r in section
+        for m in map(_SECTION_HEADING_LINE_RE.match, str(r.get("content", "")).split("\n"))
+        if m
+    }
+
+
+def _member_block_key(member: dict, by_id: dict) -> tuple:
+    """The list or table *member* belongs to; a nested list joins its top-level list."""
+    meta = member["metadata"]
+    if member["chunk_type"] == "table_row":
+        return ("table", meta.get("table_id"))
+    root = member
+    for _ in range(_SECTION_WALK_CAP):
+        parent = by_id.get(root["metadata"].get("parent_item_id"))
+        if parent is None:
+            break
+        root = parent
+    return ("list", root["metadata"].get("list_id"))
+
+
+def _own_item_text(item: dict, breadcrumb: str) -> str:
+    """The text of a list item without the lines the chunker adds before it.
+
+    The chunker starts an item with its ``# {breadcrumb}`` header and, for a
+    nested item, one line per parent item: the parent's first line, which the
+    list block shows already. A parent whose text starts on the next line has
+    an empty first line, so the lines are counted, never matched by content.
+    """
+    content = str(item.get("content", ""))
+    header = f"# {breadcrumb}\n" if breadcrumb else "#\n"
+    if not content.startswith(header):
+        return content
+    lines = content[len(header):].split("\n")
+    return "\n".join(lines[item["metadata"].get("depth", 0):]).lstrip("\n")
+
+
+def _format_member_block(key: tuple, items: list[dict]) -> str:
+    """A list as its items or a table as its rows, under a header with its location.
+
+    Shows up to ``_SECTION_MAX_BLOCK_MEMBERS`` items or rows, then names the
+    tool that returns the rest.
+    """
+    meta = items[0]["metadata"]
+    breadcrumb = meta.get("breadcrumb_path", "")
+    shown = items[:_SECTION_MAX_BLOCK_MEMBERS]
+    if items[0]["chunk_type"] == "table_row":
+        caption = meta.get("table_caption")
+        lines = [f"Table ({len(items)} of {meta.get('total_rows', len(items))} rows)"]
+        for m in shown:
+            body = _strip_breadcrumb(str(m.get("content", "")), breadcrumb)
+            # The caption is the line before the table, which the section shows already.
+            if caption and body.startswith(f"{caption}\n"):
+                body = body[len(caption) + 1:]
+            lines.append(f"[{m['metadata'].get('row_index')}] {body}")
+    else:
+        base = min(m["metadata"].get("depth", 0) for m in items)
+        roots = [m for m in items if m["metadata"].get("depth", 0) == base]
+        root_meta = roots[0]["metadata"]
+        lines = [
+            f"List ({len(roots)} of {root_meta.get('total_siblings', len(roots))} items, "
+            f"style={root_meta.get('list_style', '')})"
+        ]
+        for m in shown:
+            lines.append(_list_item_line(m, _own_item_text(m, breadcrumb), base))
+    if len(items) > len(shown):
+        kind, block_id = key
+        hidden = len(items) - len(shown)
+        noun = ("row" if kind == "table" else "list item") + ("" if hidden == 1 else "s")
+        tool = _MEMBER_TYPES["table_row" if kind == "table" else "list_item"]
+        lines.append(
+            f"... {hidden} more {noun} not shown; "
+            f"call {tool[1]}({tool[2]}='{block_id}') for the whole {kind}."
+        )
+    if breadcrumb:
+        lines.insert(1, f"Location: {breadcrumb}")
+    return "\n".join(lines)
+
+
+def _member_blocks(members: list[dict]) -> list[tuple[int, str, int, int]]:
+    """Group list items and table rows into lists and tables.
+
+    One ``(doc_order, text, chunks shown, chunks)`` entry per list or table.
+    """
+    by_id = {m["chunk_id"]: m for m in members}
+    groups: dict = {}
+    ordered = sorted(members, key=lambda m: (
+        _doc_order(m),
+        m["metadata"].get("depth", 0),
+        m["metadata"].get("position", m["metadata"].get("row_index", 0)),
+    ))
+    for m in ordered:
+        groups.setdefault(_member_block_key(m, by_id), []).append(m)
+    return [
+        (_doc_order(items[0]), _format_member_block(key, items), min(len(items), _SECTION_MAX_BLOCK_MEMBERS), len(items))
+        for key, items in groups.items()
+    ]
+
+
+def _format_subsections(rows: list[dict], include: bool, blocks: list[tuple] = ()) -> str:
     if not include:
         heads = [r for r in rows if _opens_with_heading(r.get("content"))]
         lines = [f"Sub-sections ({len(heads)}):"]
@@ -1974,13 +2128,23 @@ def _format_subsections(rows: list[dict], include: bool) -> str:
             path = r["metadata"].get("heading_path") or ""
             lines.append(f"  - {path.split(' > ')[-1]} (chunk_id={r['chunk_id']})")
         return "\n".join(lines) + "\n"
-    shown = rows[:_SECTION_MAX_SUBSECTION_CHUNKS]
-    parts = [f"Sub-sections ({len(rows)} chunks):"]
-    for r in shown:
-        parts.append(f"--- {r['metadata'].get('heading_path') or ''} (chunk_id={r['chunk_id']}) ---\n{r.get('content', '')}")
-    if len(rows) > len(shown):
+    entries = [
+        (_doc_order(r), f"--- {r['metadata'].get('heading_path') or ''} (chunk_id={r['chunk_id']}) ---\n{r.get('content', '')}", 1, 1)
+        for r in rows
+    ]
+    # A stable sort: without doc_order, the prose keeps its order and the lists and tables follow.
+    entries = sorted([*entries, *blocks], key=lambda e: e[0])
+    # The cap counts the chunks shown, so a list or table counts its items or rows.
+    shown, budget = 0, _SECTION_MAX_SUBSECTION_CHUNKS
+    while shown < len(entries) and (not shown or entries[shown][2] <= budget):
+        budget -= entries[shown][2]
+        shown += 1
+    parts = [f"Sub-sections ({sum(e[3] for e in entries)} chunks):"]
+    parts.extend(e[1] for e in entries[:shown])
+    hidden = sum(e[3] for e in entries[shown:])
+    if hidden:
         parts.append(
-            f"... {len(rows) - len(shown)} more sub-section chunks not shown; "
+            f"... {hidden} more sub-section chunks not shown; "
             "call get_section on a sub-section chunk_id to read further."
         )
     return "\n\n".join(parts) + "\n"
@@ -2009,7 +2173,7 @@ def _neighbor_sections(section: list[dict], count: int) -> tuple[list, list]:
 
 
 async def get_section(arguments: dict) -> list[TextContent]:
-    """Return a prose section (by chunk_id or clause id) with optional sub-sections and neighbours."""
+    """Return a section (by chunk_id or clause id) with its lists and tables, optional sub-sections and neighbours."""
     arguments = arguments or {}
     logger.info(
         f"   📑 get_section: chunk_id={arguments.get('chunk_id')!r} "
@@ -2036,12 +2200,32 @@ async def get_section(arguments: dict) -> list[TextContent]:
                          f"(nearest enclosing clause: {enclosing!r}, chunk_id={head['chunk_id']}).",
                 )]
 
-        parts = [_format_section(section, text, inner)]
-        if inner is None:
+        if inner is not None:
+            parts = [_format_section(section, text, inner)]
+        else:
             include = bool(arguments.get("include_subsections", False))
-            subsections = _subsection_rows(section, recursive=include)
-            if subsections:
-                parts.append(_format_subsections(subsections, include))
+            subsections, members = _section_tree(section, recursive=include)
+            ids = {r["chunk_id"] for r in section}
+            titles = _heading_titles(section)
+
+            below = f"{head['metadata'].get('heading_path') or ''} > "
+
+            def own(member: dict) -> bool:
+                # A list or table under a heading that has no chunk of its own
+                # (only a list follows it) hangs off the enclosing section. With
+                # include_subsections it is shown with the sub-sections, where
+                # it sits on the page, unless the section text holds its heading.
+                if member["metadata"].get("parent_chunk_id") not in ids:
+                    return False
+                breadcrumb = member["metadata"].get("breadcrumb_path") or ""
+                if not include or not breadcrumb.startswith(below):
+                    return True
+                return any(breadcrumb.endswith(f" > {title}") for title in titles)
+
+            parts = [_format_section(section, members=[m for m in members if own(m)])]
+            rest = [m for m in members if not own(m)]
+            if subsections or rest:
+                parts.append(_format_subsections(subsections, include, _member_blocks(rest)))
 
         try:
             count = int(arguments.get("neighbors") or 0)
@@ -2052,7 +2236,8 @@ async def get_section(arguments: dict) -> list[TextContent]:
             before, after = _neighbor_sections(section, count)
             for label, sections in (("Previous section", before), ("Next section", after)):
                 for rows in sections:
-                    parts.append(f"=== {label} ===\n" + _format_section(rows))
+                    members = _section_tree(rows, recursive=False)[1]
+                    parts.append(f"=== {label} ===\n" + _format_section(rows, members=members))
 
         return [TextContent(type="text", text="\n".join(parts))]
     except Exception as e:

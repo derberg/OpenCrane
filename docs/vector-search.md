@@ -233,16 +233,16 @@ get_table_members(table_id="{TABLE_ID}")
 
 ### `get_section`
 
-The `get_section` tool returns a whole prose section, for example when a search result is cut off. The tool is available only when the prose chunks have [navigation metadata](../opencrane/mcp/metadata-schema.md#prose-navigation-metadata).
+The `get_section` tool returns a whole section, for example when a search result is cut off. The section text includes the lists and tables of the section, in the order of the page. The tool is available only when the prose chunks have [navigation metadata](../opencrane/mcp/metadata-schema.md#prose-navigation-metadata).
 
 The following table lists the parameters of `get_section`. Pass **chunk_id** or **clause_id**:
 
 | Parameter | Type | Required | Description | Default value |
 |---|---|---|---|---|
-| **chunk_id** | string | No | The chunk ID of a prose search result. It overrides **clause_id**. | none |
+| **chunk_id** | string | No | The chunk ID of a search result. For a `list_item` or `table_row` result, the tool returns the section that the list or table sits in. It overrides **clause_id**. | none |
 | **clause_id** | string | No | The clause number from the section heading, for example `5.4.1.2a` or `Annex C`. | none |
 | **source** | string | No | Limits a **clause_id** lookup to pages whose source name, page URL, or page title contains this text. The match ignores case. | none |
-| **include_subsections** | boolean | No | Returns the full text of up to 50 sub-section chunks instead of a list of the direct sub-sections. | `false` |
+| **include_subsections** | boolean | No | Returns the full text of the sub-sections, with their lists and tables, instead of a list of the direct sub-sections. The tool shows up to 50 prose chunks, lists, and tables. | `false` |
 | **neighbors** | integer | No | The number of sections on the same page, from `0` to `5`, to add before and after the section. | `0` |
 
 The following example opens a clause:
@@ -250,6 +250,20 @@ The following example opens a clause:
 ```python
 get_section(clause_id="5.4.1.2a", source="{SOURCE_NAME}")
 ```
+
+The tool shows a list as its items and a table as its rows, each under a header with its heading path. The following example shows a list in a section:
+
+```text
+To upgrade the gateway, follow these steps:
+
+List (3 of 3 items, style=ordered)
+Location: Gateway operations > Upgrade the gateway
+[1] 1. Back up the gateway configuration.
+[2] 2. Install the gateway Helm chart in version 1.7.0.
+[3] 3. Check that every gateway pod reports `Ready`.
+```
+
+The chunker records where each list and table sits on the page, in the `parent_chunk_id` and `doc_order` fields. A heading followed only by a list has no prose chunk of its own, so its list belongs to the enclosing section. With **include_subsections**, the tool shows that list with the sub-sections, where it sits on the page. An index made before OpenCrane recorded these fields returns sections without their lists and tables. To add the fields, run `opencrane chunk`, `opencrane embed`, and `opencrane index` again.
 
 ### `health`
 

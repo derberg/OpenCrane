@@ -136,6 +136,28 @@ def _push_heading(stack: list, level: int, title: str, owner: str) -> None:
     stack.append((level, title, owner))
 
 
+# Chunk types that get a ``doc_order`` (and, for lists and tables, a section).
+_ORDERED_CHUNK_TYPES = ("prose", "list_item", "table_row")
+
+
+def _member_parent(stack: list, metadata: dict) -> str | None:
+    """The chunk holding the section of a list item or table row.
+
+    The heading stack is the one after the previous prose chunk, so it can hold
+    headings the list or table is not under, and miss headings that were dropped
+    right before it (a heading followed only by a list has no prose chunk). The
+    item's own ``breadcrumb_path`` is the truth: walk the stack while its titles
+    match the breadcrumb and keep the last heading that has a chunk.
+    """
+    titles = (metadata.get("breadcrumb_path") or "").split(" > ")
+    owner = None
+    for (_, title, chunk_id), expected in zip(stack, titles):
+        if title != expected:
+            break
+        owner = chunk_id or owner
+    return owner
+
+
 def _annotate_prose_navigation(chunks, config) -> None:
     """Record heading ancestry, clause id and neighbour links on prose chunks.
 
@@ -155,6 +177,14 @@ def _annotate_prose_navigation(chunks, config) -> None:
     - ``prev_chunk_id`` / ``next_chunk_id``: the adjacent prose chunks of the
       same page (``None`` at the page edges).
 
+    ``list_item`` and ``table_row`` chunks get a ``parent_chunk_id`` too: the
+    chunk holding the heading of the section the list or table sits in, or of
+    the nearest enclosing section when that heading has no chunk (see
+    :func:`_member_parent`). Prose, list item and table row chunks all get a
+    ``doc_order``: their order in the document, counted from 1 again whenever
+    ``source_url`` changes, so get_section can place lists and tables between
+    the prose of a section.
+
     ``breadcrumb_path`` is left untouched. No-op when ``config.prose_navigation``
     is off.
     """
@@ -164,11 +194,20 @@ def _annotate_prose_navigation(chunks, config) -> None:
     page = object()
     previous = None
     position = 0
+    order_url = object()
+    order = 0
     for chunk in chunks:
-        if chunk.chunk_type != "prose" or not isinstance(chunk.content, str):
+        if chunk.chunk_type not in _ORDERED_CHUNK_TYPES or not isinstance(chunk.content, str):
             continue
         metadata = chunk.metadata
         url = metadata.get("source_url")
+        if url != order_url:
+            order_url, order = url, 0
+        order += 1
+        metadata["doc_order"] = order
+        if chunk.chunk_type != "prose":
+            metadata["parent_chunk_id"] = _member_parent(stack, metadata) if url == page else None
+            continue
         preceding = [
             (len(m.group(1)), m.group(2).strip())
             for m in map(_NAV_HEADING_RE.match, chunk._preceding_headings) if m

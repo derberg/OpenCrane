@@ -121,7 +121,7 @@ The server always lists `search_docs` and `health`. It lists the other tools onl
 | `get_metadata_schema` | At least one other conditional tool present | Returns the reference documentation for the chunk metadata fields. |
 | `get_list_members` | List item chunks indexed | Returns all items of a list by list ID. |
 | `get_table_members` | Table row chunks indexed | Returns all rows of a table by table ID. |
-| `get_section` | Prose chunks with navigation metadata indexed | Returns a whole prose section by chunk ID or clause number. |
+| `get_section` | Prose chunks with navigation metadata indexed | Returns a whole section, with its lists and tables, by chunk ID or clause number. |
 | `health` | Always present | Reports whether the server can serve queries, with Milvus and collection checks. |
 
 The stdio server reads the indexed chunk types from Milvus on the first request for the tool list, and keeps them until the process stops. The HTTP server builds its tool list once, at startup. Restart the server after you run `opencrane index`.

@@ -10,16 +10,41 @@ Upgrade one gateway pod at a time, so the other pods keep routing traffic.
 
 Before you start, check these prerequisites:
 
+List (2 of 2 items, style=unordered)
+Location: Gateway operations > Upgrade the gateway
+[1] A Kubernetes cluster in version 1.29 or later.
+[2] Helm in version 3.14 or later.
+
 To upgrade the gateway, follow these steps:
+
+List (3 of 3 items, style=ordered)
+Location: Gateway operations > Upgrade the gateway
+[1] 1. Back up the gateway configuration with `kubectl get configmap gateway-config -o yaml > backup.yaml`.
+[2] 2. Install the gateway Helm chart in version 1.7.0.
+[3] 3. Check that every gateway pod reports `Ready` with `kubectl get pods -l app=gateway`.
 
 If a pod stays in `CrashLoopBackOff` for more than five minutes, roll back with `helm rollback gateway`.
 
-Sub-sections (2 chunks):
+Sub-sections (6 chunks):
 
 --- Gateway operations > Upgrade the gateway > Log settings (chunk_id=log-settings) ---
 ### Log settings
 
 The gateway reads these environment variables at startup:
 
+Table (2 of 2 rows)
+Location: Gateway operations > Upgrade the gateway > Log settings
+[1] Variable: GATEWAY_LOG_LEVEL.
+Default: info.
+Description: Sets the log level. Use debug to log every request.
+[2] Variable: GATEWAY_LOG_FORMAT.
+Default: text.
+Description: Sets the log format. Use json for log collectors.
+
 --- Gateway operations > Upgrade the gateway > Log settings (chunk_id=log-settings-2) ---
 Restart the gateway pod after you change a variable, because the gateway reads them only at startup.
+
+List (2 of 2 items, style=unordered)
+Location: Gateway operations > Upgrade the gateway > Rollback checks
+[1] Confirm the previous chart version with `helm history gateway`.
+[2] Check that the user sessions recover within two minutes.

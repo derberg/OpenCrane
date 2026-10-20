@@ -91,7 +91,7 @@ class Chunk(BaseModel):
                 "source_url", "breadcrumb_path", "section_anchor", "tab_value", "tab_label",
                 # Navigation metadata (see _annotate_prose_navigation in rag/chunker.py)
                 "heading_path", "clause_id", "parent_chunk_id", "position",
-                "prev_chunk_id", "next_chunk_id",
+                "prev_chunk_id", "next_chunk_id", "doc_order",
             }
             invalid_keys = set(self.metadata.keys()) - allowed_keys
             if invalid_keys:

@@ -91,9 +91,17 @@ The following table lists the navigation fields of `prose` chunks. OpenCrane add
 | `clause_id` | string, optional | Clause number at the start of the section heading, such as a dotted number or an annex. Pass it to `get_section(clause_id=...)`. | `"5.4.1.2a"`, `"Annex C"` |
 | `parent_chunk_id` | `chunk_id` string, or null | Chunk of the nearest enclosing section, or `null` at the top level. | `null` |
 | `position` | integer, 1-indexed | Position of the chunk among the prose chunks of its page. | `1` |
+| `doc_order` | integer, 1-indexed | Position of the chunk among the prose, `list_item`, and `table_row` chunks of its page. The count starts again at `1` when `source_url` changes. | `4` |
 | `prev_chunk_id`, `next_chunk_id` | `chunk_id` string, or null | Previous and next prose chunk of the page, or `null` at the page edges. | `"a41e…"` (shortened) |
 
 A chunk without a leading heading continues the previous section and repeats its `heading_path`, `clause_id`, and `parent_chunk_id`.
+
+The navigation pass also adds two fields to `list_item` and `table_row` chunks, so `get_section` can show the lists and tables of a section in the order of the page:
+
+| Field | Type | Description | Example |
+|---|---|---|---|
+| `parent_chunk_id` | `chunk_id` string, or null | Prose chunk that holds the heading of the section the list or table sits in. A heading followed only by a list has no chunk, so the field then names the chunk of the nearest enclosing section. The value is `null` when no section heading on the page has a chunk. | `"a41e…"` (shortened) |
+| `doc_order` | integer, 1-indexed | Position of the chunk on its page, counted the same way as the `doc_order` of prose chunks. | `5` |
 
 To change the clause format, set `section_clause_pattern` in `.opencrane/config.yaml` to a regular expression whose first capture group is the clause ID. The value `none` turns clause IDs off. For details, see [Section navigation and clause IDs](https://github.com/derberg/OpenCrane/blob/main/README.md#section-navigation-and-clause-ids).
 
@@ -233,6 +241,6 @@ The MCP server uses the metadata fields in the following ways:
 |---|---|
 | Search tool | Shows `breadcrumb_path` and `section_anchor` with each result. For CRD, OpenAPI, and JSON Schema results, it adds `breadcrumb_path` and `logical_parent` as comments to the content instead. |
 | YAML definition tool | Adds `breadcrumb_path` and `logical_parent` as location comments. It also lists up to five `neighbor_chunks` IDs, so you can fetch them. |
-| Section tool | Finds a prose section by `chunk_id` or `clause_id`, and uses `parent_chunk_id` and `position` to return it with its sub-sections. |
+| Section tool | Finds a prose section by `chunk_id` or `clause_id`, and uses `parent_chunk_id` and `position` to return it with its sub-sections. It uses the `parent_chunk_id` and `doc_order` of `list_item` and `table_row` chunks to add the lists and tables of the section in the order of the page. |
 
 You receive formatted results from the MCP server, not raw chunks. To learn what a metadata field means, call the `get_metadata_schema` tool, which returns this schema.

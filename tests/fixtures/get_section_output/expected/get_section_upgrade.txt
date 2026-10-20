@@ -10,9 +10,25 @@ Upgrade one gateway pod at a time, so the other pods keep routing traffic.
 
 Before you start, check these prerequisites:
 
+List (2 of 2 items, style=unordered)
+Location: Gateway operations > Upgrade the gateway
+[1] A Kubernetes cluster in version 1.29 or later.
+[2] Helm in version 3.14 or later.
+
 To upgrade the gateway, follow these steps:
 
+List (3 of 3 items, style=ordered)
+Location: Gateway operations > Upgrade the gateway
+[1] 1. Back up the gateway configuration with `kubectl get configmap gateway-config -o yaml > backup.yaml`.
+[2] 2. Install the gateway Helm chart in version 1.7.0.
+[3] 3. Check that every gateway pod reports `Ready` with `kubectl get pods -l app=gateway`.
+
 If a pod stays in `CrashLoopBackOff` for more than five minutes, roll back with `helm rollback gateway`.
+
+List (2 of 2 items, style=unordered)
+Location: Gateway operations > Upgrade the gateway > Rollback checks
+[1] Confirm the previous chart version with `helm history gateway`.
+[2] Check that the user sessions recover within two minutes.
 
 Sub-sections (1):
   - Log settings (chunk_id=log-settings)

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.3](https://github.com/derberg/OpenCrane/compare/v0.34.2...v0.34.3) (2026-10-20)
+
+
+### Bug Fixes
+
+* return the lists and tables of a section from get_section ([#106](https://github.com/derberg/OpenCrane/issues/106)) ([67c683f](https://github.com/derberg/OpenCrane/commit/67c683f1674b17bd2478bf2d1ccd54b9509c71aa))
+
 ## [0.34.2](https://github.com/derberg/OpenCrane/compare/v0.34.1...v0.34.2) (2026-10-20)
 
 

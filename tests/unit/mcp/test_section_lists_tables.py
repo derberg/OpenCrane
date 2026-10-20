@@ -225,3 +225,27 @@ async def test_subsection_cap_counts_the_rows_shown_and_always_shows_one_entry(m
     assert "[3] Key: k3.\n... 1 more row not shown;" in text
     assert "Later text." not in text
     assert text.endswith("... 1 more sub-section chunks not shown; call get_section on a sub-section chunk_id to read further.\n")
+
+
+@pytest.mark.anyio
+async def test_nested_items_under_a_parent_whose_text_starts_on_the_next_line(monkeypatch):
+    # The parent item's first line is empty, so each nested item starts with an empty lineage line.
+    rows = [
+        _prose("p", "## Steps\n\nDo it.", 1, order=1, path="Page > Steps"),
+        _item("a", "\n  Parent text on next line", 1, "outer", parent="p", order=2, total=1, breadcrumb="Page > Steps"),
+        _item("a1", "\nInstall the package on the host.", 1, "inner", parent="p", order=3, depth=1,
+              parent_item="a", breadcrumb="Page > Steps"),
+        _item("a2", "\nSecond nested.", 2, "inner", parent="p", order=4, depth=1,
+              parent_item="a", breadcrumb="Page > Steps"),
+        # Content from an index without the breadcrumb header is shown as it is.
+        _row("x", "list_item", "Loose item.", list_id="other", list_style="unordered", position=1,
+             total_siblings=1, depth=0, parent_chunk_id="p", doc_order=5),
+    ]
+    _use(monkeypatch, rows)
+    text = await _call({"chunk_id": "p"})
+    assert (
+        "[1]   Parent text on next line\n"
+        "  [1] Install the package on the host.\n"
+        "  [2] Second nested.\n"
+    ) in text
+    assert text.endswith("List (1 of 1 items, style=unordered)\n[1] Loose item.\n")

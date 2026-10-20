@@ -2042,6 +2042,22 @@ def _member_block_key(member: dict, by_id: dict) -> tuple:
     return ("list", root["metadata"].get("list_id"))
 
 
+def _own_item_text(item: dict, breadcrumb: str) -> str:
+    """The text of a list item without the lines the chunker adds before it.
+
+    The chunker starts an item with its ``# {breadcrumb}`` header and, for a
+    nested item, one line per parent item: the parent's first line, which the
+    list block shows already. A parent whose text starts on the next line has
+    an empty first line, so the lines are counted, never matched by content.
+    """
+    content = str(item.get("content", ""))
+    header = f"# {breadcrumb}\n" if breadcrumb else "#\n"
+    if not content.startswith(header):
+        return content
+    lines = content[len(header):].split("\n")
+    return "\n".join(lines[item["metadata"].get("depth", 0):]).lstrip("\n")
+
+
 def _format_member_block(key: tuple, items: list[dict]) -> str:
     """A list as its items or a table as its rows, under a header with its location.
 
@@ -2069,10 +2085,7 @@ def _format_member_block(key: tuple, items: list[dict]) -> str:
             f"style={root_meta.get('list_style', '')})"
         ]
         for m in shown:
-            body = _strip_breadcrumb(str(m.get("content", "")), breadcrumb)
-            # A nested item repeats the first line of each parent item; the block shows them already.
-            own = "\n".join(body.split("\n")[m["metadata"].get("depth", 0):])
-            lines.append(_list_item_line(m, own, base))
+            lines.append(_list_item_line(m, _own_item_text(m, breadcrumb), base))
     if len(items) > len(shown):
         kind, block_id = key
         hidden = len(items) - len(shown)

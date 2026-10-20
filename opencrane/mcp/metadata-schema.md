@@ -100,7 +100,7 @@ The navigation pass also adds two fields to `list_item` and `table_row` chunks, 
 
 | Field | Type | Description | Example |
 |---|---|---|---|
-| `parent_chunk_id` | `chunk_id` string, or null | Prose chunk that holds the heading of the section the list or table sits in. A heading followed only by a list has no chunk, so the field then names the chunk of the nearest enclosing section. The value is `null` when no section heading on the page has a chunk. | `"a41e…"` (shortened) |
+| `parent_chunk_id` | `chunk_id` string, or null | Prose chunk that holds the heading of the section the list or table sits in. A heading followed only by a list has no chunk, so the field then names the chunk of the nearest enclosing section. When no section above the list or table has a chunk, the field names the prose chunk right before it on the page. A list or table above the first prose chunk of its page names that first prose chunk. The value is `null` only on a page without prose chunks. | `"a41e…"` (shortened) |
 | `doc_order` | integer, 1-indexed | Position of the chunk on its page, counted the same way as the `doc_order` of prose chunks. | `5` |
 
 To change the clause format, set `section_clause_pattern` in `.opencrane/config.yaml` to a regular expression whose first capture group is the clause ID. The value `none` turns clause IDs off. For details, see [Section navigation and clause IDs](https://github.com/derberg/OpenCrane/blob/main/README.md#section-navigation-and-clause-ids).

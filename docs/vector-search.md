@@ -265,7 +265,7 @@ Location: Gateway operations > Upgrade the gateway
 
 The tool shows up to 50 items of a list and 50 rows of a table. For a longer list or table, the last line names the call that returns all of it, for example `get_table_members(table_id="{TABLE_ID}")`.
 
-The chunker records where each list and table sits on the page, in the `parent_chunk_id` and `doc_order` fields. A heading followed only by a list has no prose chunk of its own, so its list belongs to the enclosing section. With **include_subsections**, the tool shows that list with the sub-sections, where it sits on the page. An index made before OpenCrane recorded these fields returns sections without their lists and tables. To add the fields, run `opencrane chunk`, `opencrane embed`, and `opencrane index` again.
+The chunker records where each list and table sits on the page, in the `parent_chunk_id` and `doc_order` fields. A heading followed only by a list has no prose chunk of its own, so its list belongs to the enclosing section. With **include_subsections**, the tool shows that list with the sub-sections, where it sits on the page. When no section above a list or table has a prose chunk, the list or table belongs to the prose chunk right before it. A list or table above the first prose chunk of a page belongs to that chunk, and the tool shows it above the text. An index made before OpenCrane recorded these fields returns sections without their lists and tables. To add the fields, run `opencrane chunk`, `opencrane embed`, and `opencrane index` again.
 
 ### `health`
 

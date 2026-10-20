@@ -140,19 +140,21 @@ def _push_heading(stack: list, level: int, title: str, owner: str) -> None:
 _ORDERED_CHUNK_TYPES = ("prose", "list_item", "table_row")
 
 
-def _member_parent(stack: list, metadata: dict) -> str | None:
-    """The chunk holding the section of a list item or table row.
+def _member_parent(stack: list, breadcrumb: str) -> str | None:
+    """The chunk holding the deepest section above a list item or table row.
 
-    The heading stack is the one after the previous prose chunk, so it can hold
-    headings the list or table is not under, and miss headings that were dropped
-    right before it (a heading followed only by a list has no prose chunk). The
-    item's own ``breadcrumb_path`` is the truth: walk the stack while its titles
-    match the breadcrumb and keep the last heading that has a chunk.
+    The stack holds the headings up to the item, those dropped right before it
+    included (they come with the first item of the list or table). When some
+    are missing, the stack can still name headings the item is not under, so
+    the item's own ``breadcrumb_path`` decides: walk the stack while the
+    breadcrumb starts with its heading path and keep the last heading that has
+    a chunk. Paths are compared whole, so a title that contains `` > `` still
+    matches.
     """
-    titles = (metadata.get("breadcrumb_path") or "").split(" > ")
-    owner = None
-    for (_, title, chunk_id), expected in zip(stack, titles):
-        if title != expected:
+    owner, path = None, ""
+    for _, title, chunk_id in stack:
+        path = f"{path} > {title}" if path else title
+        if breadcrumb != path and not breadcrumb.startswith(f"{path} > "):
             break
         owner = chunk_id or owner
     return owner
@@ -180,10 +182,16 @@ def _annotate_prose_navigation(chunks, config) -> None:
     ``list_item`` and ``table_row`` chunks get a ``parent_chunk_id`` too: the
     chunk holding the heading of the section the list or table sits in, or of
     the nearest enclosing section when that heading has no chunk (see
-    :func:`_member_parent`). Prose, list item and table row chunks all get a
-    ``doc_order``: their order in the document, counted from 1 again whenever
-    ``source_url`` changes, so get_section can place lists and tables between
-    the prose of a section.
+    :func:`_member_parent`). When no section above it has a chunk, it is the
+    prose chunk right before it on the page, or, for a list or table above the
+    first prose chunk of the page, that first prose chunk. So get_section on
+    the chunk shows the list or table next to the text around it. It stays
+    ``None`` only on a page without prose chunks. The headings dropped right
+    before a list or table come with its first item (``_preceding_headings``),
+    so they update the heading stack and an H1 among them starts a new page.
+    Prose, list item and table row chunks all get a ``doc_order``: their order
+    in the document, counted from 1 again whenever ``source_url`` changes, so
+    get_section can place lists and tables between the prose of a section.
 
     ``breadcrumb_path`` is left untouched. No-op when ``config.prose_navigation``
     is off.
@@ -196,6 +204,8 @@ def _annotate_prose_navigation(chunks, config) -> None:
     position = 0
     order_url = object()
     order = 0
+    # Lists and tables above the first prose chunk of the page, which they link to.
+    waiting: list = []
     for chunk in chunks:
         if chunk.chunk_type not in _ORDERED_CHUNK_TYPES or not isinstance(chunk.content, str):
             continue
@@ -205,23 +215,37 @@ def _annotate_prose_navigation(chunks, config) -> None:
             order_url, order = url, 0
         order += 1
         metadata["doc_order"] = order
-        if chunk.chunk_type != "prose":
-            metadata["parent_chunk_id"] = _member_parent(stack, metadata) if url == page else None
-            continue
+        is_prose = chunk.chunk_type == "prose"
         preceding = [
             (len(m.group(1)), m.group(2).strip())
             for m in map(_NAV_HEADING_RE.match, chunk._preceding_headings) if m
         ]
-        opens, headings = _content_headings(chunk.content)
+        opens, headings = _content_headings(chunk.content) if is_prose else (False, [])
         # An H1 is a page title, so it starts a new page even when the URL does
         # not change (pages missing from llms.txt have none, and a synthesized
         # index repeats the source's docs_url for every page).
         starts_page = any(level == 1 for level, _ in preceding) or (opens and headings[0][0] == 1)
         if url != page or starts_page:
+            if url != page:
+                # The lists and tables of a page without prose stay unlinked.
+                waiting = []
             page, stack, previous, position = url, [], None, 0
 
         for level, title in preceding:
             _push_heading(stack, level, title, None)
+
+        if not is_prose:
+            parent = _member_parent(stack, metadata.get("breadcrumb_path") or "")
+            if parent is None and previous is not None:
+                parent = previous.chunk_id
+            if parent is None:
+                waiting.append(metadata)
+            metadata["parent_chunk_id"] = parent
+            continue
+
+        for member in waiting:
+            member["parent_chunk_id"] = chunk.chunk_id
+        waiting = []
 
         if opens:
             _push_heading(stack, *headings[0], chunk.chunk_id)

@@ -155,3 +155,18 @@ async def test_neighbor_sections_carry_their_lists(monkeypatch):
     text = await _call({"chunk_id": "p", "neighbors": 1})
     assert "=== Next section ===" in text
     assert text.endswith("Next intro.\n\nList (1 of 1 items, style=unordered)\nLocation: Page > Next\n[1] Next item.\n")
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("args", [
+    {"chunk_id": "k"}, {"chunk_id": "k", "include_subsections": True}, {"chunk_id": "i1"},
+])
+async def test_list_above_the_first_section_shows_before_its_text(monkeypatch, args):
+    # The list sits under the page title, above the first prose chunk it links to.
+    _use(monkeypatch, [
+        _prose("k", "## Known issues\n\nSome text.", 1, order=3, path="Page > Known issues"),
+        _item("i1", "Fixed X", 1, "L1", parent="k", order=1, breadcrumb="Page"),
+        _item("i2", "Added Y", 2, "L1", parent="k", order=2, breadcrumb="Page"),
+    ])
+    text = await _call(args)
+    assert text.endswith("[1] Fixed X\n[2] Added Y\n\n## Known issues\n\nSome text.\n")

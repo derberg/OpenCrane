@@ -2170,15 +2170,19 @@ async def get_section(arguments: dict) -> list[TextContent]:
             ids = {r["chunk_id"] for r in section}
             titles = _heading_titles(section)
 
+            below = f"{head['metadata'].get('heading_path') or ''} > "
+
             def own(member: dict) -> bool:
                 # A list or table under a heading that has no chunk of its own
                 # (only a list follows it) hangs off the enclosing section. With
                 # include_subsections it is shown with the sub-sections, where
-                # it sits on the page.
+                # it sits on the page, unless the section text holds its heading.
                 if member["metadata"].get("parent_chunk_id") not in ids:
                     return False
-                title = (member["metadata"].get("breadcrumb_path") or "").split(" > ")[-1]
-                return not include or title in titles
+                breadcrumb = member["metadata"].get("breadcrumb_path") or ""
+                if not include or not breadcrumb.startswith(below):
+                    return True
+                return any(breadcrumb.endswith(f" > {title}") for title in titles)
 
             parts = [_format_section(section, members=[m for m in members if own(m)])]
             rest = [m for m in members if not own(m)]

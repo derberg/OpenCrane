@@ -43,8 +43,8 @@ def test_members_link_to_their_section_and_count_doc_order():
     assert meta["in-a"]["parent_chunk_id"] == "a"
     assert meta["in-inner"]["parent_chunk_id"] == "a"
     assert meta["in-b"]["parent_chunk_id"] == "top"
-    # A list on a page the heading stack has not reached yet has no section.
-    assert meta["other-page"]["parent_chunk_id"] is None
+    # A list above the first prose chunk of its page links to that chunk.
+    assert meta["other-page"]["parent_chunk_id"] == "other"
     assert [meta[c]["doc_order"] for c in ("top", "a", "in-a", "in-inner", "in-b", "c")] == [1, 2, 3, 4, 5, 6]
     assert [meta[c]["doc_order"] for c in ("other-page", "other")] == [1, 2]
     for c in chunks:
@@ -83,3 +83,78 @@ def test_chunked_page_links_lists_and_table_to_sections(tmp_path, monkeypatch):
         "Helm in version 3.14",
         "To upgrade the gatew",
     ]
+
+
+def _chunk(tmp_path, monkeypatch, md):
+    """Chunk a one-page bundle titled "Page" and return its chunks."""
+    llms = tmp_path / "llmstxt"
+    llms.mkdir()
+    (llms / "llms-full.txt").write_text(md)
+    (llms / "llms.txt").write_text("# Docs\n## src\n- [Page](https://docs.example.com/p)\n")
+    out = tmp_path / "chunks.json"
+    monkeypatch.chdir(tmp_path)
+    main(llmstxt_dir=llms, chunks_file=out)
+    return json.loads(out.read_text())
+
+
+def _parents(chunks):
+    """``{prose start or member text: parent_chunk_id}``, with prose keyed by their first line."""
+    return {
+        c["content"].split("\n")[1 if c["chunk_type"] != "prose" else 0]: c["metadata"]["parent_chunk_id"]
+        for c in chunks
+    }
+
+
+def _id(chunks, start):
+    return next(c["chunk_id"] for c in chunks if c["chunk_type"] == "prose" and c["content"].startswith(start))
+
+
+INTRO = "Intro paragraph with enough words to stay a chunk."
+
+
+def test_list_above_the_first_prose_chunk_links_to_it(tmp_path, monkeypatch):
+    # The page title has no chunk of its own, so the list sits above any prose.
+    chunks = _chunk(tmp_path, monkeypatch,
+                    "# Page\n\n- Fixed X\n- Added Y\n\n## Known issues\n\nSome text that is long enough here.\n")
+    parents = _parents(chunks)
+    assert parents["Fixed X"] == parents["Added Y"] == _id(chunks, "## Known issues")
+
+
+def test_list_under_headings_without_chunks_links_to_the_prose_before_it(tmp_path, monkeypatch):
+    # "Intro." is too short to keep, so neither "Page" nor the second "Setup" has a chunk.
+    chunks = _chunk(tmp_path, monkeypatch, (
+        "# Page\n\nIntro.\n\n## Setup\n\nFirst setup text.\n\n## Other\n\nOther text.\n\n"
+        "## Setup\n\n- second setup item one\n- second setup item two\n"
+    ))
+    parents = _parents(chunks)
+    assert parents["second setup item one"] == _id(chunks, "## Other")
+
+
+def test_heading_titles_with_the_breadcrumb_separator(tmp_path, monkeypatch):
+    chunks = _chunk(tmp_path, monkeypatch, "# Page\n\nIntro.\n\n## A > B heading\n\nBaz.\n\n- d\n")
+    assert _parents(chunks)["d"] == _id(chunks, "## A > B heading")
+
+
+def test_list_under_a_repeated_heading_skips_the_earlier_section(tmp_path, monkeypatch):
+    chunks = _chunk(tmp_path, monkeypatch, (
+        f"# Page\n\n{INTRO}\n\n## Example\n\nFirst example text that is long enough to be kept as prose.\n\n"
+        "## Example\n\n- second example item one\n- second example item two\n"
+    ))
+    # The second "Example" has no chunk, so the list hangs off the page, not the first "Example".
+    assert _parents(chunks)["second example item one"] == _id(chunks, "# Page")
+
+
+def test_table_under_a_repeated_heading_skips_the_earlier_section(tmp_path, monkeypatch):
+    chunks = _chunk(tmp_path, monkeypatch, (
+        f"# Page\n\n{INTRO}\n\n## Example\n\nFirst example text that is long enough to be kept as prose.\n\n"
+        "- a list item in the first example\n\n"
+        "## Example\n\n| Key | Value |\n|---|---|\n| x | 1 |\n\n"
+        "## Other\n\nOther text that is long enough to be kept.\n\n"
+        "## Other\n\n| Key | Value |\n|---|---|\n| y | 2 |\n"
+    ))
+    rows = {json.dumps(c["content"]): c["metadata"]["parent_chunk_id"] for c in chunks if c["chunk_type"] == "table_row"}
+    page = _id(chunks, "# Page")
+    # The first table follows a list (dropped headings handed on by the list
+    # chunker), the second follows prose (handed on by the prose chunker).
+    assert sorted(rows.values()) == [page, page]
+    assert _parents(chunks)["a list item in the first example"] == _id(chunks, "## Example")

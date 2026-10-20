@@ -1,0 +1,379 @@
+[
+  {
+    "chunk_id": "prereq-1",
+    "chunk_type": "list_item",
+    "content": "# Gateway operations > Upgrade the gateway\nA Kubernetes cluster in version 1.29 or later.",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "Gateway operations > Upgrade the gateway",
+      "depth": 0,
+      "list_id": "prereqs",
+      "list_style": "unordered",
+      "parent_item_id": null,
+      "position": 1,
+      "section_anchor": "upgrade-the-gateway",
+      "sibling_ids": [
+        "prereq-2"
+      ],
+      "sibling_previews": [
+        "Helm in version 3.14 or later."
+      ],
+      "source_url": "https://docs.example.com/gateway/operations",
+      "total_siblings": 2
+    },
+    "source_file": "gateway/operations.md",
+    "source_name": "gateway-docs",
+    "token_count": 20
+  },
+  {
+    "chunk_id": "prereq-2",
+    "chunk_type": "list_item",
+    "content": "# Gateway operations > Upgrade the gateway\nHelm in version 3.14 or later.",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "Gateway operations > Upgrade the gateway",
+      "depth": 0,
+      "list_id": "prereqs",
+      "list_style": "unordered",
+      "parent_item_id": null,
+      "position": 2,
+      "section_anchor": "upgrade-the-gateway",
+      "sibling_ids": [
+        "prereq-1"
+      ],
+      "sibling_previews": [
+        "A Kubernetes cluster in versi…"
+      ],
+      "source_url": "https://docs.example.com/gateway/operations",
+      "total_siblings": 2
+    },
+    "source_file": "gateway/operations.md",
+    "source_name": "gateway-docs",
+    "token_count": 19
+  },
+  {
+    "chunk_id": "step-1",
+    "chunk_type": "list_item",
+    "content": "# Gateway operations > Upgrade the gateway\n1. Back up the gateway configuration with `kubectl get configmap gateway-config -o yaml > backup.yaml`.",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "Gateway operations > Upgrade the gateway",
+      "depth": 0,
+      "list_id": "steps",
+      "list_style": "ordered",
+      "parent_item_id": null,
+      "position": 1,
+      "section_anchor": "upgrade-the-gateway",
+      "sibling_ids": [
+        "step-2",
+        "step-3"
+      ],
+      "sibling_previews": [
+        "2. Install the gateway Helm c…",
+        "3. Check that every gateway p…"
+      ],
+      "source_url": "https://docs.example.com/gateway/operations",
+      "total_siblings": 3
+    },
+    "source_file": "gateway/operations.md",
+    "source_name": "gateway-docs",
+    "token_count": 30
+  },
+  {
+    "chunk_id": "step-2",
+    "chunk_type": "list_item",
+    "content": "# Gateway operations > Upgrade the gateway\n2. Install the gateway Helm chart in version 1.7.0.",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "Gateway operations > Upgrade the gateway",
+      "depth": 0,
+      "list_id": "steps",
+      "list_style": "ordered",
+      "parent_item_id": null,
+      "position": 2,
+      "section_anchor": "upgrade-the-gateway",
+      "sibling_ids": [
+        "step-1",
+        "step-3"
+      ],
+      "sibling_previews": [
+        "1. Back up the gateway config…",
+        "3. Check that every gateway p…"
+      ],
+      "source_url": "https://docs.example.com/gateway/operations",
+      "total_siblings": 3
+    },
+    "source_file": "gateway/operations.md",
+    "source_name": "gateway-docs",
+    "token_count": 24
+  },
+  {
+    "chunk_id": "step-3",
+    "chunk_type": "list_item",
+    "content": "# Gateway operations > Upgrade the gateway\n3. Check that every gateway pod reports `Ready` with `kubectl get pods -l app=gateway`.",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "Gateway operations > Upgrade the gateway",
+      "depth": 0,
+      "list_id": "steps",
+      "list_style": "ordered",
+      "parent_item_id": null,
+      "position": 3,
+      "section_anchor": "upgrade-the-gateway",
+      "sibling_ids": [
+        "step-1",
+        "step-2"
+      ],
+      "sibling_previews": [
+        "1. Back up the gateway config…",
+        "2. Install the gateway Helm c…"
+      ],
+      "source_url": "https://docs.example.com/gateway/operations",
+      "total_siblings": 3
+    },
+    "source_file": "gateway/operations.md",
+    "source_name": "gateway-docs",
+    "token_count": 30
+  },
+  {
+    "chunk_id": "rollback-check-1",
+    "chunk_type": "list_item",
+    "content": "# Gateway operations > Upgrade the gateway > Rollback checks\nConfirm the previous chart version with `helm history gateway`.",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "Gateway operations > Upgrade the gateway > Rollback checks",
+      "depth": 0,
+      "list_id": "rollback-checks",
+      "list_style": "unordered",
+      "parent_item_id": null,
+      "position": 1,
+      "section_anchor": "rollback-checks",
+      "sibling_ids": [
+        "rollback-check-2"
+      ],
+      "sibling_previews": [
+        "Check that the user sessions …"
+      ],
+      "source_url": "https://docs.example.com/gateway/operations",
+      "total_siblings": 2
+    },
+    "source_file": "gateway/operations.md",
+    "source_name": "gateway-docs",
+    "token_count": 23
+  },
+  {
+    "chunk_id": "rollback-check-2",
+    "chunk_type": "list_item",
+    "content": "# Gateway operations > Upgrade the gateway > Rollback checks\nCheck that the user sessions recover within two minutes.",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "Gateway operations > Upgrade the gateway > Rollback checks",
+      "depth": 0,
+      "list_id": "rollback-checks",
+      "list_style": "unordered",
+      "parent_item_id": null,
+      "position": 2,
+      "section_anchor": "rollback-checks",
+      "sibling_ids": [
+        "rollback-check-1"
+      ],
+      "sibling_previews": [
+        "Confirm the previous chart ve…"
+      ],
+      "source_url": "https://docs.example.com/gateway/operations",
+      "total_siblings": 2
+    },
+    "source_file": "gateway/operations.md",
+    "source_name": "gateway-docs",
+    "token_count": 22
+  },
+  {
+    "chunk_id": "page-intro",
+    "chunk_type": "prose",
+    "content": "# Gateway operations\n\nThe gateway routes user traffic between the radio network and the packet core.",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "Gateway operations",
+      "heading_path": "Gateway operations",
+      "next_chunk_id": "upgrade",
+      "parent_chunk_id": null,
+      "position": 1,
+      "prev_chunk_id": null,
+      "source_url": "https://docs.example.com/gateway/operations"
+    },
+    "source_file": "gateway/operations.md",
+    "source_name": "gateway-docs",
+    "token_count": 18
+  },
+  {
+    "chunk_id": "upgrade",
+    "chunk_type": "prose",
+    "content": "## Upgrade the gateway\n\nUpgrade one gateway pod at a time, so the other pods keep routing traffic.\n\nBefore you start, check these prerequisites:",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "Gateway operations > Upgrade the gateway",
+      "heading_path": "Gateway operations > Upgrade the gateway",
+      "next_chunk_id": "upgrade-2",
+      "parent_chunk_id": "page-intro",
+      "position": 2,
+      "prev_chunk_id": "page-intro",
+      "section_anchor": "upgrade-the-gateway",
+      "source_url": "https://docs.example.com/gateway/operations"
+    },
+    "source_file": "gateway/operations.md",
+    "source_name": "gateway-docs",
+    "token_count": 29
+  },
+  {
+    "chunk_id": "upgrade-2",
+    "chunk_type": "prose",
+    "content": "To upgrade the gateway, follow these steps:",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "Gateway operations",
+      "heading_path": "Gateway operations > Upgrade the gateway",
+      "next_chunk_id": "upgrade-3",
+      "parent_chunk_id": "page-intro",
+      "position": 3,
+      "prev_chunk_id": "upgrade",
+      "source_url": "https://docs.example.com/gateway/operations"
+    },
+    "source_file": "gateway/operations.md",
+    "source_name": "gateway-docs",
+    "token_count": 9
+  },
+  {
+    "chunk_id": "upgrade-3",
+    "chunk_type": "prose",
+    "content": "If a pod stays in `CrashLoopBackOff` for more than five minutes, roll back with `helm rollback gateway`.",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "Gateway operations",
+      "heading_path": "Gateway operations > Upgrade the gateway",
+      "next_chunk_id": "log-settings",
+      "parent_chunk_id": "page-intro",
+      "position": 4,
+      "prev_chunk_id": "upgrade-2",
+      "source_url": "https://docs.example.com/gateway/operations"
+    },
+    "source_file": "gateway/operations.md",
+    "source_name": "gateway-docs",
+    "token_count": 26
+  },
+  {
+    "chunk_id": "log-settings",
+    "chunk_type": "prose",
+    "content": "### Log settings\n\nThe gateway reads these environment variables at startup:",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "Gateway operations > Log settings",
+      "heading_path": "Gateway operations > Upgrade the gateway > Log settings",
+      "next_chunk_id": "log-settings-2",
+      "parent_chunk_id": "upgrade",
+      "position": 5,
+      "prev_chunk_id": "upgrade-3",
+      "section_anchor": "log-settings",
+      "source_url": "https://docs.example.com/gateway/operations"
+    },
+    "source_file": "gateway/operations.md",
+    "source_name": "gateway-docs",
+    "token_count": 13
+  },
+  {
+    "chunk_id": "log-settings-2",
+    "chunk_type": "prose",
+    "content": "Restart the gateway pod after you change a variable, because the gateway reads them only at startup.",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "Gateway operations",
+      "heading_path": "Gateway operations > Upgrade the gateway > Log settings",
+      "next_chunk_id": "monitor",
+      "parent_chunk_id": "upgrade",
+      "position": 6,
+      "prev_chunk_id": "log-settings",
+      "source_url": "https://docs.example.com/gateway/operations"
+    },
+    "source_file": "gateway/operations.md",
+    "source_name": "gateway-docs",
+    "token_count": 19
+  },
+  {
+    "chunk_id": "monitor",
+    "chunk_type": "prose",
+    "content": "## Monitor the gateway\n\nThe gateway exports Prometheus metrics on port 9090. Scrape them every 30 seconds.",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "Gateway operations > Monitor the gateway",
+      "heading_path": "Gateway operations > Monitor the gateway",
+      "next_chunk_id": null,
+      "parent_chunk_id": "page-intro",
+      "position": 7,
+      "prev_chunk_id": "log-settings-2",
+      "section_anchor": "monitor-the-gateway",
+      "source_url": "https://docs.example.com/gateway/operations"
+    },
+    "source_file": "gateway/operations.md",
+    "source_name": "gateway-docs",
+    "token_count": 24
+  },
+  {
+    "chunk_id": "log-var-1",
+    "chunk_type": "table_row",
+    "content": "# Gateway operations > Upgrade the gateway > Log settings\nThe gateway reads these environment variables at startup:\nVariable: GATEWAY_LOG_LEVEL.\nDefault: info.\nDescription: Sets the log level. Use debug to log every request.",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "Gateway operations > Upgrade the gateway > Log settings",
+      "columns": [
+        "Variable",
+        "Default",
+        "Description"
+      ],
+      "row_index": 1,
+      "row_key": "GATEWAY_LOG_LEVEL",
+      "section_anchor": "log-settings",
+      "sibling_ids": [
+        "log-var-2"
+      ],
+      "sibling_previews": [
+        "GATEWAY_LOG_FORMAT"
+      ],
+      "source_url": "https://docs.example.com/gateway/operations",
+      "table_caption": "The gateway reads these environment variables at startup:",
+      "table_id": "log-variables",
+      "total_rows": 2
+    },
+    "source_file": "gateway/operations.md",
+    "source_name": "gateway-docs",
+    "token_count": 46
+  },
+  {
+    "chunk_id": "log-var-2",
+    "chunk_type": "table_row",
+    "content": "# Gateway operations > Upgrade the gateway > Log settings\nThe gateway reads these environment variables at startup:\nVariable: GATEWAY_LOG_FORMAT.\nDefault: text.\nDescription: Sets the log format. Use json for log collectors.",
+    "line_start": null,
+    "metadata": {
+      "breadcrumb_path": "Gateway operations > Upgrade the gateway > Log settings",
+      "columns": [
+        "Variable",
+        "Default",
+        "Description"
+      ],
+      "row_index": 2,
+      "row_key": "GATEWAY_LOG_FORMAT",
+      "section_anchor": "log-settings",
+      "sibling_ids": [
+        "log-var-1"
+      ],
+      "sibling_previews": [
+        "GATEWAY_LOG_LEVEL"
+      ],
+      "source_url": "https://docs.example.com/gateway/operations",
+      "table_caption": "The gateway reads these environment variables at startup:",
+      "table_id": "log-variables",
+      "total_rows": 2
+    },
+    "source_file": "gateway/operations.md",
+    "source_name": "gateway-docs",
+    "token_count": 45
+  }
+]

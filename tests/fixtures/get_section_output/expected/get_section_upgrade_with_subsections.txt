@@ -1,0 +1,25 @@
+Section: Gateway operations > Upgrade the gateway
+Source: https://docs.example.com/gateway/operations#upgrade-the-gateway
+Source Name: gateway-docs
+Chunk ID: upgrade (continued in upgrade-2, upgrade-3)
+Parent Chunk ID: page-intro
+
+## Upgrade the gateway
+
+Upgrade one gateway pod at a time, so the other pods keep routing traffic.
+
+Before you start, check these prerequisites:
+
+To upgrade the gateway, follow these steps:
+
+If a pod stays in `CrashLoopBackOff` for more than five minutes, roll back with `helm rollback gateway`.
+
+Sub-sections (2 chunks):
+
+--- Gateway operations > Upgrade the gateway > Log settings (chunk_id=log-settings) ---
+### Log settings
+
+The gateway reads these environment variables at startup:
+
+--- Gateway operations > Upgrade the gateway > Log settings (chunk_id=log-settings-2) ---
+Restart the gateway pod after you change a variable, because the gateway reads them only at startup.

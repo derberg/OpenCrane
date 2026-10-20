@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.4](https://github.com/derberg/OpenCrane/compare/v0.34.3...v0.34.4) (2026-10-20)
+
+
+### Bug Fixes
+
+* serialize query encoding so concurrent searches cannot corrupt the model ([#108](https://github.com/derberg/OpenCrane/issues/108)) ([449c351](https://github.com/derberg/OpenCrane/commit/449c3516ab83f14d2728da0e239ab3c0cdae0626))
+
 ## [0.34.3](https://github.com/derberg/OpenCrane/compare/v0.34.2...v0.34.3) (2026-10-20)
 
 

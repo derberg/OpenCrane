@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.34.2](https://github.com/derberg/OpenCrane/compare/v0.34.1...v0.34.2) (2026-10-20)
+
+
+### Bug Fixes
+
+* show the source of grouped list and table results ([#104](https://github.com/derberg/OpenCrane/issues/104)) ([fe552f6](https://github.com/derberg/OpenCrane/commit/fe552f6c534d37ad8660ec61c65be007dfde38d9))
+
 ## [0.34.1](https://github.com/derberg/OpenCrane/compare/v0.34.0...v0.34.1) (2026-10-19)
 
 

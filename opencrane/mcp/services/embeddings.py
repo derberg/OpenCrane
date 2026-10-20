@@ -3,6 +3,7 @@
 import logging
 import os
 import random
+import threading
 import yaml
 from typing import List, Dict, Any, Union
 from sentence_transformers import SentenceTransformer
@@ -56,6 +57,21 @@ def cast_to_dtype(model, dtype: str) -> str:
     except TypeError:
         first = None
     return str(first.dtype).removeprefix("torch.") if first is not None else dtype
+
+
+# Query encodes from concurrent searches and the health probe share one model.
+# Some models are not safe to run in parallel: the remote code of nomic-bert
+# caches rotary position tensors on the module, and two concurrent forward
+# passes leave the cached length and tensors out of step. Every later shorter
+# query then fails with "The size of tensor a (N) must match the size of
+# tensor b (M)" until a longer query rebuilds the cache.
+_query_encode_lock = threading.Lock()
+
+
+def encode_query(model, texts: List[str]):
+    """Encode query *texts* with *model*, one call at a time per process."""
+    with _query_encode_lock:
+        return model.encode(texts, batch_size=8, show_progress_bar=False)
 
 
 class EmbeddingService:

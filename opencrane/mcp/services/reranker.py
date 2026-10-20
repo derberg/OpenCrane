@@ -56,6 +56,10 @@ class CrossEncoderReranker:
         # Searches rerank in executor threads; without the lock, concurrent
         # first searches would each load their own copy of the model.
         self._load_lock = threading.Lock()
+        # Concurrent searches share one model. Scoring one batch at a time
+        # keeps a model whose code caches state between forward passes (as
+        # nomic-bert does for its rotary tensors) from corrupting that state.
+        self._predict_lock = threading.Lock()
 
     def _load_model(self):
         with self._load_lock:
@@ -82,11 +86,9 @@ class CrossEncoderReranker:
         if not candidates:
             return []
         model = self._load_model()
-        scores = model.predict(
-            [(query, candidate_text(c)) for c in candidates],
-            batch_size=self.batch_size,
-            show_progress_bar=False,
-        )
+        pairs = [(query, candidate_text(c)) for c in candidates]
+        with self._predict_lock:
+            scores = model.predict(pairs, batch_size=self.batch_size, show_progress_bar=False)
         rescored = []
         for candidate, score in zip(candidates, scores):
             out = dict(candidate)

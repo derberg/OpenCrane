@@ -16,7 +16,7 @@ from mcp import Tool
 from mcp.server import Server
 from mcp.types import TextContent, PromptMessage
 from mcp.server.stdio import stdio_server
-from opencrane.mcp.services.embeddings import EmbeddingService
+from opencrane.mcp.services.embeddings import EmbeddingService, encode_query
 from opencrane.mcp.services.embedding_settings import (
     EmbeddingSettings,
     EmbeddingSettingsMismatch,
@@ -1189,7 +1189,7 @@ async def _search_documentation_impl(
                 model=embeddings_service.model,
                 model_name=getattr(embeddings_service, "model_name", None),
             )
-            query_embedding = embeddings_service.model.encode([query_text], batch_size=8, show_progress_bar=False)
+            query_embedding = encode_query(embeddings_service.model, [query_text])
             if hasattr(query_embedding, 'tolist'):
                 query_embedding = query_embedding.tolist()
             query_vec = query_embedding[0]

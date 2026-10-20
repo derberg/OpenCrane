@@ -159,7 +159,7 @@ Each result contains the following fields:
 - `Content`: the chunk text, cut at 1,000 characters, with a tip that names the tool that returns the full text
 - `Score`: the score that orders the results. Its scale depends on the search mode and the reranker.
 
-List items of one list, and table rows of one table, appear as one result.
+List items of one list, and table rows of one table, appear as one result. A grouped result shows the same `Source` and `Source Name` fields as other results, followed by the location, the list or table ID, and the matched items.
 
 ### `get_yaml_definition`
 
@@ -201,7 +201,7 @@ get_metadata_schema(chunk_type="list_item")
 
 ### `get_list_members`
 
-The `get_list_members` tool returns all items of a Markdown list in list order. Call it when a search returns `list_item` chunks and you need the whole list. The tool is available only when the index contains `list_item` chunks.
+The `get_list_members` tool returns all items of a Markdown list in list order. Call it when a search returns `list_item` chunks and you need the whole list. The output starts with the `Source` and `Source Name` of the list, like a search result. The tool is available only when the index contains `list_item` chunks.
 
 The following table lists the parameter of `get_list_members`:
 
@@ -217,7 +217,7 @@ get_list_members(list_id="{LIST_ID}")
 
 ### `get_table_members`
 
-The `get_table_members` tool returns all rows of a Markdown table, ordered by `row_index`. Call it when a search returns `table_row` chunks and you need the whole table. The tool is available only when the index contains `table_row` chunks.
+The `get_table_members` tool returns all rows of a Markdown table, ordered by `row_index`. Call it when a search returns `table_row` chunks and you need the whole table. The output starts with the `Source` and `Source Name` of the table, like a search result. The tool is available only when the index contains `table_row` chunks.
 
 The following table lists the parameter of `get_table_members`:
 

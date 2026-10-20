@@ -1,5 +1,7 @@
 Result 1:
 Matched Table (2 of 3 rows):
+Source: https://docs.example.com/gateway/troubleshooting#log-settings
+Source Name: gateway-docs
 Location: Troubleshooting > Log settings
 Table ID: log-settings
 Matched rows:

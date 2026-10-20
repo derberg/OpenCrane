@@ -71,6 +71,23 @@ def _extract_source_url(text: str) -> str | None:
     return match.group(0) if match else None
 
 
+def _source_lines(row: dict, metadata: dict) -> list[str]:
+    """The ``Source:`` and ``Source Name:`` lines that cite where a chunk comes from.
+
+    The source is the page URL (with section anchor) from the metadata, falling
+    back to any URL embedded in the content, then the source file.
+    """
+    source_url = metadata.get("source_url")
+    if not source_url:
+        source_url = _extract_source_url(str(row.get("content", "")))
+    if not source_url:
+        source_url = row.get("source_file", "")
+    lines = [f"Source: {source_url}"]
+    if row.get("source_name"):
+        lines.append(f"Source Name: {row['source_name']}")
+    return lines
+
+
 def _rehydrate_to_yaml(content: dict | str, metadata: dict, chunk_type: str = "") -> str:
     """Convert JSON chunk content to YAML with breadcrumb comments.
 
@@ -426,6 +443,7 @@ def _format_grouped_list_item(result: dict) -> str:
 
     lines = [
         f"Matched List ({len(members)} of {total} items):",
+        *_source_lines(members[0], head_meta),
     ]
     if breadcrumb:
         lines.append(f"Location: {breadcrumb}")
@@ -533,6 +551,7 @@ def _format_grouped_table_row(result: dict) -> str:
 
     lines = [
         f"Matched Table ({len(members)} of {total} rows):",
+        *_source_lines(members[0], head_meta),
     ]
     if breadcrumb:
         lines.append(f"Location: {breadcrumb}")
@@ -1094,7 +1113,6 @@ async def _search_documentation_impl(
                     formatted.append(TextContent(type="text", text=f"Result {i}:\n{grouped_body}"))
                     continue
                 content = result.get("content", "")
-                source_file = result.get("source_file", "")
                 chunk_type = result.get("chunk_type", "")
                 chunk_id = result.get("chunk_id")
                 metadata_json = result.get("metadata_json", "{}")
@@ -1113,20 +1131,8 @@ async def _search_documentation_impl(
                 # Re-hydrate YAML chunks with breadcrumb comments
                 display_content = _rehydrate_to_yaml(content, metadata, chunk_type)
 
-                # Extract source URL (with section anchor) straight from the result's
-                # metadata; fall back to any URL embedded in the content, then the file.
-                source_url = metadata.get("source_url")
-                if not source_url:
-                    source_url = _extract_source_url(str(content))
-                if not source_url:
-                    source_url = source_file
-
-                source_name = result.get("source_name") or ""
-
                 result_text = f"Result {i}:\n"
-                result_text += f"Source: {source_url}\n"
-                if source_name:
-                    result_text += f"Source Name: {source_name}\n"
+                result_text += "".join(f"{line}\n" for line in _source_lines(result, metadata))
                 result_text += f"Type: {chunk_type}\n"
                 result_text += f"Chunk ID: {chunk_id}\n"
                 if token_count is not None:
@@ -1655,6 +1661,7 @@ async def get_list_members(arguments: dict) -> list[TextContent]:
     total = first_meta.get("total_siblings", len(members))
 
     lines = [f"List ({len(members)} of {total} items, style={style})"]
+    lines.extend(_source_lines(members[0], first_meta))
     if breadcrumb:
         lines.append(f"Location: {breadcrumb}")
     lines.append("")
@@ -1683,7 +1690,7 @@ async def get_table_members(arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=f"No table found for table_id={table_id!r}.")]
     first_meta = members[0].get("metadata", {}) or {}
     breadcrumb = first_meta.get("breadcrumb_path", "")
-    lines = []
+    lines = [*_source_lines(members[0], first_meta), ""]
     for m in members:
         content = m.get("content", "")
         # Strip breadcrumb header for readable inline display

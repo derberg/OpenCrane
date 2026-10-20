@@ -1,3 +1,6 @@
+Source: https://docs.example.com/gateway/troubleshooting#log-settings
+Source Name: gateway-docs
+
 The gateway reads these environment variables at startup:
 Variable: GATEWAY_LOG_LEVEL.
 Default: info.

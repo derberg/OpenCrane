@@ -14,6 +14,7 @@ The following table lists the metadata fields that can appear on every chunk typ
 | `schema_type` | string, enum, optional | Schema category of YAML content: `"k8s_crd"`, `"openapi"`, or `"json_schema"`. Only CRD, OpenAPI, and JSON Schema chunks have it. | `"openapi"` |
 | `original_yaml_file` | string, optional | Path of the YAML file that the content came from. Only CRD, OpenAPI, and JSON Schema chunks can have it. The OpenCrane pipeline never sets it. A chunk has it only when your own code creates a tree walker with the `original_yaml_file` argument. | `"crds/smc.yaml"` |
 | `root_identity` | object, optional | Identity of a Kubernetes resource: its `apiVersion`, `kind`, `name`, and `namespace`. Only `yaml_content` chunks of a YAML document with `apiVersion`, `kind`, and `metadata.name` have it. | `{"apiVersion": "v1", "kind": "ConfigMap", "name": "app-config", "namespace": null}` |
+| `details_summary` | string, optional | Title of the `<details>` block that the chunk came from, taken from its `<summary>`. The title is also a heading at the top of the chunk content. Use it to find everything inside one collapsible section. | `"Advanced options"` |
 
 The chunker finds the `source_url` of a chunk by matching the `llms-full.txt` content to the companion `llms.txt` index. For details, see [Document boundaries and page URLs](https://github.com/derberg/OpenCrane/blob/main/docs/chunking.md#document-boundaries-and-page-urls).
 
@@ -37,7 +38,6 @@ The following table lists the metadata fields of `code_snippet` chunks:
 |---|---|---|---|
 | `language` | string | Language identifier of the fenced code block, or `"unknown"` for a block without one. Every code chunk has it. | `"python"` |
 | `is_complete` | boolean | Always `true`. | `true` |
-| `tab_value`, `tab_label` | string, optional | The `value` and `label` attributes of a `<Tab>` component. Only a custom processing strategy sets them. | `"helm"`, `"Helm"` |
 
 ## CRD-Specific Metadata
 

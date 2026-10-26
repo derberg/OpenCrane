@@ -1583,6 +1583,45 @@ _CHUNK_TYPE_SECTION_HEADINGS = {
 }
 
 
+# Metadata keys that the project's chunking strategies declare, with their
+# descriptions. Read once from the project config.
+_declared_keys_cache: dict | None = None
+
+
+def _declared_metadata_keys() -> dict:
+    """Return the metadata keys the configured strategies declare.
+
+    A config that fails to load counts as declaring none, as for extra_tools.
+    """
+    global _declared_keys_cache
+    if _declared_keys_cache is None:
+        keys: dict = {}
+        try:
+            from opencrane.cli import load_config
+
+            config = load_config(None)
+            for strategy in config.chunking_strategies:
+                for key, description in getattr(strategy, "metadata_keys", {}).items():
+                    keys.setdefault(key, description)
+        except Exception as exc:
+            logger.warning(f"Failed to load project config for metadata keys: {exc}; skipping")
+        _declared_keys_cache = keys
+    return _declared_keys_cache
+
+
+def _strategy_metadata_section(schema_content: str) -> str:
+    """List declared keys the packaged schema does not document, or ``""``."""
+    keys = {k: d for k, d in _declared_metadata_keys().items() if f"`{k}`" not in schema_content}
+    if not keys:
+        return ""
+    rows = "\n".join(f"| `{key}` | {description} |" for key, description in keys.items())
+    return (
+        "\n\n## Strategy Metadata\n\n"
+        "The project's chunking strategies add the following metadata fields:\n\n"
+        "| Field | Description |\n|---|---|\n" + rows + "\n"
+    )
+
+
 def _extract_schema_section(full_schema: str, heading_prefix: str) -> str | None:
     """Return the ``## {heading_prefix}…`` section up to the next top-level heading.
 
@@ -1618,8 +1657,10 @@ async def get_metadata_schema(arguments: dict) -> list[TextContent]:
             .read_text(encoding="utf-8")
         )
 
+        strategy_section = _strategy_metadata_section(schema_content)
+
         if not chunk_type:
-            return [TextContent(type="text", text=schema_content)]
+            return [TextContent(type="text", text=schema_content + strategy_section)]
 
         universal = _extract_schema_section(schema_content, "Universal Metadata") or ""
 
@@ -1636,7 +1677,7 @@ async def get_metadata_schema(arguments: dict) -> list[TextContent]:
             body = universal + (
                 f"\n`{chunk_type}` is a custom chunk type. The project's chunking "
                 "strategy or tree walker defines its other metadata fields.\n"
-            )
+            ) + strategy_section
             logger.info(f"   get_metadata_schema: returned universal fields for custom type {chunk_type}")
             return [TextContent(type="text", text=body)]
 
@@ -1644,7 +1685,7 @@ async def get_metadata_schema(arguments: dict) -> list[TextContent]:
         specific = "" if heading == "Universal Metadata" else (
             _extract_schema_section(schema_content, heading) or ""
         )
-        body = universal + "\n" + specific if specific else universal
+        body = (universal + "\n" + specific if specific else universal) + strategy_section
         logger.info(f"   get_metadata_schema: returned {len(body)} chars (filtered to {chunk_type})")
         return [TextContent(type="text", text=body)]
 

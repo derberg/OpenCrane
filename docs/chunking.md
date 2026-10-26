@@ -67,7 +67,7 @@ The following variables control how the prose chunker splits text:
 
 The prose chunker always drops a chunk shorter than 15 characters.
 
-The variables do not apply to the text around a Markdown list. The list chunker emits that text as prose chunks without splitting it at headings. See [Chunking strategies](#chunking-strategies).
+The list chunker passes the text around a Markdown list to the prose chunker, so the variables apply to that text too. A list ends the prose chunk before it, and the text after the list starts a new chunk even without a heading. This applies only to a list whose first marker starts at the beginning of the line. A list indented by one or more spaces stays in the prose chunk and gets no list item chunks. See [Chunking strategies](#chunking-strategies).
 
 > [!CAUTION]
 > Rebuilding deletes the Milvus collection, and searches fail until the rebuild finishes. Before you rebuild, confirm that `MILVUS_COLLECTION` and the connection variables name the collection that you want to replace.

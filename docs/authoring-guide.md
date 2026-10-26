@@ -280,7 +280,7 @@ Avoid the following item. Its key phrase comes late, so the preview shows filler
 
 ### Nest list items only for real hierarchy
 
-Use nesting for real hierarchy, not for visual indentation. The chunk of a nested item holds the first line of each parent item and the first line of the nested item. OpenCrane drops the other lines of a nested item, so keep each nested item to one line. If the nested items are not logical children of the parent, use a paragraph or a separate list instead.
+Use nesting for real hierarchy, not for visual indentation. The chunk of a nested item holds the first line of each parent item and the full text of the nested item, with its extra paragraphs and code blocks. An item nested one level deeper gets its own chunk. If the nested items are not logical children of the parent, use a paragraph or a separate list instead.
 
 The following list is correct:
 

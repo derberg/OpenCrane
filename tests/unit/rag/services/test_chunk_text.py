@@ -38,7 +38,7 @@ class Wrapper(ProcessingStrategy):
 class Inner(ProcessingStrategy):
     """Records the inner block it gets and emits nothing."""
 
-    block_tags = ("details",)
+    block_tags = ("box",)
     seen: list = []
 
     def can_process(self, node) -> bool:
@@ -140,9 +140,9 @@ def test_chunk_text_keeps_parent_headings_and_url(tmp_path):
 
 
 def test_nested_other_tag_found_by_chunk_text(tmp_path):
-    body = "<Wrap>\n\nOuter text.\n\n<details>\ninner body\n</details>\n\n</Wrap>"
+    body = "<Wrap>\n\nOuter text.\n\n<box>\ninner body\n</box>\n\n</Wrap>"
     _chunks(tmp_path, body, _config(Wrapper(), Inner()))
-    assert Inner.seen == ["<details>\ninner body\n</details>"]
+    assert Inner.seen == ["<box>\ninner body\n</box>"]
 
 
 def test_nesting_limit_stops_recursion(tmp_path, caplog):

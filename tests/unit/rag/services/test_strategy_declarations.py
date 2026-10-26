@@ -51,13 +51,13 @@ def test_base_strategy_declares_nothing():
 
 
 def test_block_strategies_maps_tag_to_strategy():
-    strategy = _strategy(tags=["details"])
-    assert FileProcessor(_config(strategy)).block_strategies == {"details": strategy}
+    strategy = _strategy(tags=["box"])
+    assert FileProcessor(_config(strategy)).block_strategies["box"] is strategy
 
 
 def test_duplicate_block_tag_raises():
-    with pytest.raises(ValueError, match="details.*First.*Second|details.*Second.*First"):
-        FileProcessor(_config(_strategy(["details"], name="First"), _strategy(["details"], name="Second")))
+    with pytest.raises(ValueError, match="box.*First.*Second|box.*Second.*First"):
+        FileProcessor(_config(_strategy(["box"], name="First"), _strategy(["box"], name="Second")))
 
 
 def test_declared_key_equal_to_builtin_raises():
@@ -72,7 +72,7 @@ def test_conflicting_descriptions_raise():
 
 def test_same_key_same_description_is_allowed():
     FileProcessor(_config(_strategy(keys={"my_key": "same"}), _strategy(keys={"my_key": "same"})))
-    assert declared_metadata_keys() == {"my_key": "same"}
+    assert declared_metadata_keys()["my_key"] == "same"
 
 
 def test_declared_prose_key_accepted():

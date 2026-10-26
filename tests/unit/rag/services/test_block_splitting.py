@@ -13,8 +13,8 @@ from opencrane.shared.models.chunk import register_metadata_keys
 URL = "https://github.com/org/repo/blob/main/a.md"
 
 
-class DetailsOwner(ProcessingStrategy):
-    block_tags = ("details",)
+class BoxOwner(ProcessingStrategy):
+    block_tags = ("box",)
 
     def can_process(self, node) -> bool:
         return False
@@ -24,7 +24,7 @@ class DetailsOwner(ProcessingStrategy):
 
 
 class Config(OpenCraneConfig):
-    chunking_strategies = [DetailsOwner(), *OpenCraneConfig.chunking_strategies]
+    chunking_strategies = [BoxOwner(), *OpenCraneConfig.chunking_strategies]
 
 
 @pytest.fixture(autouse=True)
@@ -40,30 +40,30 @@ def _items(tmp_path, content, config=None, index=None):
     return list(processor._create_fallback_document(f, index).iterate_items())
 
 
-_BLOCK = "<details>\n<summary>More</summary>\n\nInside text.\n\n```bash\nrun it\n```\n\n</details>"
+_BLOCK = "<box>\n<summary>More</summary>\n\nInside text.\n\n```bash\nrun it\n```\n\n</box>"
 
 
 def test_block_is_one_item_with_tag(tmp_path):
     content = f"### {URL}\n\n# Page\n\nBefore text.\n\n{_BLOCK}\n\nAfter text.\n"
     items = _items(tmp_path, content)
     assert [i.text for i in items] == ["# Page\n\nBefore text.", _BLOCK, "After text."]
-    assert [i.block_tag for i in items] == [None, "details", None]
+    assert [i.block_tag for i in items] == [None, "box", None]
     assert all(i.source_url == URL for i in items)
 
 
 def test_block_kept_whole_with_index(tmp_path):
     idx = LlmsIndex.parse("# D\n## proj\n- [Home](https://x/home)\n")
     items = _items(tmp_path, f"# Home\n\nBefore text.\n\n{_BLOCK}\n\nAfter text.\n", index=idx)
-    assert [i.block_tag for i in items] == [None, "details", None]
+    assert [i.block_tag for i in items] == [None, "box", None]
     assert items[1].text == _BLOCK
     assert items[1].source_url == "https://x/home"
 
 
 def test_unclosed_block_stops_at_page_end(tmp_path):
     idx = LlmsIndex.parse("# D\n## proj\n- [One](https://x/one)\n- [Two](https://x/two)\n")
-    content = "# One\n\nText.\n\n<details>\nopen forever\n\n# Two\n\nSecond page text.\n"
+    content = "# One\n\nText.\n\n<box>\nopen forever\n\n# Two\n\nSecond page text.\n"
     items = _items(tmp_path, content, index=idx)
-    block = [i for i in items if i.block_tag == "details"]
+    block = [i for i in items if i.block_tag == "box"]
     assert len(block) == 1
     assert "# Two" not in block[0].text
     assert any(i.source_url == "https://x/two" and "Second page" in i.text for i in items)
@@ -71,7 +71,7 @@ def test_unclosed_block_stops_at_page_end(tmp_path):
 
 def test_small_file_with_block_is_split(tmp_path):
     items = _items(tmp_path, f"# Page\n\nBefore text.\n\n{_BLOCK}\n")
-    assert [i.block_tag for i in items] == [None, "details"]
+    assert [i.block_tag for i in items] == [None, "box"]
 
 
 def test_small_file_without_block_stays_one_item(tmp_path):
@@ -80,16 +80,16 @@ def test_small_file_without_block_stays_one_item(tmp_path):
 
 
 def test_yaml_inside_block_not_extracted(tmp_path):
-    block = "<details>\n\n```yaml\nkey: value\nother: 1\n```\n\n</details>"
+    block = "<box>\n\n```yaml\nkey: value\nother: 1\n```\n\n</box>"
     items = _items(tmp_path, f"### {URL}\n\n# Page\n\nText.\n\n{block}\n")
-    assert [i.block_tag for i in items] == [None, "details"]
+    assert [i.block_tag for i in items] == [None, "box"]
     assert items[1].text == block
 
 
 def test_headings_inside_block_do_not_leak(tmp_path):
-    content = f"### {URL}\n\n## A\n\nText A.\n\n<details>\n\n### Inner\n\nInner text.\n\n</details>\n\nAfter text.\n"
+    content = f"### {URL}\n\n## A\n\nText A.\n\n<box>\n\n### Inner\n\nInner text.\n\n</box>\n\nAfter text.\n"
     items = _items(tmp_path, content)
-    assert items[1].block_tag == "details"
+    assert items[1].block_tag == "box"
     assert items[1].heading_ancestry == [(2, "A")]
     assert items[2].heading_ancestry == [(2, "A")]
 

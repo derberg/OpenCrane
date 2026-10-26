@@ -4,7 +4,7 @@ This guide describes how to structure Markdown documentation so that OpenCrane p
 
 ## How OpenCrane chunks Markdown
 
-OpenCrane first splits each page at every fenced code block outside a list or a `<Tabs>` block, and keeps each `<Tabs>` block whole. It then chunks each code block, each `<Tabs>` block, and each part of the page between them on its own. Each part keeps the headings that it sits under, so a list or table after a code block gets its full breadcrumb. For the order in which OpenCrane tries the chunking strategies, see [Chunking strategies](chunking.md#chunking-strategies).
+OpenCrane first splits each page at every fenced code block outside a list or a content block, and keeps each content block whole. A content block is a component written as a tag, such as `<details>`, that a chunking strategy declares. OpenCrane declares `<details>` by default, and a project can declare its own components, such as MDX `<Tabs>`. For details, see [Add a strategy for a content block](chunking.md#add-a-strategy-for-a-content-block). OpenCrane then chunks each code block, each content block, and each part of the page between them on its own. Each part keeps the headings that it sits under, so a list or table after a code block gets its full breadcrumb. For the order in which OpenCrane tries the chunking strategies, see [Chunking strategies](chunking.md#chunking-strategies).
 
 How you write the content determines which strategy handles each part and how well each chunk stands alone.
 
@@ -505,6 +505,26 @@ sources:
     branch: main
 ```
 ````
+
+## Collapsible sections
+
+GitHub-flavored Markdown writes a collapsible section as a `<details>` block. OpenCrane chunks the content of the block like any other part of the page, so a list in the block becomes list item chunks and a code block becomes a code chunk.
+
+### Give every `<details>` block a summary
+
+OpenCrane turns the text of the `<summary>` element into a heading on top of the chunks of the block, one level below the heading above the block. Search then finds the content under that title, and each chunk records it in its `details_summary` metadata. Write a summary that names the content, not a summary such as "Click to expand".
+
+````md
+<details>
+<summary>Advanced retry options</summary>
+
+- `max_retries`: number of attempts before the request fails
+- `backoff`: delay between attempts
+
+</details>
+````
+
+Start the opening and closing tags at the beginning of a line. A `<details>` tag in the middle of a sentence does not open a block.
 
 ## Embedded specifications
 

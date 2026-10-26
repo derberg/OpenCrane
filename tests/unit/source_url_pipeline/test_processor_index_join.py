@@ -1,5 +1,7 @@
 """Tests for FileProcessor page-boundary split + llms.txt index join."""
 
+from opencrane.config import OpenCraneConfig
+from opencrane.rag.services.base_strategy import ProcessingStrategy
 from opencrane.rag.services.file_processor import FileProcessor
 from opencrane.rag.services.llms_index import LlmsIndex
 
@@ -99,24 +101,24 @@ def test_processor_index_preserves_code_and_yaml_subsplit(tmp_path):
     assert any("yaml" in c.chunk_type for c in chunks)
 
 
-def test_processor_index_keeps_tabs_html_block_intact(tmp_path):
-    """A <Tabs> HTML block inside a page is emitted as one sub-section and
+def test_processor_index_keeps_declared_block_intact(tmp_path):
+    """A declared block inside a page is emitted as one sub-section and
     carries the page URL from the index."""
     full = (
         "# Home\nIntro prose for the home page here.\n\n"
-        "<Tabs>\n"
-        "  <Tab>First tab body content goes here now.</Tab>\n"
-        "  <Tab>Second tab body content goes here now.</Tab>\n"
-        "</Tabs>\n\n"
-        "More prose after the tabs block content.\n"
+        "<Panel>\n"
+        "  First panel body content goes here now.\n"
+        "  Second panel body content goes here now.\n"
+        "</Panel>\n\n"
+        "More prose after the panel block content.\n"
     )
     idx = LlmsIndex.parse("# D\n## proj\n- [Home](https://x/home)\n")
     f = tmp_path / "llms-full.txt"
     f.write_text(full)
-    chunks = FileProcessor().process_file(f, index=idx)
+    chunks = FileProcessor(_PanelConfig()).process_file(f, index=idx)
     urls = {c.metadata.get("source_url") for c in chunks if c.metadata.get("source_url")}
     assert urls == {"https://x/home"}
-    assert any("<Tabs>" in c.content and "</Tabs>" in c.content for c in chunks)
+    assert any("<Panel>" in c.content and "</Panel>" in c.content for c in chunks)
 
 
 def test_processor_h1_split_ignores_fenced_hash_comments(tmp_path):
@@ -168,28 +170,40 @@ def test_processor_leaves_source_url_a_clean_page_link(tmp_path):
     assert urls == {"https://x/home"}
 
 
-_TABS_PAGE = (
+_BLOCK_PAGE = (
     "# Home\n\n"
     "BEFORE_TABS prose paragraph explains the install.\n\n"
-    "<Tabs>\n"
-    '  <Tab value="npm" label="npm">\n\n'
+    "<Panel>\n\n"
     "```bash\nnpm install thing\n```\n\n"
-    "  </Tab>\n"
-    '  <Tab value="pip" label="pip">\n\n'
     "```bash\npip install thing\n```\n\n"
-    "  </Tab>\n"
-    "</Tabs>\n\n"
+    "</Panel>\n\n"
     "AFTER_TABS prose paragraph explains next steps.\n"
 )
 
 
-def test_processor_index_keeps_prose_around_tabs_block(tmp_path):
-    """Prose before and after a <Tabs> block becomes prose chunks, in page
-    order, with the page URL; the tab code stays code_snippet chunks."""
+class _PanelOwner(ProcessingStrategy):
+    """Declares <Panel> blocks but leaves them to the built-in strategies."""
+
+    block_tags = ("Panel",)
+
+    def can_process(self, node) -> bool:
+        return False
+
+    def process(self, node, source_file):
+        return []  # pragma: no cover - never chosen
+
+
+class _PanelConfig(OpenCraneConfig):
+    chunking_strategies = [_PanelOwner(), *OpenCraneConfig.chunking_strategies]
+
+
+def test_processor_index_keeps_prose_around_declared_block(tmp_path):
+    """Prose before and after a declared block becomes prose chunks, in page
+    order, with the page URL; the code in the block stays code_snippet chunks."""
     idx = LlmsIndex.parse("# D\n## proj\n- [Home](https://x/home)\n")
     f = tmp_path / "llms-full.txt"
-    f.write_text(_TABS_PAGE)
-    chunks = FileProcessor().process_file(f, index=idx)
+    f.write_text(_BLOCK_PAGE)
+    chunks = FileProcessor(_PanelConfig()).process_file(f, index=idx)
 
     assert [c.chunk_type for c in chunks] == [
         "prose", "code_snippet", "code_snippet", "prose",
@@ -202,40 +216,35 @@ def test_processor_index_keeps_prose_around_tabs_block(tmp_path):
     assert {c.metadata.get("source_url") for c in chunks} == {"https://x/home"}
 
 
-_TABS_WITH_TEXT_PAGE = (
+_BLOCK_WITH_TEXT_PAGE = (
     "# Home\n\n"
     "BEFORE_TABS prose paragraph explains the install.\n\n"
-    "<Tabs>\n"
-    '  <Tab value="npm" label="npm">\n\n'
+    "<Panel>\n\n"
     "NPM_EXPLAIN install the package with npm.\n\n"
     "```bash\nnpm install thing\n```\n\n"
-    "  </Tab>\n"
-    '  <Tab value="pip" label="pip">\n\n'
     "PIP_EXPLAIN install the package with pip.\n\n"
     "```bash\npip install thing\n```\n\n"
-    "  </Tab>\n"
-    "</Tabs>\n\n"
+    "</Panel>\n\n"
     "AFTER_TABS prose paragraph explains next steps.\n"
 )
 
 
-def test_processor_index_keeps_text_inside_tabs_block(tmp_path):
-    """The explanation inside each <Tab> becomes a prose chunk next to the
-    tab's code, in page order, with the page URL; nothing is emitted twice."""
+def test_processor_index_keeps_text_inside_declared_block(tmp_path):
+    """The text inside a declared block that its strategy leaves alone becomes
+    prose chunks next to the block's code, in page order, with the page URL;
+    nothing is emitted twice."""
     idx = LlmsIndex.parse("# D\n## proj\n- [Home](https://x/home)\n")
     f = tmp_path / "llms-full.txt"
-    f.write_text(_TABS_WITH_TEXT_PAGE)
-    chunks = FileProcessor().process_file(f, index=idx)
+    f.write_text(_BLOCK_WITH_TEXT_PAGE)
+    chunks = FileProcessor(_PanelConfig()).process_file(f, index=idx)
 
     assert [c.chunk_type for c in chunks] == [
         "prose", "prose", "code_snippet", "prose", "code_snippet", "prose",
     ]
     assert "BEFORE_TABS" in chunks[0].content
     assert "NPM_EXPLAIN" in chunks[1].content
-    assert 'label="npm"' in chunks[1].content
     assert chunks[2].content == "npm install thing"
     assert "PIP_EXPLAIN" in chunks[3].content
-    assert 'label="pip"' in chunks[3].content
     assert chunks[4].content == "pip install thing"
     assert "AFTER_TABS" in chunks[5].content
     assert {c.metadata.get("source_url") for c in chunks} == {"https://x/home"}

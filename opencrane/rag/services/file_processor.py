@@ -11,6 +11,7 @@ from opencrane.rag.services.yaml_chunker import YamlChunkingStrategy
 from opencrane.rag.services.code_chunker import CodeChunkingStrategy
 from opencrane.rag.services.table_chunker import _is_table_separator
 from opencrane.rag.services.llms_index import PAGE_SEPARATOR
+from opencrane.rag.services.utils.blocks import find_blocks
 from opencrane.rag.services.utils.markdown_structure import (
     HeadingTracker,
     list_item_fence_mask,
@@ -98,6 +99,71 @@ def _bracketed_marker(heading_line: str):
         return page.group(1), page.group(2).strip()
     # No page URL follows the tag — fall back to the bracket content.
     return bracket.group(0).strip('[]'), after_bracket
+
+
+class TextItem:
+    """A part of a page handed to the chunking strategies."""
+
+    def __init__(self, text, source_url=None, heading_ancestry=None, starts_page=False, block_tag=None):
+        self.text = text
+        self.node_type = 'text'
+        self.source_url = source_url
+        # Headings in effect where this item starts on its page, as
+        # (level, title) pairs. The list and table strategies seed
+        # their breadcrumb with it, so a part of the page that follows
+        # a code block keeps the headings above that code block.
+        self.heading_ancestry = heading_ancestry or []
+        self.starts_page = starts_page
+        # The declared tag when this item is a whole content block, such as
+        # "details". FileProcessor routes it to the strategy that declares it.
+        self.block_tag = block_tag
+
+
+def split_text_into_parts(text: str, block_tags) -> list:
+    """Split text at fenced code blocks and around declared content blocks.
+
+    Returns ``(text, block_tag)`` pairs in page order. A declared block is one
+    part with its tag, and fences inside it do not split it. Fences inside list
+    items do not split the text either, so a list stays one list. Blank parts
+    are left out.
+    """
+    lines = text.split('\n')
+    item_fence = list_item_fence_mask(lines)
+    spans = {span.start: span for span in find_blocks(lines, block_tags)}
+    parts = []
+    current = []
+    in_code_block = False
+
+    def emit(part, tag=None):
+        if part.strip():
+            parts.append((part, tag))
+
+    n = 0
+    while n < len(lines):
+        line = lines[n]
+        span = spans.get(n)
+        if span is not None:
+            # Flush the prose before the block so it is not merged into it.
+            emit('\n'.join(current).strip())
+            current = []
+            emit('\n'.join(lines[span.start:span.end + 1]).strip(), span.tag)
+            n = span.end + 1
+            continue
+        current.append(line)
+        if line.strip().startswith('```') and not item_fence[n]:
+            if not in_code_block:
+                if len(current) > 1:
+                    emit('\n'.join(current[:-1]).strip())
+                    current = [line]
+                in_code_block = True
+            else:
+                in_code_block = False
+                emit('\n'.join(current))
+                current = []
+        n += 1
+    if current:
+        emit('\n'.join(current).strip())
+    return parts
 
 
 class FileProcessor:
@@ -299,17 +365,8 @@ class FileProcessor:
 
         config = self.config
 
-        class FakeTextItem:
-            def __init__(self, text, source_url=None, heading_ancestry=None, starts_page=False):
-                self.text = text
-                self.node_type = 'text'
-                self.source_url = source_url
-                # Headings in effect where this item starts on its page, as
-                # (level, title) pairs. The list and table strategies seed
-                # their breadcrumb with it, so a part of the page that follows
-                # a code block keeps the headings above that code block.
-                self.heading_ancestry = heading_ancestry or []
-                self.starts_page = starts_page
+        FakeTextItem = TextItem
+        block_tags = list(self.block_strategies)
 
         def _assign_heading_ancestry(items):
             """Give each item the headings seen so far on its page."""
@@ -318,7 +375,10 @@ class FileProcessor:
                 if item.starts_page:
                     tracker = HeadingTracker()
                 item.heading_ancestry = list(tracker.stack)
-                tracker.feed(item.text)
+                # A heading inside a declared block counts for the block only,
+                # not for the parts of the page after it.
+                if item.block_tag is None:
+                    tracker.feed(item.text)
             return items
 
         class FakeDocument:
@@ -352,7 +412,8 @@ class FileProcessor:
 
                 # For large files with mixed content, or files with section markers, split into logical sections
                 # This allows prose, code, and YAML sections to be processed independently
-                if has_section_markers or len(self.content) > 100000 or self.content.count('```') > 100:
+                has_blocks = bool(find_blocks(self.content.split('\n'), block_tags))
+                if has_section_markers or has_blocks or len(self.content) > 100000 or self.content.count('```') > 100:
                     logger.debug(f"File has section markers or is large, splitting into sections")
                     sections = _assign_heading_ancestry(self._split_into_sections(self.content))
                     # Extract YAML blocks as separate items
@@ -382,7 +443,9 @@ class FileProcessor:
                 
                 for section in sections:
                     # If section contains yaml fences, extract them
-                    if '```yaml' in section.text or '```yml' in section.text:
+                    # A declared block reaches its strategy whole, so its
+                    # YAML stays inside it.
+                    if getattr(section, 'block_tag', None) is None and ('```yaml' in section.text or '```yml' in section.text):
                         logger.debug(f"Extracting YAML blocks from section ({len(section.text)} chars)")
                         yaml_blocks = extractor.extract_yaml_blocks(section.text, section.source_url or "")
                         
@@ -510,71 +573,24 @@ class FileProcessor:
                 return pages
 
             def _subsplit_page(self, page_text, page_url):
-                """Sub-split a single page into strategy-ready ``FakeTextItem``s.
+                """Sub-split a single page into strategy-ready ``TextItem``s.
 
-                Preserves the code-fence / ``<Tabs>`` HTML sub-splitting so
+                Splits at code fences and around declared content blocks, so
                 prose/code/yaml strategy dispatch is identical to the legacy
                 path.  Each emitted item carries ``page_url`` (section anchors
                 are added later, per chunk, by the chunker).
                 """
-                sub_sections = []
-                current_section = []
-                in_code_block = False
-                in_html_block = False
-                html_block_depth = 0
-
-                def emit(text):
-                    if text.strip():
-                        sub_sections.append(text)
-
-                lines = page_text.split('\n')
-                # Fences inside list items do not split the page, so the list
-                # stays one list and the code stays inside its item.
-                item_fence = list_item_fence_mask(lines)
-
-                for n, line in enumerate(lines):
-                    stripped_line = line.lstrip()
-                    if stripped_line.startswith('<Tabs>') or stripped_line.startswith('<Tabs '):
-                        if not in_html_block and not in_code_block:
-                            # Flush the prose before the block so it is not
-                            # merged into it (and claimed by the code strategy).
-                            emit('\n'.join(current_section).strip())
-                            current_section = []
-                        in_html_block = True
-                        html_block_depth += line.count('<Tabs')
-
-                    current_section.append(line)
-
-                    if '</Tabs>' in line:
-                        html_block_depth -= line.count('</Tabs>')
-                        if html_block_depth <= 0:
-                            in_html_block = False
-                            html_block_depth = 0
-                            emit('\n'.join(current_section).strip())
-                            current_section = []
-
-                    if line.strip().startswith('```') and not in_html_block and not item_fence[n]:
-                        if not in_code_block:
-                            if len(current_section) > 1:
-                                emit('\n'.join(current_section[:-1]).strip())
-                                current_section = [line]
-                            in_code_block = True
-                        else:
-                            in_code_block = False
-                            emit('\n'.join(current_section))
-                            current_section = []
-
-                if current_section:
-                    emit('\n'.join(current_section).strip())
-
-                items = [FakeTextItem(text, page_url) for text in sub_sections]
+                items = [
+                    FakeTextItem(text, page_url, block_tag=tag)
+                    for text, tag in split_text_into_parts(page_text, block_tags)
+                ]
                 return _assign_heading_ancestry(items)
 
             def _split_into_sections(self, content):
                 """Split content into sections for independent processing.
                 
-                Sections are split on code fence boundaries, but HTML blocks
-                (like <Tabs>) are kept intact and emitted as complete sections.
+                Sections are split on code fence boundaries, but declared
+                content blocks are kept intact and emitted as complete sections.
                 URL markers (### https://github.com/...) track the current source file.
                 
                 Args:
@@ -605,16 +621,16 @@ class FileProcessor:
                             break
                 
                 in_code_block = False
-                in_html_block = False
-                html_block_depth = 0
+                # The declared block being collected, as (last line, tag).
+                open_block = None
                 current_heading = None
                 # True until the first item of a new page (a marker with a new
                 # URL) is emitted, so heading ancestry restarts on each page.
                 page_start = False
 
-                def _new_item(section_text):
+                def _new_item(section_text, block_tag=None):
                     nonlocal page_start
-                    item = FakeTextItem(section_text, current_source_url, starts_page=page_start)
+                    item = FakeTextItem(section_text, current_source_url, starts_page=page_start, block_tag=block_tag)
                     page_start = False
                     return item
 
@@ -633,6 +649,7 @@ class FileProcessor:
                 # Fences inside list items do not split the page, so the list
                 # stays one list and the code stays inside its item.
                 item_fence = list_item_fence_mask(lines)
+                spans = {span.start: span for span in find_blocks(lines, block_tags)}
 
                 for n, line in enumerate(lines):
                     stripped = line.strip()
@@ -640,7 +657,7 @@ class FileProcessor:
                     # Split on URL marker lines BEFORE processing.
                     # Matches both bare GitHub URLs (### https://github.com/...)
                     # and bracketed docs URLs (# [https://...] Title).
-                    if not in_html_block and not in_code_block and not item_fence[n]:
+                    if open_block is None and not in_code_block and not item_fence[n]:
                         # Markers update the current source URL and start a new
                         # section. A bracketed marker (# [base] <page-url> ...)
                         # uses the page URL after the bracket, not the base tag.
@@ -695,44 +712,33 @@ class FileProcessor:
                                     current_section = []  # pragma: no cover
                             continue
                     
-                    # Track HTML block state (Tabs, Tab, etc)
-                    # Only detect actual HTML tags (line starts with <Tabs> after whitespace)
-                    # Ignore inline mentions like "use the `<Tabs>` tag"
-                    stripped_line = line.lstrip()
-                    if stripped_line.startswith('<Tabs>') or stripped_line.startswith('<Tabs '):
-                        if not in_html_block and not in_code_block:
-                            # Flush the prose before the block so it is not
-                            # merged into it (and claimed by the code strategy).
-                            section_text = '\n'.join(current_section).strip()
-                            if section_text:
-                                sections.append(_emit(section_text))
-                            current_section = []
-                        in_html_block = True
-                        html_block_depth += line.count('<Tabs')
-                    
+                    span = spans.get(n)
+                    if span is not None and open_block is None and not in_code_block:
+                        # Flush the prose before the block so it is not
+                        # merged into it.
+                        section_text = '\n'.join(current_section).strip()
+                        if section_text:
+                            sections.append(_emit(section_text))
+                        current_section = []
+                        open_block = (span.end, span.tag)
+
                     current_section.append(line)
+                    if open_block is not None:
+                        if n == open_block[0]:
+                            # Emit the complete block as one section
+                            sections.append(_new_item('\n'.join(current_section).strip(), open_block[1]))
+                            current_section = []
+                            open_block = None
+                        continue
                     if (
                         not in_code_block
-                        and not in_html_block
                         and not item_fence[n]
                         and _HEADING_PREFIX_RE.match(stripped)
                     ):
                         current_heading = line
 
-                    if '</Tabs>' in line:
-                        html_block_depth -= line.count('</Tabs>')
-                        if html_block_depth <= 0:
-                            in_html_block = False
-                            html_block_depth = 0
-                            # Emit the complete HTML block as a section
-                            if current_section:
-                                section_text = '\n'.join(current_section).strip()
-                                if section_text:
-                                    sections.append(_emit(section_text))
-                                current_section = []
-
-                    # Track code block state - but don't split if inside HTML block
-                    if line.strip().startswith('```') and not in_html_block and not item_fence[n]:
+                    # Track code block state
+                    if line.strip().startswith('```') and not item_fence[n]:
                         if not in_code_block:
                             # Starting a code block - save accumulated prose before it
                             if len(current_section) > 1:  # More than just the ``` line

@@ -3,7 +3,25 @@
 import tempfile
 from unittest.mock import MagicMock, patch, Mock
 from pathlib import Path
+from opencrane.config import OpenCraneConfig
+from opencrane.rag.services.base_strategy import ProcessingStrategy
 from opencrane.rag.services.file_processor import FileProcessor
+
+
+class _TabsOwner(ProcessingStrategy):
+    """Declares <Tabs> blocks so the splitter keeps them whole."""
+
+    block_tags = ("Tabs",)
+
+    def can_process(self, node) -> bool:
+        return False
+
+    def process(self, node, source_file):
+        return []  # pragma: no cover - never chosen
+
+
+class _TabsConfig(OpenCraneConfig):
+    chunking_strategies = [_TabsOwner(), *OpenCraneConfig.chunking_strategies]
 
 
 class TestFileProcessor:
@@ -571,8 +589,8 @@ class TestFileProcessorModuleHelpers:
 class TestFallbackDocumentIteration:
     """Cover branches of the fallback FakeDocument.iterate_items / split logic."""
 
-    def _doc(self, content, tmp_path):
-        processor = FileProcessor()
+    def _doc(self, content, tmp_path, config=None):
+        processor = FileProcessor(config)
         f = tmp_path / "doc.txt"
         f.write_text(content, encoding="utf-8")
         return processor._create_fallback_document(f)
@@ -628,8 +646,8 @@ class TestFallbackDocumentIteration:
         assert len(result) == 1
         assert result[0].text == Section.text
 
-    def test_split_sections_with_html_tabs_block(self, tmp_path):
-        """A <Tabs> HTML block is tracked and emitted as a complete section (lines 394-409)."""
+    def test_split_sections_with_declared_block(self, tmp_path):
+        """A declared block is tracked and emitted as a complete section."""
         content = (
             "### https://github.com/org/repo/blob/main/a.md\n\n"
             "# Intro\n\nSome intro prose content.\n\n"
@@ -639,14 +657,14 @@ class TestFallbackDocumentIteration:
             "</Tabs>\n\n"
             "More prose after the tabs block.\n"
         )
-        doc = self._doc(content, tmp_path)
+        doc = self._doc(content, tmp_path, _TabsConfig())
         sections = doc._split_into_sections(content)
         # The complete <Tabs>...</Tabs> block should appear intact in one section.
         assert any("<Tabs>" in s.text and "</Tabs>" in s.text for s in sections)
 
-    def test_split_sections_flushes_prose_before_tabs_block(self, tmp_path):
-        """Prose before a <Tabs> block is its own section, not merged into the
-        block (where the code strategy would claim and drop it)."""
+    def test_split_sections_flushes_prose_before_declared_block(self, tmp_path):
+        """Prose before a declared block is its own section, not merged into
+        the block."""
         url = "https://github.com/org/repo/blob/main/a.md"
         content = (
             f"### {url}\n\n"
@@ -656,7 +674,7 @@ class TestFallbackDocumentIteration:
             "</Tabs>\n\n"
             "AFTER_TABS prose content.\n"
         )
-        doc = self._doc(content, tmp_path)
+        doc = self._doc(content, tmp_path, _TabsConfig())
         sections = doc._split_into_sections(content)
         texts = [s.text for s in sections]
         assert texts == [
@@ -666,14 +684,14 @@ class TestFallbackDocumentIteration:
         ]
         assert all(s.source_url == url for s in sections)
 
-    def test_split_sections_nested_tabs_stay_one_section(self, tmp_path):
-        """An inner <Tabs> inside an open block does not split the outer block."""
+    def test_split_sections_nested_declared_block_stays_one_section(self, tmp_path):
+        """An inner block of the same declared tag does not split the outer block."""
         content = (
             "### https://github.com/org/repo/blob/main/a.md\n\n"
             "Intro prose.\n\n"
             "<Tabs>\n  <Tab>\n  <Tabs>\n    <Tab>inner</Tab>\n  </Tabs>\n  </Tab>\n</Tabs>\n"
         )
-        doc = self._doc(content, tmp_path)
+        doc = self._doc(content, tmp_path, _TabsConfig())
         sections = doc._split_into_sections(content)
         assert [s.text for s in sections] == [
             "Intro prose.",

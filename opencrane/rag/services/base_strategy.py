@@ -19,6 +19,22 @@ class ProcessingStrategy(ABC):
     # get_metadata_schema lists them for agents.
     metadata_keys: Dict[str, str] = {}
 
+    def chunk_text(self, text: str, node, source_file: Path) -> List[Chunk]:
+        """Chunk ``text`` from inside ``node`` the way OpenCrane chunks a page.
+
+        A strategy that owns a block calls this with text it cut out of the
+        block, such as the body of one tab. The text goes through every
+        configured strategy, so lists, tables and code inside it get their
+        own chunks, and they keep the headings above the block.
+
+        Raises:
+            RuntimeError: when ``node`` does not come from FileProcessor.
+        """
+        run = getattr(node, "chunk_text", None)
+        if run is None:
+            raise RuntimeError("chunk_text needs a node that FileProcessor created")
+        return run(text, source_file)
+
     @abstractmethod
     def can_process(self, node) -> bool:
         """Check if this strategy can process the given node.

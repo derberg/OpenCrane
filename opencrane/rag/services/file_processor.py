@@ -2,6 +2,8 @@
 
 import logging
 import re
+from functools import partial
+from itertools import chain
 from pathlib import Path
 from typing import List
 from docling.exceptions import ConversionError
@@ -19,10 +21,15 @@ from opencrane.rag.services.utils.markdown_structure import (
 from opencrane.shared.models.chunk import (
     BUILTIN_PROSE_METADATA_KEYS,
     Chunk,
+    declared_metadata_keys,
     register_metadata_keys,
 )
 
 logger = logging.getLogger(__name__)
+
+# How deep chunk_text calls may nest. Deeper text is chunked without block
+# routing, so a strategy that sends its whole block back cannot loop forever.
+MAX_BLOCK_NESTING = 8
 
 _HEADING_PREFIX_RE = re.compile(r'^#{1,6}\s+')
 _LEADING_URL_RE = re.compile(r'(https?://[^\s\]]+)(.*)$')
@@ -166,6 +173,58 @@ def split_text_into_parts(text: str, block_tags) -> list:
     return parts
 
 
+def extract_yaml_items(sections):
+    """Extract YAML blocks from markdown sections.
+    
+    For sections that contain fenced YAML blocks, extract them
+    as separate items so they can be processed by YAML strategies.
+    This ensures tree walkers (CRD/OpenAPI) are invoked correctly.
+    """
+    from opencrane.rag.services.chunking_strategies.yaml_extractor import YamlExtractor
+    
+    result = []
+    extractor = YamlExtractor()
+    
+    for section in sections:
+        # If section contains yaml fences, extract them
+        # A declared block reaches its strategy whole, so its
+        # YAML stays inside it.
+        if getattr(section, 'block_tag', None) is None and ('```yaml' in section.text or '```yml' in section.text):
+            logger.debug(f"Extracting YAML blocks from section ({len(section.text)} chars)")
+            yaml_blocks = extractor.extract_yaml_blocks(section.text, section.source_url or "")
+            
+            if yaml_blocks:
+                logger.debug(f"Extracted {len(yaml_blocks)} YAML blocks")
+                # Create separate items for each YAML block
+                for block in yaml_blocks:
+                    # Wrap in fenced block so YamlChunkingStrategy can process it
+                    yaml_text = f"```yaml\n{block.yaml_content}\n```"
+                    result.append(TextItem(yaml_text, block.source_url, section.heading_ancestry))
+
+                # Keep the surrounding prose, with the extracted
+                # fences dropped by their line spans — each YAML
+                # block must be owned by exactly one item, or
+                # code-heavy sections get their YAML chunked a
+                # second time by the code strategy.
+                lines = section.text.split('\n')
+                owned = {
+                    n
+                    for block in yaml_blocks
+                    for n in range(block.line_start - 1, block.line_end)
+                }
+                remainder = '\n'.join(
+                    line for n, line in enumerate(lines) if n not in owned
+                )
+                if remainder.strip():
+                    result.append(TextItem(remainder, section.source_url, section.heading_ancestry))
+            else:
+                result.append(section)
+        else:
+            result.append(section)
+    
+    return result
+
+
 class FileProcessor:
     """Orchestrates chunking of files using appropriate strategies."""
 
@@ -196,6 +255,86 @@ class FileProcessor:
         ]
         self.block_strategies = self._collect_block_strategies(self.strategies)
         register_metadata_keys(self._collect_metadata_keys(self.strategies))
+
+    def _chunk_items(self, items, source_file, depth: int):
+        """Run the strategies on each item and return ``(chunks, items processed)``.
+
+        An item cut from a declared block goes to the strategy that declares
+        its tag first. Every other item, and a block whose strategy returns
+        nothing, goes to the first strategy that accepts it and returns chunks.
+        Above ``MAX_BLOCK_NESTING``, block routing and the strategies that
+        declare block tags are skipped.
+        """
+        within_limit = depth <= MAX_BLOCK_NESTING
+        strategies = [s for s in self.strategies if within_limit or not s.block_tags]
+        chunks = []
+        nodes_processed = 0
+        for item in items:
+            if isinstance(item, TextItem):
+                item.chunk_text = partial(self._chunk_text, parent=item, depth=depth + 1)
+            tag = getattr(item, 'block_tag', None)
+            owner = self.block_strategies.get(tag) if (tag and within_limit) else None
+            # A generator, so can_process runs only until a strategy wins.
+            candidates = chain(
+                [owner] if owner else [],
+                (s for s in strategies if s is not owner and s.can_process(item)),
+            )
+            for strategy in candidates:
+                try:
+                    node_chunks = strategy.process(item, source_file)
+                except Exception as e:  # pragma: no cover
+                    logger.error(f"Error processing node with {strategy.__class__.__name__}: {e}")
+                    continue  # Try next strategy
+                self._check_prose_metadata(strategy, node_chunks)
+                if tag:
+                    for chunk in node_chunks:
+                        chunk._in_block = True
+                chunks.extend(node_chunks)
+                logger.debug(f"Strategy {strategy.__class__.__name__} processed node, added {len(node_chunks)} chunks")
+                nodes_processed += 1
+                if node_chunks:
+                    break  # First matching strategy wins
+        return chunks, nodes_processed
+
+    def _chunk_text(self, text: str, source_file, parent, depth: int) -> List[Chunk]:
+        """Chunk text from inside a block the way a part of a page is chunked.
+
+        The text is split at code fences and around declared blocks, its YAML
+        blocks are pulled out, and each part goes through the strategies. The
+        parts keep the headings above ``parent`` and its source URL.
+        """
+        if depth > MAX_BLOCK_NESTING:
+            logger.warning(
+                f"Block '{parent.block_tag}' nests deeper than {MAX_BLOCK_NESTING} levels; "
+                "chunking its text without block strategies"
+            )
+        items = [
+            TextItem(part, parent.source_url, block_tag=tag)
+            for part, tag in split_text_into_parts(text, self.block_strategies)
+        ]
+        tracker = HeadingTracker(list(parent.heading_ancestry))
+        for item in items:
+            item.heading_ancestry = list(tracker.stack)
+            if item.block_tag is None:
+                tracker.feed(item.text)
+        chunks, _ = self._chunk_items(extract_yaml_items(items), source_file, depth)
+        for chunk in chunks:
+            chunk._in_block = True
+        return chunks
+
+    @staticmethod
+    def _check_prose_metadata(strategy, chunks) -> None:
+        """Raise when a strategy left an undeclared metadata key on a prose chunk."""
+        allowed = BUILTIN_PROSE_METADATA_KEYS | declared_metadata_keys().keys()
+        for chunk in chunks:
+            if chunk.chunk_type != "prose":
+                continue
+            for key in chunk.metadata:
+                if key not in allowed:
+                    raise ValueError(
+                        f"{type(strategy).__name__} added metadata key '{key}' to a prose "
+                        "chunk without declaring it in metadata_keys"
+                    )
 
     @staticmethod
     def _collect_block_strategies(strategies) -> dict:
@@ -265,41 +404,14 @@ class FileProcessor:
                 logger.debug(f"Docling conversion failed for {file_path}: {e}. Using fallback text processing.")
                 document = self._create_fallback_document(file_path, index)
 
-        chunks = []
-        nodes_processed = 0
-        
-        # Process each node with appropriate strategy
-        for node in document.iterate_items():
-            for strategy in self.strategies:
-                if strategy.can_process(node):
-                    try:
-                        node_chunks = strategy.process(node, display_path)
-                        chunks.extend(node_chunks)
-                        logger.debug(f"Strategy {strategy.__class__.__name__} processed node, added {len(node_chunks)} chunks")
-                        nodes_processed += 1
-                        if node_chunks:
-                            break  # First matching strategy wins
-                    except Exception as e:  # pragma: no cover
-                        logger.error(f"Error processing node with {strategy.__class__.__name__}: {e}")
-                        continue  # Try next strategy
+        chunks, nodes_processed = self._chunk_items(document.iterate_items(), display_path, 0)
 
         # If no nodes were processed successfully, fall back to plain text processing
         if nodes_processed == 0 and file_path.exists():
             logger.warning(f"FALLBACK: No Docling nodes processed, falling back to plain text processing for {file_path}")
             fallback_doc = self._create_fallback_document(file_path, index)
             logger.warning(f"FALLBACK: Created fallback document with {len(list(fallback_doc.iterate_items()))} items")
-            for node in fallback_doc.iterate_items():
-                for strategy in self.strategies:
-                    if strategy.can_process(node):
-                        try:
-                            node_chunks = strategy.process(node, display_path)
-                            chunks.extend(node_chunks)
-                            logger.debug(f"Fallback strategy {strategy.__class__.__name__} processed node, added {len(node_chunks)} chunks")
-                            if node_chunks:
-                                break
-                        except Exception as e:  # pragma: no cover
-                            logger.error(f"Error in fallback processing with {strategy.__class__.__name__}: {e}")
-                            continue
+            chunks.extend(self._chunk_items(fallback_doc.iterate_items(), display_path, 0)[0])
 
         logger.info(f"Processed {len(chunks)} chunks from {file_path}")
         return chunks
@@ -430,55 +542,7 @@ class FileProcessor:
                         return [FakeTextItem(self.content, None)]
             
             def _extract_yaml_from_sections(self, sections):
-                """Extract YAML blocks from markdown sections.
-                
-                For sections that contain fenced YAML blocks, extract them
-                as separate items so they can be processed by YAML strategies.
-                This ensures tree walkers (CRD/OpenAPI) are invoked correctly.
-                """
-                from opencrane.rag.services.chunking_strategies.yaml_extractor import YamlExtractor
-                
-                result = []
-                extractor = YamlExtractor()
-                
-                for section in sections:
-                    # If section contains yaml fences, extract them
-                    # A declared block reaches its strategy whole, so its
-                    # YAML stays inside it.
-                    if getattr(section, 'block_tag', None) is None and ('```yaml' in section.text or '```yml' in section.text):
-                        logger.debug(f"Extracting YAML blocks from section ({len(section.text)} chars)")
-                        yaml_blocks = extractor.extract_yaml_blocks(section.text, section.source_url or "")
-                        
-                        if yaml_blocks:
-                            logger.debug(f"Extracted {len(yaml_blocks)} YAML blocks")
-                            # Create separate items for each YAML block
-                            for block in yaml_blocks:
-                                # Wrap in fenced block so YamlChunkingStrategy can process it
-                                yaml_text = f"```yaml\n{block.yaml_content}\n```"
-                                result.append(FakeTextItem(yaml_text, block.source_url, section.heading_ancestry))
-
-                            # Keep the surrounding prose, with the extracted
-                            # fences dropped by their line spans — each YAML
-                            # block must be owned by exactly one item, or
-                            # code-heavy sections get their YAML chunked a
-                            # second time by the code strategy.
-                            lines = section.text.split('\n')
-                            owned = {
-                                n
-                                for block in yaml_blocks
-                                for n in range(block.line_start - 1, block.line_end)
-                            }
-                            remainder = '\n'.join(
-                                line for n, line in enumerate(lines) if n not in owned
-                            )
-                            if remainder.strip():
-                                result.append(FakeTextItem(remainder, section.source_url, section.heading_ancestry))
-                        else:
-                            result.append(section)
-                    else:
-                        result.append(section)
-                
-                return result
+                return extract_yaml_items(sections)
 
             def _split_into_pages(self, content, index):
                 """Assign page URLs by joining clean content to the llms.txt index.

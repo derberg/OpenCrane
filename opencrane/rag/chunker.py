@@ -193,6 +193,10 @@ def _annotate_prose_navigation(chunks, config) -> None:
     in the document, counted from 1 again whenever ``source_url`` changes, so
     get_section can place lists and tables between the prose of a section.
 
+    Headings in chunks from a declared content block (``chunk._in_block``)
+    count for the block only: after the block, the heading stack is the one
+    from before it.
+
     ``breadcrumb_path`` is left untouched. No-op when ``config.prose_navigation``
     is off.
     """
@@ -206,6 +210,10 @@ def _annotate_prose_navigation(chunks, config) -> None:
     order = 0
     # Lists and tables above the first prose chunk of the page, which they link to.
     waiting: list = []
+    # The heading stack from before a run of chunks from a declared block. The
+    # block's headings count for the block only, so the stack goes back to
+    # this after the block.
+    before_block = None
     for chunk in chunks:
         if chunk.chunk_type not in _ORDERED_CHUNK_TYPES or not isinstance(chunk.content, str):
             continue
@@ -230,6 +238,12 @@ def _annotate_prose_navigation(chunks, config) -> None:
                 # The lists and tables of a page without prose stay unlinked.
                 waiting = []
             page, stack, previous, position = url, [], None, 0
+            before_block = None
+
+        if chunk._in_block and before_block is None:
+            before_block = list(stack)
+        elif not chunk._in_block and before_block is not None:
+            stack, before_block = before_block, None
 
         for level, title in preceding:
             _push_heading(stack, level, title, None)

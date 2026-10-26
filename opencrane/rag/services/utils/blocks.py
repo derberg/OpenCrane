@@ -61,20 +61,32 @@ def find_blocks(
     A block closes at the line that closes its tag, counting nesting of the
     same tag. Lines inside a code fence outside a block never open one, and a
     closing tag inside a fence within a block does not count. A block that
-    never closes ends at the line before the next index in ``boundaries``,
-    such as the start of the next page, or at the last line.
+    never closes ends at the line before the first index in ``boundaries``
+    after it, such as the start of the next page, or at the last line. A
+    boundary inside a block that does close has no effect.
     """
     tags = list(tags)
     spans: List[BlockSpan] = []
-    if not tags:
-        return spans
+    begin = 0
+    while tags and begin < len(lines):
+        found, unclosed = _scan(lines, tags, begin)
+        spans.extend(found)
+        if unclosed is None:
+            break
+        cut = min((b for b in boundaries if b > unclosed), default=len(lines))
+        spans.append(BlockSpan(unclosed, cut - 1, _opening_tag(lines[unclosed], tags)))
+        begin = cut
+    return spans
+
+
+def _scan(lines: List[str], tags: List[str], begin: int):
+    """Scan from ``begin``; return the closed blocks and the start of an unclosed one."""
+    spans: List[BlockSpan] = []
     fence: Optional[str] = None
     block_tag: Optional[str] = None
     start = depth = 0
-    for i, line in enumerate(lines):
-        if block_tag is not None and i in boundaries:
-            spans.append(BlockSpan(start, i - 1, block_tag))
-            block_tag, fence = None, None
+    for i in range(begin, len(lines)):
+        line = lines[i]
         if fence is not None:
             if _closes_fence(line, fence):
                 fence = None
@@ -92,6 +104,4 @@ def find_blocks(
         if depth <= 0:
             spans.append(BlockSpan(start, i, block_tag))
             block_tag = None
-    if block_tag is not None:
-        spans.append(BlockSpan(start, len(lines) - 1, block_tag))
-    return spans
+    return spans, (start if block_tag is not None else None)

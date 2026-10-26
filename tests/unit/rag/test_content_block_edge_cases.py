@@ -173,3 +173,8 @@ def test_heading_only_start_of_a_part_does_not_leak_after_block(tmp_path):
     chunks = _process(tmp_path, text, TwinConfig())
     after = [c for c in chunks if "Text after the block" in c.content][0]
     assert after.metadata["heading_path"] == "Install"
+
+
+def test_boundary_does_not_cut_a_block_that_closes():
+    lines = ["<details>", "#### https://github.com/o/r/blob/main/a.md CLI", "text", "</details>", "after"]
+    assert find_blocks(lines, ["details"], boundaries={1}) == [BlockSpan(0, 3, "details")]

@@ -83,6 +83,9 @@ class Chunk(BaseModel):
     # right before this chunk. Not serialized; read by the chunker's prose
     # navigation pass so heading ancestry includes them.
     _preceding_headings: list = PrivateAttr(default_factory=list)
+    # Headings right above the declared block this chunk opens. The prose
+    # navigation pass applies them before the block, so they outlast it.
+    _outer_headings: list = PrivateAttr(default_factory=list)
     # True when the chunk comes from inside a declared content block. Not
     # serialized; the prose navigation pass keeps the block's headings out of
     # the sections that follow the block.

@@ -249,11 +249,17 @@ def _annotate_prose_navigation(chunks, config) -> None:
             (len(m.group(1)), m.group(2).strip())
             for m in map(_NAV_HEADING_RE.match, chunk._preceding_headings) if m
         ]
+        # Headings right above a block, carried by its first chunk. They sit
+        # outside the block, so they stay after the block ends.
+        outer = [
+            (len(m.group(1)), m.group(2).strip())
+            for m in map(_NAV_HEADING_RE.match, chunk._outer_headings) if m
+        ]
         opens, headings = _content_headings(chunk.content) if is_prose else (False, [])
         # An H1 is a page title, so it starts a new page even when the URL does
         # not change (pages missing from llms.txt have none, and a synthesized
         # index repeats the source's docs_url for every page).
-        starts_page = any(level == 1 for level, _ in preceding) or (opens and headings[0][0] == 1)
+        starts_page = any(level == 1 for level, _ in outer + preceding) or (opens and headings[0][0] == 1)
         if url != page or starts_page:
             if url != page:
                 # The lists and tables of a page without prose stay unlinked.
@@ -268,13 +274,16 @@ def _annotate_prose_navigation(chunks, config) -> None:
             # headings of the part before it.
             stack = _align_stack(stack, chunk._part_ancestry)
 
-        for level, title in preceding:
+        for level, title in outer:
             _push_heading(stack, level, title, None)
 
         if chunk._in_block:
             if before_block is None:
                 before_block = list(stack)
             block_part = chunk._block_part
+
+        for level, title in preceding:
+            _push_heading(stack, level, title, None)
 
         if not is_prose:
             parent = _member_parent(stack, metadata.get("breadcrumb_path") or "")

@@ -331,7 +331,10 @@ class FileProcessor:
                     break  # First matching strategy wins
             if len(chunks) > first_new:
                 first = chunks[first_new]
-                first._preceding_headings = pending_headings + first._preceding_headings
+                if tag:
+                    first._outer_headings = pending_headings + first._outer_headings
+                else:
+                    first._preceding_headings = pending_headings + first._preceding_headings
                 pending_headings = []
             elif tag is None:
                 pending_headings += _heading_lines(getattr(item, 'text', ''))

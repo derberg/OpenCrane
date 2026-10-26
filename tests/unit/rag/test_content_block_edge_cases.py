@@ -162,3 +162,14 @@ def test_headings_do_not_leak_between_parts(tmp_path):
     chunks = _process(tmp_path, text, TwinConfig())
     second = [c for c in chunks if "Second part text" in c.content][0]
     assert second.metadata["heading_path"] == "Install"
+
+
+def test_heading_only_start_of_a_part_does_not_leak_after_block(tmp_path):
+    text = (
+        f"### {URL_A}\n\n## Install\n\nInstall text for the section.\n\n"
+        "<Twin>\n### First part\n\n- step one\n- step two\n<split/>\n### Second part\n\n- step three\n</Twin>\n\n"
+        "Text after the block belongs to Install.\n"
+    )
+    chunks = _process(tmp_path, text, TwinConfig())
+    after = [c for c in chunks if "Text after the block" in c.content][0]
+    assert after.metadata["heading_path"] == "Install"

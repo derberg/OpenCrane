@@ -8,7 +8,7 @@
   },
   {
     "chunk_id": "$item_ca",
-    "content": "# Prerequisites\nCA certificate is available",
+    "content": "# Prerequisites\nBefore starting, verify:\nCA certificate is available",
     "source_file": "tests/fixtures/lists/06_multiple_same_section.md",
     "chunk_type": "list_item",
     "metadata": {
@@ -25,7 +25,7 @@
   },
   {
     "chunk_id": "$item_key",
-    "content": "# Prerequisites\nPrivate key is created",
+    "content": "# Prerequisites\nBefore starting, verify:\nPrivate key is created",
     "source_file": "tests/fixtures/lists/06_multiple_same_section.md",
     "chunk_type": "list_item",
     "metadata": {
@@ -42,7 +42,7 @@
   },
   {
     "chunk_id": "$item_base",
-    "content": "# Prerequisites\n1. Install the base chart.",
+    "content": "# Prerequisites\nThen install:\n1. Install the base chart.",
     "source_file": "tests/fixtures/lists/06_multiple_same_section.md",
     "chunk_type": "list_item",
     "metadata": {
@@ -59,7 +59,7 @@
   },
   {
     "chunk_id": "$item_support",
-    "content": "# Prerequisites\n2. Install the support chart.",
+    "content": "# Prerequisites\nThen install:\n2. Install the support chart.",
     "source_file": "tests/fixtures/lists/06_multiple_same_section.md",
     "chunk_type": "list_item",
     "metadata": {

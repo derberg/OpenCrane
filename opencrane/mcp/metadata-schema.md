@@ -38,6 +38,8 @@ The following table lists the metadata fields of `code_snippet` chunks:
 |---|---|---|---|
 | `language` | string | Language identifier of the fenced code block, or `"unknown"` for a block without one. Every code chunk has it. | `"python"` |
 | `is_complete` | boolean | Always `true`. | `true` |
+| `breadcrumb_path` | string, optional | Headings above the code block, joined by ` > `. The chunk content starts with the same breadcrumb as a `#` line. | `"Install > CLI"` |
+| `code_caption` | string, optional | The sentence right before the code block that introduces it, when that sentence ends with a colon. The chunk content repeats it under the breadcrumb, above the fenced code. | `"Run this command:"` |
 
 ## CRD-Specific Metadata
 
@@ -122,6 +124,7 @@ The following table lists the metadata fields of `list_item` chunks:
 | `sibling_previews` | array of strings | Short previews of the other items, in list order. For the length and the cap, see [Previews of list items](#previews-of-list-items). | `["1. Back up the database", "3. Restart the server"]` |
 | `parent_item_id` | `chunk_id` string, or null | For a nested item, the `chunk_id` of the item that contains it. The value is `null` at the top level. The parent item belongs to the outer list, so its `list_id` differs from the `list_id` of this item. | `null` |
 | `depth` | integer | Nesting level of the item: `0` for a top-level item, `1` for the first nested level, and so on. | `0` |
+| `list_caption` | string, optional | The sentence right before the list that introduces it, when that sentence ends with a colon. The chunk content repeats it under the breadcrumb, so every item shows what the list is about. | `"Prerequisites:"` |
 
 ### Previews of list items
 

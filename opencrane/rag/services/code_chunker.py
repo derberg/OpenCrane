@@ -5,7 +5,11 @@ import yaml
 from typing import List, Dict, Any
 from pathlib import Path
 from opencrane.rag.services.base_strategy import ProcessingStrategy
-from opencrane.rag.services.utils.markdown_structure import has_fence_outside_list_items
+from opencrane.rag.services.utils.markdown_structure import (
+    HeadingTracker,
+    has_fence_outside_list_items,
+    lead_in_line,
+)
 from opencrane.shared.models.chunk import Chunk
 from opencrane.shared.utils.token_counter import get_token_count
 from opencrane.shared.utils.metadata_helpers import is_openapi_spec, extract_openapi_metadata, extract_crd_identity
@@ -98,17 +102,28 @@ class CodeChunkingStrategy(ProcessingStrategy):
         else:
             # Walk the node in reading order: each code block becomes code
             # chunks and the text between code blocks becomes prose chunks.
+            # A code chunk carries the headings above it and the sentence
+            # that introduces it, such as "Run this command:".
+            tracker = HeadingTracker(list(getattr(node, 'heading_ancestry', None) or []))
+            lead_in = getattr(node, 'lead_in', None)
             for kind, language, content in segments:
                 if kind == 'code':
-                    self._add_code(chunks, content, language, source_file, node_source_url)
+                    breadcrumb = " > ".join(title for _, title in tracker.stack)
+                    self._add_code(chunks, content, language, source_file, node_source_url, breadcrumb, lead_in)
+                    lead_in = None
                 else:
                     chunks.extend(self._prose_chunks(content, source_file, node_source_url))
+                    tracker.feed(content)
+                    lead_in = lead_in_line(content)
 
         return chunks
 
-    def _add_code(self, chunks: List[Chunk], code: str, language: str, source_file: Path, source_url: str | None) -> None:
+    def _add_code(
+        self, chunks: List[Chunk], code: str, language: str, source_file: Path, source_url: str | None,
+        breadcrumb: str = "", lead_in: str | None = None,
+    ) -> None:
         """Append the chunk(s) built from one code block to ``chunks``."""
-        result = self._create_code_chunk(code, language, source_file, source_url)
+        result = self._create_code_chunk(code, language, source_file, source_url, breadcrumb, lead_in)
         if result:
             # Tree walkers return lists, single chunks return Chunk
             if isinstance(result, list):
@@ -180,7 +195,10 @@ class CodeChunkingStrategy(ProcessingStrategy):
         """
         return [(language, code) for kind, language, code in self._split_segments(text) if kind == 'code']
     
-    def _create_code_chunk(self, code: str, language: str, source_file: Path, base_source_url: str | None = None) -> Chunk | List[Chunk] | None:
+    def _create_code_chunk(
+        self, code: str, language: str, source_file: Path, base_source_url: str | None = None,
+        breadcrumb: str = "", lead_in: str | None = None,
+    ) -> Chunk | List[Chunk] | None:
         """Create a code chunk with language metadata.
         
         For YAML code blocks, attempts to detect if they are OpenAPI specs or CRDs
@@ -191,6 +209,9 @@ class CodeChunkingStrategy(ProcessingStrategy):
             language: Programming language.
             source_file: Path to source file.
             base_source_url: Optional source URL.
+            breadcrumb: Headings above the code block, joined by `` > ``.
+            lead_in: Sentence that introduces the code block, such as
+                "Run this command:".
         
         Returns:
             - None if code is empty or invalid
@@ -250,13 +271,23 @@ class CodeChunkingStrategy(ProcessingStrategy):
         code = self._strip_urls_from_headings(code)
         
         # Default: create code snippet chunk
-        token_count = get_token_count(code)
         source_url = base_source_url or self._extract_source_url(code)
-        
+
         metadata = {
             "language": language,
             "is_complete": True  # Assuming fenced blocks are complete
         }
+        if breadcrumb or lead_in:
+            # Give the code its context, the way list items and table rows
+            # carry theirs: the headings above it and its lead-in sentence.
+            header = "\n".join(part for part in (f"# {breadcrumb}" if breadcrumb else "", lead_in or "") if part)
+            fence = "```" + (language if language != "unknown" else "")
+            code = f"{header}\n\n{fence}\n{code}\n```"
+            if breadcrumb:
+                metadata["breadcrumb_path"] = breadcrumb
+            if lead_in:
+                metadata["code_caption"] = lead_in
+        token_count = get_token_count(code)
 
         if source_url:
             metadata["source_url"] = source_url

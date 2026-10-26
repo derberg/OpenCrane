@@ -8,7 +8,7 @@
   },
   {
     "chunk_id": "$item1",
-    "content": "# Manage Secrets\nPublic/private keys",
+    "content": "# Manage Secrets\nThere are four different kinds of data:\nPublic/private keys",
     "source_file": "tests/fixtures/lists/02_unordered_short.md",
     "chunk_type": "list_item",
     "metadata": {
@@ -25,7 +25,7 @@
   },
   {
     "chunk_id": "$item2",
-    "content": "# Manage Secrets\nCertificates",
+    "content": "# Manage Secrets\nThere are four different kinds of data:\nCertificates",
     "source_file": "tests/fixtures/lists/02_unordered_short.md",
     "chunk_type": "list_item",
     "metadata": {
@@ -42,7 +42,7 @@
   },
   {
     "chunk_id": "$item3",
-    "content": "# Manage Secrets\nCA certificates",
+    "content": "# Manage Secrets\nThere are four different kinds of data:\nCA certificates",
     "source_file": "tests/fixtures/lists/02_unordered_short.md",
     "chunk_type": "list_item",
     "metadata": {
@@ -59,7 +59,7 @@
   },
   {
     "chunk_id": "$item4",
-    "content": "# Manage Secrets\nCertificate revocation lists",
+    "content": "# Manage Secrets\nThere are four different kinds of data:\nCertificate revocation lists",
     "source_file": "tests/fixtures/lists/02_unordered_short.md",
     "chunk_type": "list_item",
     "metadata": {

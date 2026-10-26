@@ -45,7 +45,7 @@ def test_section_anchor_fixture(tmp_path, monkeypatch):
     expected = json.loads((FIXTURE_DIR / "expected_chunks.json").read_text())["chunks"]
     for entry in expected:
         marker = entry["content_contains"]
-        matches = [c for c in chunks if marker in _content(c)]
+        matches = [c for c in chunks if marker in _content(c) and c["chunk_type"] == entry["chunk_type"]]
         assert len(matches) == 1, f"expected exactly one chunk containing {marker!r}, got {len(matches)}"
         chunk = matches[0]
         assert chunk["chunk_type"] == entry["chunk_type"], marker

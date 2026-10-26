@@ -243,9 +243,9 @@ def test_processor_index_keeps_text_inside_declared_block(tmp_path):
     ]
     assert "BEFORE_TABS" in chunks[0].content
     assert "NPM_EXPLAIN" in chunks[1].content
-    assert chunks[2].content == "npm install thing"
+    assert chunks[2].content == "# Home\n\n```bash\nnpm install thing\n```"
     assert "PIP_EXPLAIN" in chunks[3].content
-    assert chunks[4].content == "pip install thing"
+    assert chunks[4].content == "# Home\n\n```bash\npip install thing\n```"
     assert "AFTER_TABS" in chunks[5].content
     assert {c.metadata.get("source_url") for c in chunks} == {"https://x/home"}
     joined = "\n".join(c.content for c in chunks)

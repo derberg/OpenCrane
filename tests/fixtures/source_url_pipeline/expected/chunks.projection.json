@@ -24,15 +24,15 @@
     "source_url": "https://alpha.example.com/docs/setup"
   },
   {
+    "content_prefix": "# Installation Instructions > Steps\nRun the following comman",
+    "source_url": "https://alpha.example.com/docs/setup"
+  },
+  {
     "content_prefix": "## Prerequisites\n\nYou will need Python 3.11 or later install",
     "source_url": "https://alpha.example.com/docs/setup"
   },
   {
     "content_prefix": "## Steps\n\nRun the following command to install:",
-    "source_url": "https://alpha.example.com/docs/setup"
-  },
-  {
-    "content_prefix": "pip install mypackage",
     "source_url": "https://alpha.example.com/docs/setup"
   },
   {

@@ -8,7 +8,7 @@
   },
   {
     "chunk_id": "$item1",
-    "content": "# Migration guide > 1.6 -> 1.7\n1. Install the cgw Helm chart in version 1.7.0.",
+    "content": "# Migration guide > 1.6 -> 1.7\nFollow these steps to upgrade CGW to version 1.7.0:\n1. Install the cgw Helm chart in version 1.7.0.",
     "source_file": "tests/fixtures/lists/01_simple_ordered.md",
     "chunk_type": "list_item",
     "metadata": {
@@ -25,7 +25,7 @@
   },
   {
     "chunk_id": "$item2",
-    "content": "# Migration guide > 1.6 -> 1.7\n2. Install the cgw-support Helm chart in version 1.7.0.",
+    "content": "# Migration guide > 1.6 -> 1.7\nFollow these steps to upgrade CGW to version 1.7.0:\n2. Install the cgw-support Helm chart in version 1.7.0.",
     "source_file": "tests/fixtures/lists/01_simple_ordered.md",
     "chunk_type": "list_item",
     "metadata": {

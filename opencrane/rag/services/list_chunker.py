@@ -17,6 +17,7 @@ from typing import List, Optional, Tuple
 from opencrane.rag.services.base_strategy import ProcessingStrategy
 from opencrane.rag.services.prose_chunker import ProseChunkingStrategy
 from opencrane.rag.services.utils.chunk_id_generator import generate_unique_chunk_id
+from opencrane.rag.services.utils.markdown_structure import lead_in_line
 from opencrane.shared.models.chunk import Chunk
 from opencrane.shared.utils.token_counter import get_token_count
 
@@ -93,6 +94,9 @@ class ListChunkingStrategy(ProcessingStrategy):
         # (heading-only or too short), handed to the next prose chunk so its
         # heading ancestry stays complete, as within a single prose node.
         pending_headings: List[str] = []
+        # The sentence right before a list that introduces it, such as
+        # "Prerequisites:". Every item of that list repeats it.
+        lead_in: Optional[str] = None
 
         for kind, payload in segments:
             if kind == "prose":
@@ -111,6 +115,7 @@ class ListChunkingStrategy(ProcessingStrategy):
                     pending_headings = []
                 pending_headings += prose_strategy._skipped_headings
                 chunks.extend(prose_chunks)
+                lead_in = lead_in_line("\n".join(payload))
             elif kind == "list":
                 list_ordinal_in_section += 1
                 list_chunks = self._make_list_chunks(
@@ -119,7 +124,9 @@ class ListChunkingStrategy(ProcessingStrategy):
                     list_ordinal=list_ordinal_in_section,
                     source_file=source_file,
                     source_url=source_url,
+                    lead_in=lead_in,
                 )
+                lead_in = None
                 if list_chunks:
                     # The headings dropped since the last prose chunk sit right
                     # above this list, so they go with its first item.
@@ -298,6 +305,7 @@ class ListChunkingStrategy(ProcessingStrategy):
         list_ordinal: int,
         source_file: Path,
         source_url: Optional[str],
+        lead_in: Optional[str] = None,
     ) -> List[Chunk]:
         top_items = self._parse_items(list_lines)
         if not top_items:
@@ -327,7 +335,7 @@ class ListChunkingStrategy(ProcessingStrategy):
             )
             for it in items:
                 it.list_id = group_list_id
-                content = self._build_item_content(it, breadcrumb)
+                content = self._build_item_content(it, breadcrumb, lead_in)
                 metadata_for_hash = {"breadcrumb_path": breadcrumb, "list_id": group_list_id, "position": it.position}
                 if source_url:
                     metadata_for_hash["source_url"] = source_url
@@ -338,17 +346,18 @@ class ListChunkingStrategy(ProcessingStrategy):
                     metadata=metadata_for_hash,
                 )
             for it in items:
-                content = self._build_item_content(it, breadcrumb)
-                chunks.append(
-                    self._build_item_chunk(
-                        it=it,
-                        siblings=items,
-                        breadcrumb=breadcrumb,
-                        content=content,
-                        source_file=source_file,
-                        source_url=source_url,
-                    )
+                content = self._build_item_content(it, breadcrumb, lead_in)
+                chunk = self._build_item_chunk(
+                    it=it,
+                    siblings=items,
+                    breadcrumb=breadcrumb,
+                    content=content,
+                    source_file=source_file,
+                    source_url=source_url,
                 )
+                if lead_in:
+                    chunk.metadata["list_caption"] = lead_in
+                chunks.append(chunk)
                 if it.children:
                     walk(it.children, it)
 
@@ -430,15 +439,18 @@ class ListChunkingStrategy(ProcessingStrategy):
 
     # --- content composition -------------------------------------------------
 
-    def _build_item_content(self, item: _Item, breadcrumb: str) -> str:
+    def _build_item_content(self, item: _Item, breadcrumb: str, lead_in: Optional[str] = None) -> str:
         """Compose the chunk content for a list item.
 
         Every item renders its own full body (continuation lines, paragraphs
         and fenced code included, nested items excluded since they get their
         own chunks). Nested items prepend their ancestors' first lines so the
-        chunk stays self-contained for embedding.
+        chunk stays self-contained for embedding. The lead-in sentence of the
+        list, when there is one, comes right after the breadcrumb.
         """
         header = f"# {breadcrumb}" if breadcrumb else "#"
+        if lead_in:
+            header += f"\n{lead_in}"
         lineage: List[str] = []
         cur: Optional[_Item] = item.parent
         while cur is not None:

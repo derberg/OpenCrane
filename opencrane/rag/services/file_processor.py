@@ -16,6 +16,7 @@ from opencrane.rag.services.llms_index import PAGE_SEPARATOR
 from opencrane.rag.services.utils.blocks import find_blocks
 from opencrane.rag.services.utils.markdown_structure import (
     HeadingTracker,
+    lead_in_line,
     list_item_fence_mask,
 )
 from opencrane.shared.models.chunk import (
@@ -152,6 +153,24 @@ class TextItem:
         # The declared tag when this item is a whole content block, such as
         # "details". FileProcessor routes it to the strategy that declares it.
         self.block_tag = block_tag
+        # The sentence that ends the part of the page right before this item
+        # and introduces it, such as "Run this command:".
+        self.lead_in = None
+
+
+def _assign_lead_ins(items):
+    """Give each item the lead-in sentence of the prose part right before it."""
+    previous = None
+    for item in items:
+        if (
+            previous is not None
+            and previous.block_tag is None
+            and previous.source_url == item.source_url
+            and not previous.text.lstrip().startswith('```')
+        ):
+            item.lead_in = lead_in_line(previous.text)
+        previous = item
+    return items
 
 
 def split_text_into_parts(text: str, block_tags) -> list:
@@ -361,7 +380,7 @@ class FileProcessor:
             item.heading_ancestry = list(tracker.stack)
             if item.block_tag is None:
                 tracker.feed(item.text)
-        chunks, _ = self._chunk_items(extract_yaml_items(items), source_file, depth)
+        chunks, _ = self._chunk_items(_assign_lead_ins(extract_yaml_items(items)), source_file, depth)
         part = next(self._block_parts)
         anchor = _nearest_heading(parent)
         for chunk in chunks:
@@ -560,7 +579,7 @@ class FileProcessor:
                 if self.index is not None:
                     sections = self._split_into_pages(self.content, self.index)
                     if sections is not None:
-                        return self._extract_yaml_from_sections(sections)
+                        return _assign_lead_ins(self._extract_yaml_from_sections(sections))
                     # Source-block count mismatch → fall through to legacy path.
 
                 # Always split into sections if content has ### URL markers
@@ -579,14 +598,14 @@ class FileProcessor:
                     logger.debug(f"File has section markers or is large, splitting into sections")
                     sections = _assign_heading_ancestry(self._split_into_sections(self.content))
                     # Extract YAML blocks as separate items
-                    return self._extract_yaml_from_sections(sections)
+                    return _assign_lead_ins(self._extract_yaml_from_sections(sections))
                 else:
                     # For small files, also extract YAML if present
                     if '```yaml' in self.content or '```yml' in self.content:
                         logger.debug(f"Small file with YAML blocks detected, extracting")
                         # Create a single section (source_url will be None for small files without markers)
                         section = FakeTextItem(self.content, None)
-                        return self._extract_yaml_from_sections([section])
+                        return _assign_lead_ins(self._extract_yaml_from_sections([section]))
                     else:
                         # Plain text with no YAML blocks
                         return [FakeTextItem(self.content, None)]

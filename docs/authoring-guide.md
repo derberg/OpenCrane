@@ -232,7 +232,7 @@ Avoid sentences like this one: "Run the main command to execute it all."
 
 ## Lists
 
-Every list item, including each nested item, becomes its own chunk. Each item chunk carries a `breadcrumb_path` built from the headings the list sits under. The following sections help each item chunk stand alone.
+Every list item, including each nested item, becomes its own chunk. Each item chunk carries a `breadcrumb_path` built from the headings the list sits under. When the sentence right before the list ends with a colon, such as "To install the extension:", every item chunk repeats it, so a search for that task finds each step. Code blocks get the same context: the headings above them and a lead-in sentence that ends with a colon, such as "Run this command:". The following sections help each item chunk stand alone.
 
 ### Put every list under a heading
 

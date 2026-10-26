@@ -12,12 +12,6 @@ from opencrane.shared.utils.metadata_helpers import is_openapi_spec, extract_ope
 from opencrane.shared.config import get_config
 
 
-# A <Tabs>/<Tab>/<TabItem> tag alone on its line, and the bare (attribute-less)
-# form. <TabItem> is the Docusaurus name for a tab.
-_TAB_TAG_RE = re.compile(r'^\s*</?Tab(?:s|Item)?(\s[^>]*)?>\s*$')
-_BARE_TAB_TAG_RE = re.compile(r'^\s*</?Tab(?:s|Item)?>\s*$')
-
-
 class _TextNode:
     """Minimal node handed to the prose strategy for text between code blocks."""
 
@@ -103,8 +97,7 @@ class CodeChunkingStrategy(ProcessingStrategy):
                 self._add_code(chunks, text, language, source_file, node_source_url)
         else:
             # Walk the node in reading order: each code block becomes code
-            # chunks and the text between code blocks (for example the
-            # explanations inside a <Tabs> block) becomes prose chunks.
+            # chunks and the text between code blocks becomes prose chunks.
             for kind, language, content in segments:
                 if kind == 'code':
                     self._add_code(chunks, content, language, source_file, node_source_url)
@@ -125,19 +118,10 @@ class CodeChunkingStrategy(ProcessingStrategy):
 
     @staticmethod
     def _prose_chunks(text: str, source_file: Path, source_url: str | None) -> List[Chunk]:
-        """Chunk the text between code blocks as prose.
-
-        Bare structural tags (``<Tabs>``, ``<Tab>``, ``<TabItem>`` and their
-        closing tags) carry no content and are dropped; a tab tag with
-        attributes is kept because its ``label`` names the tab. Text made only of tags yields
-        no chunk.
-        """
-        lines = [line for line in text.split('\n') if not _BARE_TAB_TAG_RE.match(line)]
-        if all(not line.strip() or _TAB_TAG_RE.match(line) for line in lines):
-            return []
+        """Chunk the text between code blocks as prose."""
         from opencrane.rag.services.prose_chunker import ProseChunkingStrategy
 
-        node = _TextNode('\n'.join(lines).strip(), source_url)
+        node = _TextNode(text.strip(), source_url)
         return ProseChunkingStrategy().process(node, source_file)
 
     @staticmethod

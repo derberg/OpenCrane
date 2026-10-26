@@ -1,7 +1,7 @@
 """Pydantic models for the Structure-Aware Hybrid Chunker."""
 
 import re
-from typing import Dict, Any, Union
+from typing import Dict, Any, Mapping, Union
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
 
@@ -17,6 +17,30 @@ BUILTIN_CHUNK_TYPES = frozenset({
 CHUNK_TYPE_MAX_LENGTH = 32
 
 _CHUNK_TYPE_PATTERN = re.compile(r"[A-Za-z0-9_-]+")
+
+# Metadata keys a prose chunk may carry from OpenCrane's own strategies and
+# the chunker's post-passes.
+BUILTIN_PROSE_METADATA_KEYS = frozenset({
+    "source_url", "breadcrumb_path", "section_anchor",
+    # Navigation metadata (see _annotate_prose_navigation in rag/chunker.py)
+    "heading_path", "clause_id", "parent_chunk_id", "position",
+    "prev_chunk_id", "next_chunk_id", "doc_order",
+})
+
+# Keys that the configured strategies declare in ``metadata_keys``, with their
+# descriptions. FileProcessor registers them before any strategy runs.
+_declared_metadata_keys: Dict[str, str] = {}
+
+
+def register_metadata_keys(keys: Mapping[str, str]) -> None:
+    """Replace the declared metadata keys that prose chunks accept."""
+    global _declared_metadata_keys
+    _declared_metadata_keys = dict(keys)
+
+
+def declared_metadata_keys() -> Dict[str, str]:
+    """Return the declared metadata keys and their descriptions."""
+    return dict(_declared_metadata_keys)
 
 
 def is_valid_chunk_type(value: object) -> bool:
@@ -87,12 +111,7 @@ class Chunk(BaseModel):
         
         # Validate metadata shape based on chunk_type
         if self.chunk_type == "prose":
-            allowed_keys = {
-                "source_url", "breadcrumb_path", "section_anchor", "tab_value", "tab_label",
-                # Navigation metadata (see _annotate_prose_navigation in rag/chunker.py)
-                "heading_path", "clause_id", "parent_chunk_id", "position",
-                "prev_chunk_id", "next_chunk_id", "doc_order",
-            }
+            allowed_keys = BUILTIN_PROSE_METADATA_KEYS | _declared_metadata_keys.keys()
             invalid_keys = set(self.metadata.keys()) - allowed_keys
             if invalid_keys:
                 raise ValueError("prose chunks must use supported metadata keys only")

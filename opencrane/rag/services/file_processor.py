@@ -15,7 +15,11 @@ from opencrane.rag.services.utils.markdown_structure import (
     HeadingTracker,
     list_item_fence_mask,
 )
-from opencrane.shared.models.chunk import Chunk
+from opencrane.shared.models.chunk import (
+    BUILTIN_PROSE_METADATA_KEYS,
+    Chunk,
+    register_metadata_keys,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +128,40 @@ class FileProcessor:
             yaml_strategy if isinstance(s, YamlChunkingStrategy) else s
             for s in config.chunking_strategies
         ]
+        self.block_strategies = self._collect_block_strategies(self.strategies)
+        register_metadata_keys(self._collect_metadata_keys(self.strategies))
+
+    @staticmethod
+    def _collect_block_strategies(strategies) -> dict:
+        """Map each declared block tag to the strategy that declares it."""
+        owners: dict = {}
+        for strategy in strategies:
+            for tag in strategy.block_tags:
+                if tag in owners:
+                    raise ValueError(
+                        f"Block tag '{tag}' is declared by both "
+                        f"{type(owners[tag]).__name__} and {type(strategy).__name__}"
+                    )
+                owners[tag] = strategy
+        return owners
+
+    @staticmethod
+    def _collect_metadata_keys(strategies) -> dict:
+        """Merge the metadata keys the strategies declare, with their descriptions."""
+        keys: dict = {}
+        for strategy in strategies:
+            for key, description in strategy.metadata_keys.items():
+                if key in BUILTIN_PROSE_METADATA_KEYS:
+                    raise ValueError(
+                        f"{type(strategy).__name__} declares metadata key '{key}', "
+                        "which is a built-in key"
+                    )
+                if key in keys and keys[key] != description:
+                    raise ValueError(
+                        f"Metadata key '{key}' is declared twice with different descriptions"
+                    )
+                keys[key] = description
+        return keys
 
     def process_file(self, file_path: Path, index=None) -> List[Chunk]:
         """Process a file and return chunks.

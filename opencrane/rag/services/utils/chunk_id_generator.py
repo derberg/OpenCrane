@@ -75,10 +75,6 @@ def generate_chunk_id(
             breadcrumb = metadata["breadcrumb_path"]
             if breadcrumb:
                 hash_components.append(json.dumps(breadcrumb, sort_keys=True))
-        
-        # For tab chunks: tab_value provides context
-        if "tab_value" in metadata:
-            hash_components.append(str(metadata["tab_value"]))
     
     # Add collision suffix if provided
     if collision_suffix:

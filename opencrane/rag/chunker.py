@@ -93,7 +93,12 @@ def _annotate_section_anchors(chunks, config) -> None:
         metadata = chunk.metadata
         if not metadata or not metadata.get("source_url"):
             continue
-        heading = _chunk_section_heading(chunk)
+        # A block's own titles have no anchor on the rendered page, so a block
+        # chunk links to the heading above the block.
+        if getattr(chunk, "_in_block", False):
+            heading = chunk._anchor_heading
+        else:
+            heading = _chunk_section_heading(chunk)
         if not heading:
             continue
         anchor = config.section_anchor_for(heading)
@@ -160,6 +165,21 @@ def _member_parent(stack: list, breadcrumb: str) -> str | None:
     return owner
 
 
+def _align_stack(stack: list, ancestry: list) -> list:
+    """Cut ``stack`` back to the headings in ``ancestry`` and add the missing ones.
+
+    ``stack`` holds ``(level, title, owner)`` entries and ``ancestry`` holds
+    ``(level, title)`` pairs. Entries that match ``ancestry`` keep their owner.
+    """
+    kept = 0
+    while (
+        kept < len(stack) and kept < len(ancestry)
+        and stack[kept][:2] == tuple(ancestry[kept])
+    ):
+        kept += 1
+    return stack[:kept] + [(level, title, None) for level, title in ancestry[kept:]]
+
+
 def _annotate_prose_navigation(chunks, config) -> None:
     """Record heading ancestry, clause id and neighbour links on prose chunks.
 
@@ -214,6 +234,7 @@ def _annotate_prose_navigation(chunks, config) -> None:
     # block's headings count for the block only, so the stack goes back to
     # this after the block.
     before_block = None
+    block_part = None
     for chunk in chunks:
         if chunk.chunk_type not in _ORDERED_CHUNK_TYPES or not isinstance(chunk.content, str):
             continue
@@ -238,15 +259,22 @@ def _annotate_prose_navigation(chunks, config) -> None:
                 # The lists and tables of a page without prose stay unlinked.
                 waiting = []
             page, stack, previous, position = url, [], None, 0
-            before_block = None
+            before_block = block_part = None
 
-        if chunk._in_block and before_block is None:
-            before_block = list(stack)
-        elif not chunk._in_block and before_block is not None:
-            stack, before_block = before_block, None
+        if not chunk._in_block and before_block is not None:
+            stack, before_block, block_part = before_block, None, None
+        elif chunk._in_block and before_block is not None and chunk._block_part != block_part:
+            # Another part of the block, such as the next tab: drop the
+            # headings of the part before it.
+            stack = _align_stack(stack, chunk._part_ancestry)
 
         for level, title in preceding:
             _push_heading(stack, level, title, None)
+
+        if chunk._in_block:
+            if before_block is None:
+                before_block = list(stack)
+            block_part = chunk._block_part
 
         if not is_prose:
             parent = _member_parent(stack, metadata.get("breadcrumb_path") or "")

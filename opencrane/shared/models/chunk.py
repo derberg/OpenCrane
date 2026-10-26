@@ -87,6 +87,15 @@ class Chunk(BaseModel):
     # serialized; the prose navigation pass keeps the block's headings out of
     # the sections that follow the block.
     _in_block: bool = PrivateAttr(default=False)
+    # Title of the heading above the outermost block the chunk comes from, or
+    # None. A block's own titles have no anchor on the rendered page, so the
+    # section anchor of a block chunk comes from this heading.
+    _anchor_heading: str | None = PrivateAttr(default=None)
+    # Which chunk_text call produced the chunk, and the headings in effect
+    # where that call starts. Two parts of one block, such as two tabs, do not
+    # share the headings inside them.
+    _block_part: int | None = PrivateAttr(default=None)
+    _part_ancestry: list = PrivateAttr(default_factory=list)
 
     @field_validator("chunk_type")
     @classmethod

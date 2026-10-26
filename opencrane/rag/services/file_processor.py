@@ -3,7 +3,7 @@
 import logging
 import re
 from functools import partial
-from itertools import chain
+from itertools import chain, count
 from pathlib import Path
 from typing import List
 from docling.exceptions import ConversionError
@@ -106,6 +106,34 @@ def _bracketed_marker(heading_line: str):
         return page.group(1), page.group(2).strip()
     # No page URL follows the tag — fall back to the bracket content.
     return bracket.group(0).strip('[]'), after_bracket
+
+
+def _nearest_heading(item):
+    """Title of the nearest heading above ``item``, or None."""
+    ancestry = getattr(item, 'heading_ancestry', None) or []
+    return ancestry[-1][1] if ancestry else None
+
+
+def _heading_lines(text: str) -> List[str]:
+    """The heading lines of ``text``, outside code fences."""
+    lines = []
+    in_fence = False
+    for line in text.split('\n'):
+        stripped = line.strip()
+        if stripped.startswith('```'):
+            in_fence = not in_fence
+        elif not in_fence and _HEADING_PREFIX_RE.match(stripped):
+            lines.append(stripped)
+    return lines
+
+
+def _is_url_marker(stripped: str) -> bool:
+    """True when a stripped line is a page URL marker of the legacy format."""
+    if not stripped.startswith('#'):
+        return False
+    if _bracketed_marker(stripped) is not None:
+        return True
+    return stripped.startswith('###') and _bare_url_marker(stripped) is not None
 
 
 class TextItem:
@@ -254,6 +282,7 @@ class FileProcessor:
             for s in config.chunking_strategies
         ]
         self.block_strategies = self._collect_block_strategies(self.strategies)
+        self._block_parts = count(1)
         register_metadata_keys(self._collect_metadata_keys(self.strategies))
 
     def _chunk_items(self, items, source_file, depth: int):
@@ -269,7 +298,11 @@ class FileProcessor:
         strategies = [s for s in self.strategies if within_limit or not s.block_tags]
         chunks = []
         nodes_processed = 0
+        # Headings of parts that produced no chunk, such as a heading right
+        # above a block. They go with the next chunk, so navigation keeps them.
+        pending_headings: List[str] = []
         for item in items:
+            first_new = len(chunks)
             if isinstance(item, TextItem):
                 item.chunk_text = partial(self._chunk_text, parent=item, depth=depth + 1)
             tag = getattr(item, 'block_tag', None)
@@ -287,13 +320,21 @@ class FileProcessor:
                     continue  # Try next strategy
                 self._check_prose_metadata(strategy, node_chunks)
                 if tag:
+                    anchor = _nearest_heading(item)
                     for chunk in node_chunks:
                         chunk._in_block = True
+                        chunk._anchor_heading = anchor
                 chunks.extend(node_chunks)
                 logger.debug(f"Strategy {strategy.__class__.__name__} processed node, added {len(node_chunks)} chunks")
                 nodes_processed += 1
                 if node_chunks:
                     break  # First matching strategy wins
+            if len(chunks) > first_new:
+                first = chunks[first_new]
+                first._preceding_headings = pending_headings + first._preceding_headings
+                pending_headings = []
+            elif tag is None:
+                pending_headings += _heading_lines(getattr(item, 'text', ''))
         return chunks, nodes_processed
 
     def _chunk_text(self, text: str, source_file, parent, depth: int) -> List[Chunk]:
@@ -318,8 +359,14 @@ class FileProcessor:
             if item.block_tag is None:
                 tracker.feed(item.text)
         chunks, _ = self._chunk_items(extract_yaml_items(items), source_file, depth)
+        part = next(self._block_parts)
+        anchor = _nearest_heading(parent)
         for chunk in chunks:
             chunk._in_block = True
+            chunk._anchor_heading = anchor
+            if chunk._block_part is None:
+                chunk._block_part = part
+                chunk._part_ancestry = list(parent.heading_ancestry)
         return chunks
 
     @staticmethod
@@ -713,7 +760,16 @@ class FileProcessor:
                 # Fences inside list items do not split the page, so the list
                 # stays one list and the code stays inside its item.
                 item_fence = list_item_fence_mask(lines)
-                spans = {span.start: span for span in find_blocks(lines, block_tags)}
+                # A page marker ends a block that was never closed, so the
+                # block cannot swallow the pages after it.
+                page_markers = {
+                    n for n, line in enumerate(lines)
+                    if _is_url_marker(line.strip())
+                }
+                spans = {
+                    span.start: span
+                    for span in find_blocks(lines, block_tags, boundaries=page_markers)
+                }
 
                 for n, line in enumerate(lines):
                     stripped = line.strip()

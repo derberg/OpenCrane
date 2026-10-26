@@ -16,6 +16,8 @@ from opencrane.shared.models.chunk import Chunk
 _OPENING_RE = re.compile(r"<details(?:\s[^>]*)?>")
 _CLOSING = "</details>"
 _SUMMARY_RE = re.compile(r"<summary(?:\s[^>]*)?>(.*?)</summary>", re.DOTALL)
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_NESTED_RE = re.compile(r"^\s*<details[\s>]", re.MULTILINE)
 
 
 class DetailsChunkingStrategy(ProcessingStrategy):
@@ -31,8 +33,10 @@ class DetailsChunkingStrategy(ProcessingStrategy):
 
     def process(self, node, source_file: Path) -> List[Chunk]:
         body = self._strip_block_tags(node.text)
-        summary = _SUMMARY_RE.search(body)
-        title = summary.group(1).strip() if summary else ""
+        # Only a summary before any nested block belongs to this block.
+        nested = _NESTED_RE.search(body)
+        summary = _SUMMARY_RE.search(body, 0, nested.start() if nested else len(body))
+        title = self._clean_title(summary.group(1)) if summary else ""
         if summary:
             body = body[:summary.start()] + body[summary.end():]
         if not body.strip():
@@ -54,6 +58,13 @@ class DetailsChunkingStrategy(ProcessingStrategy):
         if cut != -1:
             text = text[:cut] + text[cut + len(_CLOSING):]
         return text
+
+    @staticmethod
+    def _clean_title(raw: str) -> str:
+        """Plain one-line title: no HTML tags, heading marks or line breaks."""
+        text = _HTML_TAG_RE.sub("", raw)
+        text = " ".join(text.split())
+        return text.lstrip("#").strip()
 
     @staticmethod
     def _title_level(node) -> int:

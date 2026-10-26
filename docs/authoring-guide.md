@@ -524,7 +524,7 @@ OpenCrane turns the text of the `<summary>` element into a heading on top of the
 </details>
 ````
 
-Start the opening and closing tags at the beginning of a line. A `<details>` tag in the middle of a sentence does not open a block.
+Start the opening tag at the beginning of a line, with no indent. A `<details>` tag in the middle of a sentence does not open a block, and an indented one, for example inside a list item, stays part of the list.
 
 ## Embedded specifications
 

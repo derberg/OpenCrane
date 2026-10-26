@@ -311,7 +311,7 @@ A content block is a component that a page writes as a tag around ordinary Markd
 
 A strategy for a content block uses three parts of `ProcessingStrategy`:
 
-- `block_tags`: the tag names that the strategy owns, such as `("Tabs",)`. The names match exactly, so `Tabs` and `tabs` are different tags. The chunker keeps each block of these tags whole and gives it to the strategy, wherever the strategy is in `chunking_strategies`. A block opens on a line that starts with `<Tabs>` or `<Tabs ` and closes at the matching `</Tabs>`. A tag inside a code fence or inside a sentence does not open a block. Two strategies cannot declare the same tag.
+- `block_tags`: the tag names that the strategy owns, such as `("Tabs",)`. The names match exactly, so `Tabs` and `tabs` are different tags. The chunker keeps each block of these tags whole and gives it to the strategy, wherever the strategy is in `chunking_strategies`. A block opens on a line that starts with `<Tabs>` or `<Tabs ` at its first column, and closes at the matching `</Tabs>`. A tag inside a code fence, an inline code span or a sentence does not open or close a block. An indented tag, for example inside a list item, stays part of the surrounding content. A block that is never closed ends at the end of its page. Two strategies cannot declare the same tag.
 - `chunk_text(text, node, source_file)`: chunks text that the strategy cuts out of its block, such as the body of one tab, the way the chunker chunks any part of a page. Lists, tables, code and YAML inside the text get their own chunks, a block of another declared tag inside it goes to its own strategy, and the chunks keep the headings above the block. To give the chunks a title, put it on top of the text as a Markdown heading. Calls can nest up to eight levels deep. Deeper text is chunked without the strategies that declare `block_tags`, and the chunker logs a warning.
 - `metadata_keys`: the metadata keys that the strategy adds to prose chunks, each with a one-line description. Prose chunks accept only declared keys and built-in keys, and `get_metadata_schema` lists the declared keys for AI agents.
 
@@ -342,7 +342,7 @@ class NoteStrategy(ProcessingStrategy):
         return chunks
 ```
 
-A heading inside a content block counts for the block only. The sections after the block keep the headings from before it.
+A heading inside a content block counts for the block only. The sections after the block keep the headings from before it, and so does each part that the strategy sends through `chunk_text` on its own. A heading right above a block stays in the heading path of the block's chunks. The `section_anchor` of a chunk from a block links to the heading above the block, because a title that a strategy adds has no anchor on the rendered page.
 
 ## Add a tree walker for a YAML specification
 

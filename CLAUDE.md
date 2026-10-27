@@ -8,6 +8,16 @@ A standalone, extensible RAG/MCP pipeline for building AI-powered documentation 
 - Keep commit messages concise: `type: short description` (for example, `feat: add custom walker support`, `fix: token count for empty files`)
 - Types: `feat`, `fix`, `docs`, `test`, `ci`, `chore`, `refactor`
 
+## Pull request descriptions
+
+Keep the description short and to the point:
+
+- Open with one or two sentences on what changes and why.
+- List the user-facing changes as a few short bullets. No section per file, no restating the diff.
+- Do not write about tests: no test plan, no test counts, no coverage numbers. CI shows them.
+- Put long detail, such as measurements, examples or migration steps, inside a collapsed `<details><summary>…</summary>` block.
+- A breaking change ends the body with a `BREAKING CHANGE:` footer of a few sentences. The repo squash-merges, so release-please reads the PR title and body.
+
 ## GitHub Actions conventions
 
 **Always pin GitHub Actions to full commit SHA, not tags or versions.**

@@ -67,6 +67,7 @@ scripts/worktree.sh new feat/<short-name>   # 1. fresh worktree off origin/main 
 #   duplication and reuse misses while they are still cheap to fix
 git push -u origin feat/<short-name>         # 3. push (needs fresh explicit user approval)
 # 4. open a PR -> test-coverage.yml runs on the PR and enforces 100% coverage
+#    (description rules: "Pull request descriptions" in CLAUDE.md, short, no test talk)
 # 5. review, then merge the PR to main
 ```
 

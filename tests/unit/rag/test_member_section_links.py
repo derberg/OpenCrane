@@ -64,8 +64,9 @@ def test_chunked_page_links_lists_and_table_to_sections(tmp_path, monkeypatch):
     def prose_id(start):
         return next(c["chunk_id"] for c in chunks if c["chunk_type"] == "prose" and c["content"].startswith(start))
 
+    # The line after the breadcrumb, and after the list's lead-in when it has one.
     parents = {
-        c["content"].split("\n")[1]: c["metadata"]["parent_chunk_id"]
+        c["content"].split("\n")[2 if c["metadata"].get("list_caption") else 1]: c["metadata"]["parent_chunk_id"]
         for c in chunks if c["chunk_type"] in ("list_item", "table_row")
     }
     upgrade, log_settings = prose_id("## Upgrade the gateway"), prose_id("### Log settings")

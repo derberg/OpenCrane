@@ -93,7 +93,12 @@ def _annotate_section_anchors(chunks, config) -> None:
         metadata = chunk.metadata
         if not metadata or not metadata.get("source_url"):
             continue
-        heading = _chunk_section_heading(chunk)
+        # A block's own titles have no anchor on the rendered page, so a block
+        # chunk links to the heading above the block.
+        if getattr(chunk, "_in_block", False):
+            heading = chunk._anchor_heading
+        else:
+            heading = _chunk_section_heading(chunk)
         if not heading:
             continue
         anchor = config.section_anchor_for(heading)
@@ -160,6 +165,21 @@ def _member_parent(stack: list, breadcrumb: str) -> str | None:
     return owner
 
 
+def _align_stack(stack: list, ancestry: list) -> list:
+    """Cut ``stack`` back to the headings in ``ancestry`` and add the missing ones.
+
+    ``stack`` holds ``(level, title, owner)`` entries and ``ancestry`` holds
+    ``(level, title)`` pairs. Entries that match ``ancestry`` keep their owner.
+    """
+    kept = 0
+    while (
+        kept < len(stack) and kept < len(ancestry)
+        and stack[kept][:2] == tuple(ancestry[kept])
+    ):
+        kept += 1
+    return stack[:kept] + [(level, title, None) for level, title in ancestry[kept:]]
+
+
 def _annotate_prose_navigation(chunks, config) -> None:
     """Record heading ancestry, clause id and neighbour links on prose chunks.
 
@@ -193,6 +213,10 @@ def _annotate_prose_navigation(chunks, config) -> None:
     in the document, counted from 1 again whenever ``source_url`` changes, so
     get_section can place lists and tables between the prose of a section.
 
+    Headings in chunks from a declared content block (``chunk._in_block``)
+    count for the block only: after the block, the heading stack is the one
+    from before it.
+
     ``breadcrumb_path`` is left untouched. No-op when ``config.prose_navigation``
     is off.
     """
@@ -206,6 +230,11 @@ def _annotate_prose_navigation(chunks, config) -> None:
     order = 0
     # Lists and tables above the first prose chunk of the page, which they link to.
     waiting: list = []
+    # The heading stack from before a run of chunks from a declared block. The
+    # block's headings count for the block only, so the stack goes back to
+    # this after the block.
+    before_block = None
+    block_part = None
     for chunk in chunks:
         if chunk.chunk_type not in _ORDERED_CHUNK_TYPES or not isinstance(chunk.content, str):
             continue
@@ -220,16 +249,42 @@ def _annotate_prose_navigation(chunks, config) -> None:
             (len(m.group(1)), m.group(2).strip())
             for m in map(_NAV_HEADING_RE.match, chunk._preceding_headings) if m
         ]
+        # Headings right above a block, carried by its first chunk. They sit
+        # outside the block, so they stay after the block ends.
+        outer = [
+            (len(m.group(1)), m.group(2).strip())
+            for m in map(_NAV_HEADING_RE.match, chunk._outer_headings) if m
+        ]
         opens, headings = _content_headings(chunk.content) if is_prose else (False, [])
         # An H1 is a page title, so it starts a new page even when the URL does
         # not change (pages missing from llms.txt have none, and a synthesized
         # index repeats the source's docs_url for every page).
-        starts_page = any(level == 1 for level, _ in preceding) or (opens and headings[0][0] == 1)
+        starts_page = any(level == 1 for level, _ in outer + preceding) or (opens and headings[0][0] == 1)
         if url != page or starts_page:
             if url != page:
                 # The lists and tables of a page without prose stay unlinked.
                 waiting = []
             page, stack, previous, position = url, [], None, 0
+            before_block = block_part = None
+
+        if not chunk._in_block and before_block is not None:
+            stack, before_block, block_part = before_block, None, None
+        elif chunk._in_block and before_block is not None and chunk._block_part != block_part:
+            # Another part of the block, such as the next tab: drop the
+            # headings of the part before it.
+            stack = _align_stack(stack, chunk._part_ancestry)
+
+        if outer and before_block is not None:
+            # Headings between two blocks: the first block is over, so start
+            # from the stack before it and keep these headings after the next.
+            stack, before_block = before_block, None
+        for level, title in outer:
+            _push_heading(stack, level, title, None)
+
+        if chunk._in_block:
+            if before_block is None:
+                before_block = list(stack)
+            block_part = chunk._block_part
 
         for level, title in preceding:
             _push_heading(stack, level, title, None)

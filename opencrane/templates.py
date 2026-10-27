@@ -30,8 +30,10 @@ class Config(OpenCraneConfig):
     # }
 
     # Chunking strategies, as ProcessingStrategy instances. OpenCrane uses
-    # the first strategy that accepts a block, so list yours first.
-    # chunking_strategies = [MyTabsStrategy(), *OpenCraneConfig.chunking_strategies]
+    # the first strategy that accepts a part of a page, so list yours first.
+    # A strategy that sets block_tags gets the blocks of those tags wherever
+    # it is listed.
+    # chunking_strategies = [MyComponentStrategy(), *OpenCraneConfig.chunking_strategies]
 
     # YAML tree walkers, as YamlTreeWalker subclasses from opencrane.walkers.
     # List the classes, not instances.

@@ -114,6 +114,23 @@ class HeadingTracker:
             self.stack.append((level, m.group(2).strip()))
 
 
+def lead_in_line(text: str) -> Optional[str]:
+    """Return the sentence that introduces what follows ``text``, or None.
+
+    It is the last non-blank line of ``text`` when that line is not a
+    heading, a fence or a table row and ends with a colon, such as
+    "Prerequisites:" or "Run this command:".
+    """
+    for line in reversed(text.split("\n")):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if _HEADING_RE.match(stripped) or _fence_run(line) or stripped.startswith("|"):
+            return None
+        return stripped if stripped.endswith(":") else None
+    return None
+
+
 def update_heading_stack(heading_stack: List[Tuple[int, str]], text: str) -> None:
     """Push the headings of ``text`` onto ``heading_stack``, outside fences."""
     HeadingTracker(heading_stack).feed(text)

@@ -88,10 +88,16 @@ def _source_lines(row: dict, metadata: dict) -> list[str]:
     return lines
 
 
-def _strip_breadcrumb(content: str, breadcrumb: str) -> str:
-    """Drop the ``# {breadcrumb}`` line that list item and table row chunks start with."""
+def _strip_breadcrumb(content: str, breadcrumb: str, lead_in: str = "") -> str:
+    """Drop the ``# {breadcrumb}`` line that list item and table row chunks start with.
+
+    With ``lead_in``, the list's lead-in sentence on the next line goes too, so
+    a tool that lists several items shows it once instead of on every item.
+    """
     if breadcrumb and content.startswith(f"# {breadcrumb}\n"):
-        return content[len(breadcrumb) + 3:].lstrip("\n")
+        content = content[len(breadcrumb) + 3:].lstrip("\n")
+    if lead_in and content.startswith(f"{lead_in}\n"):
+        content = content[len(lead_in) + 1:]
     return content
 
 
@@ -459,8 +465,11 @@ def _format_grouped_list_item(result: dict) -> str:
         f"Matched List ({len(members)} of {total} items):",
         *_source_lines(members[0], head_meta),
     ]
+    lead_in = head_meta.get("list_caption", "")
     if breadcrumb:
         lines.append(f"Location: {breadcrumb}")
+    if lead_in:
+        lines.append(f"Lead-in: {lead_in}")
     lines.append(f"List ID: {list_id}  style={list_style}")
     lines.append("Matched items:")
     for m in members:
@@ -470,7 +479,7 @@ def _format_grouped_list_item(result: dict) -> str:
             mm = {}
         pos = mm.get("position")
         # Drop breadcrumb header prefix when displaying inline for readability
-        stripped = _strip_breadcrumb(m.get("content", ""), breadcrumb)
+        stripped = _strip_breadcrumb(m.get("content", ""), breadcrumb, lead_in)
         lines.append(f"  [{pos}] {stripped}")
 
     unmatched_previews = head_meta.get("sibling_previews") or []
@@ -1583,6 +1592,45 @@ _CHUNK_TYPE_SECTION_HEADINGS = {
 }
 
 
+# Metadata keys that the project's chunking strategies declare, with their
+# descriptions. Read once from the project config.
+_declared_keys_cache: dict | None = None
+
+
+def _declared_metadata_keys() -> dict:
+    """Return the metadata keys the configured strategies declare.
+
+    A config that fails to load counts as declaring none, as for extra_tools.
+    """
+    global _declared_keys_cache
+    if _declared_keys_cache is None:
+        keys: dict = {}
+        try:
+            from opencrane.cli import load_config
+
+            config = load_config(None)
+            for strategy in config.chunking_strategies:
+                for key, description in getattr(strategy, "metadata_keys", {}).items():
+                    keys.setdefault(key, description)
+        except Exception as exc:
+            logger.warning(f"Failed to load project config for metadata keys: {exc}; skipping")
+        _declared_keys_cache = keys
+    return _declared_keys_cache
+
+
+def _strategy_metadata_section(schema_content: str) -> str:
+    """List declared keys the packaged schema does not document, or ``""``."""
+    keys = {k: d for k, d in _declared_metadata_keys().items() if f"`{k}`" not in schema_content}
+    if not keys:
+        return ""
+    rows = "\n".join(f"| `{key}` | {description} |" for key, description in keys.items())
+    return (
+        "\n\n## Strategy Metadata\n\n"
+        "The project's chunking strategies add the following metadata fields:\n\n"
+        "| Field | Description |\n|---|---|\n" + rows + "\n"
+    )
+
+
 def _extract_schema_section(full_schema: str, heading_prefix: str) -> str | None:
     """Return the ``## {heading_prefix}…`` section up to the next top-level heading.
 
@@ -1618,8 +1666,10 @@ async def get_metadata_schema(arguments: dict) -> list[TextContent]:
             .read_text(encoding="utf-8")
         )
 
+        strategy_section = _strategy_metadata_section(schema_content)
+
         if not chunk_type:
-            return [TextContent(type="text", text=schema_content)]
+            return [TextContent(type="text", text=schema_content + strategy_section)]
 
         universal = _extract_schema_section(schema_content, "Universal Metadata") or ""
 
@@ -1636,7 +1686,7 @@ async def get_metadata_schema(arguments: dict) -> list[TextContent]:
             body = universal + (
                 f"\n`{chunk_type}` is a custom chunk type. The project's chunking "
                 "strategy or tree walker defines its other metadata fields.\n"
-            )
+            ) + strategy_section
             logger.info(f"   get_metadata_schema: returned universal fields for custom type {chunk_type}")
             return [TextContent(type="text", text=body)]
 
@@ -1644,7 +1694,7 @@ async def get_metadata_schema(arguments: dict) -> list[TextContent]:
         specific = "" if heading == "Universal Metadata" else (
             _extract_schema_section(schema_content, heading) or ""
         )
-        body = universal + "\n" + specific if specific else universal
+        body = (universal + "\n" + specific if specific else universal) + strategy_section
         logger.info(f"   get_metadata_schema: returned {len(body)} chars (filtered to {chunk_type})")
         return [TextContent(type="text", text=body)]
 
@@ -1669,14 +1719,17 @@ async def get_list_members(arguments: dict) -> list[TextContent]:
     style = first_meta.get("list_style", "")
     total = first_meta.get("total_siblings", len(members))
 
+    lead_in = first_meta.get("list_caption", "")
     lines = [f"List ({len(members)} of {total} items, style={style})"]
     lines.extend(_source_lines(members[0], first_meta))
     if breadcrumb:
         lines.append(f"Location: {breadcrumb}")
+    if lead_in:
+        lines.append(f"Lead-in: {lead_in}")
     lines.append("")
     for m in members:
-        # Strip breadcrumb header for readable inline display
-        lines.append(_list_item_line(m, _strip_breadcrumb(m.get("content", ""), breadcrumb)))
+        # Strip breadcrumb header and lead-in for readable inline display
+        lines.append(_list_item_line(m, _strip_breadcrumb(m.get("content", ""), breadcrumb, lead_in)))
 
     return [TextContent(type="text", text="\n".join(lines) + "\n")]
 
@@ -2045,16 +2098,20 @@ def _member_block_key(member: dict, by_id: dict) -> tuple:
 def _own_item_text(item: dict, breadcrumb: str) -> str:
     """The text of a list item without the lines the chunker adds before it.
 
-    The chunker starts an item with its ``# {breadcrumb}`` header and, for a
-    nested item, one line per parent item: the parent's first line, which the
-    list block shows already. A parent whose text starts on the next line has
-    an empty first line, so the lines are counted, never matched by content.
+    The chunker starts an item with its ``# {breadcrumb}`` header, the list's
+    lead-in sentence when it has one, and, for a nested item, one line per
+    parent item: the parent's first line, which the list block shows already.
+    A parent whose text starts on the next line has an empty first line, so
+    the lines are counted, never matched by content.
     """
     content = str(item.get("content", ""))
     header = f"# {breadcrumb}\n" if breadcrumb else "#\n"
     if not content.startswith(header):
         return content
     lines = content[len(header):].split("\n")
+    lead_in = item["metadata"].get("list_caption")
+    if lead_in and lines[0] == lead_in:
+        lines = lines[1:]
     return "\n".join(lines[item["metadata"].get("depth", 0):]).lstrip("\n")
 
 

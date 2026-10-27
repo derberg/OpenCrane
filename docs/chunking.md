@@ -84,16 +84,17 @@ A table with no heading or lead-in sentence still produces `table_row` chunks, b
 
 ## Chunking strategies
 
-Before the strategies run, the chunker splits each page at every fenced code block outside a list or a `<Tabs>` block, and keeps each `<Tabs>` block whole. A code block inside a list item stays in that item. The chunker then processes each code block, each `<Tabs>` block, and each stretch of text between them on its own. Each stretch of text keeps the headings that it sits under, so a list or table after a code block gets its full breadcrumb. It also takes fenced `yaml` and `yml` blocks out of the text first, when the opening fence is unindented and has nothing after the language. Structured YAML specifications go to tree walkers. A tree walker is a class that walks the YAML tree of one specification format and creates one chunk for each property or element.
+Before the strategies run, the chunker splits each page at every fenced code block outside a list or a declared content block, and keeps each declared content block whole. A content block is a component written as a tag, such as `<details>`, that a strategy declares in `block_tags`. For details, see [Add a strategy for a content block](#add-a-strategy-for-a-content-block). A code block inside a list item stays in that item. The chunker then processes each code block, each content block, and each stretch of text between them on its own. Each stretch of text keeps the headings that it sits under, so a list or table after a code block gets its full breadcrumb. It also takes fenced `yaml` and `yml` blocks out of the text first, when the opening fence is unindented and has nothing after the language. Structured YAML specifications go to tree walkers. A tree walker is a class that walks the YAML tree of one specification format and creates one chunk for each property or element.
 
-The chunker evaluates the following strategies in this order. The first strategy that matches the content and returns chunks handles it:
+A content block goes to the strategy that declares its tag. The chunker evaluates the following strategies in this order for everything else, and for a content block whose strategy returns no chunks. The first strategy that matches the content and returns chunks handles it:
 
 | Strategy | Content it handles |
 |---|---|
+| `DetailsChunkingStrategy` | `<details>` blocks of GitHub-flavored Markdown. The strategy puts the text of the `<summary>` element on top of the block as a heading, one level below the heading above the block, and chunks the rest of the block like any other part of the page. Each chunk gets the summary in its `details_summary` metadata. |
 | `YamlChunkingStrategy` | Fenced `yaml` and `yml` blocks, and fenced `json` blocks that a configured tree walker accepts. The strategy skips fenced blocks in any other language. For unfenced text and for fenced blocks without a language, the strategy reads the first ten lines that are not blank or comments. It handles the text when at least two of those lines look like `key: value` pairs. Structured YAML specifications, such as Kubernetes CustomResourceDefinitions (CRDs) and OpenAPI specifications, go to the first configured tree walker whose `can_handle` method accepts them. Other YAML becomes one `yaml_content` chunk. |
-| `CodeChunkingStrategy` | Fenced code blocks, with the language from the opening fence. The strategy passes CRDs and OpenAPI specifications to the built-in tree walkers only from a `yaml` or `yml` block inside a `<Tabs>` block. The chunker leaves a `yaml` block inside the `<Tabs>` block when, for example, its opening fence has a title after the language. The built-in tree walkers do not read `yaml_tree_walkers`. To have your configured tree walkers handle the block, write its opening fence unindented, with nothing after the language. In a `<Tabs>` block, the strategy emits the text between the code blocks as prose chunks, in page order. A `<Tab>` or `<TabItem>` tag with attributes stays in the prose chunk, so the chunk shows the tab label. |
+| `CodeChunkingStrategy` | Fenced code blocks, with the language from the opening fence. The strategy passes CRDs and OpenAPI specifications to the built-in tree walkers from a `yaml` or `yml` block that the chunker leaves in the text, for example a block whose opening fence has a title after the language. The built-in tree walkers do not read `yaml_tree_walkers`. To have your configured tree walkers handle the block, write its opening fence unindented, with nothing after the language. The strategy emits the text between the code blocks as prose chunks, in page order. A code chunk starts with the headings above the block as a `#` breadcrumb line and the sentence that introduces the block, when that sentence ends with a colon, followed by the code in a fenced block. A code block with neither keeps only the code. |
 | `TableChunkingStrategy` | Markdown tables. The strategy emits one `table_row` chunk for each data row. It passes the text outside the tables to the list and prose strategies. |
-| `ListChunkingStrategy` | Markdown lists. The strategy emits one chunk for each list item, nested items included. It passes the text around the lists to the prose strategy. |
+| `ListChunkingStrategy` | Markdown lists. The strategy emits one chunk for each list item, nested items included. It passes the text around the lists to the prose strategy. When the sentence right before a list ends with a colon, such as `Prerequisites:`, every item chunk repeats it under the breadcrumb. |
 | `ProseChunkingStrategy` | Markdown and text with headings. This is the fallback strategy, and it splits the text as [Prose sections](#prose-sections) describes. |
 
 To turn the tree walkers off, set `YAML_TREE_CHUNKING_ENABLED` to `false`. The default is `true`, and any other value also turns them off. Structured specifications then become `yaml_content` or `code_snippet` chunks.
@@ -255,19 +256,18 @@ class MyCustomStrategy(ProcessingStrategy):
         return [chunk]
 ```
 
-The example creates `prose` chunks, so the chunk model checks their metadata. Prose chunks accept only the following metadata keys, and OpenCrane sets most of them after the strategies run:
+The example creates `prose` chunks, so the chunk model checks their metadata. Prose chunks accept the keys that your strategies declare in `metadata_keys`, and the following built-in keys. OpenCrane sets most of the built-in keys after the strategies run:
 
 - `source_url`
 - `breadcrumb_path`
 - `section_anchor`
-- `tab_value`
-- `tab_label`
 - `heading_path`
 - `clause_id`
 - `parent_chunk_id`
 - `position`
 - `prev_chunk_id`
 - `next_chunk_id`
+- `doc_order`
 
 To give the chunks a custom chunk type, pass a name such as `"custom_block"` as `chunk_type` and to `generate_unique_chunk_id`. A custom chunk type accepts any metadata keys. For the naming rules, see [Custom chunk types](#custom-chunk-types).
 
@@ -280,6 +280,7 @@ The following example registers the strategy in your configuration class and pla
 ```python
 # .opencrane/extensions.py
 from opencrane import OpenCraneConfig
+from opencrane.rag.services.details_chunker import DetailsChunkingStrategy
 from opencrane.rag.services.yaml_chunker import YamlChunkingStrategy
 from opencrane.rag.services.code_chunker import CodeChunkingStrategy
 from opencrane.rag.services.table_chunker import TableChunkingStrategy
@@ -289,6 +290,7 @@ from my_strategies import MyCustomStrategy
 
 class Config(OpenCraneConfig):
     chunking_strategies = [
+        DetailsChunkingStrategy(),  # <details> blocks, wherever it is listed
         YamlChunkingStrategy(),   # Priority 1: YAML (delegates to tree walkers)
         MyCustomStrategy(),       # Priority 2: Your custom strategy
         CodeChunkingStrategy(),   # Priority 3: Fenced code blocks
@@ -302,6 +304,45 @@ class Config(OpenCraneConfig):
 > The first strategy that matches the content and returns chunks handles it. A strategy that returns no chunks passes the content to the next strategy. Place specific strategies before general ones.
 
 The chunker uses your strategy the next time you run `opencrane chunk`.
+
+## Add a strategy for a content block
+
+A content block is a component that a page writes as a tag around ordinary Markdown, such as an MDX `<Tabs>` component or an HTML `<details>` element. Only your project knows what its components mean, so OpenCrane handles a component only when a strategy declares its tag. The built-in `DetailsChunkingStrategy` in `opencrane/rag/services/details_chunker.py` is a reference implementation.
+
+A strategy for a content block uses three parts of `ProcessingStrategy`:
+
+- `block_tags`: the tag names that the strategy owns, such as `("Tabs",)`. The names match exactly, so `Tabs` and `tabs` are different tags. The chunker keeps each block of these tags whole and gives it to the strategy, wherever the strategy is in `chunking_strategies`. A block opens on a line that starts with `<Tabs>` or `<Tabs ` at its first column, and closes at the matching `</Tabs>`. A tag inside a code fence, an inline code span or a sentence does not open or close a block. An indented tag, for example inside a list item, stays part of the surrounding content. A block that is never closed ends at the end of its page. Two strategies cannot declare the same tag.
+- `chunk_text(text, node, source_file)`: chunks text that the strategy cuts out of its block, such as the body of one tab, the way the chunker chunks any part of a page. Lists, tables, code and YAML inside the text get their own chunks, a block of another declared tag inside it goes to its own strategy, and the chunks keep the headings above the block. To give the chunks a title, put it on top of the text as a Markdown heading. Calls can nest up to eight levels deep. Deeper text is chunked without the strategies that declare `block_tags`, and the chunker logs a warning.
+- `metadata_keys`: the metadata keys that the strategy adds to prose chunks, each with a one-line description. Prose chunks accept only declared keys and built-in keys, and `get_metadata_schema` lists the declared keys for AI agents.
+
+The following example handles a `<Note title="...">` component. It chunks the body under the title and records the title on each chunk:
+
+```python
+import re
+from pathlib import Path
+from typing import List
+from opencrane.rag.services.base_strategy import ProcessingStrategy
+from opencrane.shared.models.chunk import Chunk
+
+class NoteStrategy(ProcessingStrategy):
+    block_tags = ("Note",)
+    metadata_keys = {"note_title": "Title of the Note component the chunk comes from."}
+
+    def can_process(self, node) -> bool:
+        return getattr(node, "block_tag", None) == "Note"
+
+    def process(self, node, source_file: Path) -> List[Chunk]:
+        lines = node.text.split("\n")
+        title = re.search(r'title="([^"]*)"', lines[0])
+        title = title.group(1) if title else ""
+        body = "\n".join(lines[1:-1])
+        chunks = self.chunk_text(f"### {title}\n\n{body}" if title else body, node, source_file)
+        for chunk in chunks:
+            chunk.metadata["note_title"] = title
+        return chunks
+```
+
+A heading inside a content block counts for the block only. The sections after the block keep the headings from before it, and so does each part that the strategy sends through `chunk_text` on its own. A heading right above a block stays in the heading path of the block's chunks. The `section_anchor` of a chunk from a block links to the heading above the block, because a title that a strategy adds has no anchor on the rendered page.
 
 ## Add a tree walker for a YAML specification
 

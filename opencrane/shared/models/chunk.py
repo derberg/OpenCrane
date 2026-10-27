@@ -1,7 +1,7 @@
 """Pydantic models for the Structure-Aware Hybrid Chunker."""
 
 import re
-from typing import Dict, Any, Union
+from typing import Dict, Any, Mapping, Union
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
 
@@ -17,6 +17,30 @@ BUILTIN_CHUNK_TYPES = frozenset({
 CHUNK_TYPE_MAX_LENGTH = 32
 
 _CHUNK_TYPE_PATTERN = re.compile(r"[A-Za-z0-9_-]+")
+
+# Metadata keys a prose chunk may carry from OpenCrane's own strategies and
+# the chunker's post-passes.
+BUILTIN_PROSE_METADATA_KEYS = frozenset({
+    "source_url", "breadcrumb_path", "section_anchor",
+    # Navigation metadata (see _annotate_prose_navigation in rag/chunker.py)
+    "heading_path", "clause_id", "parent_chunk_id", "position",
+    "prev_chunk_id", "next_chunk_id", "doc_order",
+})
+
+# Keys that the configured strategies declare in ``metadata_keys``, with their
+# descriptions. FileProcessor registers them before any strategy runs.
+_declared_metadata_keys: Dict[str, str] = {}
+
+
+def register_metadata_keys(keys: Mapping[str, str]) -> None:
+    """Replace the declared metadata keys that prose chunks accept."""
+    global _declared_metadata_keys
+    _declared_metadata_keys = dict(keys)
+
+
+def declared_metadata_keys() -> Dict[str, str]:
+    """Return the declared metadata keys and their descriptions."""
+    return dict(_declared_metadata_keys)
 
 
 def is_valid_chunk_type(value: object) -> bool:
@@ -59,6 +83,22 @@ class Chunk(BaseModel):
     # right before this chunk. Not serialized; read by the chunker's prose
     # navigation pass so heading ancestry includes them.
     _preceding_headings: list = PrivateAttr(default_factory=list)
+    # Headings right above the declared block this chunk opens. The prose
+    # navigation pass applies them before the block, so they outlast it.
+    _outer_headings: list = PrivateAttr(default_factory=list)
+    # True when the chunk comes from inside a declared content block. Not
+    # serialized; the prose navigation pass keeps the block's headings out of
+    # the sections that follow the block.
+    _in_block: bool = PrivateAttr(default=False)
+    # Title of the heading above the outermost block the chunk comes from, or
+    # None. A block's own titles have no anchor on the rendered page, so the
+    # section anchor of a block chunk comes from this heading.
+    _anchor_heading: str | None = PrivateAttr(default=None)
+    # Which chunk_text call produced the chunk, and the headings in effect
+    # where that call starts. Two parts of one block, such as two tabs, do not
+    # share the headings inside them.
+    _block_part: int | None = PrivateAttr(default=None)
+    _part_ancestry: list = PrivateAttr(default_factory=list)
 
     @field_validator("chunk_type")
     @classmethod
@@ -87,12 +127,7 @@ class Chunk(BaseModel):
         
         # Validate metadata shape based on chunk_type
         if self.chunk_type == "prose":
-            allowed_keys = {
-                "source_url", "breadcrumb_path", "section_anchor", "tab_value", "tab_label",
-                # Navigation metadata (see _annotate_prose_navigation in rag/chunker.py)
-                "heading_path", "clause_id", "parent_chunk_id", "position",
-                "prev_chunk_id", "next_chunk_id", "doc_order",
-            }
+            allowed_keys = BUILTIN_PROSE_METADATA_KEYS | _declared_metadata_keys.keys()
             invalid_keys = set(self.metadata.keys()) - allowed_keys
             if invalid_keys:
                 raise ValueError("prose chunks must use supported metadata keys only")

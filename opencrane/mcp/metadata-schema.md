@@ -14,6 +14,7 @@ The following table lists the metadata fields that can appear on every chunk typ
 | `schema_type` | string, enum, optional | Schema category of YAML content: `"k8s_crd"`, `"openapi"`, or `"json_schema"`. Only CRD, OpenAPI, and JSON Schema chunks have it. | `"openapi"` |
 | `original_yaml_file` | string, optional | Path of the YAML file that the content came from. Only CRD, OpenAPI, and JSON Schema chunks can have it. The OpenCrane pipeline never sets it. A chunk has it only when your own code creates a tree walker with the `original_yaml_file` argument. | `"crds/smc.yaml"` |
 | `root_identity` | object, optional | Identity of a Kubernetes resource: its `apiVersion`, `kind`, `name`, and `namespace`. Only `yaml_content` chunks of a YAML document with `apiVersion`, `kind`, and `metadata.name` have it. | `{"apiVersion": "v1", "kind": "ConfigMap", "name": "app-config", "namespace": null}` |
+| `details_summary` | string, optional | Title of the `<details>` block that the chunk came from, taken from its `<summary>`. The title is also a heading at the top of the chunk content. Use it to find everything inside one collapsible section. | `"Advanced options"` |
 
 The chunker finds the `source_url` of a chunk by matching the `llms-full.txt` content to the companion `llms.txt` index. For details, see [Document boundaries and page URLs](https://github.com/derberg/OpenCrane/blob/main/docs/chunking.md#document-boundaries-and-page-urls).
 
@@ -37,7 +38,8 @@ The following table lists the metadata fields of `code_snippet` chunks:
 |---|---|---|---|
 | `language` | string | Language identifier of the fenced code block, or `"unknown"` for a block without one. Every code chunk has it. | `"python"` |
 | `is_complete` | boolean | Always `true`. | `true` |
-| `tab_value`, `tab_label` | string, optional | The `value` and `label` attributes of a `<Tab>` component. Only a custom processing strategy sets them. | `"helm"`, `"Helm"` |
+| `breadcrumb_path` | string, optional | Headings above the code block, joined by ` > `. The chunk content starts with the same breadcrumb as a `#` line. | `"Install > CLI"` |
+| `code_caption` | string, optional | The sentence right before the code block that introduces it, when that sentence ends with a colon. The chunk content repeats it under the breadcrumb, above the fenced code. | `"Run this command:"` |
 
 ## CRD-Specific Metadata
 
@@ -122,6 +124,7 @@ The following table lists the metadata fields of `list_item` chunks:
 | `sibling_previews` | array of strings | Short previews of the other items, in list order. For the length and the cap, see [Previews of list items](#previews-of-list-items). | `["1. Back up the database", "3. Restart the server"]` |
 | `parent_item_id` | `chunk_id` string, or null | For a nested item, the `chunk_id` of the item that contains it. The value is `null` at the top level. The parent item belongs to the outer list, so its `list_id` differs from the `list_id` of this item. | `null` |
 | `depth` | integer | Nesting level of the item: `0` for a top-level item, `1` for the first nested level, and so on. | `0` |
+| `list_caption` | string, optional | The sentence right before the list that introduces it, when that sentence ends with a colon. The chunk content repeats it under the breadcrumb, so every item shows what the list is about. | `"Prerequisites:"` |
 
 ### Previews of list items
 

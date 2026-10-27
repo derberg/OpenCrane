@@ -172,7 +172,9 @@ class TestCodeBlockInListItem:
     def test_top_level_code_block_still_splits(self, tmp_path):
         full = CODE_IN_LIST_ITEM + "\nThen:\n\n```bash\necho top\n```\n\n- after\n"
         chunks = _chunk_with_index(tmp_path, full)
-        assert [c.content for c in _of_type(chunks, "code_snippet")] == ["echo top"]
+        assert [c.content for c in _of_type(chunks, "code_snippet")] == [
+            "# Guide > Install\nThen:\n\n```bash\necho top\n```"
+        ]
         after = [c for c in _of_type(chunks, "list_item") if c.content.endswith("after")]
         assert after[0].metadata["breadcrumb_path"] == "Guide > Install"
 

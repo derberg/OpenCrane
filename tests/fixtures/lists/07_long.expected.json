@@ -9,7 +9,7 @@
   {
     "_comment": "Item 1 of 17. After excluding self, there are 16 siblings — exceeds preview cap of 15. sibling_ids MUST contain all 16 real IDs (full list). sibling_previews MUST contain exactly 16 entries: first 15 are real previews, the 16th is the overflow marker '... +1 more'.",
     "chunk_id": "$item_01",
-    "content": "# Supported regions\nus-east-1",
+    "content": "# Supported regions\nThe service is available in the following regions:\nus-east-1",
     "source_file": "tests/fixtures/lists/07_long.md",
     "chunk_type": "list_item",
     "metadata": {

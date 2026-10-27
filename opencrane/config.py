@@ -14,6 +14,7 @@ from opencrane.rag.services.code_chunker import CodeChunkingStrategy
 from opencrane.rag.services.table_chunker import TableChunkingStrategy
 from opencrane.rag.services.list_chunker import ListChunkingStrategy
 from opencrane.rag.services.prose_chunker import ProseChunkingStrategy
+from opencrane.rag.services.details_chunker import DetailsChunkingStrategy
 from opencrane.rag.generate_llms_txt import slugify
 from opencrane.walkers import K8sCRDTreeWalker, OpenAPITreeWalker, JsonSchemaTreeWalker
 
@@ -63,6 +64,7 @@ class OpenCraneConfig:
 
     # Chunking strategies applied in order (first match wins).
     chunking_strategies: List[ProcessingStrategy] = [
+        DetailsChunkingStrategy(),
         YamlChunkingStrategy(),
         CodeChunkingStrategy(),
         TableChunkingStrategy(),

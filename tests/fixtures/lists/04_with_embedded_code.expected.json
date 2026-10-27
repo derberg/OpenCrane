@@ -8,7 +8,7 @@
   },
   {
     "chunk_id": "$item1",
-    "content": "# Setup\n1. Configure the service:\n\n   ```yaml\n   service:\n     port: 8080\n   ```\n\n   Restart after editing.",
+    "content": "# Setup\nFollow these steps:\n1. Configure the service:\n\n   ```yaml\n   service:\n     port: 8080\n   ```\n\n   Restart after editing.",
     "source_file": "tests/fixtures/lists/04_with_embedded_code.md",
     "chunk_type": "list_item",
     "metadata": {
@@ -25,7 +25,7 @@
   },
   {
     "chunk_id": "$item2",
-    "content": "# Setup\n2. Verify the service is running.",
+    "content": "# Setup\nFollow these steps:\n2. Verify the service is running.",
     "source_file": "tests/fixtures/lists/04_with_embedded_code.md",
     "chunk_type": "list_item",
     "metadata": {

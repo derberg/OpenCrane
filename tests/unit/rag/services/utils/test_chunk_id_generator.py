@@ -105,18 +105,6 @@ def test_generate_chunk_id_code_with_language():
     assert id1 != id2
 
 
-def test_generate_chunk_id_tab_with_tab_value():
-    """Tab chunks with different tab_value get different IDs."""
-    content = "Install instructions"
-    source_file = "/path/to/file.md"
-    chunk_type = "prose"
-    
-    id1 = generate_chunk_id(content, source_file, chunk_type, {"tab_value": "cli"})
-    id2 = generate_chunk_id(content, source_file, chunk_type, {"tab_value": "cmc"})
-    
-    assert id1 != id2
-
-
 def test_generate_chunk_id_crd_with_breadcrumb():
     """CRD chunks with different breadcrumb get different IDs."""
     content = {"replicas": 3}

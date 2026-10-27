@@ -178,3 +178,62 @@ def test_heading_only_start_of_a_part_does_not_leak_after_block(tmp_path):
 def test_boundary_does_not_cut_a_block_that_closes():
     lines = ["<details>", "#### https://github.com/o/r/blob/main/a.md CLI", "text", "</details>", "after"]
     assert find_blocks(lines, ["details"], boundaries={1}) == [BlockSpan(0, 3, "details")]
+
+
+# --- review round 3 -------------------------------------------------------------
+
+def test_heading_between_two_blocks_stays_for_the_rest_of_the_page(tmp_path):
+    text = (
+        f"### {URL_A}\n\n## A\n\nProse of section A.\n\n"
+        "<details><summary>Q1</summary>\n\nAnswer one text here.\n\n</details>\n\n"
+        "## X\n\n"
+        "<details><summary>Q2</summary>\n\nAnswer two text here.\n\n</details>\n\n"
+        "More text under X after Q2.\n\n### Y\n\nUnder Y text goes here.\n"
+    )
+    chunks = _process(tmp_path, text)
+    more = [c for c in chunks if "More text under X" in c.content][0]
+    under_y = [c for c in chunks if "Under Y text" in c.content][0]
+    assert more.metadata["heading_path"] == "X"
+    assert under_y.metadata["heading_path"] == "X > Y"
+
+
+def test_heading_above_block_that_starts_with_code_is_kept(tmp_path):
+    text = (
+        f"### {URL_A}\n\n## A\n\nProse of section A.\n\n## X\n\n"
+        "<details><summary>Example</summary>\n\n```bash\nrun it\n```\n\nExplanation text of the example.\n\n</details>\n\n"
+        "Text after the block goes here.\n"
+    )
+    chunks = _process(tmp_path, text)
+    explanation = [c for c in chunks if "Explanation text" in c.content][0]
+    after = [c for c in chunks if "Text after the block" in c.content][0]
+    assert explanation.metadata["heading_path"] == "X > Example"
+    assert after.metadata["heading_path"] == "X"
+
+
+def test_indented_nested_details_is_chunked_with_its_summary(tmp_path):
+    block = (
+        "<details>\n  <summary>Linux</summary>\n\n  Run it on any Linux host.\n\n"
+        "  <details>\n  <summary>Debian</summary>\n\n  Install the package with apt.\n\n  </details>\n</details>"
+    )
+    chunks = _process(tmp_path, f"### {URL_A}\n\n{block}\n")
+    inner = [c for c in chunks if "Install the package with apt." in c.content][0]
+    assert inner.metadata["details_summary"] == "Debian"
+    assert "<summary>" not in inner.content
+
+
+class Duck:
+    """A strategy that does not subclass ProcessingStrategy."""
+
+    def can_process(self, node) -> bool:
+        return "DUCK" in getattr(node, "text", "")
+
+    def process(self, node, source_file):
+        return []
+
+
+def test_strategy_without_processing_strategy_base_still_works(tmp_path):
+    class DuckConfig(OpenCraneConfig):
+        chunking_strategies = [Duck(), *OpenCraneConfig.chunking_strategies]
+
+    chunks = _process(tmp_path, f"### {URL_A}\n\n## A\n\nDUCK text that falls through to prose.\n", DuckConfig())
+    assert any("DUCK text" in c.content for c in chunks)

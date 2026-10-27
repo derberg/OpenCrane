@@ -7,6 +7,7 @@ tables and code inside the block get their own chunks under that title.
 """
 
 import re
+import textwrap
 from pathlib import Path
 from typing import List
 
@@ -39,6 +40,10 @@ class DetailsChunkingStrategy(ProcessingStrategy):
         title = self._clean_title(summary.group(1)) if summary else ""
         if summary:
             body = body[:summary.start()] + body[summary.end():]
+        # GitHub content inside <details> is often indented, nested blocks
+        # included. Remove the common indent so a nested block opens at the
+        # first column and Markdown inside is not read as an indented block.
+        body = textwrap.dedent(body)
         if not body.strip():
             return []
         if title:

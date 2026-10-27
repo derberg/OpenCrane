@@ -274,6 +274,10 @@ def _annotate_prose_navigation(chunks, config) -> None:
             # headings of the part before it.
             stack = _align_stack(stack, chunk._part_ancestry)
 
+        if outer and before_block is not None:
+            # Headings between two blocks: the first block is over, so start
+            # from the stack before it and keep these headings after the next.
+            stack, before_block = before_block, None
         for level, title in outer:
             _push_heading(stack, level, title, None)
 

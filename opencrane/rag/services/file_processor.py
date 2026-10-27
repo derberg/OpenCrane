@@ -28,6 +28,9 @@ from opencrane.shared.models.chunk import (
 
 logger = logging.getLogger(__name__)
 
+# Chunk types whose headings the chunker's prose navigation pass reads.
+_NAVIGATED_TYPES = ("prose", "list_item", "table_row")
+
 # How deep chunk_text calls may nest. Deeper text is chunked without block
 # routing, so a strategy that sends its whole block back cannot loop forever.
 MAX_BLOCK_NESTING = 8
@@ -314,7 +317,7 @@ class FileProcessor:
         declare block tags are skipped.
         """
         within_limit = depth <= MAX_BLOCK_NESTING
-        strategies = [s for s in self.strategies if within_limit or not s.block_tags]
+        strategies = [s for s in self.strategies if within_limit or not getattr(s, 'block_tags', ())]
         chunks = []
         nodes_processed = 0
         # Headings of parts that produced no chunk, such as a heading right
@@ -322,6 +325,7 @@ class FileProcessor:
         pending_headings: List[str] = []
         for item in items:
             first_new = len(chunks)
+            winner = None
             if isinstance(item, TextItem):
                 item.chunk_text = partial(self._chunk_text, parent=item, depth=depth + 1)
             tag = getattr(item, 'block_tag', None)
@@ -347,9 +351,12 @@ class FileProcessor:
                 logger.debug(f"Strategy {strategy.__class__.__name__} processed node, added {len(node_chunks)} chunks")
                 nodes_processed += 1
                 if node_chunks:
+                    winner = strategy
                     break  # First matching strategy wins
-            if len(chunks) > first_new:
-                first = chunks[first_new]
+            # The navigation pass reads headings from prose, list and table
+            # chunks only, so the headings go with the first of those.
+            first = next((c for c in chunks[first_new:] if c.chunk_type in _NAVIGATED_TYPES), None)
+            if first is not None:
                 if tag:
                     first._outer_headings = pending_headings + first._outer_headings
                 else:
@@ -357,6 +364,13 @@ class FileProcessor:
                 pending_headings = []
             elif tag is None:
                 pending_headings += _heading_lines(getattr(item, 'text', ''))
+            # Headings the winning strategy dropped after its last chunk, such
+            # as a heading right above the next block, go with the next item.
+            pending_headings += list(
+                getattr(winner, '_pending_headings', None)
+                or getattr(winner, '_skipped_headings', None)
+                or []
+            )
         return chunks, nodes_processed
 
     def _chunk_text(self, text: str, source_file, parent, depth: int) -> List[Chunk]:
@@ -410,7 +424,7 @@ class FileProcessor:
         """Map each declared block tag to the strategy that declares it."""
         owners: dict = {}
         for strategy in strategies:
-            for tag in strategy.block_tags:
+            for tag in getattr(strategy, 'block_tags', ()):
                 if tag in owners:
                     raise ValueError(
                         f"Block tag '{tag}' is declared by both "
@@ -424,7 +438,7 @@ class FileProcessor:
         """Merge the metadata keys the strategies declare, with their descriptions."""
         keys: dict = {}
         for strategy in strategies:
-            for key, description in strategy.metadata_keys.items():
+            for key, description in getattr(strategy, 'metadata_keys', {}).items():
                 if key in BUILTIN_PROSE_METADATA_KEYS:
                     raise ValueError(
                         f"{type(strategy).__name__} declares metadata key '{key}', "

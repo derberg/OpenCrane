@@ -3,6 +3,7 @@
   "packages": {
     ".": {
       "release-type": "python",
+      "bump-minor-pre-major": true,
       "package-name": "opencrane",
       "changelog-path": "CHANGELOG.md",
       "include-component-in-tag": false

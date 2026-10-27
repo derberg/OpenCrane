@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.35.0](https://github.com/derberg/OpenCrane/compare/v0.34.4...v0.35.0) (2026-10-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* let chunking strategies own content blocks by tag, and give list items and code chunks their lead-in ([#112](https://github.com/derberg/OpenCrane/issues/112))
+
+### Features
+
+* let chunking strategies own content blocks by tag, and give list items and code chunks their lead-in ([#112](https://github.com/derberg/OpenCrane/issues/112)) ([63eaaa1](https://github.com/derberg/OpenCrane/commit/63eaaa16eb572a4ae262e65191e2bbfa3face8ed))
+
+
+### Documentation
+
+* describe how the list chunker handles nested items and the prose around a list ([#110](https://github.com/derberg/OpenCrane/issues/110)) ([4ba6c31](https://github.com/derberg/OpenCrane/commit/4ba6c317ef72fa506a9a90d7e3b952a76106495d))
+
 ## [0.34.4](https://github.com/derberg/OpenCrane/compare/v0.34.3...v0.34.4) (2026-10-20)
 
 

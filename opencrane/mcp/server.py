@@ -88,10 +88,16 @@ def _source_lines(row: dict, metadata: dict) -> list[str]:
     return lines
 
 
-def _strip_breadcrumb(content: str, breadcrumb: str) -> str:
-    """Drop the ``# {breadcrumb}`` line that list item and table row chunks start with."""
+def _strip_breadcrumb(content: str, breadcrumb: str, lead_in: str = "") -> str:
+    """Drop the ``# {breadcrumb}`` line that list item and table row chunks start with.
+
+    With ``lead_in``, the list's lead-in sentence on the next line goes too, so
+    a tool that lists several items shows it once instead of on every item.
+    """
     if breadcrumb and content.startswith(f"# {breadcrumb}\n"):
-        return content[len(breadcrumb) + 3:].lstrip("\n")
+        content = content[len(breadcrumb) + 3:].lstrip("\n")
+    if lead_in and content.startswith(f"{lead_in}\n"):
+        content = content[len(lead_in) + 1:]
     return content
 
 
@@ -459,8 +465,11 @@ def _format_grouped_list_item(result: dict) -> str:
         f"Matched List ({len(members)} of {total} items):",
         *_source_lines(members[0], head_meta),
     ]
+    lead_in = head_meta.get("list_caption", "")
     if breadcrumb:
         lines.append(f"Location: {breadcrumb}")
+    if lead_in:
+        lines.append(f"Lead-in: {lead_in}")
     lines.append(f"List ID: {list_id}  style={list_style}")
     lines.append("Matched items:")
     for m in members:
@@ -470,7 +479,7 @@ def _format_grouped_list_item(result: dict) -> str:
             mm = {}
         pos = mm.get("position")
         # Drop breadcrumb header prefix when displaying inline for readability
-        stripped = _strip_breadcrumb(m.get("content", ""), breadcrumb)
+        stripped = _strip_breadcrumb(m.get("content", ""), breadcrumb, lead_in)
         lines.append(f"  [{pos}] {stripped}")
 
     unmatched_previews = head_meta.get("sibling_previews") or []
@@ -1710,14 +1719,17 @@ async def get_list_members(arguments: dict) -> list[TextContent]:
     style = first_meta.get("list_style", "")
     total = first_meta.get("total_siblings", len(members))
 
+    lead_in = first_meta.get("list_caption", "")
     lines = [f"List ({len(members)} of {total} items, style={style})"]
     lines.extend(_source_lines(members[0], first_meta))
     if breadcrumb:
         lines.append(f"Location: {breadcrumb}")
+    if lead_in:
+        lines.append(f"Lead-in: {lead_in}")
     lines.append("")
     for m in members:
-        # Strip breadcrumb header for readable inline display
-        lines.append(_list_item_line(m, _strip_breadcrumb(m.get("content", ""), breadcrumb)))
+        # Strip breadcrumb header and lead-in for readable inline display
+        lines.append(_list_item_line(m, _strip_breadcrumb(m.get("content", ""), breadcrumb, lead_in)))
 
     return [TextContent(type="text", text="\n".join(lines) + "\n")]
 
@@ -2086,16 +2098,20 @@ def _member_block_key(member: dict, by_id: dict) -> tuple:
 def _own_item_text(item: dict, breadcrumb: str) -> str:
     """The text of a list item without the lines the chunker adds before it.
 
-    The chunker starts an item with its ``# {breadcrumb}`` header and, for a
-    nested item, one line per parent item: the parent's first line, which the
-    list block shows already. A parent whose text starts on the next line has
-    an empty first line, so the lines are counted, never matched by content.
+    The chunker starts an item with its ``# {breadcrumb}`` header, the list's
+    lead-in sentence when it has one, and, for a nested item, one line per
+    parent item: the parent's first line, which the list block shows already.
+    A parent whose text starts on the next line has an empty first line, so
+    the lines are counted, never matched by content.
     """
     content = str(item.get("content", ""))
     header = f"# {breadcrumb}\n" if breadcrumb else "#\n"
     if not content.startswith(header):
         return content
     lines = content[len(header):].split("\n")
+    lead_in = item["metadata"].get("list_caption")
+    if lead_in and lines[0] == lead_in:
+        lines = lines[1:]
     return "\n".join(lines[item["metadata"].get("depth", 0):]).lstrip("\n")
 
 

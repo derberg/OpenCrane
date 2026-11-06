@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.36.0](https://github.com/derberg/OpenCrane/compare/v0.35.0...v0.36.0) (2026-11-06)
+
+
+### Features
+
+* index a local Starlight docs folder with .mdx pages, Markdown preprocessors, and trailing-slash URLs ([#113](https://github.com/derberg/OpenCrane/issues/113)) ([7178364](https://github.com/derberg/OpenCrane/commit/7178364a6cfe836ed9d2f8dccdd6582ebb6eb2fa))
+
 ## [0.35.0](https://github.com/derberg/OpenCrane/compare/v0.34.4...v0.35.0) (2026-10-27)
 
 

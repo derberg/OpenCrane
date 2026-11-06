@@ -135,6 +135,7 @@ pip install -e ".[dev]"
 Subclass `OpenCraneConfig` in `.opencrane/extensions.py` to customize:
 
 1. **`fence_types`**: custom fence block handlers for llms-full.txt generation
+   **`markdown_preprocessors`**: callables `(content, file_path, project_name) -> str` that the `llms` step runs in order on the body of every Markdown file, after the frontmatter is read and before images and links are handled. Which extensions count as Markdown is the `markdown_extensions` key in `.opencrane/config.yaml` (default `[".md"]`)
 2. **`chunking_strategies`**: custom chunking strategies (first match wins). A strategy can set `block_tags` (content block tags it owns, such as `("Tabs",)`), call `chunk_text` to chunk text from inside its block through all strategies, and declare `metadata_keys` (prose metadata keys it adds, with descriptions that `get_metadata_schema` lists)
 3. **`yaml_tree_walkers`**: custom YAML tree walkers for structured docs (K8s CRD, OpenAPI, JSON Schema built-in)
 4. **`section_anchor_for`**, **`section_clause_for`**, **`prose_navigation`**: section anchor slug, clause ID and prose navigation metadata on chunks. `section_anchor_style` and `section_clause_pattern` can also be set as keys in `.opencrane/config.yaml`

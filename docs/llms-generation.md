@@ -35,7 +35,7 @@ Outside a Git repository, the step always regenerates. To regenerate the bundles
 The source mapping file, `.opencrane/config.yaml` by default, controls which directories get a bundle. The file shapes the output in the following ways:
 
 - Only paths listed under the `sources:` key get a bundle.
-- Each bundle includes every `.md` file from the directory of the source and its subdirectories, except files under a directory listed in `ignore_patterns`. See [Top-level keys](source-mapping.md#top-level-keys).
+- Each bundle includes every Markdown file from the directory of the source and its subdirectories, except files under a directory listed in `ignore_patterns`. A Markdown file has an extension listed in `markdown_extensions`, by default only `.md`. See [Top-level keys](source-mapping.md#top-level-keys).
 - Subdirectories do not get their own bundles.
 
 For example, consider a source mapping file with the following content:
@@ -79,6 +79,7 @@ The bundle holds no page URLs. OpenCrane records them in the companion `llms.txt
 
 OpenCrane changes the content of each page in the following ways:
 
+- The Markdown preprocessors of your config rewrite the body of the page, in list order, before the other changes. See [Preprocess Markdown files](../README.md#preprocess-markdown-files).
 - Images become an `[Image removed: {ALT_TEXT}]` note. Without alt text, the note names the image file for a Markdown image, and reads `image` for an HTML `<img>` tag without an `alt` attribute.
 - A relative link to a Markdown file or an anchor becomes its link text. A link to a path without an extension counts as a link to a Markdown file.
 - An absolute-path link becomes `{LABEL} (link removed: {PATH})`.

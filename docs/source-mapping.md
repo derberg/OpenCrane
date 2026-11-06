@@ -11,7 +11,8 @@ The following table lists the top-level keys of the file:
 | Key | Description |
 |---|---|
 | `sources` | The documentation sources. See [Fields of a source entry](#fields-of-a-source-entry). |
-| `ignore_patterns` | A list of directory names. The `llms` step leaves out every `.md` file under a directory with one of these names, at any depth. The match also covers the directories above the project, so a name that appears in the project path leaves out every file. The key applies to all sources. The `opencrane init` template sets it to `devel`. Without the key, OpenCrane ignores no directories. |
+| `ignore_patterns` | A list of directory names. The `llms` step leaves out every Markdown file under a directory with one of these names, at any depth. The match also covers the directories above the project, so a name that appears in the project path leaves out every file. The key applies to all sources. The `opencrane init` template sets it to `devel`. Without the key, OpenCrane ignores no directories. |
+| `markdown_extensions` | The file extensions that the `llms` step reads as Markdown, for example `[".md", ".mdx"]`. Without the key, the step reads only `.md` files. Page URLs built from `docs_url` drop these extensions. |
 | `extensions` | Path to the Python file with your `Config` class, relative to `.opencrane/`, for example `extensions.py`. See [Extend OpenCrane](../README.md#extend-opencrane). |
 | `section_anchor_style` | The slug style of section anchors. See [Choose an anchor style](../README.md#choose-an-anchor-style). |
 | `section_clause_pattern` | The regular expression for clause IDs. See [Section navigation and clause IDs](../README.md#section-navigation-and-clause-ids). |
@@ -43,6 +44,7 @@ The following table describes each field:
 | `docs_path` | The path within the source repository where the documentation is. An empty string means the repository root. If you leave the field out, the fetch uses `docs`. For a local source, `docs_path` names the directory to read, relative to the project root, in place of the path key. |
 | `manual` | `false` means auto-discovery created the entry, and each fetch rewrites or removes it. `true` means you maintain the entry. `opencrane add` sets `true`. |
 | `local` | When `true`, the entry is a directory in the project. OpenCrane does not fetch it, and the `llms` step reads the directory directly. |
+| `trailing_slash` | When `true`, every page URL built from `docs_url` ends with `/`, for example `https://docs.example.com/product/guides/setup/`. Set it for a site that serves each page at that URL. GitHub URLs do not change. |
 | `ignore_patterns` | More directory names to leave out of this source. OpenCrane adds them to the top-level `ignore_patterns`. A fetch removes this field from an entry with `manual: false`. See [Entries that the fetch maintains](#entries-that-the-fetch-maintains). |
 | `sha`, `tag`, `release`, `branch` | Pin the fetch to one commit, tag, release, or branch. The fetch reads these fields only on entries with `manual: true`. For the order of precedence, see [Fetch documentation sources](fetching.md). |
 
@@ -96,8 +98,9 @@ For a local source in a project that sits in a subdirectory of its Git repositor
 When `docs_url` is set, it takes precedence over `url`. OpenCrane builds a URL for each page on the published documentation site in the following way:
 
 1. Takes the path of the file relative to the directory of the source, without a leading `docs_path`.
-2. Removes the `.md` extension, and maps an `index.md` file to its parent directory.
+2. Removes the file extension, and maps an `index` file, for example `index.md` or `index.mdx`, to its parent directory. OpenCrane removes `.md`, `.markdown`, and the extensions listed in `markdown_extensions`.
 3. Adds the result to `docs_url`.
+4. Adds `/` at the end when `trailing_slash` is `true`. The URL of the root page gets one `/`.
 
 For example, `guides/setup.md` with `docs_url: https://docs.example.com/product` becomes `https://docs.example.com/product/guides/setup`. Agents can then point users to the rendered documentation rather than to the raw GitHub files.
 
@@ -133,3 +136,16 @@ sources:
     docs_path: docs
     manual: true
 ```
+
+To give a local source a name that differs from its directory, set `docs_path` to the directory. The path key then becomes the source name in the `llms.txt` index, in the `source_name` of each chunk, and in search results. The following example reads the pages of a Starlight site under the name `my-site`:
+
+```yaml
+markdown_extensions: [".md", ".mdx"]
+sources:
+  my-site:
+    local: true
+    docs_path: src/content/docs/docs
+    url: https://github.com/my-org/my-site
+```
+
+Without `docs_url`, the GitHub URLs contain `docs_path` in place of the path key. For example, `faq.md` gets the URL `https://github.com/my-org/my-site/blob/main/src/content/docs/docs/faq.md`.

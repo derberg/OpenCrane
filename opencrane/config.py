@@ -5,6 +5,7 @@ chunking strategies, and YAML tree walkers.
 """
 
 import re
+from pathlib import Path
 from typing import Callable, Dict, List
 
 from opencrane.fences import CodeFenceConfig, inline_file
@@ -61,6 +62,16 @@ class OpenCraneConfig:
         "crd":          CodeFenceConfig(fence_type="crd",          handler=inline_file),
         "json-schema":  CodeFenceConfig(fence_type="json-schema",  handler=inline_file),
     }
+
+    # Markdown preprocessors applied in order by the ``llms`` step to every
+    # Markdown file before it builds ``llms-full.txt``. Each entry is a callable
+    # ``(content, file_path, project_name) -> str``: ``content`` is the file
+    # body after the frontmatter is read (so the page title still comes from
+    # the frontmatter), ``file_path`` the path of the file, and
+    # ``project_name`` the name of its source. It returns the new body. Use it
+    # to rewrite syntax that the chunker does not read, such as Starlight
+    # ``:::note`` asides or MDX components. Default empty.
+    markdown_preprocessors: List[Callable[[str, Path, str], str]] = []
 
     # Chunking strategies applied in order (first match wins).
     chunking_strategies: List[ProcessingStrategy] = [

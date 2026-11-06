@@ -43,6 +43,7 @@ This README covers the following topics:
   - [Built-in fence types](#built-in-fence-types)
   - [Built-in YAML tree walkers](#built-in-yaml-tree-walkers)
   - [Write a custom fence type](#write-a-custom-fence-type)
+  - [Preprocess Markdown files](#preprocess-markdown-files)
   - [Write a custom YAML tree walker](#write-a-custom-yaml-tree-walker)
   - [Add custom MCP tools](#add-custom-mcp-tools)
 - [Authentication and authorization](#authentication-and-authorization)
@@ -682,6 +683,28 @@ sources:
     tag: v2.1.0
 ```
 
+#### Index a local documentation site
+
+A local source reads a directory in the project instead of fetching a repository. The following example reads the pages of a Starlight site, including its `.mdx` files:
+
+```yaml
+markdown_extensions: [".md", ".mdx"]   # default: [".md"]
+sources:
+  my-site:                              # source name
+    local: true
+    docs_path: src/content/docs/docs    # directory to read, relative to the project root
+    docs_url: https://www.example.com/docs
+    trailing_slash: true                # optional: page URLs end with /
+```
+
+The example uses the following settings:
+
+- `markdown_extensions`: the file extensions that the `llms` step reads as Markdown. Page URLs drop these extensions, and an `index.mdx` file maps to the URL of its directory, like `index.md`.
+- `docs_path`: the directory of a local source. The path key, `my-site`, is then the source name. The `llms.txt` index, the `source_name` of each chunk, and the `source_names` filter of `search_docs` use it. Without `docs_path`, the path key is the directory.
+- `trailing_slash`: adds `/` to each page URL built from `docs_url`, for a site that serves `/docs/faq/` and redirects `/docs/faq`.
+
+To rewrite syntax that the chunker does not read, such as `:::note` asides or MDX components, add a Markdown preprocessor. See [Preprocess Markdown files](#preprocess-markdown-files). For all fields of an entry, see [Source mapping file](docs/source-mapping.md).
+
 ## Extend OpenCrane
 
 To register extensions for your project, subclass `OpenCraneConfig`, as in the following example:
@@ -732,6 +755,7 @@ Each extension point is an attribute or a method of `OpenCraneConfig`. The follo
 | Extension point | Pipeline step | Description |
 |---|---|---|
 | `fence_types` | `llms` | Registers custom fence language identifiers and controls how OpenCrane transforms matching blocks during `llms-full.txt` generation. |
+| `markdown_preprocessors` | `llms` | Rewrites the body of each Markdown file before OpenCrane builds `llms-full.txt`. See [Preprocess Markdown files](#preprocess-markdown-files). |
 | `chunking_strategies` | `chunk` | Adds or replaces chunking strategies for different content types. |
 | `yaml_tree_walkers` | `chunk` | Adds walkers for custom YAML document formats. |
 | `section_anchor_for` | `chunk` | Builds the in-page anchor that each chunk records in its `section_anchor` metadata. |
@@ -864,6 +888,38 @@ class Config(OpenCraneConfig):
 ```
 
 To inline a file that the block references by path, pass `handler=inline_file` from `opencrane.fences`, as the `terraform` entry in the example in [Extend OpenCrane](#extend-opencrane) does. The handler works as described in [Built-in fence types](#built-in-fence-types).
+
+### Preprocess Markdown files
+
+The `fence_types` handlers change only fenced code blocks. To rewrite other syntax, for example Starlight asides or MDX `import` lines, add functions to `markdown_preprocessors`. The `llms` step runs them in list order on every Markdown file. It runs them after it reads the frontmatter and before it handles images and links, so the page title still comes from the frontmatter. Each preprocessor receives the following arguments and returns the new body as a string:
+
+- `content`: the body of the file, without the frontmatter
+- `file_path`: the path of the Markdown file
+- `project_name`: the name of the source
+
+The following example removes MDX `import` lines and turns Starlight asides into blockquotes:
+
+```python
+import re
+from pathlib import Path
+from opencrane import OpenCraneConfig
+
+def mdx_imports(content: str, file_path: Path, project_name: str) -> str:
+    return re.sub(r"^import .*\n?", "", content, flags=re.MULTILINE)
+
+def starlight_asides(content: str, file_path: Path, project_name: str) -> str:
+    return re.sub(
+        r"^:::(note|tip|caution|danger)\n(.*?)\n:::$",
+        lambda m: f"> **{m.group(1).capitalize()}:** {m.group(2)}",
+        content,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+
+class Config(OpenCraneConfig):
+    markdown_preprocessors = [mdx_imports, starlight_asides]
+```
+
+A preprocessor that returns a value other than a string stops the `llms` step with a `TypeError`.
 
 ### Write a custom YAML tree walker
 

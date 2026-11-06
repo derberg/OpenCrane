@@ -46,6 +46,18 @@ SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
 
+# File extensions the ``llms`` step reads as Markdown when the source mapping
+# file sets no ``markdown_extensions`` key.
+DEFAULT_MARKDOWN_EXTENSIONS: tuple[str, ...] = (".md",)
+
+# A link target with one of these extensions is a Markdown page even when the
+# project does not read such files, so ``rewrite_links`` keeps only its label.
+_LINK_MARKDOWN_EXTENSIONS: tuple[str, ...] = (".md", ".markdown")
+
+# A Markdown preprocessor receives the body of a file (frontmatter removed),
+# the file path and the project name, and returns the new body.
+MarkdownPreprocessor = Callable[[str, Path, str], str]
+
 
 def strip_frontmatter(text: str) -> tuple[dict, str]:
     """Split leading YAML frontmatter from body. Returns ({}, text) if absent."""
@@ -77,6 +89,41 @@ def derive_title(frontmatter: dict, body: str, file_path: Path) -> str:
         if m:
             return m.group(2).strip()
     return filename_to_title(file_path.stem)
+
+
+def markdown_extensions() -> tuple[str, ...]:
+    """Return the file extensions that the ``llms`` step reads as Markdown.
+
+    Reads the top-level ``markdown_extensions`` key of the source mapping file,
+    for example ``[".md", ".mdx"]``. A missing key gives ``(".md",)``. Each
+    extension is lowercased and gets a leading dot when it has none.
+
+    Raises:
+        ValueError: The key is not a non-empty list of non-empty strings.
+    """
+    value = get_source_mapping().data.get("markdown_extensions")
+    if value is None:
+        return DEFAULT_MARKDOWN_EXTENSIONS
+    if not isinstance(value, list) or not value or not all(
+        isinstance(ext, str) and ext.strip(".").strip() for ext in value
+    ):
+        raise ValueError(
+            "markdown_extensions in the source mapping file must be a non-empty "
+            f"list of file extensions such as ['.md', '.mdx'], got {value!r}"
+        )
+    return tuple(dict.fromkeys(f".{ext.strip().lstrip('.').lower()}" for ext in value))
+
+
+def find_markdown_files(directory: Path, recursive: bool = True) -> List[Path]:
+    """Return the sorted Markdown files in *directory*.
+
+    A file counts as Markdown when its extension is one of
+    :func:`markdown_extensions`. With ``recursive=False`` only the files
+    directly in *directory* are returned.
+    """
+    extensions = markdown_extensions()
+    candidates = directory.rglob("*") if recursive else directory.glob("*")
+    return sorted(p for p in candidates if p.suffix in extensions)
 
 
 class CodeFenceConfig(NamedTuple):
@@ -200,7 +247,7 @@ def rewrite_links(
             
         if path_part:  # Has a file path component
             target_ext = Path(path_part).suffix.lower()
-            if target_ext and target_ext not in {".md", ".markdown"}:
+            if target_ext and target_ext not in (*_LINK_MARKDOWN_EXTENSIONS, *markdown_extensions()):
                 return match.group(0)
         
         # Return just the label - AI agents will search for content by keywords
@@ -215,10 +262,12 @@ def _docs_site_page_path(file_rel: str) -> str:
     Rendered docs sites serve markdown pages without the source extension
     (``code-contributor-guide.md`` → ``code-contributor-guide``) and serve an
     ``index`` page as its containing directory (``community/index.md`` →
-    ``community``, root ``index.md`` → ``""``). Used only for ``docs_url``;
-    GitHub blob links keep the raw ``.md`` path.
+    ``community``, root ``index.md`` → ``""``). The extensions removed are
+    ``.md``, ``.markdown`` and those of :func:`markdown_extensions`, so
+    ``index.mdx`` maps like ``index.md``. Used only for ``docs_url``; GitHub
+    blob links keep the raw file path.
     """
-    for ext in (".md", ".markdown"):
+    for ext in (*_LINK_MARKDOWN_EXTENSIONS, *markdown_extensions()):
         if file_rel.endswith(ext):
             file_rel = file_rel[: -len(ext)]
             break
@@ -268,7 +317,10 @@ def get_source_url(rel_with_project: Path, project_name: str) -> str | None:
         # GitHub blob fallback below intentionally keeps the extension.
         page_path = _docs_site_page_path(file_rel)
         base = docs_url.rstrip("/")
-        return f"{base}/{page_path}" if page_path else base
+        page_url = f"{base}/{page_path}" if page_path else base
+        # Some sites serve every page at a URL with a trailing slash and
+        # redirect the form without it.
+        return f"{page_url}/" if source.get("trailing_slash") else page_url
 
     # Fall back to GitHub blob URL
     url = source.get("url", "")
@@ -325,17 +377,47 @@ def ensure_leading_h1(body: str, title: str) -> str:
     return f"# {title}\n\n{body.lstrip(chr(10))}"
 
 
-def process_file(file_path: Path, project_dir: Path, project_name: str) -> tuple[str, IndexEntry | None]:
+def apply_markdown_preprocessors(
+    body: str,
+    file_path: Path,
+    project_name: str,
+    preprocessors: Iterable[MarkdownPreprocessor] = (),
+) -> str:
+    """Run each preprocessor on *body* in order and return the result.
+
+    Raises:
+        TypeError: A preprocessor returned something other than a string.
+    """
+    for preprocessor in preprocessors:
+        body = preprocessor(body, file_path, project_name)
+        if not isinstance(body, str):
+            name = getattr(preprocessor, "__name__", repr(preprocessor))
+            raise TypeError(
+                f"Markdown preprocessor {name} must return a string, "
+                f"got {type(body).__name__} for {file_path}"
+            )
+    return body
+
+
+def process_file(
+    file_path: Path,
+    project_dir: Path,
+    project_name: str,
+    preprocessors: Iterable[MarkdownPreprocessor] = (),
+) -> tuple[str, IndexEntry | None]:
     """Process a markdown file and return ``(content, entry)``.
 
     ``content`` is the clean file text (no URL injections, no ``### {url}``
     boundary line) with a guaranteed leading ``# {title}`` heading.
     ``entry`` is an :class:`~opencrane.rag.services.llms_index.IndexEntry`
     for this file, or ``None`` when no source URL can be resolved.
+    *preprocessors* rewrite the body after the frontmatter is read and
+    before images and links are processed.
     """
     rel_with_project = Path(project_name) / file_path.relative_to(project_dir)
     raw_text = file_path.read_text(encoding="utf-8")
     frontmatter, body = strip_frontmatter(raw_text)
+    body = apply_markdown_preprocessors(body, file_path, project_name, preprocessors)
     body = strip_images(body)
     body = rewrite_links(body, file_path, rel_with_project, project_dir, project_name)
     title = derive_title(frontmatter, body, file_path)
@@ -375,7 +457,7 @@ def process_fence_blocks(text: str, file_path: Path, project_dir: Path, project_
     return text
 
 
-def build_project_output(project_dir: Path, project_name: str | None = None, md_files: List[Path] | None = None, fence_types: Dict[str, "CodeFenceConfig"] | None = None) -> tuple[str, list[IndexEntry]]:
+def build_project_output(project_dir: Path, project_name: str | None = None, md_files: List[Path] | None = None, fence_types: Dict[str, "CodeFenceConfig"] | None = None, preprocessors: Iterable[MarkdownPreprocessor] = ()) -> tuple[str, list[IndexEntry]]:
     """Build combined output for a project.
 
     Returns a tuple ``(content, entries)`` where *content* is the sections
@@ -387,20 +469,22 @@ def build_project_output(project_dir: Path, project_name: str | None = None, md_
     Args:
         project_dir: Root directory of the project.
         project_name: Name of the project; defaults to ``project_dir.name``.
-        md_files: Markdown files to include; defaults to all ``*.md`` files
-            under *project_dir* (excluding ``devel`` folders).
+        md_files: Markdown files to include; defaults to all files with a
+            :func:`markdown_extensions` extension under *project_dir*
+            (excluding ``devel`` folders).
         fence_types: Optional fence-type registry forwarded to
             ``process_fence_blocks``.  When None or empty, no fence blocks
             are processed.
+        preprocessors: Markdown preprocessors forwarded to ``process_file``.
     """
     # project_name/md_files optional for backward compatibility with older callers/tests
     project_name = project_name or project_dir.name
-    md_files = md_files or filter_markdown_files(sorted(project_dir.rglob("*.md")))
+    md_files = md_files or filter_markdown_files(find_markdown_files(project_dir))
     sections: List[str] = []
     entries: List[IndexEntry] = []
 
     for md_file in md_files:
-        processed, entry = process_file(md_file, project_dir, project_name)
+        processed, entry = process_file(md_file, project_dir, project_name, preprocessors)
         processed = process_fence_blocks(processed, md_file, project_dir, project_name, fence_types=fence_types)
         sections.append(processed)
         if entry is not None:
@@ -609,8 +693,9 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
         selected_projects: Optional iterable of project names to process.
             When None, all projects are processed.
         config: Optional ``OpenCraneConfig`` instance.  When supplied, its
-            ``fence_types`` dict controls which fence blocks are processed.
-            When None, no fence blocks are processed.
+            ``fence_types`` dict controls which fence blocks are processed
+            and its ``markdown_preprocessors`` rewrite every Markdown file.
+            When None, no fence blocks are processed and no file is rewritten.
         sources_dirs: Source directories to process. Falls back to
             ``AI_DOCS_SOURCES_DIRS`` env var.
         llmstxt_dir: Output directory for llms-full.txt files. Falls back to
@@ -618,6 +703,7 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
         force: When True, skip the git-change check and always regenerate.
     """
     fence_types: Dict[str, CodeFenceConfig] = config.fence_types if config is not None else {}
+    preprocessors: List[MarkdownPreprocessor] = list(getattr(config, "markdown_preprocessors", None) or [])
     fingerprint: Dict[str, str] | None = None
 
     global SOURCES_BASE, LLMSTXT_BASE, SOURCE_ROOT, OUTPUT_ROOT
@@ -655,10 +741,10 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
         project_outputs: Dict[str, str] = {}
         project_entries: Dict[str, list[IndexEntry]] = {}
         for project_dir in sorted(project_dirs, key=lambda p: p.name):
-            md_files = filter_markdown_files(sorted(project_dir.rglob("*.md")))
+            md_files = filter_markdown_files(find_markdown_files(project_dir))
             if not md_files:
                 continue  # pragma: no cover
-            project_outputs[project_dir.name], project_entries[project_dir.name] = build_project_output(project_dir, project_dir.name, md_files, fence_types=fence_types)
+            project_outputs[project_dir.name], project_entries[project_dir.name] = build_project_output(project_dir, project_dir.name, md_files, fence_types=fence_types, preprocessors=preprocessors)
 
         output_root = OUTPUT_ROOT
         root_projects: set[str] = set()
@@ -823,14 +909,14 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
 
                 # Collect ALL markdown files recursively (excluding ignore pattern folders)
                 ignore_patterns = mapping.get_ignore_patterns(mapped_path)
-                md_files = filter_markdown_files(sorted(full_path.rglob("*.md")), ignore_patterns)
+                md_files = filter_markdown_files(find_markdown_files(full_path), ignore_patterns)
                 if md_files:
                     projects.append((mapped_path, full_path, md_files, False))
         else:
             # No filtering - use old discovery logic for backward compatibility
             # Include Markdown files directly under the source root as a pseudo-project
             ignore_patterns = mapping.get_ignore_patterns()
-            root_md_files = filter_markdown_files(sorted(source_dir.glob("*.md")), ignore_patterns)
+            root_md_files = filter_markdown_files(find_markdown_files(source_dir, recursive=False), ignore_patterns)
             if root_md_files:
                 projects.append((source_dir.name, source_dir, root_md_files, True))
 
@@ -838,7 +924,7 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
             project_dirs = [p for p in source_dir.iterdir() if p.is_dir()]
             for project_dir in sorted(project_dirs, key=lambda p: p.name):
                 # Process markdown files directly under project_dir as a project
-                direct_md_files = filter_markdown_files(sorted(project_dir.glob("*.md")), ignore_patterns)
+                direct_md_files = filter_markdown_files(find_markdown_files(project_dir, recursive=False), ignore_patterns)
                 if direct_md_files:
                     try:
                         project_name = project_dir.relative_to(workspace_root).as_posix()
@@ -849,7 +935,7 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
                 # Now, for each immediate subdirectory, treat as subproject
                 subproject_dirs = [sp for sp in project_dir.iterdir() if sp.is_dir()]
                 for subproject_dir in sorted(subproject_dirs, key=lambda p: p.name):
-                    sub_md_files = filter_markdown_files(sorted(subproject_dir.rglob("*.md")), ignore_patterns)
+                    sub_md_files = filter_markdown_files(find_markdown_files(subproject_dir), ignore_patterns)
                     if sub_md_files:
                         try:
                             subproject_name = subproject_dir.relative_to(workspace_root).as_posix()
@@ -864,7 +950,7 @@ def generate_outputs(selected_projects: Iterable[str] | None = None, config=None
         project_entries_map: Dict[str, list[IndexEntry]] = {}
         root_projects: set[str] = set()
         for project_name, project_dir, md_files, is_root in projects:
-            project_outputs[project_name], project_entries_map[project_name] = build_project_output(project_dir, project_name, md_files, fence_types=fence_types)
+            project_outputs[project_name], project_entries_map[project_name] = build_project_output(project_dir, project_name, md_files, fence_types=fence_types, preprocessors=preprocessors)
             if is_root:
                 root_projects.add(project_name)
 
